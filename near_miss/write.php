@@ -654,6 +654,7 @@ if ($form['incident_at'] !== '') {
                         <div class="nm-photo-group-label">조치 전 사진</div>
                         <label class="btn btn-sm nm-file-btn" for="nm-before-photos">파일 선택</label>
                         <input type="file" id="nm-before-photos" name="action_before_photos[]" multiple accept="image/*" class="nm-hidden-file">
+                        <div class="editor-help">최대 <?= formatBytes(MAX_UPLOAD_SIZE) ?> · 이미지 선택 시 본문에 삽입 가능</div>
                         <div id="nm-before-token-list" class="file-token-list"></div>
                         <?php if (!empty($beforeAtts)): ?>
                             <div class="file-list">
@@ -799,37 +800,10 @@ if ($form['incident_at'] !== '') {
             return '<span class="existing-file" data-before-idx="' + idx + '">'
                  + esc(item.file.name)
                  + ' <button type="button" class="insert-attachment-token" data-token="' + esc(token) + '">본문삽입</button>'
-                 + ' <button type="button" class="nm-before-del" data-before-idx="' + idx + '">×</button>'
                  + '</span>';
         }).join('');
     }
 
-    if (beforeTokenList) {
-        beforeTokenList.addEventListener('click', function(e) {
-            var editBtn = e.target.closest('.nm-before-edit');
-            var delBtn  = e.target.closest('.nm-before-del');
-            if (editBtn) {
-                var i = parseInt(editBtn.dataset.beforeIdx, 10);
-                var target = beforeStaged[i];
-                if (!target) return;
-                if (!window.NM_openImageEditorForFile) {
-                    alert('이미지 편집기를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.');
-                    return;
-                }
-                window.NM_openImageEditorForFile(target.file, function(editedFile) {
-                    beforeStaged[i] = { file: editedFile };
-                    rebuildBeforeInput();
-                    renderBeforeList();
-                });
-            }
-            if (delBtn) {
-                var j = parseInt(delBtn.dataset.beforeIdx, 10);
-                beforeStaged.splice(j, 1);
-                rebuildBeforeInput();
-                renderBeforeList();
-            }
-        });
-    }
 
     if (beforeFileInput) {
         beforeFileInput.addEventListener('change', function () {
