@@ -4525,7 +4525,7 @@
         const items = imageFiles.map((file) => {
             const token = `[[첨부:${file.name}]]`;
             const key = file.name.toLowerCase();
-            return `<span class="existing-file" data-staged-key="${escapeHtml(key)}">${escapeHtml(file.name)} <button type="button" class="insert-attachment-token" data-token="${escapeHtml(token)}">본문삽입</button> <button type="button" class="nm-edit-staged-file" data-staged-key="${escapeHtml(key)}">편집</button></span>`;
+            return `<span class="existing-file" data-staged-key="${escapeHtml(key)}">${escapeHtml(file.name)} <button type="button" class="insert-attachment-token" data-token="${escapeHtml(token)}">본문삽입</button></span>`;
         }).join('');
 
         newAttachmentTokenList.innerHTML = items;

@@ -799,7 +799,6 @@ if ($form['incident_at'] !== '') {
             return '<span class="existing-file" data-before-idx="' + idx + '">'
                  + esc(item.file.name)
                  + ' <button type="button" class="insert-attachment-token" data-token="' + esc(token) + '">본문삽입</button>'
-                 + ' <button type="button" class="nm-before-edit" data-before-idx="' + idx + '">편집</button>'
                  + ' <button type="button" class="nm-before-del" data-before-idx="' + idx + '">×</button>'
                  + '</span>';
         }).join('');
