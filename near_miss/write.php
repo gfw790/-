@@ -675,7 +675,8 @@ if ($form['incident_at'] !== '') {
 
                     <div class="nm-photo-group">
                         <div class="nm-photo-group-label">조치 후 사진</div>
-                        <input type="file" id="attachments" name="action_photos[]" multiple accept="image/*">
+                        <label class="btn btn-sm nm-file-btn" for="attachments">파일 선택</label>
+                        <input type="file" id="attachments" name="action_photos[]" multiple accept="image/*" class="nm-hidden-file">
                         <div class="editor-help">최대 <?= formatBytes(MAX_UPLOAD_SIZE) ?> · 이미지 선택 시 본문에 삽입 가능</div>
                         <div id="new-attachment-token-list" class="file-token-list"></div>
                         <?php if (!empty($afterAtts)): ?>
