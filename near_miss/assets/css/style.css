@@ -1524,32 +1524,6 @@ a:focus-visible {
     background: var(--bg3);
 }
 
-.nm-staged-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    padding: 6px;
-    border: 1px solid var(--border2);
-    border-radius: 8px;
-    background: var(--bg2);
-}
-
-.nm-staged-name {
-    font-size: 11px;
-    color: var(--text-dim);
-    word-break: break-all;
-    max-width: 80px;
-    text-align: center;
-    line-height: 1.3;
-}
-
-.nm-staged-item .btn {
-    padding: 2px 8px;
-    font-size: 11px;
-    min-width: 36px;
-}
-
 .survey-actions {
     display: flex;
     justify-content: space-between;

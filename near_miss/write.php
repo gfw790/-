@@ -654,8 +654,7 @@ if ($form['incident_at'] !== '') {
                         <div class="nm-photo-group-label">조치 전 사진</div>
                         <label class="btn btn-sm nm-file-btn" for="nm-before-photos">파일 선택</label>
                         <input type="file" id="nm-before-photos" name="action_before_photos[]" multiple accept="image/*" class="nm-hidden-file">
-                        <span class="nm-file-hint" id="nm-before-hint">선택된 파일 없음</span>
-                        <div class="photo-thumb-row" id="nm-before-thumbs"></div>
+                        <div id="nm-before-token-list" class="file-token-list"></div>
                         <?php if (!empty($beforeAtts)): ?>
                             <div class="file-list">
                                 <?php foreach ($beforeAtts as $att): ?>
@@ -758,11 +757,14 @@ if ($form['incident_at'] !== '') {
         useDataUrl();
     }
 
-    // 조치 전 사진 - 파일 스테이징 관리 (편집/삭제 지원)
-    var beforeStaged = []; // Array of { file, objectUrl }
+    // 조치 전 사진 - 파일 스테이징 관리 (조치 후와 동일한 방식)
+    var beforeStaged = []; // Array of { file }
     var beforeFileInput = document.getElementById('nm-before-photos');
-    var beforeThumbsWrap = document.getElementById('nm-before-thumbs');
-    var beforeFileHint   = document.getElementById('nm-before-hint');
+    var beforeTokenList = document.getElementById('nm-before-token-list');
+
+    function esc(str) {
+        return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
 
     function rebuildBeforeInput() {
         if (!beforeFileInput) return;
@@ -771,66 +773,49 @@ if ($form['incident_at'] !== '') {
             beforeStaged.forEach(function(item) { dt.items.add(item.file); });
             beforeFileInput.files = dt.files;
         } catch(e) {}
-        if (beforeFileHint) {
-            beforeFileHint.textContent = beforeStaged.length === 0 ? '선택된 파일 없음' : beforeStaged.length + '개 선택됨';
-        }
     }
 
-    function renderBeforeThumbs() {
-        if (!beforeThumbsWrap) return;
-        beforeThumbsWrap.innerHTML = '';
-        beforeStaged.forEach(function(item, idx) {
-            var wrap = document.createElement('div');
-            wrap.className = 'nm-staged-item';
+    function renderBeforeList() {
+        if (!beforeTokenList) return;
+        if (beforeStaged.length === 0) {
+            beforeTokenList.innerHTML = '';
+            beforeTokenList.style.display = 'none';
+            return;
+        }
+        beforeTokenList.style.display = '';
+        beforeTokenList.innerHTML = beforeStaged.map(function(item, idx) {
+            return '<span class="existing-file" data-before-idx="' + idx + '">'
+                 + esc(item.file.name)
+                 + ' <button type="button" class="nm-before-edit" data-before-idx="' + idx + '">편집</button>'
+                 + ' <button type="button" class="nm-before-del" data-before-idx="' + idx + '">×</button>'
+                 + '</span>';
+        }).join('');
+    }
 
-            var img = document.createElement('img');
-            img.className = 'photo-thumb';
-            img.src = item.objectUrl;
-            img.alt = item.file.name;
-            wrap.appendChild(img);
-
-            var name = document.createElement('span');
-            name.className = 'nm-staged-name';
-            name.textContent = item.file.name;
-            wrap.appendChild(name);
-
-            var editBtn = document.createElement('button');
-            editBtn.type = 'button';
-            editBtn.className = 'btn btn-sm';
-            editBtn.textContent = '편집';
-            (function(i) {
-                editBtn.addEventListener('click', function() {
-                    var target = beforeStaged[i];
-                    if (!target) return;
-                    if (!window.NM_openImageEditorForFile) {
-                        alert('이미지 편집기를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.');
-                        return;
-                    }
-                    window.NM_openImageEditorForFile(target.file, function(editedFile) {
-                        URL.revokeObjectURL(target.objectUrl);
-                        beforeStaged[i] = { file: editedFile, objectUrl: URL.createObjectURL(editedFile) };
-                        rebuildBeforeInput();
-                        renderBeforeThumbs();
-                    });
-                });
-            })(idx);
-            wrap.appendChild(editBtn);
-
-            var delBtn = document.createElement('button');
-            delBtn.type = 'button';
-            delBtn.className = 'btn btn-sm';
-            delBtn.textContent = '삭제';
-            (function(i) {
-                delBtn.addEventListener('click', function() {
-                    if (beforeStaged[i]) URL.revokeObjectURL(beforeStaged[i].objectUrl);
-                    beforeStaged.splice(i, 1);
+    if (beforeTokenList) {
+        beforeTokenList.addEventListener('click', function(e) {
+            var editBtn = e.target.closest('.nm-before-edit');
+            var delBtn  = e.target.closest('.nm-before-del');
+            if (editBtn) {
+                var i = parseInt(editBtn.dataset.beforeIdx, 10);
+                var target = beforeStaged[i];
+                if (!target) return;
+                if (!window.NM_openImageEditorForFile) {
+                    alert('이미지 편집기를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.');
+                    return;
+                }
+                window.NM_openImageEditorForFile(target.file, function(editedFile) {
+                    beforeStaged[i] = { file: editedFile };
                     rebuildBeforeInput();
-                    renderBeforeThumbs();
+                    renderBeforeList();
                 });
-            })(idx);
-            wrap.appendChild(delBtn);
-
-            beforeThumbsWrap.appendChild(wrap);
+            }
+            if (delBtn) {
+                var j = parseInt(delBtn.dataset.beforeIdx, 10);
+                beforeStaged.splice(j, 1);
+                rebuildBeforeInput();
+                renderBeforeList();
+            }
         });
     }
 
@@ -839,12 +824,11 @@ if ($form['incident_at'] !== '') {
             var files = beforeFileInput.files;
             var count = files ? files.length : 0;
             for (var i = 0; i < count; i++) {
-                var f = files[i];
-                beforeStaged.push({ file: f, objectUrl: URL.createObjectURL(f) });
+                beforeStaged.push({ file: files[i] });
             }
             beforeFileInput.value = '';
             rebuildBeforeInput();
-            renderBeforeThumbs();
+            renderBeforeList();
         });
     }
 
