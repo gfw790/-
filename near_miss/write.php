@@ -765,12 +765,19 @@ if ($form['incident_at'] !== '') {
     var beforeStaged = []; // Array of { file }
     var beforeFileInput = document.getElementById('nm-before-photos');
     var beforeTokenList = document.getElementById('nm-before-token-list');
+    // board.js의 resolveImageFromToken이 조치 전 파일을 찾을 수 있도록 공유 Map
+    window.NM_extraImageFiles = new Map();
 
     function esc(str) {
         return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
     function rebuildBeforeInput() {
+        // board.js가 조치 전 파일을 이미지 embed로 삽입할 수 있도록 공유 Map 갱신
+        window.NM_extraImageFiles = new Map();
+        beforeStaged.forEach(function(item) {
+            window.NM_extraImageFiles.set(item.file.name.toLowerCase(), item.file);
+        });
         if (!beforeFileInput) return;
         try {
             var dt = new DataTransfer();

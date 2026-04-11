@@ -192,6 +192,12 @@
 
     const getSelectedImageFileByName = () => {
         const byName = new Map();
+        // near_miss 조치 전 사진처럼 외부에서 등록한 추가 파일
+        if (window.NM_extraImageFiles instanceof Map) {
+            window.NM_extraImageFiles.forEach((file, key) => {
+                if (isImageFileName(String(file.name))) byName.set(key, file);
+            });
+        }
         Array.from(attachmentInput?.files || []).forEach((file) => {
             if (!isImageFileName(file.name)) return;
             byName.set(String(file.name).toLowerCase(), file);
