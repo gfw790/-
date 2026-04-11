@@ -758,25 +758,93 @@ if ($form['incident_at'] !== '') {
         useDataUrl();
     }
 
-    // 조치 전 사진 썸네일 미리보기
+    // 조치 전 사진 - 파일 스테이징 관리 (편집/삭제 지원)
+    var beforeStaged = []; // Array of { file, objectUrl }
     var beforeFileInput = document.getElementById('nm-before-photos');
     var beforeThumbsWrap = document.getElementById('nm-before-thumbs');
     var beforeFileHint   = document.getElementById('nm-before-hint');
+
+    function rebuildBeforeInput() {
+        if (!beforeFileInput) return;
+        try {
+            var dt = new DataTransfer();
+            beforeStaged.forEach(function(item) { dt.items.add(item.file); });
+            beforeFileInput.files = dt.files;
+        } catch(e) {}
+        if (beforeFileHint) {
+            beforeFileHint.textContent = beforeStaged.length === 0 ? '선택된 파일 없음' : beforeStaged.length + '개 선택됨';
+        }
+    }
+
+    function renderBeforeThumbs() {
+        if (!beforeThumbsWrap) return;
+        beforeThumbsWrap.innerHTML = '';
+        beforeStaged.forEach(function(item, idx) {
+            var wrap = document.createElement('div');
+            wrap.className = 'nm-staged-item';
+
+            var img = document.createElement('img');
+            img.className = 'photo-thumb';
+            img.src = item.objectUrl;
+            img.alt = item.file.name;
+            wrap.appendChild(img);
+
+            var name = document.createElement('span');
+            name.className = 'nm-staged-name';
+            name.textContent = item.file.name;
+            wrap.appendChild(name);
+
+            var editBtn = document.createElement('button');
+            editBtn.type = 'button';
+            editBtn.className = 'btn btn-sm';
+            editBtn.textContent = '편집';
+            (function(i) {
+                editBtn.addEventListener('click', function() {
+                    var target = beforeStaged[i];
+                    if (!target) return;
+                    if (!window.NM_openImageEditorForFile) {
+                        alert('이미지 편집기를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.');
+                        return;
+                    }
+                    window.NM_openImageEditorForFile(target.file, function(editedFile) {
+                        URL.revokeObjectURL(target.objectUrl);
+                        beforeStaged[i] = { file: editedFile, objectUrl: URL.createObjectURL(editedFile) };
+                        rebuildBeforeInput();
+                        renderBeforeThumbs();
+                    });
+                });
+            })(idx);
+            wrap.appendChild(editBtn);
+
+            var delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.className = 'btn btn-sm';
+            delBtn.textContent = '삭제';
+            (function(i) {
+                delBtn.addEventListener('click', function() {
+                    if (beforeStaged[i]) URL.revokeObjectURL(beforeStaged[i].objectUrl);
+                    beforeStaged.splice(i, 1);
+                    rebuildBeforeInput();
+                    renderBeforeThumbs();
+                });
+            })(idx);
+            wrap.appendChild(delBtn);
+
+            beforeThumbsWrap.appendChild(wrap);
+        });
+    }
+
     if (beforeFileInput) {
         beforeFileInput.addEventListener('change', function () {
             var files = beforeFileInput.files;
             var count = files ? files.length : 0;
-            if (beforeFileHint) beforeFileHint.textContent = count === 0 ? '선택된 파일 없음' : count + '개 선택됨';
-            if (beforeThumbsWrap) {
-                beforeThumbsWrap.innerHTML = '';
-                for (var i = 0; i < count; i++) {
-                    var img = document.createElement('img');
-                    img.className = 'photo-thumb';
-                    img.alt = '조치 전 ' + (i + 1);
-                    bindThumb(img, files[i]);
-                    beforeThumbsWrap.appendChild(img);
-                }
+            for (var i = 0; i < count; i++) {
+                var f = files[i];
+                beforeStaged.push({ file: f, objectUrl: URL.createObjectURL(f) });
             }
+            beforeFileInput.value = '';
+            rebuildBeforeInput();
+            renderBeforeThumbs();
         });
     }
 

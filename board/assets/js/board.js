@@ -112,6 +112,7 @@
     let imageEditorState = null;
     let generatedEditedFiles = new Map();
     let stagedUploadFiles = new Map();
+    let nmFileEditCallback = null;
     let editedEmbedObjectUrls = [];
 
     const escapeHtml = (str) => String(str)
@@ -3140,7 +3141,26 @@
     };
 
     const applyEditedCanvasToEmbed = () => {
-        if (!imageEditorState || !activeEmbed) return;
+        if (!imageEditorState) return;
+        // nmFileEditCallback 모드: near_miss 조치 사진 직접 편집 (embed 없음)
+        if (nmFileEditCallback) {
+            const cb = nmFileEditCallback;
+            nmFileEditCallback = null;
+            closeImageEditorTextEntry({ commit: true });
+            commitObjectsToCanvas();
+            const canvas = getImageEditorCanvas();
+            if (!canvas) return;
+            canvas.toBlob((blob) => {
+                if (!blob) return;
+                const safeName = cb.baseName.replace(/[^\w.\-]+/g, '_') || 'edited';
+                const fileName = safeName + '_편집_' + Date.now() + '.png';
+                const file = new File([blob], fileName, { type: 'image/png' });
+                closeImageEditor();
+                cb.onDone(file, fileName);
+            }, 'image/png');
+            return;
+        }
+        if (!activeEmbed) return;
         // toBlob() 콜백은 비동기로 실행되므로, 클로저가 닫히기 전에 참조를 캡처한다.
         // document click 핸들러가 activeEmbed를 null로 초기화하기 전에 콜백이 실행될 수 없기 때문.
         const targetEmbed = activeEmbed;
@@ -3240,6 +3260,65 @@
         };
         load.src = img.src;
     };
+
+    const openImageEditorForFile = (file, onDone) => {
+        ensureImageEditorModal();
+        const canvas = getImageEditorCanvas();
+        if (!imageEditorModal || !canvas) return;
+        activeEmbed = null;
+        nmFileEditCallback = { baseName: file.name.replace(/\.[^/.]+$/, ''), onDone };
+        const objectUrl = URL.createObjectURL(file);
+        const load = new Image();
+        load.onload = () => {
+            URL.revokeObjectURL(objectUrl);
+            const natW = load.naturalWidth || load.width;
+            const natH = load.naturalHeight || load.height;
+            const canvasW = Math.min(natW, 840);
+            const canvasH = natH > 0 ? Math.round(canvasW * (natH / natW)) : natH;
+            setImageEditorCanvasSize(canvasW, canvasH);
+            const ctx = canvas.getContext('2d');
+            if (!ctx) { nmFileEditCallback = null; return; }
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(load, 0, 0, canvas.width, canvas.height);
+            imageEditorState = {
+                tool: 'none',
+                pendingText: '',
+                pointerDown: false,
+                startPoint: null,
+                lastPoint: null,
+                cropRect: null,
+                previewRect: null,
+                history: [],
+                historyIndex: -1,
+                zoom: 1,
+                pixelMode: false,
+                keepRatio: true,
+                objects: [],
+                selectedObjectId: null,
+                selectDragState: null,
+                textStyle: copyTextStyle(defaultTextStyle),
+                textColorPicker: null,
+                shapeStyle: copyShapeStyle(defaultShapeStyle),
+                shapeColorPicker: null,
+                drawStyle: copyDrawStyle(defaultDrawStyle),
+                drawColorPicker: null,
+                textEntryActive: false,
+                textEntryIgnoreBlurUntil: 0,
+                aspectRatio: canvasH > 0 ? canvasW / canvasH : 1,
+            };
+            const zoomSelect = getImageEditorZoomSelect();
+            if (zoomSelect) zoomSelect.value = '100';
+            applyImageEditorZoom();
+            hideCropActionButton();
+            drawImageEditorOverlay();
+            pushImageEditorHistory();
+            updateImageEditorUi();
+            imageEditorModal.hidden = false;
+        };
+        load.onerror = () => { URL.revokeObjectURL(objectUrl); nmFileEditCallback = null; };
+        load.src = objectUrl;
+    };
+    window.NM_openImageEditorForFile = openImageEditorForFile;
 
     const ensureImageEditorModal = () => {
         if (imageEditorModal) return;
@@ -4439,7 +4518,8 @@
 
         const items = imageFiles.map((file) => {
             const token = `[[첨부:${file.name}]]`;
-            return `<span class="existing-file">${escapeHtml(file.name)} <button type="button" class="insert-attachment-token" data-token="${escapeHtml(token)}">본문삽입</button></span>`;
+            const key = file.name.toLowerCase();
+            return `<span class="existing-file" data-staged-key="${escapeHtml(key)}">${escapeHtml(file.name)} <button type="button" class="insert-attachment-token" data-token="${escapeHtml(token)}">본문삽입</button> <button type="button" class="nm-edit-staged-file" data-staged-key="${escapeHtml(key)}">편집</button></span>`;
         }).join('');
 
         newAttachmentTokenList.innerHTML = items;
@@ -4480,6 +4560,25 @@
         const button = e.target.closest('.insert-attachment-token');
         if (!button) return;
         e.preventDefault();
+    });
+
+    // 조치 후 스테이지 파일 "편집" 버튼
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('.nm-edit-staged-file');
+        if (!btn) return;
+        e.preventDefault();
+        const key = btn.dataset.stagedKey || '';
+        if (!key) return;
+        const file = stagedUploadFiles.get(key) || generatedEditedFiles.get(key);
+        if (!file) return;
+        openImageEditorForFile(file, (editedFile) => {
+            const newKey = editedFile.name.toLowerCase();
+            stagedUploadFiles.delete(key);
+            generatedEditedFiles.delete(key);
+            stagedUploadFiles.set(newKey, editedFile);
+            rebuildAttachmentInputFiles();
+            updateLivePreview();
+        });
     });
 
     if (attachmentInput) {
