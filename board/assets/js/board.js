@@ -797,7 +797,7 @@
     const copyShapeStyle = (style) => {
         const merged = { ...defaultShapeStyle, ...(style || {}) };
         return {
-            type: ['rect', 'roundRect', 'ellipse', 'line'].includes(String(merged.type)) ? String(merged.type) : defaultShapeStyle.type,
+            type: ['rect', 'roundRect', 'ellipse', 'line', 'freeQuad'].includes(String(merged.type)) ? String(merged.type) : defaultShapeStyle.type,
             lineWidth: clampShapeLineWidth(merged.lineWidth),
             lineStyle: ['solid', 'dash', 'dot'].includes(String(merged.lineStyle)) ? String(merged.lineStyle) : defaultShapeStyle.lineStyle,
             colorTarget: merged.colorTarget === 'fill' ? 'fill' : 'stroke',
@@ -1287,6 +1287,31 @@
     // 벡터 객체 시스템 (선택/이동/리사이즈/회전)
     // =============================================
     const OBJ_HANDLE_SIZE = 8;
+
+    // 자유 사각형 바운딩박스 재계산
+    const updateFreeQuadBBox = (obj) => {
+        if (!obj.corners?.length) return;
+        const xs = obj.corners.map((c) => c.x);
+        const ys = obj.corners.map((c) => c.y);
+        obj.x = Math.min(...xs);
+        obj.y = Math.min(...ys);
+        obj.width = Math.max(1, Math.max(...xs) - obj.x);
+        obj.height = Math.max(1, Math.max(...ys) - obj.y);
+    };
+
+    // 점이 볼록/오목 다각형 내부에 있는지 판별 (ray-casting)
+    const pointInPolygon = (x, y, corners) => {
+        let inside = false;
+        const n = corners.length;
+        for (let i = 0, j = n - 1; i < n; j = i++) {
+            const xi = corners[i].x, yi = corners[i].y;
+            const xj = corners[j].x, yj = corners[j].y;
+            if (((yi > y) !== (yj > y)) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) {
+                inside = !inside;
+            }
+        }
+        return inside;
+    };
     const OBJ_ROTATE_DIST = 32;
     const D2R = Math.PI / 180;
 
@@ -1307,8 +1332,13 @@
         return { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
     };
 
-    // 9개 핸들 월드 좌표 반환 (0:TL 1:TC 2:TR 3:MR 4:BR 5:BC 6:BL 7:ML 8:회전)
+    // 핸들 월드 좌표 반환
+    // 일반: 9개 (0:TL 1:TC 2:TR 3:MR 4:BR 5:BC 6:BL 7:ML 8:회전)
+    // freeQuad: 4개 꼭지점 (0:TL 1:TR 2:BR 3:BL)
     const getObjHandles = (obj) => {
+        if (obj.type === 'shape' && obj.style?.type === 'freeQuad' && obj.corners?.length === 4) {
+            return obj.corners.map((c) => ({ x: c.x, y: c.y }));
+        }
         const { cx, cy } = getObjCenter(obj);
         const hw = obj.width / 2, hh = obj.height / 2;
         const r = (obj.rotation || 0) * D2R;
@@ -1337,6 +1367,9 @@
 
     // 객체 내부 히트 테스트
     const hitTestObject = (obj, wx, wy) => {
+        if (obj.type === 'shape' && obj.style?.type === 'freeQuad' && obj.corners?.length === 4) {
+            return pointInPolygon(wx, wy, obj.corners);
+        }
         const local = worldToLocal(obj, wx, wy);
         return Math.abs(local.x) <= obj.width / 2 && Math.abs(local.y) <= obj.height / 2;
     };
@@ -1399,12 +1432,21 @@
         const x = Math.min(x1, x2), y = Math.min(y1, y2);
         const w = Math.max(10, Math.abs(x2 - x1));
         const h = Math.max(10, Math.abs(y2 - y1));
-        return {
+        const obj = {
             id: genObjectId(), type: 'shape',
             x, y, width: w, height: h, rotation: 0,
             lineFlipX: x2 < x1, lineFlipY: y2 < y1,
             style: copyShapeStyle(style),
         };
+        if (style.type === 'freeQuad') {
+            obj.corners = [
+                { x: x,     y: y     },  // 좌상
+                { x: x + w, y: y     },  // 우상
+                { x: x + w, y: y + h },  // 우하
+                { x: x,     y: y + h },  // 좌하
+            ];
+        }
+        return obj;
     };
 
     // 단일 객체를 ctx에 렌더링
@@ -1427,11 +1469,36 @@
             drawTextToImageEditorCanvas(ctx, obj.text, 0, 0, obj.style);
             ctx.restore();
         } else if (obj.type === 'shape') {
+            if (obj.style?.type === 'freeQuad' && obj.corners?.length === 4) {
+                // 꼭지점 좌표 직접 사용 (회전 없음)
+                const st = obj.style;
+                ctx.save();
+                ctx.setLineDash(getShapeLineDash(st));
+                ctx.lineWidth = st.lineWidth;
+                ctx.lineCap = st.lineStyle === 'dot' ? 'round' : 'butt';
+                ctx.lineJoin = 'round';
+                ctx.beginPath();
+                obj.corners.forEach((c, i) => {
+                    if (i === 0) ctx.moveTo(c.x, c.y);
+                    else ctx.lineTo(c.x, c.y);
+                });
+                ctx.closePath();
+                if (st.fillAlpha > 0) {
+                    ctx.fillStyle = colorToRgba(st.fillColor, st.fillAlpha);
+                    ctx.fill();
+                }
+                if (st.strokeAlpha > 0 && st.lineWidth > 0) {
+                    ctx.strokeStyle = colorToRgba(st.strokeColor, st.strokeAlpha);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            } else {
             const rx1 = obj.lineFlipX ? obj.x + obj.width : obj.x;
             const ry1 = obj.lineFlipY ? obj.y + obj.height : obj.y;
             const rx2 = obj.lineFlipX ? obj.x : obj.x + obj.width;
             const ry2 = obj.lineFlipY ? obj.y : obj.y + obj.height;
             drawShapeOnContext(ctx, { x1: rx1, y1: ry1, x2: rx2, y2: ry2 }, obj.style);
+            }
         } else if (obj.type === 'draw' && obj.points?.length >= 2) {
             ctx.beginPath();
             ctx.lineWidth = clampDrawLineWidth(obj.style.lineWidth);
@@ -1452,6 +1519,35 @@
     // 선택된 객체의 핸들 그리기
     const drawObjectHandles = (octx, obj) => {
         if (!octx || !obj) return;
+
+        // freeQuad: 다각형 윤곽 + 4개 꼭지점 핸들
+        if (obj.type === 'shape' && obj.style?.type === 'freeQuad' && obj.corners?.length === 4) {
+            octx.save();
+            octx.strokeStyle = '#3a7fc1';
+            octx.lineWidth = 1.5;
+            octx.setLineDash([4, 3]);
+            octx.beginPath();
+            obj.corners.forEach((c, i) => {
+                if (i === 0) octx.moveTo(c.x, c.y);
+                else octx.lineTo(c.x, c.y);
+            });
+            octx.closePath();
+            octx.stroke();
+            octx.restore();
+            const hs = OBJ_HANDLE_SIZE;
+            obj.corners.forEach((c) => {
+                octx.save();
+                octx.fillStyle = '#ffffff';
+                octx.strokeStyle = '#3a7fc1';
+                octx.lineWidth = 1.5;
+                octx.setLineDash([]);
+                octx.fillRect(c.x - hs / 2, c.y - hs / 2, hs, hs);
+                octx.strokeRect(c.x - hs / 2, c.y - hs / 2, hs, hs);
+                octx.restore();
+            });
+            return;
+        }
+
         const { cx, cy } = getObjCenter(obj);
         const hw = obj.width / 2, hh = obj.height / 2;
         const r = (obj.rotation || 0) * D2R;
@@ -1565,7 +1661,11 @@
             : null;
         if (selectedObj) {
             const hi = hitTestHandle(selectedObj, p.x, p.y);
-            if (hi >= 0) { overlay.style.cursor = handleCursor(hi); return; }
+            if (hi >= 0) {
+                const isFQ = selectedObj.type === 'shape' && selectedObj.style?.type === 'freeQuad';
+                overlay.style.cursor = isFQ ? 'move' : handleCursor(hi);
+                return;
+            }
         }
         const hit = hitTestObjects(p.x, p.y);
         overlay.style.cursor = hit ? 'move' : 'default';
@@ -1573,6 +1673,20 @@
 
     // 핸들 드래그로 리사이즈
     const applyHandleResize = (obj, ds, p) => {
+        // freeQuad: 해당 꼭지점만 이동
+        if (obj.type === 'shape' && obj.style?.type === 'freeQuad'
+            && obj.corners?.length === 4 && ds.objSnapshot.corners?.length === 4) {
+            const hi = ds.handleIndex;
+            if (hi >= 0 && hi < 4) {
+                const dx = p.x - ds.startX;
+                const dy = p.y - ds.startY;
+                obj.corners = ds.objSnapshot.corners.map((c, i) =>
+                    i === hi ? { x: c.x + dx, y: c.y + dy } : { x: c.x, y: c.y }
+                );
+                updateFreeQuadBBox(obj);
+            }
+            return;
+        }
         const snap = ds.objSnapshot;
         const snapCx = snap.x + snap.width / 2;
         const snapCy = snap.y + snap.height / 2;
@@ -1938,7 +2052,7 @@
     const setImageEditorShapeType = (type) => {
         if (!imageEditorState) return;
         const style = ensureImageEditorShapeStyle();
-        style.type = ['rect', 'roundRect', 'ellipse', 'line'].includes(String(type)) ? String(type) : style.type;
+        style.type = ['rect', 'roundRect', 'ellipse', 'line', 'freeQuad'].includes(String(type)) ? String(type) : style.type;
         updateImageEditorShapeStyleUi();
         if (imageEditorState.tool === 'select') pushImageEditorHistory();
     };
@@ -2381,6 +2495,11 @@
         const height = Math.abs(y2 - y1);
 
         ctx.beginPath();
+        if (style.type === 'freeQuad') {
+            // 초기 드래그 시 사각형으로 미리보기 표시
+            ctx.rect(left, top, width, height);
+            return;
+        }
         if (style.type === 'line') {
             ctx.moveTo(x1, y1);
             ctx.lineTo(x2, y2);
@@ -2892,8 +3011,16 @@
                     );
                     if (selectedObj) {
                         if (ds.type === 'move') {
-                            selectedObj.x = ds.objSnapshot.x + (p.x - ds.startX);
-                            selectedObj.y = ds.objSnapshot.y + (p.y - ds.startY);
+                            const mvDx = p.x - ds.startX;
+                            const mvDy = p.y - ds.startY;
+                            if (selectedObj.type === 'shape' && selectedObj.style?.type === 'freeQuad'
+                                && selectedObj.corners?.length === 4 && ds.objSnapshot.corners?.length === 4) {
+                                selectedObj.corners = ds.objSnapshot.corners.map((c) => ({ x: c.x + mvDx, y: c.y + mvDy }));
+                                updateFreeQuadBBox(selectedObj);
+                            } else {
+                            selectedObj.x = ds.objSnapshot.x + mvDx;
+                            selectedObj.y = ds.objSnapshot.y + mvDy;
+                            }
                         } else if (ds.type === 'rotate') {
                             const { cx, cy } = getObjCenter(selectedObj);
                             const angle = Math.atan2(p.y - cy, p.x - cx);
@@ -3195,6 +3322,7 @@
             '          <button type="button" class="image-shape-type-btn" data-action="set-shape-type" data-shape="roundRect" title="둥근 사각형"><span class="shape-type-icon round-rect" aria-hidden="true"></span></button>',
             '          <button type="button" class="image-shape-type-btn" data-action="set-shape-type" data-shape="ellipse" title="원형"><span class="shape-type-icon ellipse" aria-hidden="true"></span></button>',
             '          <button type="button" class="image-shape-type-btn" data-action="set-shape-type" data-shape="line" title="직선"><span class="shape-type-icon line" aria-hidden="true"></span></button>',
+            '          <button type="button" class="image-shape-type-btn" data-action="set-shape-type" data-shape="freeQuad" title="자유 사각형"><span class="shape-type-icon free-quad" aria-hidden="true"></span></button>',
             '        </div>',
             '      </section>',
             '      <section class="image-shape-section">',

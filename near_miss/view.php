@@ -152,6 +152,62 @@ function sanitizeNearMissRichtextInline(string $html): string {
     return preg_replace('/(?:<br>\s*){3,}/i', '<br><br>', $result) ?? $result;
 }
 
+function renderAttachmentTokenNM(string $tokenValue, array $photos): ?string {
+    $tokenValue = trim($tokenValue);
+    if ($tokenValue === '') return null;
+
+    $parts = array_values(array_filter(array_map('trim', explode('|', $tokenValue)), static fn($v) => $v !== ''));
+    $targetToken = $parts[0] ?? '';
+    if ($targetToken === '') return null;
+
+    $align = 'center';
+    $size = 'medium';
+    $rotate = 0;
+    $flip = false;
+    for ($i = 1, $n = count($parts); $i < $n; $i++) {
+        if (!preg_match('/^(align|size|rotate|flip)\s*[:=]\s*(.+)$/i', $parts[$i], $m)) continue;
+        $key = strtolower($m[1]);
+        $value = strtolower(trim($m[2]));
+        if ($key === 'align' && in_array($value, ['left', 'center', 'right'], true)) $align = $value;
+        if ($key === 'size' && in_array($value, ['small', 'medium', 'large'], true)) $size = $value;
+        if ($key === 'rotate' && is_numeric($value)) $rotate = (int)$value;
+        if ($key === 'flip') $flip = in_array($value, ['1', 'true', 'yes'], true);
+    }
+    $rotate = (($rotate % 360) + 360) % 360;
+
+    $imagePhotos = array_values(array_filter($photos, static function (array $att): bool {
+        $mime = strtolower((string)($att['mime_type'] ?? ''));
+        if ($mime !== '' && str_starts_with($mime, 'image/')) return true;
+        $ext = strtolower(pathinfo((string)($att['original_name'] ?? ''), PATHINFO_EXTENSION));
+        return in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'], true);
+    }));
+    if (empty($imagePhotos)) return null;
+
+    $target = null;
+    if (preg_match('/^id:(\d+)$/i', $targetToken, $m)) {
+        $targetId = (int)$m[1];
+        foreach ($imagePhotos as $att) {
+            if ((int)($att['id'] ?? 0) === $targetId) { $target = $att; break; }
+        }
+    } elseif (ctype_digit($targetToken)) {
+        $index = (int)$targetToken;
+        if ($index >= 1 && isset($imagePhotos[$index - 1])) $target = $imagePhotos[$index - 1];
+    }
+    if (!$target) return null;
+
+    $src = 'uploads/' . rawurlencode((string)$target['stored_name']);
+    $downloadUrl = 'download.php?id=' . (int)$target['id'];
+    $alt = h(stripTagInView((string)$target['original_name']));
+    $classes = 'inline-attachment-image align-' . h($align) . ' size-' . h($size);
+    $scaleX = $flip ? -1 : 1;
+    $imgStyle = 'transform:scaleX(' . $scaleX . ') rotate(' . $rotate . 'deg);transform-origin:center center;';
+
+    return '<figure class="' . $classes . '">'
+         . '<img src="' . h($src) . '" alt="' . $alt . '" loading="lazy" style="' . h($imgStyle) . '">'
+         . '<figcaption><a href="' . h($downloadUrl) . '">' . $alt . '</a></figcaption>'
+         . '</figure>';
+}
+
 function renderActionWithPhotoTokens(string $text, array $situationPhotos, array $actionPhotos): string {
     $richPrefix = '<!--richtext-->';
     $isRich = false;
@@ -161,7 +217,8 @@ function renderActionWithPhotoTokens(string $text, array $situationPhotos, array
     }
 
     $text = str_replace(['&#91;', '&#93;'], ['[', ']'], $text);
-    $tokenPattern = '/(\[[^\]\r\n]*상황사진[^\]\r\n]*\]|\[[^\]\r\n]*조치사진[^\]\r\n]*\])/u';
+    // [[첨부:...]] (board 에디터) + [상황사진]/[조치사진] (기존 토큰) 동시 처리
+    $tokenPattern = '/(\[\[\s*첨부\s*:\s*.+?\s*\]\]|\[[^\]\r\n]*상황사진[^\]\r\n]*\]|\[[^\]\r\n]*조치사진[^\]\r\n]*\])/u';
     $parts = preg_split($tokenPattern, $text, -1, PREG_SPLIT_DELIM_CAPTURE);
     if (!is_array($parts)) {
         return $isRich ? sanitizeNearMissRichtextInline($text) : nl2br(h($text));
@@ -170,6 +227,11 @@ function renderActionWithPhotoTokens(string $text, array $situationPhotos, array
     $html = '';
     foreach ($parts as $part) {
         $trimmed = trim($part);
+        if ($trimmed !== '' && preg_match('/^\[\[\s*첨부\s*:\s*(.+?)\s*\]\]$/u', $trimmed, $m)) {
+            $rendered = renderAttachmentTokenNM($m[1], $actionPhotos);
+            $html .= $rendered ?? '';
+            continue;
+        }
         if ($trimmed !== '' && preg_match('/^\[[^\]]*상황사진[^\]]*\]$/u', $trimmed)) {
             $html .= renderPhotoGridView($situationPhotos);
             continue;
@@ -191,7 +253,8 @@ $canEdit = $_currentUser && ($_currentUser['id'] === $row['author_id'] || $_curr
 $actionTaken = (string)($row['action_taken'] ?? '');
 $tokenScanText = str_replace(['&#91;', '&#93;'], ['[', ']'], $actionTaken);
 $hasSituationTokenInAction = (bool)preg_match('/\[[^\]\r\n]*상황사진[^\]\r\n]*\]/u', $tokenScanText);
-$hasActionTokenInAction = (bool)preg_match('/\[[^\]\r\n]*조치사진[^\]\r\n]*\]/u', $tokenScanText);
+$hasActionTokenInAction = (bool)preg_match('/\[[^\]\r\n]*조치사진[^\]\r\n]*\]/u', $tokenScanText)
+    || (bool)preg_match('/\[\[\s*첨부\s*:/u', $tokenScanText);
 $pageTitle = '아차사고 상세';
 ?>
 

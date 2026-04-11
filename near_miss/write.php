@@ -505,6 +505,26 @@ if ($form['incident_at'] !== '') {
                 <label>원인 <span class="req">*</span></label>
                 <textarea name="cause" required><?= h($form['cause']) ?></textarea>
             </div>
+            <div class="survey-field">
+                <label>현장 사진</label>
+                <div class="photo-upload-row">
+                    <label class="btn btn-sm" for="situation_photos_file">사진 선택</label>
+                    <input type="file" id="situation_photos_file" name="situation_photos[]" multiple accept="image/*" hidden>
+                    <span class="photo-upload-hint" id="situation-file-hint">선택된 파일 없음</span>
+                </div>
+                <div class="photo-thumb-row" id="situation-new-thumbs"></div>
+                <?php if (!empty($situationAtts)): ?>
+                    <div class="file-list" style="margin-top:8px;">
+                        <?php foreach ($situationAtts as $att): ?>
+                            <span class="existing-file">
+                                [상황] <?= h(stripTagPrefix($att['original_name'])) ?> (<?= formatBytes($att['file_size']) ?>)
+                                <span class="del" data-attach-id="<?= (int)$att['id'] ?>">✕</span>
+                            </span>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+                <p class="editor-help">현장 상황 사진을 첨부하세요. (여러 장 선택 가능)</p>
+            </div>
         </section>
 
         <section class="survey-card" data-survey-step>
@@ -607,64 +627,39 @@ if ($form['incident_at'] !== '') {
 
             <div class="survey-field">
                 <label>조치 내용 <span class="req">*</span></label>
-                <div class="plain-editor" data-plain-editor>
-                    <div class="plain-editor-toolbar">
-                        <select class="editor-font-size" data-editor-font-size>
-                            <option value="1">매우 작게</option>
-                            <option value="2">작게</option>
-                            <option value="3" selected>중</option>
-                            <option value="4">크게</option>
-                            <option value="5">매우 크게</option>
-                            <option value="6">제목1</option>
-                            <option value="7">제목2</option>
-                        </select>
-                        <button type="button" class="btn btn-sm editor-tool-btn" data-editor-action="bold" title="굵게"><b>B</b></button>
-                        <button type="button" class="btn btn-sm editor-tool-btn" data-editor-action="italic" title="기울임"><i>I</i></button>
-                        <button type="button" class="btn btn-sm editor-tool-btn" data-editor-action="underline" title="밑줄"><u>U</u></button>
-                        <button type="button" class="btn btn-sm editor-tool-btn" data-editor-action="strikeThrough" title="취소선"><s>S</s></button>
-                        <button type="button" class="btn btn-sm editor-tool-btn editor-color-btn" data-editor-action="foreColor" title="글자색">
-                            A
-                            <span class="color-swatch" data-editor-color-swatch></span>
-                            <input type="color" class="editor-color-input" data-editor-color value="#e8f2fc" tabindex="-1">
-                        </button>
-                        <button type="button" class="btn btn-sm editor-tool-btn" data-editor-action="removeFormat" title="서식 초기화">✕</button>
-                        <span class="toolbar-separator"></span>
-                        <button type="button" class="btn btn-sm" data-photo-picker="situation" data-photo-token="[상황사진]">상황사진 본문에 넣기</button>
-                        <button type="button" class="btn btn-sm" data-photo-picker="action" data-photo-token="[조치사진]">조치사진 본문에 넣기</button>
-                    </div>
-                    <div class="plain-editor-area" contenteditable="true" data-editor-area></div>
+                <textarea id="content" name="action_taken" required hidden><?= h($form['action_taken']) ?></textarea>
+                <div id="content-editor" class="content-editor" contenteditable="true" hidden></div>
+                <div class="editor-help">텍스트와 이미지를 함께 편집할 수 있습니다. 조치사진을 첨부하면 본문에 삽입할 수 있습니다.</div>
+            </div>
+
+            <div class="survey-field">
+                <label>조치사진 첨부</label>
+                <div class="nm-attach-wrap">
+                    <input type="file" id="attachments" name="action_photos[]" multiple accept="image/*">
+                    <div class="editor-help">최대 <?= formatBytes(MAX_UPLOAD_SIZE) ?> · 이미지 선택 시 본문에 삽입 가능</div>
+                    <div id="new-attachment-token-list" class="file-token-list"></div>
+                    <?php if (!empty($actionAtts)): ?>
+                        <div class="file-list">
+                            <?php foreach ($actionAtts as $att): ?>
+                                <span class="existing-file"
+                                      data-attach-id="<?= (int)$att['id'] ?>"
+                                      data-original-name="<?= h($att['original_name']) ?>"
+                                      data-is-image="1">
+                                    <?= h(stripTagPrefix($att['original_name'])) ?> (<?= formatBytes($att['file_size']) ?>)
+                                    <button type="button" class="insert-attachment-token"
+                                            data-token="<?= h('[[첨부:id:' . (int)$att['id'] . ']]') ?>"
+                                            title="본문에 이미지 삽입">본문삽입</button>
+                                    <span class="del" data-attach-id="<?= (int)$att['id'] ?>">×</span>
+                                </span>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
                 </div>
-                <textarea name="action_taken" required data-editor-source hidden><?= h($form['action_taken']) ?></textarea>
-                <div class="editor-help">사진 버튼을 누르면 파일 선택창이 바로 열리고, 선택 시 본문에 위치표시가 삽입됩니다.</div>
-                <div class="editor-help" id="inline-photo-status">선택된 신규 사진이 없습니다.</div>
-                <div id="inline-photo-inputs" hidden></div>
             </div>
 
             <div class="survey-field">
                 <label>추가 재발방지 메모</label>
                 <textarea name="prevention_plan"><?= h($form['prevention_plan']) ?></textarea>
-            </div>
-
-            <div class="survey-field">
-                <label>기존 첨부 사진</label>
-                <?php if (empty($situationAtts) && empty($actionAtts)): ?>
-                    <div class="editor-help">기존 첨부 사진이 없습니다.</div>
-                <?php else: ?>
-                    <div class="file-list">
-                        <?php foreach ($situationAtts as $att): ?>
-                            <span class="existing-file">
-                                [상황] <?= h(stripTagPrefix($att['original_name'])) ?> (<?= formatBytes($att['file_size']) ?>)
-                                <span class="del" data-attach-id="<?= (int)$att['id'] ?>">✕</span>
-                            </span>
-                        <?php endforeach; ?>
-                        <?php foreach ($actionAtts as $att): ?>
-                            <span class="existing-file">
-                                [조치] <?= h(stripTagPrefix($att['original_name'])) ?> (<?= formatBytes($att['file_size']) ?>)
-                                <span class="del" data-attach-id="<?= (int)$att['id'] ?>">✕</span>
-                            </span>
-                        <?php endforeach; ?>
-                    </div>
-                <?php endif; ?>
             </div>
         </section>
     </div>
@@ -681,373 +676,70 @@ if ($form['incident_at'] !== '') {
 
 <script>
 (function () {
+    // 체크리스트 '기타' 입력 토글
     var otherGroups = ['risk_type', 'unsafe_state', 'unsafe_action', 'careless_action', 'careless_state'];
-
     otherGroups.forEach(function (groupName) {
         var radios = Array.prototype.slice.call(document.querySelectorAll('input[type="radio"][name="' + groupName + '"]'));
         var wrap = document.querySelector('[data-other-wrap="' + groupName + '"]');
-        if (!radios.length || !wrap) {
-            return;
-        }
+        if (!radios.length || !wrap) return;
         var input = wrap.querySelector('input[type="text"]');
-        if (!input) {
-            return;
-        }
+        if (!input) return;
 
         var sync = function () {
-            var selected = radios.find(function (radio) { return radio.checked; });
+            var selected = radios.find(function (r) { return r.checked; });
             var show = !!selected && selected.value === '기타';
             wrap.hidden = !show;
             input.disabled = !show;
             input.required = show;
-            if (!show) {
-                input.value = '';
-            }
+            if (!show) input.value = '';
         };
-
-        radios.forEach(function (radio) {
-            radio.addEventListener('change', sync);
-        });
+        radios.forEach(function (radio) { radio.addEventListener('change', sync); });
         sync();
     });
 
-    var editorRoot = document.querySelector('[data-plain-editor]');
-    if (!editorRoot) {
-        return;
-    }
-    var editorArea = editorRoot.querySelector('[data-editor-area]');
-    var sourceTextarea = document.querySelector('textarea[data-editor-source]');
-    if (!editorArea || !sourceTextarea) {
-        return;
-    }
-    var TOKEN_REGEX = /(\[[^\]\r\n]*상황사진[^\]\r\n]*\]|\[[^\]\r\n]*조치사진[^\]\r\n]*\])/gu;
-    var TOKEN_SITUATION = '[상황사진]';
-    var TOKEN_ACTION = '[조치사진]';
-    var RICHTEXT_PREFIX = '<!--richtext-->';
-    var savedRange = null;
-
-    function saveEditorRange() {
-        var selection = window.getSelection();
-        if (!selection || selection.rangeCount === 0) return;
-        var range = selection.getRangeAt(0);
-        if (editorArea.contains(range.startContainer) && editorArea.contains(range.endContainer)) {
-            savedRange = range.cloneRange();
-        }
-    }
-
-    function bindThumbnailSource(img, file) {
+    // 상황사진 업로드 (Step 5) - 썸네일 미리보기
+    function bindThumb(img, file) {
         if (!img || !file) return;
         var useDataUrl = function () {
             if (!window.FileReader) return;
             var reader = new FileReader();
-            reader.onload = function (e) {
-                img.src = String((e && e.target && e.target.result) || '');
-            };
+            reader.onload = function (e) { img.src = String((e && e.target && e.target.result) || ''); };
             reader.readAsDataURL(file);
         };
         if (window.URL && typeof window.URL.createObjectURL === 'function') {
             try {
-                var objectUrl = window.URL.createObjectURL(file);
-                img.onload = function () { try { window.URL.revokeObjectURL(objectUrl); } catch (_) {} };
+                var url = window.URL.createObjectURL(file);
+                img.onload = function () { try { window.URL.revokeObjectURL(url); } catch (_) {} };
                 img.onerror = useDataUrl;
-                img.src = objectUrl;
+                img.src = url;
                 return;
             } catch (_) {}
         }
         useDataUrl();
     }
 
-    function createTokenNode(kind, fileList) {
-        var tokenNode = document.createElement('span');
-        tokenNode.className = 'editor-embed ' + (kind === 'situation' ? 'editor-token-situation' : 'editor-token-action');
-        tokenNode.setAttribute('contenteditable', 'false');
-        tokenNode.setAttribute('data-token', kind === 'situation' ? TOKEN_SITUATION : TOKEN_ACTION);
-        tokenNode.setAttribute('data-kind', kind);
-
-        var count = fileList && fileList.length ? fileList.length : 0;
-        var label = document.createElement('span');
-        label.className = 'editor-embed-label';
-        label.textContent = (kind === 'situation' ? '상황사진' : '조치사진') + (count > 0 ? (' ' + count + '장') : '');
-        tokenNode.appendChild(label);
-
-        if (count > 0) {
-            var thumbs = document.createElement('span');
-            thumbs.className = 'editor-embed-thumbs';
-            var thumbCount = Math.min(count, 2);
-            for (var i = 0; i < thumbCount; i++) {
-                var img = document.createElement('img');
-                img.alt = '미리보기';
-                bindThumbnailSource(img, fileList[i]);
-                thumbs.appendChild(img);
-            }
-            tokenNode.appendChild(thumbs);
-        }
-        return tokenNode;
-    }
-
-    function appendTextWithBreaks(parent, text) {
-        if (!text) return;
-        var lines = String(text).split('\n');
-        for (var i = 0; i < lines.length; i++) {
-            if (lines[i] !== '') parent.appendChild(document.createTextNode(lines[i]));
-            if (i < lines.length - 1) parent.appendChild(document.createElement('br'));
-        }
-    }
-
-    function appendParsedText(parent, text) {
-        var sourceText = String(text || '');
-        var cursor = 0;
-        var match;
-        TOKEN_REGEX.lastIndex = 0;
-        while ((match = TOKEN_REGEX.exec(sourceText)) !== null) {
-            appendTextWithBreaks(parent, sourceText.slice(cursor, match.index));
-            parent.appendChild(/상황사진/u.test(match[0]) ? createTokenNode('situation') : createTokenNode('action'));
-            cursor = TOKEN_REGEX.lastIndex;
-        }
-        appendTextWithBreaks(parent, sourceText.slice(cursor));
-    }
-
-    function hydrateTokenTextNodes(root) {
-        var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
-        var textNodes = [];
-        while (walker.nextNode()) textNodes.push(walker.currentNode);
-        textNodes.forEach(function (textNode) {
-            var text = textNode.nodeValue || '';
-            TOKEN_REGEX.lastIndex = 0;
-            if (!TOKEN_REGEX.test(text)) return;
-
-            var fragment = document.createDocumentFragment();
-            var cursor = 0;
-            TOKEN_REGEX.lastIndex = 0;
-            var m;
-            while ((m = TOKEN_REGEX.exec(text)) !== null) {
-                fragment.appendChild(document.createTextNode(text.slice(cursor, m.index)));
-                fragment.appendChild(/상황사진/u.test(m[0]) ? createTokenNode('situation') : createTokenNode('action'));
-                cursor = TOKEN_REGEX.lastIndex;
-            }
-            fragment.appendChild(document.createTextNode(text.slice(cursor)));
-            textNode.parentNode.replaceChild(fragment, textNode);
-        });
-    }
-
-    function renderEditorFromSource(raw) {
-        editorArea.innerHTML = '';
-        var source = String(raw || '');
-        if (source.startsWith(RICHTEXT_PREFIX)) {
-            var temp = document.createElement('div');
-            temp.innerHTML = source.slice(RICHTEXT_PREFIX.length);
-            hydrateTokenTextNodes(temp);
-            while (temp.firstChild) editorArea.appendChild(temp.firstChild);
-            return;
-        }
-        appendParsedText(editorArea, source);
-    }
-
-    function placeCaretAfter(node) {
-        var range = document.createRange();
-        var selection = window.getSelection();
-        range.setStartAfter(node);
-        range.collapse(true);
-        selection.removeAllRanges();
-        selection.addRange(range);
-        savedRange = range.cloneRange();
-    }
-
-    function getSafeRange() {
-        var selection = window.getSelection();
-        if (selection && selection.rangeCount > 0) {
-            var active = selection.getRangeAt(0);
-            if (editorArea.contains(active.startContainer)) {
-                return active;
-            }
-        }
-        if (savedRange && editorArea.contains(savedRange.startContainer)) {
-            return savedRange.cloneRange();
-        }
-        var fallback = document.createRange();
-        fallback.selectNodeContents(editorArea);
-        fallback.collapse(false);
-        return fallback;
-    }
-
-    function syncEditorValue() {
-        var clone = editorArea.cloneNode(true);
-        clone.querySelectorAll('.editor-embed').forEach(function (embed) {
-            var token = embed.getAttribute('data-token') || '';
-            embed.replaceWith(document.createTextNode(token));
-        });
-        clone.querySelectorAll('[contenteditable]').forEach(function (el) {
-            el.removeAttribute('contenteditable');
-        });
-        sourceTextarea.value = RICHTEXT_PREFIX + clone.innerHTML;
-    }
-
-    function insertNodeIntoEditor(node) {
-        editorArea.focus();
-        var range = getSafeRange();
-        range.deleteContents();
-        range.insertNode(node);
-        placeCaretAfter(node);
-        syncEditorValue();
-    }
-
-    function insertTextAtCursor(text) {
-        editorArea.focus();
-        var range = getSafeRange();
-        range.deleteContents();
-        var fragment = document.createDocumentFragment();
-        appendTextWithBreaks(fragment, text);
-        var lastNode = fragment.lastChild;
-        range.insertNode(fragment);
-        if (lastNode) {
-            placeCaretAfter(lastNode);
-        } else {
-            saveEditorRange();
-        }
-        syncEditorValue();
-    }
-
-    function insertTokenAtCursor(kind, fileList) {
-        insertNodeIntoEditor(createTokenNode(kind, fileList));
-    }
-
-    editorArea.addEventListener('paste', function (event) {
-        event.preventDefault();
-        var text = '';
-        if (event.clipboardData && event.clipboardData.getData) {
-            text = event.clipboardData.getData('text/plain') || '';
-        } else if (window.clipboardData && window.clipboardData.getData) {
-            text = window.clipboardData.getData('Text') || '';
-        }
-        if (text !== '') insertTextAtCursor(text);
-    });
-
-    editorArea.addEventListener('keyup', saveEditorRange);
-    editorArea.addEventListener('mouseup', saveEditorRange);
-    editorArea.addEventListener('focus', saveEditorRange);
-    document.addEventListener('selectionchange', saveEditorRange);
-    editorArea.addEventListener('input', syncEditorValue);
-    editorArea.addEventListener('blur', syncEditorValue);
-
-    var toolbar = editorRoot.querySelector('.plain-editor-toolbar');
-    var sizeSelect = toolbar ? toolbar.querySelector('[data-editor-font-size]') : null;
-    var colorInput = toolbar ? toolbar.querySelector('[data-editor-color]') : null;
-    var colorSwatch = toolbar ? toolbar.querySelector('[data-editor-color-swatch]') : null;
-
-    function updateToolbarState() {
-        if (!toolbar) return;
-        toolbar.querySelectorAll('[data-editor-action]').forEach(function (btn) {
-            var action = btn.getAttribute('data-editor-action');
-            if (action === 'foreColor' || action === 'removeFormat') return;
-            try {
-                btn.classList.toggle('is-active', document.queryCommandState(action));
-            } catch (_) {}
-        });
-    }
-
-    function runEditorCommand(action, value) {
-        editorArea.focus();
-        var range = getSafeRange();
-        var selection = window.getSelection();
-        selection.removeAllRanges();
-        selection.addRange(range);
-        document.execCommand(action, false, value == null ? null : value);
-        saveEditorRange();
-        updateToolbarState();
-        syncEditorValue();
-    }
-
-    if (toolbar) {
-        toolbar.addEventListener('mousedown', function (event) {
-            var toolBtn = event.target.closest('[data-editor-action]');
-            if (toolBtn && toolBtn.getAttribute('data-editor-action') !== 'foreColor') {
-                event.preventDefault();
+    var sitFileInput  = document.getElementById('situation_photos_file');
+    var sitThumbsWrap = document.getElementById('situation-new-thumbs');
+    var sitFileHint   = document.getElementById('situation-file-hint');
+    if (sitFileInput) {
+        sitFileInput.addEventListener('change', function () {
+            var files = sitFileInput.files;
+            var count = files ? files.length : 0;
+            if (sitFileHint) sitFileHint.textContent = count === 0 ? '선택된 파일 없음' : count + '개 선택됨';
+            if (sitThumbsWrap) {
+                sitThumbsWrap.innerHTML = '';
+                for (var i = 0; i < count; i++) {
+                    var img = document.createElement('img');
+                    img.className = 'photo-thumb';
+                    img.alt = '현장사진 ' + (i + 1);
+                    bindThumb(img, files[i]);
+                    sitThumbsWrap.appendChild(img);
+                }
             }
         });
-
-        toolbar.addEventListener('click', function (event) {
-            var toolBtn = event.target.closest('[data-editor-action]');
-            if (!toolBtn) return;
-            var action = toolBtn.getAttribute('data-editor-action') || '';
-            if (action === 'foreColor') {
-                if (colorInput) colorInput.click();
-                return;
-            }
-            runEditorCommand(action, null);
-        });
     }
-
-    if (sizeSelect) {
-        sizeSelect.addEventListener('change', function () {
-            runEditorCommand('fontSize', sizeSelect.value || '3');
-            sizeSelect.value = '3';
-        });
-    }
-
-    if (colorInput) {
-        colorInput.addEventListener('input', function () {
-            if (colorSwatch) colorSwatch.style.background = colorInput.value;
-        });
-        colorInput.addEventListener('change', function () {
-            runEditorCommand('foreColor', colorInput.value || '#e8f2fc');
-        });
-    }
-
-    var inlineBucket = document.getElementById('inline-photo-inputs');
-    var inlineStatus = document.getElementById('inline-photo-status');
-
-    function updateInlineStatus() {
-        if (!inlineStatus || !inlineBucket) return;
-        var inputs = inlineBucket.querySelectorAll('input[type="file"]');
-        var situationCount = 0;
-        var actionCount = 0;
-        inputs.forEach(function (input) {
-            var fileCount = input.files ? input.files.length : 0;
-            if (input.name === 'situation_photos[]') situationCount += fileCount;
-            if (input.name === 'action_photos[]') actionCount += fileCount;
-        });
-        var totalCount = situationCount + actionCount;
-        inlineStatus.textContent = totalCount === 0
-            ? '선택된 신규 사진이 없습니다.'
-            : ('신규 사진 선택: 상황 ' + situationCount + '개, 조치 ' + actionCount + '개');
-    }
-
-    function openInlinePicker(kind) {
-        if (!inlineBucket) return;
-        var input = document.createElement('input');
-        input.type = 'file';
-        input.hidden = true;
-        input.multiple = true;
-        input.accept = 'image/*';
-        input.name = kind === 'situation' ? 'situation_photos[]' : 'action_photos[]';
-        input.addEventListener('change', function () {
-            if (input.files && input.files.length > 0) {
-                insertTokenAtCursor(kind, input.files);
-                updateInlineStatus();
-            } else {
-                input.remove();
-                updateInlineStatus();
-            }
-        });
-        inlineBucket.appendChild(input);
-        input.click();
-    }
-
-    editorRoot.querySelectorAll('[data-photo-picker]').forEach(function (button) {
-        button.addEventListener('click', function () {
-            var kind = button.getAttribute('data-photo-picker') || '';
-            openInlinePicker(kind);
-        });
-    });
-
-    renderEditorFromSource(sourceTextarea.value || '');
-    syncEditorValue();
-    updateToolbarState();
-    updateInlineStatus();
-
-    var form = document.getElementById('write-form');
-    if (form) form.addEventListener('submit', syncEditorValue);
 })();
 </script>
 
+<script src="../board/assets/js/board.js"></script>
 <?php require_once 'includes/footer.php'; ?>

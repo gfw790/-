@@ -51,20 +51,7 @@
         });
     });
 
-    // 글쓰기 - 첨부파일 삭제 표시
-    document.querySelectorAll('.existing-file .del').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const id = btn.dataset.attachId;
-            btn.parentElement.style.opacity = '0.4';
-            btn.parentElement.style.textDecoration = 'line-through';
-            const hidden = document.createElement('input');
-            hidden.type = 'hidden';
-            hidden.name = 'delete_attachments[]';
-            hidden.value = id;
-            document.querySelector('form.write-form, form#write-form').appendChild(hidden);
-            btn.style.display = 'none';
-        });
-    });
+    // 글쓰기 - 첨부파일 삭제 표시 (아차사고 write.php에서는 board/assets/js/board.js 가 처리)
 
     // 글쓰기 - 투표 추가
     const addOptBtn = document.querySelector('.add-opt');
