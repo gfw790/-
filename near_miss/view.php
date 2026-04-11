@@ -33,7 +33,9 @@ function extractCauseLine(string $text, string $label): string {
 
 $attachments = getAttachments($id);
 $situationPhotos = [];
-$actionPhotos = [];
+$actionPhotos    = [];   // 전체 조치 사진 (토큰 렌더링용)
+$beforePhotos    = [];   // 조치 전
+$afterPhotos     = [];   // 조치 후
 
 foreach ($attachments as $att) {
     $name = (string)$att['original_name'];
@@ -41,6 +43,12 @@ foreach ($attachments as $att) {
         $situationPhotos[] = $att;
     } elseif (strncmp($name, '[조치] ', strlen('[조치] ')) === 0) {
         $actionPhotos[] = $att;
+        $stripped = substr($name, strlen('[조치] '));
+        if (str_starts_with($stripped, '조치 전_')) {
+            $beforePhotos[] = $att;
+        } else {
+            $afterPhotos[] = $att;
+        }
     }
 }
 
@@ -308,7 +316,21 @@ $pageTitle = '아차사고 상세';
                 <h3>즉시 조치</h3>
                 <div><?= renderActionWithPhotoTokens($actionTaken, $situationPhotos, $actionPhotos) ?></div>
                 <?php if (!empty($actionPhotos) && !$hasActionTokenInAction): ?>
-                    <?= renderPhotoGridView($actionPhotos) ?>
+                    <?php if (!empty($beforePhotos)): ?>
+                        <div class="action-photo-group">
+                            <div class="action-photo-group-label">조치 전</div>
+                            <?= renderPhotoGridView($beforePhotos) ?>
+                        </div>
+                    <?php endif; ?>
+                    <?php if (!empty($afterPhotos)): ?>
+                        <div class="action-photo-group">
+                            <div class="action-photo-group-label">조치 후</div>
+                            <?= renderPhotoGridView($afterPhotos) ?>
+                        </div>
+                    <?php endif; ?>
+                    <?php if (empty($beforePhotos) && empty($afterPhotos)): ?>
+                        <?= renderPhotoGridView($actionPhotos) ?>
+                    <?php endif; ?>
                 <?php endif; ?>
             </div>
             <div class="detail-item">

@@ -16,7 +16,7 @@ function stripTagPrefix(string $name): string {
     return $name;
 }
 
-function handleTaggedPhotoUploads(int $postId, array $files, string $tag): void {
+function handleTaggedPhotoUploads(int $postId, array $files, string $tag, string $namePrefix = ''): void {
     $allowedImages = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'];
     $uploadDir = __DIR__ . '/uploads/';
     if (!is_dir($uploadDir)) {
@@ -47,6 +47,11 @@ function handleTaggedPhotoUploads(int $postId, array $files, string $tag): void 
             continue;
         }
 
+        // namePrefix가 지정되면 "조치 전_YYMMDDHHMM.ext" 형식으로 자동 변경
+        $displayName = $namePrefix !== ''
+            ? $namePrefix . '_' . date('ymdHi') . '.' . $ext
+            : $origName;
+
         $stored = date('Ymd_His') . '_' . bin2hex(random_bytes(6)) . '.' . $ext;
         $target = $uploadDir . $stored;
         if (!move_uploaded_file($files['tmp_name'][$i], $target)) {
@@ -59,7 +64,7 @@ function handleTaggedPhotoUploads(int $postId, array $files, string $tag): void 
         );
         $stmt->execute([
             $postId,
-            '[' . $tag . '] ' . $origName,
+            '[' . $tag . '] ' . $displayName,
             $stored,
             (int)$files['size'][$i],
             mime_content_type($target) ?: null,
@@ -199,7 +204,8 @@ $nearMiss = null;
 $error = '';
 
 $situationAtts = [];
-$actionAtts = [];
+$beforeAtts = [];   // 조치 전 사진
+$afterAtts  = [];   // 조치 후 사진
 $currentTeam = trim((string)($user['dept'] ?? ''));
 $currentName = trim((string)($user['name'] ?? ''));
 
@@ -241,7 +247,12 @@ if ($editId > 0) {
         if (startsWithText($name, '[상황] ')) {
             $situationAtts[] = $att;
         } elseif (startsWithText($name, '[조치] ')) {
-            $actionAtts[] = $att;
+            $stripped = substr($name, strlen('[조치] '));
+            if (str_starts_with($stripped, '조치 전_')) {
+                $beforeAtts[] = $att;
+            } else {
+                $afterAtts[] = $att;
+            }
         }
     }
 }
@@ -411,8 +422,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!empty($_FILES['situation_photos']['name'][0])) {
                 handleTaggedPhotoUploads($postId, $_FILES['situation_photos'], '상황');
             }
+            if (!empty($_FILES['action_before_photos']['name'][0])) {
+                handleTaggedPhotoUploads($postId, $_FILES['action_before_photos'], '조치', '조치 전');
+            }
             if (!empty($_FILES['action_photos']['name'][0])) {
-                handleTaggedPhotoUploads($postId, $_FILES['action_photos'], '조치');
+                handleTaggedPhotoUploads($postId, $_FILES['action_photos'], '조치', '조치 후');
             }
 
             db()->commit();
@@ -634,26 +648,52 @@ if ($form['incident_at'] !== '') {
 
             <div class="survey-field">
                 <label>조치사진 첨부</label>
-                <div class="nm-attach-wrap">
-                    <input type="file" id="attachments" name="action_photos[]" multiple accept="image/*">
-                    <div class="editor-help">최대 <?= formatBytes(MAX_UPLOAD_SIZE) ?> · 이미지 선택 시 본문에 삽입 가능</div>
-                    <div id="new-attachment-token-list" class="file-token-list"></div>
-                    <?php if (!empty($actionAtts)): ?>
-                        <div class="file-list">
-                            <?php foreach ($actionAtts as $att): ?>
-                                <span class="existing-file"
-                                      data-attach-id="<?= (int)$att['id'] ?>"
-                                      data-original-name="<?= h($att['original_name']) ?>"
-                                      data-is-image="1">
-                                    <?= h(stripTagPrefix($att['original_name'])) ?> (<?= formatBytes($att['file_size']) ?>)
-                                    <button type="button" class="insert-attachment-token"
-                                            data-token="<?= h('[[첨부:id:' . (int)$att['id'] . ']]') ?>"
-                                            title="본문에 이미지 삽입">본문삽입</button>
-                                    <span class="del" data-attach-id="<?= (int)$att['id'] ?>">×</span>
-                                </span>
-                            <?php endforeach; ?>
-                        </div>
-                    <?php endif; ?>
+                <div class="nm-photo-split">
+
+                    <div class="nm-photo-group">
+                        <div class="nm-photo-group-label">조치 전 사진</div>
+                        <label class="btn btn-sm nm-file-btn" for="nm-before-photos">파일 선택</label>
+                        <input type="file" id="nm-before-photos" name="action_before_photos[]" multiple accept="image/*" class="nm-hidden-file">
+                        <span class="nm-file-hint" id="nm-before-hint">선택된 파일 없음</span>
+                        <div class="photo-thumb-row" id="nm-before-thumbs"></div>
+                        <?php if (!empty($beforeAtts)): ?>
+                            <div class="file-list">
+                                <?php foreach ($beforeAtts as $att): ?>
+                                    <span class="existing-file"
+                                          data-attach-id="<?= (int)$att['id'] ?>"
+                                          data-original-name="<?= h($att['original_name']) ?>"
+                                          data-is-image="1">
+                                        <?= h(stripTagPrefix($att['original_name'])) ?> (<?= formatBytes($att['file_size']) ?>)
+                                        <span class="del" data-attach-id="<?= (int)$att['id'] ?>">×</span>
+                                    </span>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="nm-photo-group">
+                        <div class="nm-photo-group-label">조치 후 사진</div>
+                        <input type="file" id="attachments" name="action_photos[]" multiple accept="image/*">
+                        <div class="editor-help">최대 <?= formatBytes(MAX_UPLOAD_SIZE) ?> · 이미지 선택 시 본문에 삽입 가능</div>
+                        <div id="new-attachment-token-list" class="file-token-list"></div>
+                        <?php if (!empty($afterAtts)): ?>
+                            <div class="file-list">
+                                <?php foreach ($afterAtts as $att): ?>
+                                    <span class="existing-file"
+                                          data-attach-id="<?= (int)$att['id'] ?>"
+                                          data-original-name="<?= h($att['original_name']) ?>"
+                                          data-is-image="1">
+                                        <?= h(stripTagPrefix($att['original_name'])) ?> (<?= formatBytes($att['file_size']) ?>)
+                                        <button type="button" class="insert-attachment-token"
+                                                data-token="<?= h('[[첨부:id:' . (int)$att['id'] . ']]') ?>"
+                                                title="본문에 이미지 삽입">본문삽입</button>
+                                        <span class="del" data-attach-id="<?= (int)$att['id'] ?>">×</span>
+                                    </span>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+
                 </div>
             </div>
 
@@ -716,6 +756,28 @@ if ($form['incident_at'] !== '') {
             } catch (_) {}
         }
         useDataUrl();
+    }
+
+    // 조치 전 사진 썸네일 미리보기
+    var beforeFileInput = document.getElementById('nm-before-photos');
+    var beforeThumbsWrap = document.getElementById('nm-before-thumbs');
+    var beforeFileHint   = document.getElementById('nm-before-hint');
+    if (beforeFileInput) {
+        beforeFileInput.addEventListener('change', function () {
+            var files = beforeFileInput.files;
+            var count = files ? files.length : 0;
+            if (beforeFileHint) beforeFileHint.textContent = count === 0 ? '선택된 파일 없음' : count + '개 선택됨';
+            if (beforeThumbsWrap) {
+                beforeThumbsWrap.innerHTML = '';
+                for (var i = 0; i < count; i++) {
+                    var img = document.createElement('img');
+                    img.className = 'photo-thumb';
+                    img.alt = '조치 전 ' + (i + 1);
+                    bindThumb(img, files[i]);
+                    beforeThumbsWrap.appendChild(img);
+                }
+            }
+        });
     }
 
     var sitFileInput  = document.getElementById('situation_photos_file');
