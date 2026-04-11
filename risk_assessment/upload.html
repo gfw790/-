@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>단위 위험성평가서 업로드</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "맑은 고딕", sans-serif;
+    background: #f0f4f8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 24px;
+  }
+  .card {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.10);
+    padding: 36px 40px;
+    width: 100%;
+    max-width: 520px;
+  }
+  h1 {
+    font-size: 18px;
+    color: #1F4E79;
+    margin-bottom: 6px;
+  }
+  .subtitle {
+    font-size: 12px;
+    color: #888;
+    margin-bottom: 28px;
+  }
+
+  /* 드롭존 */
+  .dropzone {
+    border: 2px dashed #4472C4;
+    border-radius: 10px;
+    padding: 36px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+    background: #F5F9FF;
+  }
+  .dropzone.dragover { background: #ddeeff; border-color: #1F4E79; }
+  .dropzone .icon {
+    font-size: 36px;
+    margin-bottom: 10px;
+    color: #4472C4;
+  }
+  .dropzone p  { font-size: 14px; color: #444; }
+  .dropzone small { font-size: 11px; color: #aaa; margin-top: 4px; display:block; }
+  #file-input { display: none; }
+
+  /* 선택된 파일명 */
+  #file-name {
+    margin-top: 12px;
+    font-size: 13px;
+    color: #2E75B6;
+    font-weight: bold;
+    min-height: 20px;
+    text-align: center;
+  }
+
+  /* 버튼 */
+  .btn-upload {
+    margin-top: 20px;
+    width: 100%;
+    padding: 13px;
+    background: #2E75B6;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-family: "맑은 고딕", sans-serif;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .btn-upload:hover:not(:disabled) { background: #1F4E79; }
+  .btn-upload:disabled { background: #b0c4d8; cursor: not-allowed; }
+
+  /* 진행바 */
+  .progress-wrap {
+    display: none;
+    margin-top: 16px;
+    background: #e8f0f8;
+    border-radius: 99px;
+    height: 8px;
+    overflow: hidden;
+  }
+  .progress-bar {
+    height: 100%;
+    background: #4472C4;
+    width: 0%;
+    transition: width 0.3s;
+    border-radius: 99px;
+  }
+
+  /* 결과 메시지 */
+  .result {
+    display: none;
+    margin-top: 20px;
+    padding: 14px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.7;
+  }
+  .result.success { background: #e8f5e9; border-left: 4px solid #4CAF50; color: #1b5e20; }
+  .result.error   { background: #fce4d6; border-left: 4px solid #e53935; color: #7f0000; }
+
+  /* 안내 */
+  .guide {
+    margin-top: 28px;
+    padding-top: 20px;
+    border-top: 1px solid #e8edf2;
+    font-size: 12px;
+    color: #777;
+    line-height: 1.8;
+  }
+  .guide b { color: #2E75B6; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>단위 위험성평가서 업로드</h1>
+  <p class="subtitle">엑셀 양식(단위위험성평가_양식.xlsx)을 MySQL DB에 저장합니다</p>
+
+  <div class="dropzone" id="dropzone" onclick="document.getElementById('file-input').click()">
+    <div class="icon">📂</div>
+    <p>클릭하거나 파일을 여기에 끌어다 놓으세요</p>
+    <small>.xlsx 파일만 지원 · 최대 10MB</small>
+  </div>
+  <input type="file" id="file-input" accept=".xlsx,.xls">
+  <div id="file-name"></div>
+
+  <button class="btn-upload" id="btn-upload" disabled onclick="uploadFile()">
+    업로드
+  </button>
+
+  <div class="progress-wrap" id="progress-wrap">
+    <div class="progress-bar" id="progress-bar"></div>
+  </div>
+
+  <div class="result" id="result"></div>
+
+  <div class="guide">
+    <b>업로드 전 확인사항</b><br>
+    · 시트명이 <b>단위위험성평가서</b>인지 확인하세요<br>
+    · D5(단위평가서명), C열(세부작업명), D열(위험요인)은 필수입니다<br>
+    · 10행부터 항목을 입력하세요<br>
+    · 위험도(L, O, R열)는 수식으로 자동계산됩니다
+  </div>
+</div>
+
+<script>
+const dropzone  = document.getElementById('dropzone');
+const fileInput = document.getElementById('file-input');
+const fileNameEl= document.getElementById('file-name');
+const btnUpload = document.getElementById('btn-upload');
+const progressWrap = document.getElementById('progress-wrap');
+const progressBar  = document.getElementById('progress-bar');
+const resultEl  = document.getElementById('result');
+
+// 드래그앤드롭
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragleave', ()=> dropzone.classList.remove('dragover'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) setFile(file);
+});
+
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) setFile(fileInput.files[0]);
+});
+
+function setFile(file) {
+  fileNameEl.textContent = '선택된 파일: ' + file.name;
+  btnUpload.disabled = false;
+  resultEl.style.display = 'none';
+  fileInput._file = file;
+}
+
+function uploadFile() {
+  const file = fileInput._file || fileInput.files[0];
+  if (!file) return;
+
+  const formData = new FormData();
+  formData.append('excel_file', file);
+
+  btnUpload.disabled = true;
+  progressWrap.style.display = 'block';
+  progressBar.style.width = '30%';
+  resultEl.style.display = 'none';
+
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', 'unit_ra_excel_upload.php');
+
+  xhr.upload.onprogress = e => {
+    if (e.lengthComputable) {
+      progressBar.style.width = Math.round((e.loaded / e.total) * 80) + '%';
+    }
+  };
+
+  xhr.onload = () => {
+    progressBar.style.width = '100%';
+    setTimeout(() => { progressWrap.style.display = 'none'; }, 400);
+
+    try {
+      const res = JSON.parse(xhr.responseText);
+      resultEl.style.display = 'block';
+      if (res.success) {
+        resultEl.className = 'result success';
+        const modeLabel = res.data.mode === 'UPDATE' ? '✏️ 수정' : '✅ 등록';
+        resultEl.innerHTML =
+          `<b>${modeLabel} 완료!</b><br>` +
+          `평가서명: ${res.data.unit_title}<br>` +
+          `항목 수: ${res.data.item_count}개<br>` +
+          `unit_ra_id = ${res.data.unit_ra_id}`;
+      } else {
+        resultEl.className = 'result error';
+        resultEl.innerHTML =
+          `${res.data.mode === 'UPDATE' ? '✏️ 수정' : '✅ 등록'} 완료!<br>` + `❌ <b>오류</b><br>${res.message}`;
+      }
+    } catch (e) {
+      resultEl.style.display = 'block';
+      resultEl.className = 'result error';
+      resultEl.innerHTML =
+          `${res.data.mode === 'UPDATE' ? '✏️ 수정' : '✅ 등록'} 완료!<br>` + '❌ 서버 응답을 파싱할 수 없습니다.<br>' + xhr.responseText;
+    }
+    btnUpload.disabled = false;
+  };
+
+  xhr.onerror = () => {
+    resultEl.style.display = 'block';
+    resultEl.className = 'result error';
+    resultEl.innerHTML =
+          `${res.data.mode === 'UPDATE' ? '✏️ 수정' : '✅ 등록'} 완료!<br>` + '❌ 네트워크 오류가 발생했습니다.';
+    btnUpload.disabled = false;
+    progressWrap.style.display = 'none';
+  };
+
+  xhr.send(formData);
+}
+</script>
+</body>
+</html>

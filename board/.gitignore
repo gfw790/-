@@ -1,0 +1,15 @@
+# DB 설정 (민감 정보)
+includes/config.php
+
+# 업로드된 파일
+uploads/*
+!uploads/.gitkeep
+
+# Windows 시스템 파일
+desktop.ini
+Thumbs.db
+
+# 에디터/IDE
+.vscode/
+*.swp
+*.swo

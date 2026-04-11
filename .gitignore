@@ -1,0 +1,41 @@
+# 환경 설정 (민감 정보)
+.env
+.env.*
+!.env.example
+
+# Laravel vendor
+vendor/
+node_modules/
+
+# Laravel 생성 파일
+bootstrap/cache/*
+!bootstrap/cache/.gitkeep
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/logs/*
+!storage/logs/.gitkeep
+
+# 업로드 파일 (사용자 데이터)
+uploads/*
+!uploads/.gitkeep
+upload/*
+!upload/.gitkeep
+
+# 내보내기/캐시 생성 파일
+export/*
+!export/.gitkeep
+tbm/cache/*
+!tbm/cache/.gitkeep
+tbm/output/*
+!tbm/output/.gitkeep
+
+# Claude 메모리 파일
+.claude/
+
+# Windows
+desktop.ini
+Thumbs.db
+
+# 백업 폴더
+tbm/backup_*/

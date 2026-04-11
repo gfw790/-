@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>위험성평가 열람</title>
+<style>
+  :root {
+    --blue-dark: #1a3a5c;
+    --blue-mid:  #2E75B6;
+    --blue-light:#e8f2fb;
+    --green:     #2e7d52;
+    --green-bg:  #e8f5ee;
+    --amber:     #b45309;
+    --amber-bg:  #fef3c7;
+    --red:       #9b1c1c;
+    --red-bg:    #fee2e2;
+    --gray:      #64748b;
+    --gray-bg:   #f1f5f9;
+    --white:     #ffffff;
+    --text:      #1e293b;
+    --text-sub:  #64748b;
+    --border:    #e2e8f0;
+    --radius:    14px;
+    --shadow:    0 2px 12px rgba(0,0,0,0.08);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: "맑은 고딕", "Apple SD Gothic Neo", sans-serif;
+    background: #f0f4f8;
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 1rem;
+  }
+
+  
+  /* 헤더 */
+  .header {
+    background: var(--blue-dark);
+    padding: 12px 16px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: transform 0.25s ease;
+  }
+  .header.hidden { transform: translateY(-100%); }
+  .header h1 {
+    color: white;
+    font-size: 1.214rem;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+  .header p { color: rgba(255,255,255,0.6); font-size: 0.857rem; margin-top: 2px; }
+
+  /* 검색 */
+  .search-wrap {
+    padding: 14px 16px;
+    background: white;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 60px;
+    z-index: 99;
+  }
+  .search-box {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    background: var(--gray-bg);
+    border-radius: 10px;
+    padding: 10px 14px;
+  }
+  .search-box svg { color: var(--gray); flex-shrink: 0; }
+  .search-box input {
+    border: none;
+    background: transparent;
+    font-size: 1.0rem;
+    font-family: inherit;
+    color: var(--text);
+    outline: none;
+    width: 100%;
+  }
+  .search-box input::placeholder { color: var(--text-sub); }
+
+  /* 필터 탭 */
+  .filter-tabs {
+    display: flex;
+    gap: 6px;
+    padding: 10px 16px 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .filter-tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    padding: 6px 14px;
+    border-radius: 99px;
+    font-size: 0.857rem;
+    font-weight: 600;
+    border: 1.5px solid var(--border);
+    background: white;
+    color: var(--text-sub);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+  }
+  .tab.active {
+    background: var(--blue-dark);
+    border-color: var(--blue-dark);
+    color: white;
+  }
+
+  /* 목록 */
+  .list-wrap { padding: 12px 16px; }
+  .count-label {
+    font-size: 0.857rem;
+    color: var(--text-sub);
+    margin-bottom: 10px;
+  }
+  .count-label b { color: var(--blue-mid); }
+
+  .card {
+    background: white;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 10px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    border: 1px solid var(--border);
+  }
+  .card:active { transform: scale(0.98); box-shadow: none; }
+
+  .card-header {
+    padding: 14px 16px 10px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .card-badge {
+    padding: 3px 10px;
+    border-radius: 99px;
+    font-size: 0.786rem;
+    font-weight: 700;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .badge-target { background: var(--green-bg);  color: var(--green); }
+  .badge-major  { background: var(--blue-light); color: var(--blue-dark); }
+  .badge-tool   { background: var(--amber-bg);   color: var(--amber); }
+  .badge-env    { background: var(--gray-bg);    color: var(--gray); }
+
+  .card-title {
+    font-size: 1.071rem;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.4;
+    flex: 1;
+  }
+  .card-body {
+    padding: 0 16px 14px;
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .card-meta {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.857rem;
+    color: var(--text-sub);
+  }
+  .card-meta svg { width: 13px; height: 13px; }
+
+  .card-footer {
+    padding: 10px 16px;
+    background: var(--gray-bg);
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .card-code { font-size: 0.857rem; color: var(--text-sub); font-family: monospace; }
+  .card-arrow {
+    color: var(--blue-mid);
+    font-size: 1.143rem;
+    font-weight: 700;
+  }
+
+  /* 빈 상태 */
+  .empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-sub);
+  }
+  .empty-icon { font-size: 3.429rem; margin-bottom: 12px; }
+  .empty p { font-size: 1.0rem; }
+
+  /* 로딩 */
+  .loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 60px 20px;
+    gap: 12px;
+    color: var(--text-sub);
+    font-size: 1.0rem;
+  }
+  .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--blue-mid);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* 항목수 뱃지 */
+  .item-count {
+    background: var(--blue-light);
+    color: var(--blue-dark);
+    font-size: 0.786rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 99px;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>위험성평가 열람</h1>
+    <p>단위 위험성평가서 목록</p>
+  </div>
+
+</div>
+
+<div class="search-wrap">
+  <div class="search-box">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+    </svg>
+    <input type="text" id="search-input" placeholder="평가서명, 공정명 검색..." oninput="filterList()">
+  </div>
+  <div class="filter-tabs" id="filter-tabs">
+    <div class="tab active" onclick="setFilter('')">전체</div>
+    <div class="tab" onclick="setFilter('target')">작업유형</div>
+    <div class="tab" onclick="setFilter('major_work')">중대위험작업</div>
+    <div class="tab" onclick="setFilter('tool')">공구/장비</div>
+    <div class="tab" onclick="setFilter('env')">작업환경</div>
+  </div>
+</div>
+
+<div class="list-wrap">
+  <div id="list-container" class="loading">
+    <div class="spinner"></div>
+    <span>불러오는 중...</span>
+  </div>
+</div>
+
+<script>
+let allData = [];
+let currentFilter = '';
+
+const typeMap = {
+  target:     { cls: 'target', label: '작업유형' },
+  major_work: { cls: 'major',  label: '중대위험작업' },
+  tool:       { cls: 'tool',   label: '공구/장비' },
+  env:        { cls: 'env',    label: '작업환경' },
+};
+
+async function loadList() {
+  try {
+    const res  = await fetch('../risk_assessment/unit_ra_list_api.php');
+    const json = await res.json();
+    if (!json.success) throw new Error(json.message);
+    allData = json.data;
+    filterList();
+  } catch(e) {
+    document.getElementById('list-container').innerHTML =
+      `<div class="empty"><div class="empty-icon">⚠️</div><p>오류: ${e.message}</p></div>`;
+  }
+}
+
+function setFilter(type) {
+  currentFilter = type;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+  filterList();
+}
+
+function filterList() {
+  const q = document.getElementById('search-input').value.trim().toLowerCase();
+  let filtered = allData;
+  if (currentFilter) filtered = filtered.filter(r => r.unit_type === currentFilter);
+  if (q) filtered = filtered.filter(r =>
+    (r.unit_title || '').toLowerCase().includes(q) ||
+    (r.process_name || '').toLowerCase().includes(q)
+  );
+  renderList(filtered);
+}
+
+function renderList(data) {
+  const el = document.getElementById('list-container');
+  if (!data.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">📋</div><p>해당하는 평가서가 없습니다</p></div>`;
+    return;
+  }
+
+  const countHtml = `<div class="count-label">총 <b>${data.length}</b>건</div>`;
+  const cards = data.map(r => {
+    const type = typeMap[r.unit_type] || { cls: 'env', label: r.unit_type };
+    const date = r.created_at ? r.created_at.slice(0,10) : '-';
+    return `
+      <div class="card" onclick="goDetail(${r.unit_ra_id})">
+        <div class="card-header">
+          <span class="card-badge badge-${type.cls}">${type.label}</span>
+          <span class="card-title">${escHtml(r.unit_title)}</span>
+        </div>
+        <div class="card-body">
+          <div class="card-meta">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+            </svg>
+            ${escHtml(r.process_name || '-')}
+          </div>
+          <div class="card-meta">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+            ${date}
+          </div>
+          <div class="card-meta">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+            ${escHtml(r.created_by || '-')}
+          </div>
+        </div>
+        <div class="card-footer">
+          <span class="card-code">${r.unit_code || '-'}</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="item-count">항목 ${r.item_count ?? 0}건</span>
+            <span class="card-arrow">›</span>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  el.innerHTML = countHtml + cards;
+}
+
+function goDetail(id) {
+  location.href = `view_detail.php?unit_ra_id=${id}`;
+}
+
+function escHtml(str) {
+  return String(str || '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// 스크롤 내리면 헤더 숨김
+let lastY = 0;
+window.addEventListener('scroll', () => {
+  const y = window.scrollY;
+  const header = document.querySelector('.header');
+  if (y > lastY && y > 60) header.classList.add('hidden');
+  else header.classList.remove('hidden');
+  lastY = y;
+}, { passive: true });
+
+loadList();
+</script>
+</body>
+</html>

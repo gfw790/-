@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>전기팀 안전작업표준서 2023</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e17;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --border: #1e2d45;
+    --accent: #f59e0b;
+    --accent2: #3b82f6;
+    --text: #e2e8f0;
+    --text-muted: #64748b;
+    --text-dim: #94a3b8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Noto Sans KR', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  .header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 0 2rem; position: sticky; top: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between; height: 64px;
+  }
+  .header-left { display: flex; align-items: center; gap: 1rem; }
+  .logo-badge { background: var(--accent); color: #000; font-weight: 900; font-size: 0.7rem; padding: 4px 8px; border-radius: 4px; letter-spacing: 0.05em; }
+  .header h1 { font-size: 1rem; font-weight: 700; color: var(--text); }
+  .header-meta { font-size: 0.75rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
+
+  .hero {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f1a2e 100%);
+    border-bottom: 1px solid var(--border); padding: 3rem 2rem; position: relative; overflow: hidden;
+  }
+  .hero::before {
+    content: ''; position: absolute; top: -50%; right: -10%; width: 500px; height: 500px;
+    background: radial-gradient(circle, rgba(245,158,11,0.06) 0%, transparent 70%); pointer-events: none;
+  }
+  .hero-inner { max-width: 1200px; margin: 0 auto; }
+  .hero-tag { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--accent); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+  .hero-tag::before { content: ''; display: block; width: 24px; height: 1px; background: var(--accent); }
+  .hero h2 { font-size: 2.5rem; font-weight: 900; line-height: 1.1; letter-spacing: -0.03em; margin-bottom: 0.75rem; }
+  .hero h2 span { color: var(--accent); }
+  .hero-sub { color: var(--text-dim); font-size: 0.9rem; margin-bottom: 2rem; max-width: 600px; line-height: 1.6; }
+  .stats-bar { display: flex; gap: 2rem; flex-wrap: wrap; }
+  .stat { display: flex; flex-direction: column; gap: 0.25rem; }
+  .stat-num { font-size: 1.8rem; font-weight: 900; color: var(--accent); font-family: 'JetBrains Mono', monospace; line-height: 1; }
+  .stat-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+
+  .main { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+
+  .section-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.15em; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.75rem; }
+  .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  .file-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2.5rem; }
+  .file-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; cursor: pointer; transition: all 0.2s; position: relative; overflow: hidden; }
+  .file-card:hover { border-color: var(--accent); background: var(--surface2); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+  .file-card.active { border-color: var(--accent); background: var(--surface2); }
+  .file-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--accent); opacity: 0; transition: opacity 0.2s; }
+  .file-card:hover::before, .file-card.active::before { opacity: 1; }
+  .file-num { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: var(--accent); letter-spacing: 0.1em; margin-bottom: 0.5rem; }
+  .file-title { font-size: 0.82rem; font-weight: 700; margin-bottom: 0.75rem; line-height: 1.3; }
+  .file-info { display: flex; align-items: center; justify-content: space-between; font-size: 0.7rem; color: var(--text-muted); }
+  .file-count { background: rgba(245,158,11,0.1); color: var(--accent); padding: 2px 8px; border-radius: 20px; font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+  .file-ext { font-family: 'JetBrains Mono', monospace; background: var(--border); padding: 2px 6px; border-radius: 3px; }
+  .file-unavail { opacity: 0.4; cursor: not-allowed; }
+  .file-unavail:hover { transform: none; box-shadow: none; border-color: var(--border); }
+  .file-unavail::before { display: none; }
+
+  .controls { display: flex; gap: 0.75rem; margin-bottom: 1.25rem; flex-wrap: wrap; align-items: center; }
+  .search-wrap { position: relative; flex: 1; min-width: 200px; }
+  .search-icon { position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
+  .search-input { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 0.85rem; padding: 0.625rem 1rem 0.625rem 2.5rem; outline: none; font-family: 'Noto Sans KR', sans-serif; transition: border-color 0.2s; }
+  .search-input:focus { border-color: var(--accent2); }
+  .search-input::placeholder { color: var(--text-muted); }
+  .filter-btn { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--text-dim); font-size: 0.8rem; padding: 0.625rem 1rem; cursor: pointer; transition: all 0.2s; white-space: nowrap; font-family: 'Noto Sans KR', sans-serif; }
+  .filter-btn:hover, .filter-btn.active { background: rgba(245,158,11,0.1); border-color: var(--accent); color: var(--accent); }
+
+  .results-info { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; font-size: 0.75rem; color: var(--text-muted); }
+  .results-count strong { color: var(--accent); font-family: 'JetBrains Mono', monospace; }
+
+  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; }
+  thead { background: var(--surface2); border-bottom: 1px solid var(--border); }
+  th { padding: 0.75rem 1rem; text-align: left; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); font-weight: 600; cursor: pointer; user-select: none; white-space: nowrap; }
+  th:hover { color: var(--text); }
+  th.sorted { color: var(--accent); }
+  td { padding: 0.75rem 1rem; font-size: 0.8rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tbody tr { transition: background 0.15s; }
+  tbody tr:hover { background: var(--surface2); }
+
+  .td-no { font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--accent); font-size: 0.75rem; }
+  .td-jobplan { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--text-muted); background: var(--border); padding: 2px 6px; border-radius: 3px; white-space: nowrap; display: inline-block; }
+  .td-name { font-weight: 500; line-height: 1.4; max-width: 340px; }
+  .highlight { background: rgba(245,158,11,0.25); color: var(--accent); border-radius: 2px; padding: 0 1px; }
+  .td-author { color: var(--text-dim); font-size: 0.75rem; white-space: nowrap; }
+  .td-date { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--text-muted); white-space: nowrap; }
+  .td-note { font-size: 0.7rem; color: var(--text-muted); }
+
+  .file-tag { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; padding: 2px 7px; border-radius: 3px; white-space: nowrap; }
+  .file-tag-1 { background: rgba(168,85,247,0.15); color: #c084fc; }
+  .file-tag-3 { background: rgba(59,130,246,0.15); color: #60a5fa; }
+  .file-tag-4 { background: rgba(16,185,129,0.15); color: #34d399; }
+
+  .empty { text-align: center; padding: 4rem 2rem; color: var(--text-muted); }
+  .empty-icon { font-size: 3rem; margin-bottom: 1rem; }
+  .empty p { font-size: 0.85rem; }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  @media (max-width: 768px) {
+    .hero h2 { font-size: 1.8rem; }
+    .td-jobplan, .td-date, .td-note { display: none; }
+    .main { padding: 1.5rem 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-left">
+    <span class="logo-badge">⚡ ELC</span>
+    <h1>전기팀 안전작업표준서</h1>
+  </div>
+  <span class="header-meta">2023년 개정판</span>
+</header>
+
+<section class="hero">
+  <div class="hero-inner">
+    <div class="hero-tag">Electrical Team · Safety Work Standards</div>
+    <h2>안전작업<span>표준서</span><br>통합 조회 시스템</h2>
+    <p class="hero-sub">전기팀 안전작업표준서 2023년 개정판. No.1~200번 작업을 빠르게 검색하고 조회하세요.</p>
+    <div class="stats-bar">
+      <div class="stat">
+        <span class="stat-num" id="total-count">149</span>
+        <span class="stat-label">총 작업 표준서</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num">5</span>
+        <span class="stat-label">파일 권호</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num">2023</span>
+        <span class="stat-label">최종 개정연도</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="main">
+  <div class="section-title">파일 목록</div>
+  <div class="file-cards">
+    <div class="file-card" onclick="filterByFile(1, this)" id="card-1">
+      <div class="file-num">VOL.01 · XLSX</div>
+      <div class="file-title">안전작업표준서<br>No.1 ~ 50</div>
+      <div class="file-info">
+        <span class="file-ext">.xlsx</span>
+        <span class="file-count">50개</span>
+      </div>
+    </div>
+    <div class="file-card file-unavail" title="구형 .xls 형식 — 데이터 미포함">
+      <div class="file-num">VOL.02 · XLS</div>
+      <div class="file-title">안전작업표준서<br>No.51 ~ 100</div>
+      <div class="file-info">
+        <span class="file-ext">.xls</span>
+        <span class="file-count">미포함</span>
+      </div>
+    </div>
+    <div class="file-card" onclick="filterByFile(3, this)" id="card-3">
+      <div class="file-num">VOL.03 · XLSX</div>
+      <div class="file-title">안전작업표준서<br>No.101 ~ 150</div>
+      <div class="file-info">
+        <span class="file-ext">.xlsx</span>
+        <span class="file-count">50개</span>
+      </div>
+    </div>
+    <div class="file-card" onclick="filterByFile(4, this)" id="card-4">
+      <div class="file-num">VOL.04 · XLSX</div>
+      <div class="file-title">안전작업표준서<br>No.151 ~ 200</div>
+      <div class="file-info">
+        <span class="file-ext">.xlsx</span>
+        <span class="file-count">49개</span>
+      </div>
+    </div>
+    <div class="file-card file-unavail" title="xlsb 형식 — 데이터 미포함">
+      <div class="file-num">VOL.05 · XLSB</div>
+      <div class="file-title">안전작업표준서<br>No.201 ~ 250</div>
+      <div class="file-info">
+        <span class="file-ext">.xlsb</span>
+        <span class="file-count">미포함</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">작업 표준서 목록</div>
+
+  <div class="controls">
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input class="search-input" type="text" id="search" placeholder="작업명, Job Plan 번호, 작성자 검색..." oninput="applyFilters()">
+    </div>
+    <button class="filter-btn active" id="btn-all" onclick="filterByFile(null, this)">전체</button>
+    <button class="filter-btn" onclick="filterByFile(1, this)">VOL.01 (1~50)</button>
+    <button class="filter-btn" onclick="filterByFile(3, this)">VOL.03 (101~150)</button>
+    <button class="filter-btn" onclick="filterByFile(4, this)">VOL.04 (151~200)</button>
+  </div>
+
+  <div class="results-info">
+    <span class="results-count"><strong id="shown-count">149</strong>개 표시 중</span>
+    <span id="sort-info" style="font-family:'JetBrains Mono',monospace;font-size:0.7rem">번호 순 정렬</span>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th onclick="sortBy('no')" id="th-no" class="sorted">번호 ▲</th>
+          <th onclick="sortBy('jobPlan')" id="th-jobPlan">Job Plan</th>
+          <th onclick="sortBy('name')" id="th-name">작업명</th>
+          <th onclick="sortBy('author')" id="th-author">작성자</th>
+          <th onclick="sortBy('revised')" id="th-revised">수정일</th>
+          <th onclick="sortBy('note')" id="th-note">비고</th>
+          <th>파일</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="empty" id="empty" style="display:none">
+      <div class="empty-icon">🔍</div>
+      <p>검색 결과가 없습니다.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+const DATA = [{"no":1,"jobPlan":"RLCCP006","name":"MV panel의 전력용 콘덴서 교체","created":"07.07.11","revised":"23.01.31","author":"김교성","note":"Rev.4","fileNo":1},{"no":2,"jobPlan":"RLCk0002","name":"MCC의  MC 교체","created":"07.07.11","revised":"23.01.31","author":"김교성","note":"Rev.3","fileNo":1},{"no":3,"jobPlan":"RLCMT012","name":"고압 MOTOR 교체","created":"07.07.17","revised":"23.01.31","author":"김교성","note":"Rev.3","fileNo":1},{"no":4,"jobPlan":"RLCCP008","name":"MCC panel의 전력용 콘덴서 교체","created":"07.07.17","revised":"23.01.31","author":"김교성","note":"Rev.4","fileNo":1},{"no":5,"jobPlan":"RLCk0004","name":"MCC의  MCCB 교체","created":"07.07.17","revised":"23.01.31","author":"김교성","note":"Rev.3","fileNo":1},{"no":6,"jobPlan":"RLCMT004","name":"저압 MOTOR 교체","created":"07.07.19","revised":"23.01.31","author":"김교성","note":"Rev.3","fileNo":1},{"no":7,"jobPlan":"RLCMT006","name":"L11BK1, K11BK1 주행 Motor 교체","created":"07.07.27","revised":"23.01.31","author":"김정기","note":"Rev.3","fileNo":1},{"no":8,"jobPlan":"RLCIO002","name":"R I/O Card 교체","created":"07.07.26","revised":"23.01.31","author":"서주현","note":"Rev.3","fileNo":1},{"no":9,"jobPlan":"RLCFU004","name":"MV panel VCS의  FUSE 교체","created":"07.07.25","revised":"23.01.31","author":"김교성","note":"Rev.3","fileNo":1},{"no":10,"jobPlan":"RLCMT014","name":"Weigh feeder용 motor 교체","created":"07.07.27","revised":"23.01.31","author":"서주현","note":"Rev.3","fileNo":1},{"no":11,"jobPlan":"RLCER002","name":"Stacker/Reclaimer Reel Cable 교체","created":"07.07.31","revised":"23.01.31","author":"김교성","note":"Rev.3","fileNo":1},{"no":12,"jobPlan":"RLCAC002","name":"Motor type actucator 교체(ABB)","created":"07.08.01","revised":"23.01.31","author":"김교성","note":"Rev.3","fileNo":1},{"no":13,"jobPlan":"RLCVS002","name":"INVERTER(UNIT, PANEL) 교체","created":"07.08.02","revised":"23.01.31","author":"김교성","note":"Rev.3","fileNo":1},{"no":14,"jobPlan":"RLCQC004","name":"VCB 교체","created":"07.08.03","revised":"23.01.31","author":"김교성","note":"Rev.3","fileNo":1},{"no":15,"jobPlan":"RPRES007","name":"EP 보수후 정지중 하전 Test","created":"07.07.14","revised":"23.01.31","author":"김교성","note":"Rev.3","fileNo":1},{"no":16,"jobPlan":"RLCDC002","name":"Bag filter time card 교체","created":"07.08.09","revised":"23.01.31","author":"김교성","note":"Rev.3","fileNo":1},{"no":17,"jobPlan":"RLCMT020","name":"Kiln main motor tachogenerator교체","created":"07.08.09","revised":"23.01.31","author":"김교성","note":"Rev.3","fileNo":1},{"no":18,"jobPlan":"RLCBJ002","name":"Battery 교체 (UPS)","created":"07.08.09","revised":"23.01.31","author":"김교성","note":"Rev.3","fileNo":1},{"no":19,"jobPlan":"RLCLH002","name":"조명등 수리 및 교체","created":"07.08.13","revised":"23.01.31","author":"서주현","note":"Rev.3","fileNo":1},{"no":20,"jobPlan":"RLCMT016","name":"Gas analyzer probe 청소","created":"07.08.13","revised":"23.01.31","author":"김교성","note":"Rev.3","fileNo":1},{"no":21,"jobPlan":"RLCSR002","name":"기동저항기 교체","created":"07.08.14","revised":"23.02.28","author":"김교성","note":"Rev.3","fileNo":1},{"no":22,"jobPlan":"RLCDH002","name":"MV PANEL(SWGR)교체","created":"07.08.14","revised":"23.02.28","author":"김교성","note":"Rev.2","fileNo":1},{"no":23,"jobPlan":"RLCMT002","name":"Motor Brush & B/holder 교체","created":"07.08.20","revised":"23.02.28","author":"노 식","note":"Rev.2","fileNo":1},{"no":24,"jobPlan":"RLCVS006","name":"Inverter & DC Drive Panel 상부 Cooling Fan 교체","created":"07.08.21","revised":"23.02.28","author":"김교성","note":"Rev.2","fileNo":1},{"no":25,"jobPlan":"RLCXX002","name":"Limit Switch 교체(RS,DS,SS,LS)","created":"07.08.21","revised":"23.02.28","author":"김교성","note":"Rev.2","fileNo":1},{"no":26,"jobPlan":"RLCQV002","name":"Local Switch Box 교체","created":"07.08.22","revised":"23.02.28","author":"김교성","note":"Rev.2","fileNo":1},{"no":27,"jobPlan":"RLCKY006","name":"보호계전기 교체","created":"07.08.28","revised":"23.02.28","author":"김교성","note":"Rev.3","fileNo":1},{"no":28,"jobPlan":"RLCMT008","name":"Kiln Main(DC) Motor 교체","created":"07.08.28","revised":"23.02.28","author":"김교성","note":"Rev.3","fileNo":1},{"no":29,"jobPlan":"RLCVA002","name":"Bag Filter Solenoid Coil 교체","created":"07.08.30","revised":"23.02.28","author":"김교성","note":"Rev.2","fileNo":1},{"no":30,"jobPlan":"RLCYY002","name":"Panel Meter 교체(전압계,전류계 등)","created":"07.08.31","revised":"23.02.28","author":"김교성","note":"Rev.3","fileNo":1},{"no":31,"jobPlan":"RLCBY002","name":"BATTERY CHARGER 교체","created":"07.09.05","revised":"23.02.28","author":"서주현","note":"Rev.2","fileNo":1},{"no":32,"jobPlan":"RLCDA002","name":"Fisher Pneumatic Actuator Positioner 교체","created":"07.09.06","revised":"23.02.28","author":"김교성","note":"Rev.2","fileNo":1},{"no":33,"jobPlan":"RLCEC004","name":"LV PANEL 교체","created":"07.09.07","revised":"23.02.28","author":"김교성","note":"Rev.3","fileNo":1},{"no":34,"jobPlan":"RLCPU002","name":"액체저항기 순환 PUMP교체","created":"07.09.07","revised":"23.02.28","author":"김교성","note":"Rev.3","fileNo":1},{"no":35,"jobPlan":"ISTWL002","name":"Cable 포설 작업","created":"07.09.17","revised":"23.02.28","author":"김교성","note":"Rev.2","fileNo":1},{"no":36,"jobPlan":"CLNWC002","name":"Cable 철거 작업","created":"07.11.26","revised":"23.02.28","author":"김교성","note":"Rev.2","fileNo":1},{"no":37,"jobPlan":"IFSCK002","name":"Burner/Cooler CCD Camera 점검/청소","created":"07.11.20","revised":"23.02.28","author":"김교성","note":"Rev.2","fileNo":1},{"no":38,"jobPlan":"RPRMT002","name":"저압 Motor Bearing 교체","created":"07.11.09","revised":"23.02.28","author":"한금재","note":"Rev.3","fileNo":1},{"no":39,"jobPlan":"RLCMT018","name":"저압 Motor Brake 교체","created":"07.10.23","revised":"23.02.28","author":"노식","note":"Rev.2","fileNo":1},{"no":40,"jobPlan":"RPRWH002(1)","name":"154kV 철탑 점검 및 보수","created":"07.11.07","revised":"23.02.28","author":"노식","note":"Rev.2","fileNo":1},{"no":41,"jobPlan":"RPRWH002(2)","name":"154kV 철탑 활선애자 세척","created":"07.11.06","revised":"23.03.30","author":"김교성","note":"Rev.3","fileNo":1},{"no":42,"jobPlan":"RPRWH002(3)","name":"154kV TL 선로보수(동해~옥계)","created":"07.11.06","revised":"23.03.30","author":"노식","note":"Rev.3","fileNo":1},{"no":43,"jobPlan":"INSQS002(1)","name":"GIS 보수 및 점검(SF6 Gas 차단기)","created":"07.11.05","revised":"23.03.30","author":"김교성","note":"Rev.3","fileNo":1},{"no":44,"jobPlan":"INSQS002(2)","name":"GIS 보수 및 점검(단로기)","created":"07.11.05","revised":"23.03.30","author":"김교성","note":"Rev.3","fileNo":1},{"no":45,"jobPlan":"INSQS002(3)","name":"GIS 보수 및 점검(접지개폐기)","created":"07.11.05","revised":"23.03.30","author":"김교성","note":"Rev.3","fileNo":1},{"no":46,"jobPlan":"INSQS002(4)","name":"GIS 보수 및 점검","created":"07.11.05","revised":"23.03.30","author":"김교성","note":"Rev.3","fileNo":1},{"no":47,"jobPlan":"RPRTF004(1)","name":"154kV MTR 보수 및 점검","created":"07.11.06","revised":"23.03.30","author":"노식","note":"Rev.2","fileNo":1},{"no":48,"jobPlan":"RPRQC006","name":"Unit 전기실 VCB 점검","created":"07.11.06","revised":"23.03.30","author":"김교성","note":"Rev.3","fileNo":1},{"no":49,"jobPlan":"INSWH002(1)","name":"전기실 Incomming Cable 점검","created":"07.11.06","revised":"23.03.30","author":"김교성","note":"Rev.3","fileNo":1},{"no":50,"jobPlan":"INSWH002(2)","name":"설비 고압 Cable 점검","created":"07.11.06","revised":"23.03.30","author":"김교성","note":"Rev.3","fileNo":1},{"no":101,"jobPlan":"RPREC012","name":"용접기 panel 수리","created":"10.10.07","revised":"23.07.28","author":"김교성","note":"Rev.3","fileNo":3},{"no":102,"jobPlan":"CLNEC002","name":"Panel 철거 및 정리","created":"10.10.14","revised":"23.07.28","author":"김교성","note":"Rev.3","fileNo":3},{"no":103,"jobPlan":"RLCMT024","name":"LAF pump motor 교체 및 시운전","created":"10.09.06","revised":"23.07.28","author":"한금재","note":"Rev.3","fileNo":3},{"no":104,"jobPlan":"PWKWC008","name":"Signal Cable 해체,결선 작업","created":"08.06.18","revised":"23.07.28","author":"김정기","note":"Rev.3","fileNo":3},{"no":105,"jobPlan":"RLCLH004","name":"조명등 수리 및 교체(벽부형,천정형)","created":"08.06.19","revised":"23.07.28","author":"최종태","note":"Rev.3","fileNo":3},{"no":106,"jobPlan":"ADJWF006","name":"KUBOTA weighfeeder calibration","created":"11.03.14","revised":"23.07.28","author":"서주현","note":"Rev.3","fileNo":3},{"no":107,"jobPlan":"ADJBS002","name":"KUBOTA belt scale calibration","created":"11.03.14","revised":"23.07.28","author":"김교성","note":"Rev.3","fileNo":3},{"no":108,"jobPlan":"CLNMT008","name":"DC motor brush 청소(운전중)","created":"11.06.27","revised":"23.07.28","author":"김교성","note":"Rev.3","fileNo":3},{"no":109,"jobPlan":"PWKQC002","name":"고압 PANEL 차단기 인입/인출","created":"10.07.03","revised":"23.07.28","author":"김교성","note":"Rev.3","fileNo":3},{"no":110,"jobPlan":"RPRMC006","name":"고압 PANEL 점검","created":"10.07.23","revised":"23.07.28","author":"김교성","note":"Rev.3","fileNo":3},{"no":111,"jobPlan":"RPRVS008","name":"Inverter overhaul","created":"11.07.02","revised":"23.07.28","author":"김교성","note":"Rev.3","fileNo":3},{"no":112,"jobPlan":"RPRWH002","name":"광산 배전선로 보수(22.9KV)","created":"11.05.18","revised":"23.07.28","author":"노 식","note":"Rev.3","fileNo":3},{"no":113,"jobPlan":"RLCQC002","name":"전기실 정전작업(VCB 개조)","created":"11.06.29","revised":"23.07.28","author":"노 식","note":"Rev.3","fileNo":3},{"no":114,"jobPlan":"RPRSU004","name":"전기실(광산 소형) 지붕 보강 작업","created":"11.07.08","revised":"23.07.28","author":"노 식","note":"Rev.3","fileNo":3},{"no":115,"jobPlan":"RLCCN002","name":"Hoist trolley bar 교체","created":"11.07.27","revised":"23.07.28","author":"노 식","note":"Rev.3","fileNo":3},{"no":116,"jobPlan":"RLCLX004","name":"BIN LOADCELL 교체","created":"11.08.02","revised":"23.07.28","author":"김교성","note":"Rev.3","fileNo":3},{"no":117,"jobPlan":"LUBMT004","name":"MOTOR GREASE 보충","created":"11.07.29","revised":"23.07.28","author":"김교성","note":"Rev.3","fileNo":3},{"no":118,"jobPlan":"RLCXL004","name":"COOLER UNDERCUT LEVEL SWITCH 교체","created":"11.07.29","revised":"23.07.28","author":"전제봉,조동근,강광원","note":"Rev.3","fileNo":3},{"no":119,"jobPlan":"CLNMT010","name":"KILN MAIN MOTOR FILTER 청소","created":"11.07.29","revised":"23.07.28","author":"김교성","note":"Rev.3","fileNo":3},{"no":120,"jobPlan":"RPRAL002","name":"AIR BLASTER 수리","created":"11.08.12","revised":"23.07.28","author":"전제봉,조동근,강광원","note":"Rev.3","fileNo":3},{"no":121,"jobPlan":"RLCXL006","name":"BIN LEVEL SWITCH 교체","created":"11.08.12","revised":"23.07.28","author":"전제봉,조동근,강광원","note":"Rev.3","fileNo":3},{"no":122,"jobPlan":"RPRZX004","name":"LSP EXTRACTOR TROLLEY BAR 작업(221EX)","created":"11.08.19","revised":"23.07.28","author":"노 식","note":"Rev.3","fileNo":3},{"no":123,"jobPlan":"RPRLX008","name":"COAL DOSING PREHOPPER LEVEL SWITCH 수리","created":"11.08.26","revised":"23.07.28","author":"김교성","note":"Rev.3","fileNo":3},{"no":124,"jobPlan":"ADJVS010","name":"KILN DC DRIVE SPEED 오차 CALIBRATION","created":"11.09.22","revised":"23.07.28","author":"김교성","note":"Rev.3","fileNo":3},{"no":125,"jobPlan":"RLCBS002","name":"Belt scale speed measuring unit 교체(kubota)","created":"11.09.23","revised":"23.07.28","author":"노 식","note":"Rev.3","fileNo":3},{"no":126,"jobPlan":"RLCCK002","name":"무선 CCTV 설치","created":"11.09.23","revised":"23.07.28","author":"노 식","note":"Rev.3","fileNo":3},{"no":127,"jobPlan":"CLNWC006","name":"CABLE 전선관 배관작업","created":"11.09.23","revised":"23.07.28","author":"김교성","note":"Rev.3","fileNo":3},{"no":128,"jobPlan":"RPRPP002","name":"PT 압력관 배관작업(신규,교체)","created":"11.09.23","revised":"23.07.28","author":"김교성","note":"Rev.3","fileNo":3},{"no":129,"jobPlan":"RPRGN002","name":"154KV 증설 비상발전기 냉각수 fan unit 이설","created":"11.09.27","revised":"23.07.28","author":"노 식","note":"Rev.3","fileNo":3},{"no":130,"jobPlan":"RPRWC010","name":"Reclaimer rake car cable 교체","created":"11.09.27","revised":"23.07.28","author":"김교성","note":"Rev.3","fileNo":3},{"no":131,"jobPlan":"ADJYP002","name":"PRESSURE TRANSMITTER CALIBRATION","created":"11.09.27","revised":"23.08.30","author":"김교성","note":"Rev.3","fileNo":3},{"no":132,"jobPlan":"RLCLH004","name":"가로등 수리 및 교체","created":"11.09.27","revised":"23.08.30","author":"김교성","note":"Rev.3","fileNo":3},{"no":133,"jobPlan":"RLCLH006","name":"벽부,천정 및 폴대형 조명등 수리 및 교체","created":"11.09.27","revised":"23.08.30","author":"김교성","note":"Rev.3","fileNo":3},{"no":134,"jobPlan":"RLCLH008","name":"전주,조명타워 조명등 수리 및 교체","created":"11.09.27","revised":"23.08.30","author":"김교성","note":"Rev.3","fileNo":3},{"no":135,"jobPlan":"RLCLH010","name":"건물,전기실 형광등 수리 및 교체","created":"11.09.27","revised":"23.08.30","author":"김교성","note":"Rev.3","fileNo":3},{"no":136,"jobPlan":"RLCLH012","name":"콘센트 설치 및 교체","created":"11.09.27","revised":"23.08.30","author":"김교성","note":"Rev.3","fileNo":3},{"no":137,"jobPlan":"ISTWC012","name":"Heating cable 설치","created":"11.09.27","revised":"23.08.30","author":"김교성","note":"Rev.3","fileNo":3},{"no":138,"jobPlan":"ADJAG002","name":"Gas analyzer calibration","created":"11.09.27","revised":"23.08.30","author":"김교성","note":"Rev.3","fileNo":3},{"no":139,"jobPlan":"ADJYT002","name":"Temperature transmitter calibration","created":"11.09.27","revised":"23.08.30","author":"김교성","note":"Rev.3","fileNo":3},{"no":140,"jobPlan":"ADJWF008","name":"HASLER weighfeeder calibration","created":"11.10.14","revised":"-","author":"서주현","note":"Rev.3","fileNo":3},{"no":141,"jobPlan":"ADJWF010","name":"HASLER weighfeeder parameter loading & back up","created":"11.10.14","revised":"-","author":"노 식","note":"Rev.3","fileNo":3},{"no":142,"jobPlan":"RPRLP002","name":"피뢰설비 보수","created":"11.11.28","revised":"23.08.30","author":"노 식","note":"Rev.3","fileNo":3},{"no":143,"jobPlan":"RLCKY002","name":"Panel 내부 control relay 교체","created":"11.03.30","revised":"23.08.30","author":"배진현","note":"Rev.3","fileNo":3},{"no":144,"jobPlan":"RLCMT026","name":"저압 Motor 단자 box 교체","created":"11.07.01","revised":"23.08.30","author":"김기훈","note":"Rev.3","fileNo":3},{"no":145,"jobPlan":"RLCEL002","name":"Hasler W/F SWS card 교체","created":"11.04.28","revised":"23.08.30","author":"임용빈","note":"Rev.3","fileNo":3},{"no":146,"jobPlan":"RLCMT028","name":"기동저항기 내부 operating motor & 감속기 교체","created":"11.04.25","revised":"23.08.30","author":"김기훈","note":"Rev.3","fileNo":3},{"no":147,"jobPlan":"RLCKY004","name":"67G 계전기 교체","created":"11.04.11","revised":"23.08.30","author":"김기훈","note":"Rev.3","fileNo":3},{"no":148,"jobPlan":"ADJWF012","name":"2.3호 W/F 점검 및 Calibration","created":"11.04.05","revised":"23.08.30","author":"임용빈","note":"Rev.3","fileNo":3},{"no":149,"jobPlan":"RLCLX002","name":"1호 W/F load cell 교체","created":"11.05.02","revised":"23.08.30","author":"김기훈","note":"Rev.3","fileNo":3},{"no":150,"jobPlan":"RLCCK004","name":"ST/RE 무선 송수신기 교체","created":"11.05.03","revised":"23.08.30","author":"임용빈","note":"Rev.3","fileNo":3},{"no":151,"jobPlan":"RLCYT006","name":"R/M 감속기 RTD, Vibration sensor 해체,설치","created":"11.04.13","revised":"23.08.30","author":"김기훈","note":"Rev.3","fileNo":4},{"no":152,"jobPlan":"RLCYT008","name":"Pressure transmitter 점검,조정,교체","created":"11.11.18","revised":"23.08.30","author":"임용빈","note":"Rev.3","fileNo":4},{"no":154,"jobPlan":"RPRXX006","name":"Kiln tire slip 측정용 근접 sensor 수리","created":"12.01.05","revised":"23.08.30","author":"김교성","note":"Rev.3","fileNo":4},{"no":155,"jobPlan":"RPRWC006","name":"고압 CV 케이블 종단접속재 시공","created":"12.01.05","revised":"23.08.30","author":"김교성","note":"Rev.3","fileNo":4},{"no":156,"jobPlan":"RPRTF006","name":"MTR OLTC 점검 및 보수","created":"12.01.17","revised":"23.09.26","author":"노  식","note":"Rev.3","fileNo":4},{"no":157,"jobPlan":"RPRSQ002","name":"GCB 보수 및 점검","created":"12.01.17","revised":"23.09.26","author":"노  식","note":"Rev.3","fileNo":4},{"no":158,"jobPlan":"RPRSQ002","name":"1호 GCB PUMP 교체","created":"12.01.31","revised":"23.09.26","author":"노  식","note":"Rev.3","fileNo":4},{"no":159,"jobPlan":"RLCVS004","name":"고압 INVERTER CELL 교체","created":"12.02.20","revised":"23.09.26","author":"노  식","note":"Rev.3","fileNo":4},{"no":160,"jobPlan":"RPRSU004","name":"수냉식냉방기 OVERHAUL","created":"12.03.02","revised":"23.09.26","author":"김교성","note":"Rev.3","fileNo":4},{"no":161,"jobPlan":"RLCCN004","name":"Crane hoist drive SCR 교체","created":"12.03.07","revised":"23.09.26","author":"노  식","note":"Rev.3","fileNo":4},{"no":162,"jobPlan":"RPRQC004","name":"1호 Incoming VCB cradle 교체","created":"12.03.09","revised":"23.09.26","author":"노  식","note":"Rev.3","fileNo":4},{"no":163,"jobPlan":"RPRWH004","name":"22.9kV 배전선로 전주 보수","created":"12.03.30","revised":"23.09.26","author":"서주현","note":"Rev.3","fileNo":4},{"no":164,"jobPlan":"RLCBJ004","name":"Battery charger용 battery 교체","created":"12.04.05","revised":"23.09.26","author":"노  식","note":"Rev.3","fileNo":4},{"no":165,"jobPlan":"RPRGN002","name":"비상발전기 엔진 보수","created":"12.04.16","revised":"23.09.26","author":"노  식","note":"Rev.3","fileNo":4},{"no":166,"jobPlan":"RPRQC006","name":"고압 차단기(VCB) 수리","created":"12.05.14","revised":"23.09.26","author":"노  식","note":"Rev.3","fileNo":4},{"no":167,"jobPlan":"RLCMT030","name":"CBC Encoder 교체","created":"12.06.04","revised":"23.09.26","author":"김원규","note":"Rev.3","fileNo":4},{"no":168,"jobPlan":"RLCER004","name":"K11 Reel Cable 교체","created":"12.06.14","revised":"23.09.26","author":"김원규","note":"Rev.3","fileNo":4},{"no":169,"jobPlan":"RLCMT032","name":"Slipring Brush & B/holder 교체","created":"12.06.14","revised":"23.09.26","author":"김원규","note":"Rev.3","fileNo":4},{"no":170,"jobPlan":"RPRTS004","name":"O-Sepa 하부 베어링 RTD 교체","created":"12.07.02","revised":"23.09.26","author":"김원규","note":"Rev.3","fileNo":4},{"no":171,"jobPlan":"RPREZ002","name":"전기설비보수(TRAY.PIPE.CABLE.PIT.PANEL)","created":"12.01.03","revised":"23.09.26","author":"김정기","note":"Rev.3","fileNo":4},{"no":172,"jobPlan":"RPRVS010","name":"인버터 Reactor 절연저항 측정","created":"12.07.18","revised":"23.09.26","author":"김교성","note":"Rev.3","fileNo":4},{"no":173,"jobPlan":"RPRVS012","name":"인버터 오실로스코프 출력파형 측정","created":"12.07.18","revised":"23.09.26","author":"김교성","note":"Rev.3","fileNo":4},{"no":174,"jobPlan":"RPRWH006","name":"22.9KV 배전선로 전주 LA 교체","created":"12.07.19","revised":"23.09.26","author":"노  식","note":"Rev.3","fileNo":4},{"no":175,"jobPlan":"RPRWH008","name":"22.9KV 배전선로 전주 교체","created":"12.08.14","revised":"23.09.26","author":"노  식","note":"Rev.3","fileNo":4},{"no":176,"jobPlan":"RLCLH014","name":"경광등 교체","created":"12.08.20","revised":"23.09.26","author":"김교성","note":"Rev.3","fileNo":4},{"no":177,"jobPlan":"ADJBS004","name":"Schenck belt scale calibration","created":"12.08.29","revised":"23.09.26","author":"김원규","note":"Rev.3","fileNo":4},{"no":178,"jobPlan":"UNLER002","name":"Unloader Reel Cable 작업","created":"12.08.30","revised":"23.09.26","author":"김원규","note":"Rev.3","fileNo":4},{"no":179,"jobPlan":"CLNEZ002","name":"맨홀 내부청소","created":"12.11.27","revised":"23.09.26","author":"김교성","note":"Rev.3","fileNo":4},{"no":180,"jobPlan":"RPRTF008","name":"1호 MTR 절연유 보충","created":"12.12.13","revised":"23.09.26","author":"노  식","note":"Rev.3","fileNo":4},{"no":181,"jobPlan":"RLCVS008","name":"Inverter & DC Drive Panel 하부 cooling fan 교체","created":"13.02.04","revised":"23.09.26","author":"김교성","note":"Rev.3","fileNo":4},{"no":182,"jobPlan":"ISRWH002","name":"고압 Cable 활선 진단","created":"13.02.04","revised":"23.09.26","author":"노  식","note":"Rev.3","fileNo":4},{"no":183,"jobPlan":"RPRSQ002","name":"지하공동구내 작업","created":"13.02.12","revised":"23.09.26","author":"노  식","note":"Rev.3","fileNo":4},{"no":184,"jobPlan":"RPRKY008","name":"보호계전기 동작시험","created":"13.03.18","revised":"23.09.26","author":"김교성","note":"Rev.3","fileNo":4},{"no":185,"jobPlan":"CLNWC008","name":"CCR MIMIC cable 철거","created":"13.05.06","revised":"23.09.26","author":"김교성","note":"Rev.3","fileNo":4},{"no":186,"jobPlan":"ADJYF002","name":"LAF FLEXIM flowmeter manual calibration","created":"13.06.03","revised":"-","author":"김교성","note":"Rev.2","fileNo":4},{"no":187,"jobPlan":"RLCYY004","name":"Panel 영상전압계 교체","created":"13.06.03","revised":"22.10.31","author":"김교성","note":"Rev.3","fileNo":4},{"no":188,"jobPlan":"RPRDC002","name":"Bag filter time card 수리(Shop)","created":"13.09.06","revised":"22.10.31","author":"김교성","note":"Rev.3","fileNo":4},{"no":189,"jobPlan":"RPRAG002","name":"가스분석기 diaphragm pump 수리(Shop)","created":"13.09.06","revised":"22.10.31","author":"김교성","note":"Rev.3","fileNo":4},{"no":190,"jobPlan":"INSDH006","name":"고압 PANEL BUSBAR 치수측정","created":"13.11.05","revised":"22.10.31","author":"김교성","note":"Rev.3","fileNo":4},{"no":191,"jobPlan":"ADJXL010","name":"LAF 초음파 LEVEL MAPPING","created":"14.01.18","revised":"22.10.31","author":"김교성","note":"Rev.3","fileNo":4},{"no":192,"jobPlan":"CLNAG004","name":"가스분석기 점검 및 청소(FC)","created":"14.01.18","revised":"22.10.31","author":"김교성","note":"Rev.3","fileNo":4},{"no":193,"jobPlan":"INFVS002","name":"운전 중 Coal unloader 점검","created":"14.05.14","revised":"22.10.31","author":"김정기/민화기","note":"Rev.3","fileNo":4},{"no":194,"jobPlan":"RPRDH002","name":"고압 차단기 Panel trouble check & 보수","created":"14.05.14","revised":"22.10.31","author":"김정기/민화기","note":"Rev.3","fileNo":4},{"no":195,"jobPlan":"RPREC014","name":"저압 Control panel trouble check & 보수","created":"14.05.15","revised":"22.10.31","author":"김정기/민화기","note":"Rev.3","fileNo":4},{"no":196,"jobPlan":"RLCEC006","name":"용접기 Panel 교체","created":"14.05.15","revised":"22.10.31","author":"김정기/민화기","note":"Rev.3","fileNo":4},{"no":197,"jobPlan":"INFWH002","name":"철도 횡단 전선로 점검","created":"14.05.15","revised":"22.10.31","author":"김정기/민화기","note":"Rev.3","fileNo":4},{"no":198,"jobPlan":"RPREC016","name":"상하역 설비 trouble check & 보수","created":"14.05.16","revised":"22.10.31","author":"김정기/민화기","note":"Rev.3","fileNo":4},{"no":199,"jobPlan":"RLCMT034","name":"6D1BK1 주행 Motor 교체","created":"14.05.20","revised":"22.10.31","author":"김정기/민화기","note":"Rev.3","fileNo":4},{"no":200,"jobPlan":"RPRST004","name":"L21 ST/RE1 Trouble check 작업","created":"14.05.20","revised":"22.10.31","author":"김정기/민화기","note":"Rev.3","fileNo":4}];
+
+let filteredData = [...DATA];
+let currentSort = { key: 'no', dir: 1 };
+let activeFile = null;
+
+document.getElementById('total-count').textContent = DATA.length;
+
+function highlight(text, query) {
+  if (!query) return text;
+  const re = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi');
+  return String(text).replace(re, '<mark class="highlight">$1</mark>');
+}
+
+function applyFilters() {
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  filteredData = DATA.filter(d => {
+    const matchFile = activeFile === null || d.fileNo === activeFile;
+    const matchQ = !q ||
+      d.name.toLowerCase().includes(q) ||
+      d.jobPlan.toLowerCase().includes(q) ||
+      d.author.toLowerCase().includes(q) ||
+      String(d.no).includes(q);
+    return matchFile && matchQ;
+  });
+  sortData();
+  render();
+}
+
+function filterByFile(fileNo, btn) {
+  activeFile = fileNo;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  else document.getElementById('btn-all').classList.add('active');
+  document.querySelectorAll('.file-card:not(.file-unavail)').forEach(c => c.classList.remove('active'));
+  if (fileNo) document.getElementById('card-' + fileNo)?.classList.add('active');
+  applyFilters();
+}
+
+function sortBy(key) {
+  if (currentSort.key === key) currentSort.dir *= -1;
+  else { currentSort.key = key; currentSort.dir = 1; }
+  document.querySelectorAll('th').forEach(th => {
+    th.textContent = th.textContent.replace(' ▲','').replace(' ▼','');
+    th.classList.remove('sorted');
+  });
+  const th = document.getElementById('th-' + key);
+  if (th) { th.textContent += currentSort.dir === 1 ? ' ▲' : ' ▼'; th.classList.add('sorted'); }
+  document.getElementById('sort-info').textContent = `${key} ${currentSort.dir===1?'오름차순':'내림차순'} 정렬`;
+  sortData();
+  render();
+}
+
+function sortData() {
+  const {key, dir} = currentSort;
+  filteredData.sort((a, b) => {
+    let av = a[key], bv = b[key];
+    if (typeof av === 'number') return (av - bv) * dir;
+    return String(av).localeCompare(String(bv), 'ko') * dir;
+  });
+}
+
+function render() {
+  const q = document.getElementById('search').value.trim();
+  const tbody = document.getElementById('tbody');
+  const empty = document.getElementById('empty');
+  document.getElementById('shown-count').textContent = filteredData.length;
+  if (!filteredData.length) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  tbody.innerHTML = filteredData.map(d => `
+    <tr>
+      <td class="td-no">${d.no}</td>
+      <td><span class="td-jobplan">${highlight(d.jobPlan, q)}</span></td>
+      <td class="td-name">${highlight(d.name, q)}</td>
+      <td class="td-author">${highlight(d.author, q)}</td>
+      <td class="td-date">${d.revised}</td>
+      <td class="td-note">${d.note}</td>
+      <td><span class="file-tag file-tag-${d.fileNo}">VOL.0${d.fileNo}</span></td>
+    </tr>
+  `).join('');
+}
+
+sortData();
+render();
+</script>
+</body>
+</html>

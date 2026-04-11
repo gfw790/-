@@ -1,0 +1,128 @@
+{
+    "1234": {
+        "password": "1234",
+        "name": "윤택천(작업지휘자)",
+        "role": "leader",
+        "team": "공사팀-전기"
+    },
+    "7204": {
+        "password": "1234",
+        "name": "진종철(관리감독자)",
+        "role": "manager",
+        "team": "공사팀-전기"
+    },
+    "1117": {
+        "password": "1234",
+        "name": "김종훈",
+        "role": "manager",
+        "team": "공사팀-모터"
+    },
+    "admin01": {
+        "password": "1234",
+        "name": "운영자",
+        "role": "admin",
+        "team": ""
+    },
+    "monitor": {
+        "password": "1234",
+        "name": "모니터출력",
+        "role": "worker",
+        "team": ""
+    },
+    "3092": {
+        "password": "1234",
+        "name": "윤순형",
+        "role": "worker",
+        "team": "공사팀-전기"
+    },
+    "0979": {
+        "password": "1234",
+        "name": "이정민",
+        "role": "worker",
+        "team": "공사팀-전기"
+    },
+    "0185": {
+        "password": "1234",
+        "name": "한지민",
+        "role": "worker",
+        "team": "공사팀-전기"
+    },
+    "0639": {
+        "password": "1234",
+        "name": "이돈희",
+        "role": "worker",
+        "team": "공사팀-전기"
+    },
+    "2559": {
+        "password": "1234",
+        "name": "조한봉",
+        "role": "worker",
+        "team": "공사팀-모터"
+    },
+    "9247": {
+        "password": "1234",
+        "name": "김도담",
+        "role": "manager",
+        "team": "가스팀"
+    },
+    "8466": {
+        "password": "1234",
+        "name": "장진혁",
+        "role": "worker",
+        "team": "가스팀"
+    },
+    "2313": {
+        "password": "1234",
+        "name": "정재호",
+        "role": "worker",
+        "team": "가스팀"
+    },
+    "8985": {
+        "password": "1234",
+        "name": "김동훈",
+        "role": "worker",
+        "team": "가스팀"
+    },
+    "4456": {
+        "password": "1234",
+        "name": "이윤성",
+        "role": "worker",
+        "team": "가스팀"
+    },
+    "4879": {
+        "password": "1234",
+        "name": "박재민",
+        "role": "worker",
+        "team": "가스팀"
+    },
+    "5349": {
+        "password": "1234",
+        "name": "최정섭",
+        "role": "worker",
+        "team": "가스팀"
+    },
+    "0911": {
+        "password": "1234",
+        "name": "우홍기",
+        "role": "leader",
+        "team": "제조팀"
+    },
+    "9460": {
+        "password": "1234",
+        "name": "정민교",
+        "role": "worker",
+        "team": "제조팀"
+    },
+    "6434": {
+        "password": "1234",
+        "name": "김성용",
+        "role": "worker",
+        "team": "제조팀"
+    },
+    "1280": {
+        "password": "1234",
+        "name": "엄기준",
+        "role": "worker",
+        "team": "공사팀-전기"
+    }
+}

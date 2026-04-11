@@ -1,0 +1,250 @@
+[02-Apr-2026 04:03:30 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:03:37 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:03:46 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:03:56 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:04:07 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:14:43 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:14:51 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:14:59 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:15:07 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:15:18 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:17:44 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:17:52 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:18:00 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:18:08 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:18:17 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:18:22 Asia/Seoul] [TBM AI AJAX] AI 생성 실패: GEMINI_QUOTA_EXCEEDED::{
+  "error": {
+    "code": 429,
+    "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash\nPlease retry in 26.539619191s.",
+    "status": "RESOURCE_EXHAUSTED",
+    "details": [
+      {
+        "@type": "type.googleapis.com/google.rpc.Help",
+        "links": [
+          {
+            "description": "Learn more about Gemini API quotas",
+            "url": "https://ai.google.dev/gemini-api/docs/rate-limits"
+          }
+        ]
+      },
+      {
+        "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+        "violations": [
+          {
+            "quotaMetric": "generativelanguage.googleapis.com/generate_content_free_tier_requests",
+            "quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier",
+            "quotaDimensions": {
+              "location": "global",
+              "model": "gemini-2.5-flash"
+            },
+            "quotaValue": "20"
+          }
+        ]
+      },
+      {
+        "@type": "type.googleapis.com/google.rpc.RetryInfo",
+        "retryDelay": "26s"
+      }
+    ]
+  }
+}
+ in tbm_ai.php:765
+[02-Apr-2026 04:19:59 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:20:07 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:20:11 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:20:15 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:20:23 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:20:27 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:20:31 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:20:41 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:20:45 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:20:50 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:20:54 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:20:56 Asia/Seoul] [TBM AI AJAX] AI 생성 실패: GEMINI_QUOTA_EXCEEDED::{
+  "error": {
+    "code": 429,
+    "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash\nPlease retry in 52.61261944s.",
+    "status": "RESOURCE_EXHAUSTED",
+    "details": [
+      {
+        "@type": "type.googleapis.com/google.rpc.Help",
+        "links": [
+          {
+            "description": "Learn more about Gemini API quotas",
+            "url": "https://ai.google.dev/gemini-api/docs/rate-limits"
+          }
+        ]
+      },
+      {
+        "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+        "violations": [
+          {
+            "quotaMetric": "generativelanguage.googleapis.com/generate_content_free_tier_requests",
+            "quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier",
+            "quotaDimensions": {
+              "location": "global",
+              "model": "gemini-2.5-flash"
+            },
+            "quotaValue": "20"
+          }
+        ]
+      },
+      {
+        "@type": "type.googleapis.com/google.rpc.RetryInfo",
+        "retryDelay": "52s"
+      }
+    ]
+  }
+}
+ in tbm_ai.php:765
+[02-Apr-2026 04:22:07 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:22:10 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:22:12 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:22:15 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:22:17 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:22:20 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:22:23 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:22:26 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:22:29 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:22:32 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:22:35 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:22:37 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:22:40 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:22:43 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:22:45 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:22:48 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:22:50 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:22:53 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:22:56 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:22:59 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:23:00 Asia/Seoul] [TBM AI AJAX] AI 생성 실패: GEMINI_API_KEY가 설정되지 않았습니다. .env 파일에 GEMINI_API_KEY=발급받은키 형식으로 넣어주세요. in tbm_ai.php:765
+[02-Apr-2026 04:25:42 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:25:51 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:26:01 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:26:09 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:26:20 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:28:52 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:28:59 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:29:08 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:29:17 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[02-Apr-2026 04:29:27 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=4) — Gemini Vision 폴백
+[03-Apr-2026 00:00:08 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=4) — Gemini Vision 폴백
+[03-Apr-2026 00:00:23 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[03-Apr-2026 00:00:38 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[03-Apr-2026 00:00:49 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[04-Apr-2026 00:00:08 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[04-Apr-2026 00:00:16 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[04-Apr-2026 00:00:25 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[04-Apr-2026 00:00:36 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=2) — Gemini Vision 폴백
+[05-Apr-2026 00:00:07 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[05-Apr-2026 00:00:15 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=2) — Gemini Vision 폴백
+[06-Apr-2026 00:00:07 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=2) — Gemini Vision 폴백
+[09-Apr-2026 00:00:08 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=5, prevention=4) — Gemini Vision 폴백
+[09-Apr-2026 00:00:22 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=5, prevention=4) — Gemini Vision 폴백
+[09-Apr-2026 00:00:32 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[09-Apr-2026 00:00:42 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[09-Apr-2026 00:00:52 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=5, prevention=4) — Gemini Vision 폴백
+[09-Apr-2026 00:01:00 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=5, prevention=4) — Gemini Vision 폴백
+[09-Apr-2026 00:01:08 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[09-Apr-2026 00:01:15 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[09-Apr-2026 01:50:01 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=5, prevention=4) — Gemini Vision 폴백
+[09-Apr-2026 01:50:13 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=5, prevention=4) — Gemini Vision 폴백
+[09-Apr-2026 01:50:23 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[09-Apr-2026 01:50:31 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[09-Apr-2026 01:50:38 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[09-Apr-2026 01:50:45 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[09-Apr-2026 01:59:11 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=5, prevention=4) — Gemini Vision 폴백
+[09-Apr-2026 01:59:20 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[09-Apr-2026 01:59:28 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[09-Apr-2026 01:59:33 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[09-Apr-2026 01:59:38 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[09-Apr-2026 01:59:40 Asia/Seoul] [TBM AI AJAX] AI 생성 실패: GEMINI_QUOTA_EXCEEDED::{
+  "error": {
+    "code": 429,
+    "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash\nPlease retry in 19.595969651s.",
+    "status": "RESOURCE_EXHAUSTED",
+    "details": [
+      {
+        "@type": "type.googleapis.com/google.rpc.Help",
+        "links": [
+          {
+            "description": "Learn more about Gemini API quotas",
+            "url": "https://ai.google.dev/gemini-api/docs/rate-limits"
+          }
+        ]
+      },
+      {
+        "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+        "violations": [
+          {
+            "quotaMetric": "generativelanguage.googleapis.com/generate_content_free_tier_requests",
+            "quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier",
+            "quotaDimensions": {
+              "location": "global",
+              "model": "gemini-2.5-flash"
+            },
+            "quotaValue": "20"
+          }
+        ]
+      },
+      {
+        "@type": "type.googleapis.com/google.rpc.RetryInfo",
+        "retryDelay": "19s"
+      }
+    ]
+  }
+}
+ in tbm_ai.php:781
+[09-Apr-2026 02:49:46 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=5, prevention=4) — Gemini Vision 폴백
+[09-Apr-2026 02:49:52 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=5, prevention=4) — Gemini Vision 폴백
+[09-Apr-2026 02:49:57 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[09-Apr-2026 02:50:02 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[09-Apr-2026 02:50:08 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=5, prevention=4) — Gemini Vision 폴백
+[09-Apr-2026 02:50:13 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=5, prevention=4) — Gemini Vision 폴백
+[09-Apr-2026 02:50:18 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[09-Apr-2026 02:50:23 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[09-Apr-2026 02:50:25 Asia/Seoul] [TBM AI AJAX] AI 생성 실패: GEMINI_QUOTA_EXCEEDED::{
+  "error": {
+    "code": 429,
+    "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash\nPlease retry in 34.921701748s.",
+    "status": "RESOURCE_EXHAUSTED",
+    "details": [
+      {
+        "@type": "type.googleapis.com/google.rpc.Help",
+        "links": [
+          {
+            "description": "Learn more about Gemini API quotas",
+            "url": "https://ai.google.dev/gemini-api/docs/rate-limits"
+          }
+        ]
+      },
+      {
+        "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+        "violations": [
+          {
+            "quotaMetric": "generativelanguage.googleapis.com/generate_content_free_tier_requests",
+            "quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier",
+            "quotaDimensions": {
+              "location": "global",
+              "model": "gemini-2.5-flash"
+            },
+            "quotaValue": "20"
+          }
+        ]
+      },
+      {
+        "@type": "type.googleapis.com/google.rpc.RetryInfo",
+        "retryDelay": "34s"
+      }
+    ]
+  }
+}
+ in tbm_ai.php:781
+[09-Apr-2026 03:13:48 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=5, prevention=4) — Gemini Vision 폴백
+[09-Apr-2026 03:13:59 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[10-Apr-2026 00:00:12 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[10-Apr-2026 00:00:24 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[11-Apr-2026 00:00:11 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[11-Apr-2026 00:00:28 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[12-Apr-2026 00:00:11 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백

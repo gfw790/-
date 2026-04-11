@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>아차사고 입력 템플릿</title>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --card: #ffffff;
+      --ink: #17212b;
+      --sub: #5b6774;
+      --line: #d9e0e7;
+      --accent: #0f766e;
+      --accent-2: #0a5c56;
+      --warn: #8b3d00;
+      --warn-bg: #fff4eb;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Noto Sans KR", sans-serif;
+      background:
+        radial-gradient(circle at 0 0, rgba(15, 118, 110, 0.07), transparent 46%),
+        radial-gradient(circle at 100% 0, rgba(10, 92, 86, 0.06), transparent 42%),
+        var(--bg);
+      color: var(--ink);
+      padding: 28px 16px 40px;
+    }
+
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .hero {
+      margin-bottom: 18px;
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-size: 1.65rem;
+      letter-spacing: -0.02em;
+    }
+
+    .hero p {
+      margin: 6px 0 0;
+      color: var(--sub);
+    }
+
+    .hint {
+      background: var(--warn-bg);
+      border: 1px solid #ffd6bb;
+      color: var(--warn);
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin: 14px 0 18px;
+      line-height: 1.5;
+    }
+
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: 0 6px 24px rgba(10, 27, 44, 0.05);
+      overflow: hidden;
+    }
+
+    form {
+      padding: 20px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px 14px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .full {
+      grid-column: 1 / -1;
+    }
+
+    label {
+      font-size: 0.9rem;
+      color: var(--sub);
+      font-weight: 600;
+    }
+
+    .req {
+      color: #b42318;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 10px;
+      padding: 10px 11px;
+      font-size: 0.95rem;
+      color: var(--ink);
+    }
+
+    textarea {
+      min-height: 88px;
+      resize: vertical;
+      line-height: 1.42;
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
+    }
+
+    .actions {
+      margin-top: 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 0.92rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-2);
+    }
+
+    .btn-ghost {
+      background: #e8eef2;
+      color: #213243;
+    }
+
+    .preview {
+      border-top: 1px solid var(--line);
+      background: #fbfcfd;
+      padding: 14px 20px 20px;
+    }
+
+    .preview h2 {
+      margin: 0 0 10px;
+      font-size: 1rem;
+    }
+
+    pre {
+      margin: 0;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid #dce3ea;
+      background: #0f172a;
+      color: #e5edf6;
+      overflow: auto;
+      font-size: 0.83rem;
+      line-height: 1.45;
+    }
+
+    @media (max-width: 860px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      body {
+        padding-top: 18px;
+      }
+
+      form {
+        padding: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <h1>아차사고 입력 템플릿</h1>
+      <p>엑셀 헤더 구조에 맞춘 내부용 입력 폼입니다.</p>
+    </div>
+
+    <div class="hint">
+      이 파일은 Microsoft Forms 저장본을 대체하는 내부 템플릿입니다.
+      민감 토큰이나 외부 런타임 스크립트를 포함하지 않습니다.
+    </div>
+
+    <section class="panel">
+      <form id="near-miss-form" novalidate>
+        <input id="id" name="id" type="hidden">
+        <div class="grid">
+          <div class="field">
+            <label for="start_time">시작 시간</label>
+            <input id="start_time" name="start_time" type="datetime-local">
+          </div>
+
+          <div class="field">
+            <label for="written_time">작성 시간</label>
+            <input id="written_time" name="written_time" type="datetime-local">
+          </div>
+          <div class="field">
+            <label for="email">전자 메일</label>
+            <input id="email" name="email" type="email" placeholder="user@example.com">
+          </div>
+
+          <div class="field">
+            <label for="name_text">이름</label>
+            <input id="name_text" name="name_text" type="text" placeholder="표시 이름">
+          </div>
+          <div class="field">
+            <label for="dept">소속</label>
+            <input id="dept" name="dept" type="text" placeholder="예: 현대기전-건설팀">
+          </div>
+
+          <div class="field">
+            <label for="person_name">성명 <span class="req">*</span></label>
+            <input id="person_name" name="person_name" type="text" required placeholder="예: 홍길동">
+          </div>
+          <div class="field">
+            <label for="incident_name">아차사고명 <span class="req">*</span></label>
+            <input id="incident_name" name="incident_name" type="text" required placeholder="예: 사다리 접힘 중 손가락 끼임">
+          </div>
+
+          <div class="field">
+            <label for="incident_date">발생 일자 <span class="req">*</span></label>
+            <input id="incident_date" name="incident_date" type="date" required>
+          </div>
+          <div class="field">
+            <label for="location">발생 장소 <span class="req">*</span></label>
+            <input id="location" name="location" type="text" required placeholder="예: 4P34 전기실 앞">
+          </div>
+
+          <div class="field">
+            <label for="incident_hour">발생 시간(Hour) <span class="req">*</span></label>
+            <select id="incident_hour" name="incident_hour" required></select>
+          </div>
+          <div class="field">
+            <label for="incident_minute">발생 시간(Minute) <span class="req">*</span></label>
+            <select id="incident_minute" name="incident_minute" required></select>
+          </div>
+
+          <div class="field full">
+            <label for="content_cause">내용/ 원인 <span class="req">*</span></label>
+            <textarea id="content_cause" name="content_cause" required placeholder="상황, 원인, 배경을 입력하세요."></textarea>
+          </div>
+
+          <div class="field">
+            <label for="risk_type">사고유형</label>
+            <select id="risk_type" name="risk_type">
+              <option value="">선택</option>
+              <option>전도</option>
+              <option>협착</option>
+              <option>낙상</option>
+              <option>요통/근골격</option>
+              <option>감전</option>
+              <option>기타</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="unsafe_state">불안전한 상태</label>
+            <input id="unsafe_state" name="unsafe_state" type="text" placeholder="예: 개구부">
+          </div>
+
+          <div class="field">
+            <label for="unsafe_action">불안전한 행동</label>
+            <input id="unsafe_action" name="unsafe_action" type="text" placeholder="예: 불안전한 자세">
+          </div>
+          <div class="field">
+            <label for="careless_action">부주의 행동</label>
+            <input id="careless_action" name="careless_action" type="text" placeholder="예: 위험을 보지 않음">
+          </div>
+
+          <div class="field full">
+            <label for="careless_state">부주의 상태</label>
+            <input id="careless_state" name="careless_state" type="text" placeholder="예: 서두름">
+          </div>
+
+          <div class="field full">
+            <label for="prevention_action">사고 방지를 위해 이렇게 조치하였습니다 <span class="req">*</span></label>
+            <textarea id="prevention_action" name="prevention_action" required placeholder="즉시 조치/재발 방지 내용을 입력하세요."></textarea>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn-primary" type="button" id="btn-json">JSON 복사</button>
+          <button class="btn-ghost" type="button" id="btn-csv">CSV 한 줄 복사</button>
+          <button class="btn-ghost" type="reset">입력 초기화</button>
+        </div>
+      </form>
+
+      <div class="preview">
+        <h2>엑셀 행 미리보기 (헤더 기준)</h2>
+        <pre id="preview">{}</pre>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const form = document.getElementById("near-miss-form");
+    const preview = document.getElementById("preview");
+    const btnJson = document.getElementById("btn-json");
+    const btnCsv = document.getElementById("btn-csv");
+    const hourSel = document.getElementById("incident_hour");
+    const minuteSel = document.getElementById("incident_minute");
+
+    function toLocalInputValue(date) {
+      const d = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+      return d.toISOString().slice(0, 16);
+    }
+
+    function pad2(v) {
+      return String(v).padStart(2, "0");
+    }
+
+    function generateAutoId() {
+      // 밀리초 타임스탬프 기반 숫자 ID
+      return String(Date.now());
+    }
+
+    function fillTimeOptions() {
+      hourSel.innerHTML = "";
+      minuteSel.innerHTML = "";
+
+      for (let h = 0; h < 24; h += 1) {
+        const opt = document.createElement("option");
+        opt.value = pad2(h) + "시";
+        opt.textContent = pad2(h) + "시";
+        hourSel.appendChild(opt);
+      }
+
+      for (let m = 0; m < 60; m += 1) {
+        const opt = document.createElement("option");
+        opt.value = pad2(m) + "분";
+        opt.textContent = pad2(m) + "분";
+        minuteSel.appendChild(opt);
+      }
+    }
+
+    function getValue(name) {
+      const el = form.elements[name];
+      return el ? String(el.value || "").trim() : "";
+    }
+
+    function buildExcelRow() {
+      return {
+        "Id": getValue("id"),
+        "시작 시간": getValue("start_time"),
+        "작성 시간": getValue("written_time"),
+        "전자 메일": getValue("email"),
+        "이름": getValue("name_text"),
+        "소속": getValue("dept"),
+        "성명": getValue("person_name"),
+        "아차사고명": getValue("incident_name"),
+        "발생 일자": getValue("incident_date"),
+        "발생 시간(Hour)": getValue("incident_hour"),
+        "발생 시간(Minute)": getValue("incident_minute"),
+        "발생 장소": getValue("location"),
+        "내용/ 원인": getValue("content_cause"),
+        "사고유형": getValue("risk_type"),
+        "불안전한 상태": getValue("unsafe_state"),
+        "불안전한 행동": getValue("unsafe_action"),
+        "부주의 행동": getValue("careless_action"),
+        "부주의 상태": getValue("careless_state"),
+        "사고 방지를 위해 이렇게 조치하였습니다": getValue("prevention_action")
+      };
+    }
+
+    function updatePreview() {
+      preview.textContent = JSON.stringify(buildExcelRow(), null, 2);
+    }
+
+    function csvEscape(value) {
+      const s = String(value ?? "");
+      return `"${s.replaceAll('"', '""')}"`;
+    }
+
+    async function copyText(text, okMessage) {
+      try {
+        await navigator.clipboard.writeText(text);
+        alert(okMessage);
+      } catch (e) {
+        alert("클립보드 복사에 실패했습니다.");
+      }
+    }
+
+    btnJson.addEventListener("click", async () => {
+      updatePreview();
+      await copyText(preview.textContent, "JSON을 복사했습니다.");
+    });
+
+    btnCsv.addEventListener("click", async () => {
+      const row = buildExcelRow();
+      const headers = Object.keys(row);
+      const values = headers.map((h) => csvEscape(row[h]));
+      const csv = headers.map(csvEscape).join(",") + "\n" + values.join(",");
+      await copyText(csv, "CSV 헤더+한 줄 데이터를 복사했습니다.");
+    });
+
+    form.addEventListener("input", updatePreview);
+    form.addEventListener("change", updatePreview);
+    form.addEventListener("reset", () => {
+      setTimeout(() => {
+        initializeDefaults();
+        updatePreview();
+      }, 0);
+    });
+
+    function initializeDefaults() {
+      const now = new Date();
+      const local = toLocalInputValue(now);
+      document.getElementById("id").value = generateAutoId();
+      document.getElementById("written_time").value = local;
+      document.getElementById("start_time").value = local;
+      document.getElementById("incident_date").value = local.slice(0, 10);
+      hourSel.value = pad2(now.getHours()) + "시";
+      minuteSel.value = pad2(now.getMinutes()) + "분";
+    }
+
+    fillTimeOptions();
+    initializeDefaults();
+    updatePreview();
+  </script>
+</body>
+</html>
