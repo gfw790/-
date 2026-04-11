@@ -87,6 +87,7 @@
         const prevBtn = slider.querySelector('[data-survey-prev]');
         const nextBtn = slider.querySelector('[data-survey-next]');
         const submitBtn = slider.querySelector('[data-survey-submit]');
+        const previewBtn = slider.querySelector('[data-survey-preview]');
         const progressBar = slider.querySelector('[data-survey-progress]');
         const progressText = slider.querySelector('[data-survey-progress-text]');
         let current = Math.max(0, cards.findIndex(c => c.classList.contains('is-active')));
@@ -105,6 +106,7 @@
             if (prevBtn) prevBtn.disabled = current === 0;
             if (nextBtn) nextBtn.style.display = current === total - 1 ? 'none' : '';
             if (submitBtn) submitBtn.style.display = current === total - 1 ? '' : 'none';
+            if (previewBtn) previewBtn.style.display = current === total - 1 ? '' : 'none';
         };
 
         if (prevBtn) {

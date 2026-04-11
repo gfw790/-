@@ -158,22 +158,213 @@ function formatBytes($bytes) {
     return $bytes . ' B';
 }
 
+function normalizeUploadDirPath(string $path): string {
+    $path = trim($path);
+    if ($path === '') {
+        return '';
+    }
+    $path = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
+    return rtrim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+}
+
+function legacyUploadDir(): string {
+    return normalizeUploadDirPath(__DIR__ . '/../uploads');
+}
+
+function categoryUploadDirMap(): array {
+    static $map = null;
+    if ($map !== null) {
+        return $map;
+    }
+
+    $rawMap = [
+        'free' => defined('BOARD_UPLOAD_DIR_CHAT') ? (string)BOARD_UPLOAD_DIR_CHAT : '',
+        'qna' => defined('BOARD_UPLOAD_DIR_QNA') ? (string)BOARD_UPLOAD_DIR_QNA : '',
+        'data' => defined('BOARD_UPLOAD_DIR_DATA') ? (string)BOARD_UPLOAD_DIR_DATA : '',
+        'dwg' => defined('BOARD_UPLOAD_DIR_DWG') ? (string)BOARD_UPLOAD_DIR_DWG : '',
+        'near_miss' => defined('BOARD_UPLOAD_DIR_NEAR_MISS') ? (string)BOARD_UPLOAD_DIR_NEAR_MISS : '',
+    ];
+
+    $map = [];
+    foreach ($rawMap as $key => $path) {
+        $normalized = normalizeUploadDirPath($path);
+        if ($normalized !== '') {
+            $map[$key] = $normalized;
+        }
+    }
+
+    return $map;
+}
+
+function legacyCategoryUploadDirMap(): array {
+    static $map = null;
+    if ($map !== null) {
+        return $map;
+    }
+
+    $rawMap = [
+        'free' => 'A:\\risk_server\\upload file\\board-upload\\01_chat',
+        'qna' => 'A:\\risk_server\\upload file\\board-upload\\02_Q&A',
+        'data' => 'A:\\risk_server\\upload file\\board-upload\\03_data',
+        'dwg' => 'A:\\risk_server\\upload file\\board-upload\\04_dwg',
+        'near_miss' => 'A:\\risk_server\\upload file\\board-upload\\05_naer_miss',
+    ];
+
+    $map = [];
+    foreach ($rawMap as $key => $path) {
+        $normalized = normalizeUploadDirPath($path);
+        if ($normalized !== '') {
+            $map[$key] = $normalized;
+        }
+    }
+
+    return $map;
+}
+
+function categoryUploadKey(string $code, string $name): ?string {
+    $map = categoryUploadDirMap();
+    $codeKey = strtolower(trim($code));
+
+    if ($codeKey !== '') {
+        if (isset($map[$codeKey])) {
+            return $codeKey;
+        }
+        if (in_array($codeKey, ['drawing', 'cad', 'dwg_data'], true) && isset($map['dwg'])) {
+            return 'dwg';
+        }
+    }
+
+    $nameKey = trim($name);
+    if ($nameKey === '') {
+        return null;
+    }
+    $nameKey = preg_replace('/\s+/u', '', $nameKey) ?? $nameKey;
+    $nameKey = function_exists('mb_strtolower')
+        ? mb_strtolower($nameKey, 'UTF-8')
+        : strtolower($nameKey);
+
+    $aliases = [
+        '자유게시판' => 'free',
+        'q&a' => 'qna',
+        'qna' => 'qna',
+        '자료실' => 'data',
+        '도면자료실' => 'dwg',
+        '아차사고' => 'near_miss',
+        'nearmiss' => 'near_miss',
+    ];
+
+    if (isset($aliases[$nameKey]) && isset($map[$aliases[$nameKey]])) {
+        return $aliases[$nameKey];
+    }
+
+    return null;
+}
+
+function postCategoryMeta(int $postId): array {
+    static $cache = [];
+    if ($postId <= 0) {
+        return ['code' => '', 'name' => ''];
+    }
+    if (isset($cache[$postId])) {
+        return $cache[$postId];
+    }
+
+    $stmt = db()->prepare(
+        "SELECT c.code, c.name
+         FROM posts p
+         LEFT JOIN categories c ON c.id = p.category_id
+         WHERE p.id = ?
+         LIMIT 1"
+    );
+    $stmt->execute([$postId]);
+    $row = $stmt->fetch();
+
+    $cache[$postId] = [
+        'code' => trim((string)($row['code'] ?? '')),
+        'name' => trim((string)($row['name'] ?? '')),
+    ];
+    return $cache[$postId];
+}
+
+function getUploadDirForPostId(int $postId): string {
+    $meta = postCategoryMeta($postId);
+    $key = categoryUploadKey($meta['code'], $meta['name']);
+    $map = categoryUploadDirMap();
+
+    if ($key !== null && isset($map[$key])) {
+        return $map[$key];
+    }
+    return legacyUploadDir();
+}
+
+function ensureUploadDir(string $uploadDir): void {
+    if ($uploadDir === '') {
+        return;
+    }
+
+    if (!is_dir($uploadDir)) {
+        mkdir($uploadDir, 0755, true);
+    }
+
+    $htaccess = $uploadDir . '.htaccess';
+    if (!file_exists($htaccess)) {
+        @file_put_contents($htaccess, "<FilesMatch \"\\.php[0-9s]?$|\\.phtml$|\\.phar$\">\n    Require all denied\n</FilesMatch>\n");
+    }
+}
+
+function getAttachmentStoredPath(array $att): ?string {
+    $storedName = basename((string)($att['stored_name'] ?? ''));
+    if ($storedName === '') {
+        return null;
+    }
+
+    $candidates = [];
+    $postId = (int)($att['post_id'] ?? 0);
+    if ($postId > 0) {
+        $candidates[] = getUploadDirForPostId($postId) . $storedName;
+    }
+
+    foreach (categoryUploadDirMap() as $dir) {
+        $candidates[] = $dir . $storedName;
+    }
+    foreach (legacyCategoryUploadDirMap() as $dir) {
+        $candidates[] = $dir . $storedName;
+    }
+    $candidates[] = legacyUploadDir() . $storedName;
+
+    foreach (array_unique($candidates) as $path) {
+        if (is_file($path)) {
+            return $path;
+        }
+    }
+
+    return null;
+}
+
+function deleteAttachmentPhysicalFile(array $att): void {
+    $path = getAttachmentStoredPath($att);
+    if ($path !== null && is_file($path)) {
+        @unlink($path);
+    }
+}
+
+function attachmentInlineUrl(array $att): string {
+    return 'download.php?' . http_build_query(
+        ['id' => (int)($att['id'] ?? 0), 'inline' => 1],
+        '',
+        '&',
+        PHP_QUERY_RFC3986
+    );
+}
+
 /**
  * 첨부파일 업로드 처리
  */
 function handleUploads($postId, $files) {
     $allowed = explode(',', ALLOWED_EXTENSIONS);
     $blocked = explode(',', BLOCKED_EXTENSIONS);
-    $uploadDir = __DIR__ . '/../uploads/';
-    if (!is_dir($uploadDir)) {
-        mkdir($uploadDir, 0755, true);
-    }
-
-    // uploads 폴더의 PHP 실행 차단
-    $htaccess = $uploadDir . '.htaccess';
-    if (!file_exists($htaccess)) {
-        file_put_contents($htaccess, "php_flag engine off\nAddType text/plain .php .phtml .php3 .php4 .php5 .phar\n");
-    }
+    $uploadDir = getUploadDirForPostId((int)$postId);
+    ensureUploadDir($uploadDir);
 
     $count = is_array($files['name']) ? count($files['name']) : 0;
     for ($i = 0; $i < $count; $i++) {
@@ -412,7 +603,7 @@ function renderAttachmentToken(string $tokenValue, array $attachments): ?string 
         return null;
     }
 
-    $src = 'uploads/' . rawurlencode((string)$target['stored_name']);
+    $src = attachmentInlineUrl($target);
     $downloadUrl = 'download.php?id=' . (int)$target['id'];
     $alt = h((string)$target['original_name']);
     $classes = 'inline-attachment-image align-' . h($align) . ' size-' . h($size);

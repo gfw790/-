@@ -16,6 +16,11 @@ define('POSTS_PER_PAGE', 20);
 define('MAX_UPLOAD_SIZE', 20 * 1024 * 1024); // 20MB
 define('ALLOWED_EXTENSIONS', 'jpg,jpeg,png,gif,bmp,webp,pdf,doc,docx,xls,xlsx,ppt,pptx,hwp,hwpx,txt,zip,7z,csv');
 define('BLOCKED_EXTENSIONS', 'php,phtml,php3,php4,php5,phar,exe,bat,cmd,sh,js,html,htm');
+define('BOARD_UPLOAD_DIR_CHAT', 'A:\\risk_server\\upload file\\2026\\board-upload\\01_chat');
+define('BOARD_UPLOAD_DIR_QNA', 'A:\\risk_server\\upload file\\2026\\board-upload\\02_Q&A');
+define('BOARD_UPLOAD_DIR_DATA', 'A:\\risk_server\\upload file\\2026\\board-upload\\03_data');
+define('BOARD_UPLOAD_DIR_DWG', 'A:\\risk_server\\upload file\\2026\\board-upload\\04_dwg');
+define('BOARD_UPLOAD_DIR_NEAR_MISS', 'A:\\risk_server\\upload file\\2026\\board-upload\\05_naer_miss');
 
 // 시간대
 date_default_timezone_set('Asia/Seoul');

@@ -185,6 +185,11 @@
             ordered.push(info);
             byId.set(id, info);
             byName.set(name.toLowerCase(), info);
+            // [태그] 접두어를 제거한 파일명으로도 조회 가능하게 (예: "[조치 전] IMG_001.JPG" → "img_001.jpg")
+            const stripped = name.replace(/^\[[^\]]+\]\s*/, '');
+            if (stripped.toLowerCase() !== name.toLowerCase()) {
+                byName.set(stripped.toLowerCase(), info);
+            }
         });
 
         return { byId, byName, ordered };

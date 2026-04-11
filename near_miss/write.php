@@ -7,26 +7,17 @@ function startsWithText(string $text, string $prefix): bool {
 }
 
 function stripTagPrefix(string $name): string {
-    if (startsWithText($name, '[상황] ')) {
-        return substr($name, strlen('[상황] '));
-    }
-    if (startsWithText($name, '[조치] ')) {
-        return substr($name, strlen('[조치] '));
-    }
+    if (startsWithText($name, '[상황] '))     return substr($name, strlen('[상황] '));
+    if (startsWithText($name, '[조치 전] '))  return substr($name, strlen('[조치 전] '));
+    if (startsWithText($name, '[조치 후] '))  return substr($name, strlen('[조치 후] '));
+    if (startsWithText($name, '[조치] '))     return substr($name, strlen('[조치] '));
     return $name;
 }
 
 function handleTaggedPhotoUploads(int $postId, array $files, string $tag, string $namePrefix = ''): void {
     $allowedImages = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'];
-    $uploadDir = __DIR__ . '/uploads/';
-    if (!is_dir($uploadDir)) {
-        mkdir($uploadDir, 0755, true);
-    }
-
-    $htaccess = $uploadDir . '.htaccess';
-    if (!file_exists($htaccess)) {
-        file_put_contents($htaccess, "php_flag engine off\nAddType text/plain .php .phtml .php3 .php4 .php5 .phar\n");
-    }
+    $uploadDir = getUploadDirForPostId($postId);
+    ensureUploadDir($uploadDir);
 
     $count = isset($files['name']) && is_array($files['name']) ? count($files['name']) : 0;
     for ($i = 0; $i < $count; $i++) {
@@ -70,6 +61,64 @@ function handleTaggedPhotoUploads(int $postId, array $files, string $tag, string
             mime_content_type($target) ?: null,
         ]);
     }
+}
+
+/**
+ * 수정 모드 로드 시: 파일명 기반 토큰을 id:N 토큰으로 변환.
+ * - [tag] 접두어 제거 후 이름이 일치하면 교체
+ * - 이름이 일치하지 않으면 순서 기반으로 미참조 첨부 파일에 매핑
+ */
+function resolveUnresolvedTokens(string $text, array $actionAtts): string {
+    if ($text === '' || empty($actionAtts)) return $text;
+
+    // name(소문자, 태그 제거) → id 맵 구성
+    $nameToId = [];
+    foreach ($actionAtts as $att) {
+        $id = (int)($att['id'] ?? 0);
+        if (!$id) continue;
+        $raw = (string)($att['original_name'] ?? '');
+        $nameToId[mb_strtolower($raw, 'UTF-8')] = $id;
+        $stripped = preg_replace('/^\[[^\]]+\]\s*/u', '', $raw);
+        if ($stripped !== $raw) {
+            $nameToId[mb_strtolower($stripped, 'UTF-8')] = $id;
+        }
+    }
+
+    // 이미 id:N 토큰으로 참조된 첨부 ID 수집
+    $usedIds = [];
+    preg_match_all('/\[\[첨부:\s*id:(\d+)/ui', $text, $idM);
+    foreach ($idM[1] as $n) $usedIds[(int)$n] = true;
+
+    // 미참조 첨부 파일 목록 (순서 유지)
+    $unrefAtts = array_values(array_filter($actionAtts, fn($a) => !isset($usedIds[(int)($a['id'] ?? 0)])));
+    $unrefIdx  = 0;
+
+    return preg_replace_callback(
+        '/\[\[첨부:((?:[^\]|]|\|(?!\]))+?)(\|[^\]]+?)?\]\]/u',
+        function ($m) use ($nameToId, $unrefAtts, &$unrefIdx) {
+            $target = trim($m[1]);
+            $opts   = $m[2] ?? '';
+
+            // 이미 id:N 형식이면 그대로
+            if (preg_match('/^id:\d+$/i', $target)) return $m[0];
+
+            // 이름 매칭
+            $key = mb_strtolower($target, 'UTF-8');
+            if (isset($nameToId[$key])) {
+                return '[[첨부:id:' . $nameToId[$key] . $opts . ']]';
+            }
+
+            // 순서 기반 매핑
+            if ($unrefIdx < count($unrefAtts)) {
+                $id = (int)($unrefAtts[$unrefIdx]['id'] ?? 0);
+                $unrefIdx++;
+                if ($id > 0) return '[[첨부:id:' . $id . $opts . ']]';
+            }
+
+            return $m[0]; // 변환 불가 → 원문 유지
+        },
+        $text
+    ) ?? $text;
 }
 
 function normalizeDateTimeInput(string $value): string {
@@ -246,7 +295,12 @@ if ($editId > 0) {
         $name = (string)$att['original_name'];
         if (startsWithText($name, '[상황] ')) {
             $situationAtts[] = $att;
+        } elseif (startsWithText($name, '[조치 전] ')) {
+            $beforeAtts[] = $att;
+        } elseif (startsWithText($name, '[조치 후] ')) {
+            $afterAtts[] = $att;
         } elseif (startsWithText($name, '[조치] ')) {
+            // 이전 형식 호환: [조치] 조치 전_xxx / [조치] 조치 후_xxx
             $stripped = substr($name, strlen('[조치] '));
             if (str_starts_with($stripped, '조치 전_')) {
                 $beforeAtts[] = $att;
@@ -277,7 +331,10 @@ $form = [
     'careless_state' => extractNearMissFieldFromContent($nearMissContent, '부주의 상태'),
     'description' => $nearMiss['description'] ?? '',
     'cause' => $nearMiss['cause'] ?? '',
-    'action_taken' => $nearMiss['action_taken'] ?? '',
+    'action_taken' => resolveUnresolvedTokens(
+        (string)($nearMiss['action_taken'] ?? ''),
+        array_merge($beforeAtts, $afterAtts)
+    ),
     'prevention_plan' => $nearMiss['prevention_plan'] ?? '',
     'reporter_team' => $nearMiss['author_dept'] ?? ($currentTeam !== '' ? $currentTeam : 'ETC'),
     'reporter_name' => $nearMiss['author_name'] ?? $currentName,
@@ -412,7 +469,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stmt = db()->prepare("SELECT * FROM attachments WHERE post_id = ? AND id IN ($in)");
                     $stmt->execute(array_merge([$postId], $delIds));
                     foreach ($stmt->fetchAll() as $att) {
-                        @unlink(__DIR__ . '/uploads/' . $att['stored_name']);
+                        deleteAttachmentPhysicalFile($att);
                     }
                     $stmt = db()->prepare("DELETE FROM attachments WHERE post_id = ? AND id IN ($in)");
                     $stmt->execute(array_merge([$postId], $delIds));
@@ -423,10 +480,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 handleTaggedPhotoUploads($postId, $_FILES['situation_photos'], '상황');
             }
             if (!empty($_FILES['action_before_photos']['name'][0])) {
-                handleTaggedPhotoUploads($postId, $_FILES['action_before_photos'], '조치', '조치 전');
+                handleTaggedPhotoUploads($postId, $_FILES['action_before_photos'], '조치 전');
             }
             if (!empty($_FILES['action_photos']['name'][0])) {
-                handleTaggedPhotoUploads($postId, $_FILES['action_photos'], '조치', '조치 후');
+                handleTaggedPhotoUploads($postId, $_FILES['action_photos'], '조치 후');
             }
 
             db()->commit();
@@ -472,7 +529,7 @@ if ($form['incident_at'] !== '') {
     <div class="survey-cards">
         <section class="survey-card is-active" data-survey-step>
             <h3 class="survey-card-title">1. 소속 / 성명</h3>
-            <p class="survey-card-desc">소속/성명은 자동 적용됩니다.</p>
+            <p class="survey-card-desc">로그인 정보로 자동 입력되니 확인만 가볍게 해주세요.</p>
 
             <div class="survey-field">
                 <label>소속</label>
@@ -487,6 +544,7 @@ if ($form['incident_at'] !== '') {
 
         <section class="survey-card" data-survey-step>
             <h3 class="survey-card-title">2. 아차사고명</h3>
+            <p class="survey-card-desc">어떤 일이 있었는지 한 문장으로 편하게 적어주세요.</p>
             <div class="survey-field">
                 <label>아차사고명 <span class="req">*</span></label>
                 <input type="text" name="incident_name" maxlength="200" required value="<?= h($form['incident_name']) ?>" placeholder="예: 사다리 이동 중 미끄러짐">
@@ -495,6 +553,7 @@ if ($form['incident_at'] !== '') {
 
         <section class="survey-card" data-survey-step>
             <h3 class="survey-card-title">3. 발생일자 및 시간</h3>
+            <p class="survey-card-desc">발생한 날짜와 시간을 기억나는 범위에서 가장 가깝게 입력해 주세요.</p>
             <div class="survey-field">
                 <label>발생일시 <span class="req">*</span></label>
                 <input type="datetime-local" name="incident_at" required value="<?= h($incidentAtInput) ?>">
@@ -503,6 +562,7 @@ if ($form['incident_at'] !== '') {
 
         <section class="survey-card" data-survey-step>
             <h3 class="survey-card-title">4. 발생장소</h3>
+            <p class="survey-card-desc">발생 위치를 나중에 찾기 쉽도록 장소를 조금만 구체적으로 적어주세요.</p>
             <div class="survey-field">
                 <label>발생장소 <span class="req">*</span></label>
                 <input type="text" name="location" maxlength="200" required value="<?= h($form['location']) ?>" placeholder="예: 4P34 전기실 앞">
@@ -511,16 +571,17 @@ if ($form['incident_at'] !== '') {
 
         <section class="survey-card" data-survey-step>
             <h3 class="survey-card-title">5. 내용과 원인</h3>
+            <p class="survey-card-desc">상황과 원인을 편하게 적어주시고 가능하면 사진도 함께 올려주세요.</p>
             <div class="survey-field">
                 <label>내용 <span class="req">*</span></label>
-                <textarea name="description" required><?= h($form['description']) ?></textarea>
+                <textarea name="description" required placeholder="예: 전기실 입구 계단을 내려오던 중 바닥이 젖어 있어 미끄러질 뻔했습니다."><?= h($form['description']) ?></textarea>
             </div>
             <div class="survey-field">
                 <label>원인 <span class="req">*</span></label>
-                <textarea name="cause" required><?= h($form['cause']) ?></textarea>
+                <textarea name="cause" required placeholder="예: 전날 청소 후 바닥이 완전히 건조되지 않은 상태였고, 미끄럼 주의 표시가 없었습니다."><?= h($form['cause']) ?></textarea>
             </div>
             <div class="survey-field">
-                <label>현장 사진</label>
+                <label>현장 사진 <span class="opt">(선택)</span></label>
                 <div class="photo-upload-row">
                     <label class="btn btn-sm" for="situation_photos_file">사진 선택</label>
                     <input type="file" id="situation_photos_file" name="situation_photos[]" multiple accept="image/*" hidden>
@@ -537,12 +598,13 @@ if ($form['incident_at'] !== '') {
                         <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
-                <p class="editor-help">현장 상황 사진을 첨부하세요. (여러 장 선택 가능)</p>
+                <p class="editor-help">현장 상황 사진을 올려주시면 상황 파악에 큰 도움이 됩니다. 여러 장도 가능해요.</p>
             </div>
         </section>
 
         <section class="survey-card" data-survey-step>
             <h3 class="survey-card-title">6. 사고유형</h3>
+            <p class="survey-card-desc">이번 상황과 가장 비슷한 사고유형을 하나 골라주세요.</p>
             <section class="checklist-card-block">
                 <div class="checklist-chip-list">
                     <?php foreach ($riskTypeOptions as $idx => $opt): ?>
@@ -562,6 +624,7 @@ if ($form['incident_at'] !== '') {
 
         <section class="survey-card" data-survey-step>
             <h3 class="survey-card-title">7. 불안전한 상태</h3>
+            <p class="survey-card-desc">당시 현장에서 보였던 위험한 상태를 해당 항목에서 골라주세요.</p>
             <section class="checklist-card-block">
                 <div class="checklist-chip-list">
                     <?php foreach ($unsafeStateOptions as $idx => $opt): ?>
@@ -581,6 +644,7 @@ if ($form['incident_at'] !== '') {
 
         <section class="survey-card" data-survey-step>
             <h3 class="survey-card-title">8. 불안전한 행동</h3>
+            <p class="survey-card-desc">작업 중 위험했거나 아쉬웠던 행동이 있었다면 해당 항목을 골라주세요.</p>
             <section class="checklist-card-block">
                 <div class="checklist-chip-list">
                     <?php foreach ($unsafeActionOptions as $idx => $opt): ?>
@@ -600,6 +664,7 @@ if ($form['incident_at'] !== '') {
 
         <section class="survey-card" data-survey-step>
             <h3 class="survey-card-title">9. 부주의한 행동</h3>
+            <p class="survey-card-desc">당시의 부주의한 행동이 있었다면 부담 없이 선택해 주세요.</p>
             <section class="checklist-card-block">
                 <div class="checklist-chip-list">
                     <?php foreach ($carelessActionOptions as $idx => $opt): ?>
@@ -619,6 +684,7 @@ if ($form['incident_at'] !== '') {
 
         <section class="survey-card" data-survey-step>
             <h3 class="survey-card-title">10. 부주의한 상태</h3>
+            <p class="survey-card-desc">그때의 몸 상태나 마음 상태를 가장 가까운 항목으로 골라주세요.</p>
             <section class="checklist-card-block">
                 <div class="checklist-chip-list">
                     <?php foreach ($carelessStateOptions as $idx => $opt): ?>
@@ -638,12 +704,13 @@ if ($form['incident_at'] !== '') {
 
         <section class="survey-card" data-survey-step>
             <h3 class="survey-card-title">11. 사고 방지를 위해 이렇게 조치하였습니다.</h3>
+            <p class="survey-card-desc">재발 방지를 위해 하신 조치를 편하게 적어주시고 가능하면 사진도 함께 올려주세요.</p>
 
             <div class="survey-field">
                 <label>조치 내용 <span class="req">*</span></label>
                 <textarea id="content" name="action_taken" required hidden><?= h($form['action_taken']) ?></textarea>
                 <div id="content-editor" class="content-editor" contenteditable="true" hidden></div>
-                <div class="editor-help">텍스트와 이미지를 함께 편집할 수 있습니다. 조치사진을 첨부하면 본문에 삽입할 수 있습니다.</div>
+                <div class="editor-help">텍스트와 이미지를 함께 작성할 수 있어요. 아래에서 사진을 첨부하면 본문에 바로 삽입할 수 있습니다.</div>
             </div>
 
             <div class="survey-field">
@@ -713,10 +780,25 @@ if ($form['incident_at'] !== '') {
         <div class="survey-actions-right">
             <a href="<?= $editId > 0 ? 'view.php?id=' . $editId : 'index.php' ?>" class="btn">취소</a>
             <button type="button" class="btn" data-survey-next>다음</button>
+            <button type="button" class="btn" data-survey-preview style="display:none;">미리보기</button>
             <button type="submit" class="btn btn-primary" data-survey-submit style="display:none;"><?= $editId > 0 ? '수정 완료' : '등록' ?></button>
         </div>
     </div>
 </form>
+
+<div id="nm-preview-modal" class="nm-preview-modal" hidden>
+    <div class="nm-preview-dialog">
+        <div class="nm-preview-head">
+            <h2>등록 전 미리보기</h2>
+            <button type="button" class="nm-preview-close-btn" id="nm-preview-close-btn" aria-label="닫기">✕</button>
+        </div>
+        <div class="nm-preview-body" id="nm-preview-body"></div>
+        <div class="nm-preview-foot">
+            <button type="button" class="btn" id="nm-preview-cancel-btn">닫기</button>
+            <button type="button" class="btn btn-primary" id="nm-preview-confirm-btn"><?= $editId > 0 ? '수정 완료' : '등록' ?></button>
+        </div>
+    </div>
+</div>
 
 <script>
 (function () {
@@ -836,6 +918,199 @@ if ($form['incident_at'] !== '') {
                     sitThumbsWrap.appendChild(img);
                 }
             }
+        });
+    }
+
+    // ===== 미리보기 =====
+    var previewModal   = document.getElementById('nm-preview-modal');
+    var previewBody    = document.getElementById('nm-preview-body');
+    var previewOpenBtn = document.querySelector('[data-survey-preview]');
+    var previewSubmitBtn = document.querySelector('[data-survey-submit]');
+
+    function fmtDateTime(v) {
+        if (!v) return '-';
+        var d = new Date(v);
+        if (isNaN(d.getTime())) return v;
+        function pad(n) { return String(n).padStart(2, '0'); }
+        return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
+            + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }
+
+    function escHtml(s) {
+        return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function pvRow(label, value) {
+        return '<tr><th>' + escHtml(label) + '</th><td>' + escHtml(value || '-') + '</td></tr>';
+    }
+
+    function getRadioVal(name) {
+        var f = document.getElementById('write-form');
+        if (!f) return '';
+        var el = f.querySelector('input[type="radio"][name="' + name + '"]:checked');
+        return el ? el.value : '';
+    }
+
+    function getFieldVal(name) {
+        var f = document.getElementById('write-form');
+        if (!f) return '';
+        var el = f.querySelector('[name="' + name + '"]');
+        return el ? el.value.trim() : '';
+    }
+
+    function resolveChecklist(radioName, otherName) {
+        var v = getRadioVal(radioName);
+        if (v === '기타') {
+            var other = getFieldVal(otherName);
+            return other ? '기타: ' + other : '기타';
+        }
+        return v || '-';
+    }
+
+    function buildPreviewHtml() {
+        var html = '';
+
+        // 기본 정보
+        html += '<section class="nm-preview-section">';
+        html += '<h4>기본 정보</h4>';
+        html += '<table class="nm-preview-table">';
+        html += pvRow('소속', getFieldVal('reporter_team'));
+        html += pvRow('성명', getFieldVal('reporter_name'));
+        html += pvRow('아차사고명', getFieldVal('incident_name'));
+        html += pvRow('발생일시', fmtDateTime(getFieldVal('incident_at')));
+        html += pvRow('발생장소', getFieldVal('location'));
+        html += pvRow('작업유형', getFieldVal('work_type'));
+        html += '</table></section>';
+
+        // 사고 내용
+        var desc = getFieldVal('description');
+        var cause = getFieldVal('cause');
+        html += '<section class="nm-preview-section">';
+        html += '<h4>사고 내용 및 원인</h4>';
+        html += '<table class="nm-preview-table">';
+        html += '<tr><th>내용</th><td>' + escHtml(desc).replace(/\n/g, '<br>') + '</td></tr>';
+        html += '<tr><th>원인</th><td>' + escHtml(cause).replace(/\n/g, '<br>') + '</td></tr>';
+        html += '</table>';
+        var sitInput = document.getElementById('situation_photos_file');
+        if (sitInput && sitInput.files && sitInput.files.length > 0) {
+            html += '<div class="nm-preview-photo-label">현장 사진 (' + sitInput.files.length + '장)</div>';
+            html += '<div class="nm-preview-thumbs" id="nm-pv-sit-thumbs"></div>';
+        }
+        html += '</section>';
+
+        // 사고 분류
+        html += '<section class="nm-preview-section">';
+        html += '<h4>사고 분류</h4>';
+        html += '<table class="nm-preview-table">';
+        html += pvRow('사고유형', resolveChecklist('risk_type', 'risk_type_other'));
+        html += pvRow('불안전한 상태', resolveChecklist('unsafe_state', 'unsafe_state_other'));
+        html += pvRow('불안전한 행동', resolveChecklist('unsafe_action', 'unsafe_action_other'));
+        html += pvRow('부주의한 행동', resolveChecklist('careless_action', 'careless_action_other'));
+        html += pvRow('부주의한 상태', resolveChecklist('careless_state', 'careless_state_other'));
+        html += '</table></section>';
+
+        // 즉시 조치
+        html += '<section class="nm-preview-section">';
+        html += '<h4>즉시 조치</h4>';
+        var editorEl = document.getElementById('content-editor');
+        if (editorEl && !editorEl.hidden && editorEl.innerHTML.trim()) {
+            html += '<div class="nm-preview-field-label">조치 내용</div>';
+            html += '<div class="nm-preview-content nm-preview-editor-content">' + editorEl.innerHTML + '</div>';
+        } else {
+            var ta = document.getElementById('content');
+            var taVal = ta ? ta.value.trim() : '';
+            if (taVal) {
+                html += '<div class="nm-preview-field-label">조치 내용</div>';
+                html += '<div class="nm-preview-content">' + escHtml(taVal).replace(/\n/g, '<br>') + '</div>';
+            }
+        }
+        if (beforeStaged.length > 0) {
+            html += '<div class="nm-preview-photo-label">조치 전 사진 (' + beforeStaged.length + '장)</div>';
+            html += '<div class="nm-preview-thumbs" id="nm-pv-before-thumbs"></div>';
+        }
+        var afterInput = document.getElementById('attachments');
+        var afterCount = afterInput && afterInput.files ? afterInput.files.length : 0;
+        if (afterCount > 0) {
+            html += '<div class="nm-preview-photo-label">조치 후 사진 (' + afterCount + '장)</div>';
+            html += '<div class="nm-preview-thumbs" id="nm-pv-after-thumbs"></div>';
+        }
+        html += '</section>';
+
+        // 재발방지
+        var prevention = getFieldVal('prevention_plan');
+        if (prevention) {
+            html += '<section class="nm-preview-section">';
+            html += '<h4>추가 재발방지 메모</h4>';
+            html += '<div class="nm-preview-content">' + escHtml(prevention).replace(/\n/g, '<br>') + '</div>';
+            html += '</section>';
+        }
+
+        return html;
+    }
+
+    function openPreview() {
+        if (!previewModal || !previewBody) return;
+        previewBody.innerHTML = buildPreviewHtml();
+
+        var sitInput = document.getElementById('situation_photos_file');
+        var sitWrap = document.getElementById('nm-pv-sit-thumbs');
+        if (sitInput && sitInput.files && sitWrap) {
+            Array.from(sitInput.files).forEach(function (f) {
+                var img = document.createElement('img');
+                img.className = 'nm-preview-thumb';
+                bindThumb(img, f);
+                sitWrap.appendChild(img);
+            });
+        }
+
+        var beforeWrap = document.getElementById('nm-pv-before-thumbs');
+        if (beforeWrap) {
+            beforeStaged.forEach(function (item) {
+                var img = document.createElement('img');
+                img.className = 'nm-preview-thumb';
+                bindThumb(img, item.file);
+                beforeWrap.appendChild(img);
+            });
+        }
+
+        var afterInput = document.getElementById('attachments');
+        var afterWrap = document.getElementById('nm-pv-after-thumbs');
+        if (afterInput && afterInput.files && afterWrap) {
+            Array.from(afterInput.files).forEach(function (f) {
+                var img = document.createElement('img');
+                img.className = 'nm-preview-thumb';
+                bindThumb(img, f);
+                afterWrap.appendChild(img);
+            });
+        }
+
+        previewModal.hidden = false;
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closePreview() {
+        if (!previewModal) return;
+        previewModal.hidden = true;
+        document.body.style.overflow = '';
+    }
+
+    if (previewOpenBtn) previewOpenBtn.addEventListener('click', openPreview);
+
+    var pvCloseBtn   = document.getElementById('nm-preview-close-btn');
+    var pvCancelBtn  = document.getElementById('nm-preview-cancel-btn');
+    var pvConfirmBtn = document.getElementById('nm-preview-confirm-btn');
+
+    if (pvCloseBtn)  pvCloseBtn.addEventListener('click', closePreview);
+    if (pvCancelBtn) pvCancelBtn.addEventListener('click', closePreview);
+    if (pvConfirmBtn) {
+        pvConfirmBtn.addEventListener('click', function () {
+            closePreview();
+            if (previewSubmitBtn) previewSubmitBtn.click();
+        });
+    }
+    if (previewModal) {
+        previewModal.addEventListener('click', function (e) {
+            if (e.target === previewModal) closePreview();
         });
     }
 })();

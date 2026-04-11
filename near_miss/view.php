@@ -41,7 +41,14 @@ foreach ($attachments as $att) {
     $name = (string)$att['original_name'];
     if (strncmp($name, '[상황] ', strlen('[상황] ')) === 0) {
         $situationPhotos[] = $att;
+    } elseif (strncmp($name, '[조치 전] ', strlen('[조치 전] ')) === 0) {
+        $actionPhotos[] = $att;
+        $beforePhotos[] = $att;
+    } elseif (strncmp($name, '[조치 후] ', strlen('[조치 후] ')) === 0) {
+        $actionPhotos[] = $att;
+        $afterPhotos[] = $att;
     } elseif (strncmp($name, '[조치] ', strlen('[조치] ')) === 0) {
+        // 이전 형식 호환: [조치] 조치 전_xxx / [조치] 조치 후_xxx
         $actionPhotos[] = $att;
         $stripped = substr($name, strlen('[조치] '));
         if (str_starts_with($stripped, '조치 전_')) {
@@ -52,16 +59,18 @@ foreach ($attachments as $att) {
     }
 }
 
-$carelessAction = extractCauseLine((string)$row['cause'], '부주의 행동');
-$carelessState = extractCauseLine((string)$row['cause'], '부주의 상태');
-$incidentName = extractCauseLine((string)$row['content'], '아차사고명');
+$postContent    = (string)($row['content'] ?? '');
+$unsafeState    = extractCauseLine($postContent, '불안전한 상태');
+$unsafeAction   = extractCauseLine($postContent, '불안전한 행동');
+$carelessAction = extractCauseLine($postContent, '부주의 행동');
+$carelessState  = extractCauseLine($postContent, '부주의 상태');
+$incidentName   = extractCauseLine($postContent, '아차사고명');
 
 function stripTagInView(string $name): string {
-    if (strncmp($name, '[상황] ', strlen('[상황] ')) === 0) {
-        return substr($name, strlen('[상황] '));
-    }
-    if (strncmp($name, '[조치] ', strlen('[조치] ')) === 0) {
-        return substr($name, strlen('[조치] '));
+    foreach (['[상황] ', '[조치 전] ', '[조치 후] ', '[조치] '] as $prefix) {
+        if (strncmp($name, $prefix, strlen($prefix)) === 0) {
+            return substr($name, strlen($prefix));
+        }
     }
     return $name;
 }
@@ -79,7 +88,7 @@ function renderPhotoGridView(array $photos): string {
     $html = '<div class="attach-photo-grid">';
     foreach ($photos as $att) {
         $html .= '<a class="attach-photo-item" href="download.php?id=' . (int)$att['id'] . '">';
-        $html .= '<img src="uploads/' . h($att['stored_name']) . '" alt="' . h(stripTagInView($att['original_name'])) . '">';
+        $html .= '<img src="' . h(attachmentInlineUrl($att)) . '" alt="' . h(stripTagInView($att['original_name'])) . '">';
         $html .= '<span>' . h(stripTagInView($att['original_name'])) . '</span>';
         $html .= '</a>';
     }
@@ -213,7 +222,7 @@ function renderAttachmentTokenNM(string $tokenValue, array $photos): ?string {
     }
     if (!$target) return null;
 
-    $src = 'uploads/' . rawurlencode((string)$target['stored_name']);
+    $src = attachmentInlineUrl($target);
     $downloadUrl = 'download.php?id=' . (int)$target['id'];
     $alt = h(stripTagInView((string)$target['original_name']));
     $classes = 'inline-attachment-image align-' . h($align) . ' size-' . h($size);
@@ -272,7 +281,7 @@ $actionTaken = (string)($row['action_taken'] ?? '');
 $tokenScanText = str_replace(['&#91;', '&#93;'], ['[', ']'], $actionTaken);
 $hasSituationTokenInAction = (bool)preg_match('/\[[^\]\r\n]*상황사진[^\]\r\n]*\]/u', $tokenScanText);
 $hasActionTokenInAction = (bool)preg_match('/\[[^\]\r\n]*조치사진[^\]\r\n]*\]/u', $tokenScanText)
-    || (bool)preg_match('/\[\[\s*첨부\s*:/u', $tokenScanText);
+    || (bool)preg_match('/\[\[\s*첨부\s*:\s*id:\d+/u', $tokenScanText);
 $pageTitle = '아차사고 상세';
 ?>
 
@@ -296,8 +305,24 @@ $pageTitle = '아차사고 상세';
     <div class="post-view-body">
         <div class="detail-grid">
             <div class="detail-item">
-                <h3>위험 유형</h3>
+                <h3>사고유형</h3>
                 <p><?= $row['risk_type'] !== null && $row['risk_type'] !== '' ? h($row['risk_type']) : '-' ?></p>
+            </div>
+            <div class="detail-item">
+                <h3>불안전한 상태</h3>
+                <p><?= $unsafeState !== '' ? h($unsafeState) : '-' ?></p>
+            </div>
+            <div class="detail-item">
+                <h3>불안전한 행동</h3>
+                <p><?= $unsafeAction !== '' ? h($unsafeAction) : '-' ?></p>
+            </div>
+            <div class="detail-item">
+                <h3>부주의한 행동</h3>
+                <p><?= $carelessAction !== '' ? h($carelessAction) : '-' ?></p>
+            </div>
+            <div class="detail-item">
+                <h3>부주의한 상태</h3>
+                <p><?= $carelessState !== '' ? h($carelessState) : '-' ?></p>
             </div>
             <div class="detail-item">
                 <h3>제보 구분</h3>
@@ -313,14 +338,6 @@ $pageTitle = '아차사고 상세';
             <div class="detail-item">
                 <h3>원인</h3>
                 <p><?= nl2br(h($row['cause'])) ?></p>
-            </div>
-            <div class="detail-item">
-                <h3>부주의 행동</h3>
-                <p><?= $carelessAction !== '' ? h($carelessAction) : '-' ?></p>
-            </div>
-            <div class="detail-item">
-                <h3>부주의 상태</h3>
-                <p><?= $carelessState !== '' ? h($carelessState) : '-' ?></p>
             </div>
             <div class="detail-item">
                 <h3>즉시 조치</h3>
@@ -355,6 +372,11 @@ $pageTitle = '아차사고 상세';
         <div>
             <?php if ($canEdit): ?>
                 <a href="write.php?id=<?= (int)$id ?>" class="btn btn-sm">수정</a>
+            <?php endif; ?>
+            <?php if ($_currentUser && $_currentUser['role'] === 'admin'): ?>
+                <a href="delete.php?id=<?= (int)$id ?>&csrf=<?= h(csrfToken()) ?>"
+                   class="btn btn-sm btn-danger"
+                   onclick="return confirm('이 아차사고 게시물을 삭제하시겠습니까?\n삭제 후 복구할 수 없습니다.');">삭제</a>
             <?php endif; ?>
             <a href="index.php" class="btn btn-sm">목록</a>
         </div>

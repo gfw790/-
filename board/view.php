@@ -160,7 +160,7 @@ $pageTitle = $post['title'];
                     <?php foreach ($imageAttachments as $att): ?>
                         <?php
                         $downloadUrl = 'download.php?id=' . (int)$att['id'];
-                        $imageSrc = 'uploads/' . rawurlencode((string)$att['stored_name']);
+                        $imageSrc = attachmentInlineUrl($att);
                         ?>
                         <figure class="post-attachment-image">
                             <a href="<?= h($downloadUrl) ?>" target="_blank" rel="noopener noreferrer">

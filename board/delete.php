@@ -20,7 +20,7 @@ if ($post['author_id'] !== $user['id'] && $user['role'] !== 'admin') {
 // 첨부파일 물리 삭제
 $atts = getAttachments($id);
 foreach ($atts as $att) {
-    @unlink(__DIR__ . '/uploads/' . $att['stored_name']);
+    deleteAttachmentPhysicalFile($att);
 }
 
 try {

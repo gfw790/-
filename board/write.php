@@ -86,7 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $stmt = db()->prepare("SELECT * FROM attachments WHERE post_id = ? AND id IN ($in)");
                         $stmt->execute(array_merge([$postId], $delIds));
                         foreach ($stmt->fetchAll() as $att) {
-                            @unlink(__DIR__ . '/uploads/' . $att['stored_name']);
+                            deleteAttachmentPhysicalFile($att);
                         }
 
                         $stmt = db()->prepare("DELETE FROM attachments WHERE post_id = ? AND id IN ($in)");
