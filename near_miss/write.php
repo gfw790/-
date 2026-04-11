@@ -663,6 +663,9 @@ if ($form['incident_at'] !== '') {
                                           data-original-name="<?= h($att['original_name']) ?>"
                                           data-is-image="1">
                                         <?= h(stripTagPrefix($att['original_name'])) ?> (<?= formatBytes($att['file_size']) ?>)
+                                        <button type="button" class="insert-attachment-token"
+                                                data-token="<?= h('[[첨부:id:' . (int)$att['id'] . ']]') ?>"
+                                                title="본문에 이미지 삽입">본문삽입</button>
                                         <span class="del" data-attach-id="<?= (int)$att['id'] ?>">×</span>
                                     </span>
                                 <?php endforeach; ?>
@@ -784,8 +787,10 @@ if ($form['incident_at'] !== '') {
         }
         beforeTokenList.style.display = '';
         beforeTokenList.innerHTML = beforeStaged.map(function(item, idx) {
+            var token = '[[첨부:' + item.file.name + ']]';
             return '<span class="existing-file" data-before-idx="' + idx + '">'
                  + esc(item.file.name)
+                 + ' <button type="button" class="insert-attachment-token" data-token="' + esc(token) + '">본문삽입</button>'
                  + ' <button type="button" class="nm-before-edit" data-before-idx="' + idx + '">편집</button>'
                  + ' <button type="button" class="nm-before-del" data-before-idx="' + idx + '">×</button>'
                  + '</span>';

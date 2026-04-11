@@ -200,6 +200,16 @@ function renderAttachmentTokenNM(string $tokenValue, array $photos): ?string {
     } elseif (ctype_digit($targetToken)) {
         $index = (int)$targetToken;
         if ($index >= 1 && isset($imagePhotos[$index - 1])) $target = $imagePhotos[$index - 1];
+    } else {
+        // 파일명 토큰: [태그] 접두사를 제거한 뒤 대소문자 무시 매칭
+        $needle = mb_strtolower(trim($targetToken), 'UTF-8');
+        foreach ($imagePhotos as $att) {
+            $rawName = (string)($att['original_name'] ?? '');
+            $strippedName = preg_replace('/^\[[^\]]+\]\s*/u', '', $rawName);
+            if (mb_strtolower($strippedName, 'UTF-8') === $needle) { $target = $att; break; }
+            $storedName = (string)($att['stored_name'] ?? '');
+            if ($storedName !== '' && mb_strtolower($storedName, 'UTF-8') === $needle) { $target = $att; break; }
+        }
     }
     if (!$target) return null;
 
