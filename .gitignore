@@ -22,6 +22,9 @@ uploads/*
 upload/*
 !upload/.gitkeep
 
+# 날씨 캐시
+calendar/weather_cache.json
+
 # 내보내기/캐시 생성 파일
 export/*
 !export/.gitkeep

@@ -259,6 +259,11 @@
       color: var(--sat);
     }
 
+    .day.is-holiday:not(.is-today) .day-number {
+      color: var(--sun);
+      font-weight: 800;
+    }
+
     .day.is-today .day-number {
       background: #0f766e;
       color: #ffffff;
@@ -297,6 +302,11 @@
     .event-personal {
       background: #dff6dd;
       border-left: 3px solid #16a34a;
+    }
+
+    .event-holiday {
+      background: #ffe0e7;
+      border-left: 3px solid #be123c;
     }
 
     .event-more {
@@ -385,6 +395,11 @@
     .badge-personal {
       background: #dcf6db;
       color: #0f7130;
+    }
+
+    .badge-holiday {
+      background: #ffdfe8;
+      color: #a30f38;
     }
 
     .event-meta {
@@ -532,6 +547,47 @@
         align-items: stretch;
       }
     }
+
+    /* ── 날씨 위젯 ─────────────────────────────────────────────── */
+    .weather-row {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      margin: 2px 0 3px;
+      line-height: 1;
+    }
+
+    .weather-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+    }
+
+    .weather-icon svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .weather-temp {
+      font-size: 0.66rem;
+      color: #4e607a;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    .weather-pop {
+      font-size: 0.62rem;
+      color: #1d6fb8;
+      font-weight: 600;
+      margin-left: 1px;
+    }
+
+    .day.is-other-month .weather-row {
+      opacity: 0.4;
+    }
   </style>
 </head>
 <body>
@@ -628,14 +684,38 @@
     </section>
   </div>
 
+  <script src="kr_holidays.js"></script>
   <script>
     (function () {
       var STORAGE_KEY = "schedule_calendar_events_v1";
       var WORK_LIST_EVENTS_API = "work_list_events.php";
+      var KR_PUBLIC_HOLIDAYS_BY_YEAR = (window.KR_PUBLIC_HOLIDAYS_BY_YEAR && typeof window.KR_PUBLIC_HOLIDAYS_BY_YEAR === "object")
+        ? window.KR_PUBLIC_HOLIDAYS_BY_YEAR
+        : {};
       var CATEGORY_LABEL = {
         work: "업무",
         meeting: "회의",
         personal: "개인"
+      };
+      CATEGORY_LABEL.holiday = "\uACF5\uD734\uC77C";
+
+      var WEATHER_SVG = {
+        // 맑음 ─ 황금 태양
+        CLEAR: '<svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="10" r="4" fill="#FBBF24"/><g stroke="#F59E0B" stroke-width="1.5" stroke-linecap="round"><line x1="10" y1="2" x2="10" y2="4.5"/><line x1="10" y1="15.5" x2="10" y2="18"/><line x1="2" y1="10" x2="4.5" y2="10"/><line x1="15.5" y1="10" x2="18" y2="10"/><line x1="4.22" y1="4.22" x2="5.94" y2="5.94"/><line x1="14.06" y1="14.06" x2="15.78" y2="15.78"/><line x1="15.78" y1="4.22" x2="14.06" y2="5.94"/><line x1="5.94" y1="14.06" x2="4.22" y2="15.78"/></g></svg>',
+        // 구름조금 ─ 태양 + 작은 구름
+        PARTLY_CLOUDY: '<svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><circle cx="13.5" cy="6.5" r="3" fill="#FBBF24"/><g stroke="#F59E0B" stroke-width="1.2" stroke-linecap="round"><line x1="13.5" y1="2.5" x2="13.5" y2="3.8"/><line x1="17.5" y1="6.5" x2="16.2" y2="6.5"/><line x1="16.3" y1="3.7" x2="15.4" y2="4.6"/><line x1="9.5" y1="6.5" x2="10.8" y2="6.5"/><line x1="10.7" y1="3.7" x2="11.6" y2="4.6"/></g><ellipse cx="7.5" cy="15" rx="5.5" ry="2.8" fill="#E2E8F0"/><ellipse cx="5.5" cy="13.5" rx="3.5" ry="3" fill="#E2E8F0"/><ellipse cx="10" cy="12.5" rx="4" ry="3.5" fill="#E2E8F0"/></svg>',
+        // 구름많음 ─ 큰 구름 + 작은 태양
+        MOSTLY_CLOUDY: '<svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><circle cx="14.5" cy="5.5" r="2.3" fill="#FCD34D" opacity="0.85"/><ellipse cx="9.5" cy="14" rx="7" ry="3" fill="#CBD5E1"/><ellipse cx="7" cy="12" rx="4.2" ry="3.8" fill="#CBD5E1"/><ellipse cx="12.5" cy="10.5" rx="4.8" ry="4.2" fill="#CBD5E1"/></svg>',
+        // 흐림 ─ 회색 구름
+        CLOUDY: '<svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><ellipse cx="9.5" cy="14" rx="7.5" ry="3.2" fill="#94A3B8"/><ellipse cx="7" cy="12" rx="4.5" ry="4" fill="#94A3B8"/><ellipse cx="12.5" cy="10.5" rx="5" ry="4.5" fill="#94A3B8"/></svg>',
+        // 비 ─ 구름 + 빗방울
+        RAIN: '<svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><ellipse cx="9.5" cy="10" rx="7" ry="2.8" fill="#94A3B8"/><ellipse cx="7" cy="8.2" rx="4" ry="3.5" fill="#94A3B8"/><ellipse cx="12.5" cy="7" rx="4.5" ry="4" fill="#94A3B8"/><g stroke="#38BDF8" stroke-width="1.4" stroke-linecap="round"><line x1="6" y1="14" x2="5" y2="18"/><line x1="10" y1="14" x2="9" y2="18"/><line x1="14" y1="14" x2="13" y2="18"/></g></svg>',
+        // 눈/비
+        SNOW_RAIN: '<svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><ellipse cx="9.5" cy="10" rx="7" ry="2.8" fill="#94A3B8"/><ellipse cx="7" cy="8.2" rx="4" ry="3.5" fill="#94A3B8"/><ellipse cx="12.5" cy="7" rx="4.5" ry="4" fill="#94A3B8"/><g stroke="#38BDF8" stroke-width="1.4" stroke-linecap="round"><line x1="6" y1="14" x2="5" y2="18"/><line x1="14" y1="14" x2="13" y2="18"/></g><g fill="#7DD3FC"><circle cx="10" cy="15" r="1.2"/><circle cx="10" cy="18" r="1.2"/></g></svg>',
+        // 눈 ─ 구름 + 눈송이
+        SNOW: '<svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><ellipse cx="9.5" cy="10" rx="7" ry="2.8" fill="#CBD5E1"/><ellipse cx="7" cy="8.2" rx="4" ry="3.5" fill="#CBD5E1"/><ellipse cx="12.5" cy="7" rx="4.5" ry="4" fill="#CBD5E1"/><g fill="#7DD3FC"><circle cx="5.5" cy="15" r="1.3"/><circle cx="10" cy="16.5" r="1.3"/><circle cx="14.5" cy="15" r="1.3"/></g></svg>',
+        // 소나기 ─ 어두운 구름 + 번개 + 비
+        SHOWER: '<svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><ellipse cx="9.5" cy="10" rx="7" ry="2.8" fill="#64748B"/><ellipse cx="7" cy="8.2" rx="4" ry="3.5" fill="#64748B"/><ellipse cx="12.5" cy="7" rx="4.5" ry="4" fill="#64748B"/><polygon points="11,13 9,17 10.5,17 7.5,20 13,15 11,15" fill="#FDE68A"/><g stroke="#38BDF8" stroke-width="1.4" stroke-linecap="round"><line x1="4.5" y1="14" x2="3.5" y2="18"/><line x1="15.5" y1="14" x2="14.5" y2="18"/></g></svg>'
       };
 
       var now = new Date();
@@ -643,9 +723,11 @@
         currentMonth: new Date(now.getFullYear(), now.getMonth(), 1),
         selectedDate: toDateKey(now),
         editingId: null,
+        holidayEvents: buildHolidayEvents(KR_PUBLIC_HOLIDAYS_BY_YEAR),
         events: loadEvents(),
         taskEvents: [],
-        canManualSync: false
+        canManualSync: false,
+        weatherData: {}
       };
 
       var monthTitleEl = document.getElementById("monthTitle");
@@ -776,6 +858,11 @@
           return;
         }
 
+        if (targetEvent.source === "holiday") {
+          alert("공휴일 일정은 수정/삭제할 수 없습니다.");
+          return;
+        }
+
         if (targetEvent.source === "task") {
           alert("작업목록 일정은 작업목록에서 수정/삭제해 주세요.");
           return;
@@ -850,8 +937,60 @@
         };
       }
 
+      function isValidDateKey(value) {
+        return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
+      }
+
+      function buildHolidayEvents(dataByYear) {
+        var events = [];
+        if (!dataByYear || typeof dataByYear !== "object") {
+          return events;
+        }
+
+        Object.keys(dataByYear).forEach(function (yearKey) {
+          var rows = dataByYear[yearKey];
+          if (!Array.isArray(rows)) {
+            return;
+          }
+
+          rows.forEach(function (row, rowIndex) {
+            if (!row || typeof row !== "object") {
+              return;
+            }
+
+            var dateKey = String(row.date || "").trim();
+            if (!isValidDateKey(dateKey)) {
+              return;
+            }
+
+            var titleRaw = String(row.title || "").trim();
+            if (!titleRaw) {
+              return;
+            }
+
+            titleRaw.split(";").map(function (name) {
+              return name.trim();
+            }).filter(Boolean).forEach(function (name, nameIndex) {
+              events.push({
+                id: "holiday-" + dateKey + "-" + rowIndex + "-" + nameIndex,
+                title: name,
+                date: dateKey,
+                startTime: "",
+                endTime: "",
+                category: "holiday",
+                memo: "대한민국 공휴일",
+                source: "holiday",
+                reportId: 0
+              });
+            });
+          });
+        });
+
+        return events;
+      }
+
       function getAllEvents() {
-        return state.taskEvents.concat(state.events);
+        return state.holidayEvents.concat(state.taskEvents, state.events);
       }
 
       function updateSyncButtonVisibility() {
@@ -956,6 +1095,12 @@
       }
 
       function sortByTimeAndTitle(a, b) {
+        var aIsHoliday = a && a.category === "holiday";
+        var bIsHoliday = b && b.category === "holiday";
+        if (aIsHoliday !== bIsHoliday) {
+          return aIsHoliday ? -1 : 1;
+        }
+
         var aTime = a.startTime || "99:99";
         var bTime = b.startTime || "99:99";
         if (aTime !== bTime) {
@@ -1020,11 +1165,42 @@
           } else if (cellDate.getDay() === 6) {
             dayEl.classList.add("is-saturday");
           }
+          if (dayEvents.some(function (item) { return item.category === "holiday"; })) {
+            dayEl.classList.add("is-holiday");
+          }
 
           var numberEl = document.createElement("span");
           numberEl.className = "day-number";
           numberEl.textContent = String(dayNumber);
           dayEl.appendChild(numberEl);
+
+          var w = state.weatherData[cellKey];
+          if (w) {
+            var wRow = document.createElement("div");
+            wRow.className = "weather-row";
+            wRow.title = (w.pop > 0 ? "강수확률 " + w.pop + "%" : "");
+
+            var wIcon = document.createElement("span");
+            wIcon.className = "weather-icon";
+            wIcon.innerHTML = WEATHER_SVG[w.code] || "";
+            wRow.appendChild(wIcon);
+
+            if (w.tMin !== null && w.tMax !== null) {
+              var wTemp = document.createElement("span");
+              wTemp.className = "weather-temp";
+              wTemp.textContent = Math.round(w.tMin) + "~" + Math.round(w.tMax) + "°";
+              wRow.appendChild(wTemp);
+            }
+
+            if (w.pop > 0) {
+              var wPop = document.createElement("span");
+              wPop.className = "weather-pop";
+              wPop.textContent = w.pop + "%";
+              wRow.appendChild(wPop);
+            }
+
+            dayEl.appendChild(wRow);
+          }
 
           var stackEl = document.createElement("div");
           stackEl.className = "event-stack";
@@ -1121,10 +1297,12 @@
             row.appendChild(top);
             row.appendChild(meta);
 
-            if (item.source === "task") {
+            if (item.source === "task" || item.source === "holiday") {
               var readonlyEl = document.createElement("div");
               readonlyEl.className = "event-readonly";
-              readonlyEl.textContent = "작업목록 연동 일정 (읽기 전용)";
+              readonlyEl.textContent = item.source === "task"
+                ? "작업목록 연동 일정 (읽기 전용)"
+                : "공휴일 기본 일정 (읽기 전용)";
               row.appendChild(readonlyEl);
             } else {
               var actions = document.createElement("div");
@@ -1240,9 +1418,27 @@
         return date.getFullYear() + "년 " + (date.getMonth() + 1) + "월 " + date.getDate() + "일 (" + weekdayNames[date.getDay()] + ")";
       }
 
+      function fetchWeather() {
+        fetch("weather.php", { headers: { Accept: "application/json" } })
+          .then(function (r) {
+            if (!r.ok) { throw new Error("weather fetch failed"); }
+            return r.json();
+          })
+          .then(function (data) {
+            if (data && data.weather && typeof data.weather === "object") {
+              state.weatherData = data.weather;
+              renderCalendar();
+            }
+          })
+          .catch(function () {
+            // 날씨 로드 실패 시 달력은 그대로 유지
+          });
+      }
+
       resetFormForCreate();
       render();
       syncTaskEvents({ silent: true });
+      fetchWeather();
     })();
   </script>
 </body>
