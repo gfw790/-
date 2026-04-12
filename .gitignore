@@ -42,3 +42,7 @@ Thumbs.db
 
 # 백업 폴더
 tbm/backup_*/
+
+# TBM 로그/디버그 파일
+tbm/gemini_raw.txt
+tbm/tbm_ai_debug.log
