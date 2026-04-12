@@ -715,7 +715,10 @@ if ($requestMethod === 'POST' && ($_POST['action'] ?? '') === 'login') {
         $error = '로그인 정보가 올바르지 않습니다.';
     } else {
         $loggedInUser = auth_current_user();
-        if ($loggedInUser !== null && auth_is_worker($loggedInUser)) {
+        $loggedInRole = (string)($loggedInUser['role'] ?? '');
+        if ($loggedInRole === 'safety_manager') {
+            $nextPage = 'work_list.php';
+        } elseif ($loggedInUser !== null && auth_is_worker($loggedInUser)) {
             $nextPage = 'work_list.php';
         } elseif ($loggedInUser !== null && auth_can_lead($loggedInUser) && !auth_can_manage($loggedInUser)) {
             $nextPage = 'work_list.php';

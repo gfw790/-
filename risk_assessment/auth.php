@@ -301,7 +301,7 @@ function auth_write_stored_accounts(array $accounts): bool
 
 function auth_allowed_roles(): array
 {
-    return ['worker', 'leader', 'manager', 'admin'];
+    return ['worker', 'leader', 'manager', 'safety_manager', 'admin'];
 }
 
 function auth_normalize_role(string $role): string
@@ -381,7 +381,7 @@ function auth_accounts(): array
 
     foreach ($storedAccounts as $account) {
         $role = (string)($account['role'] ?? '');
-        if (in_array($role, ['manager', 'leader'], true)) {
+        if (in_array($role, ['manager', 'safety_manager', 'leader'], true)) {
             $rolesWithStoredOverride[$role] = true;
         }
     }
@@ -402,6 +402,7 @@ function auth_role_label(string $role): string
 {
     return match ($role) {
         'manager' => '관리감독자',
+        'safety_manager' => '안전관리자',
         'leader' => '작업지휘자(작업반장)',
         'admin' => '운영자',
         'worker' => '일반작업자',
@@ -420,7 +421,7 @@ function auth_can_manage(?array $user): bool
         return false;
     }
 
-    return in_array((string)($user['role'] ?? ''), ['manager', 'admin'], true);
+    return in_array((string)($user['role'] ?? ''), ['manager', 'safety_manager', 'admin'], true);
 }
 
 function auth_can_lead(?array $user): bool

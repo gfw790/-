@@ -25,6 +25,7 @@ foreach ($atts as $att) {
 
 try {
     db()->beginTransaction();
+    db()->prepare("DELETE FROM near_miss_photo_links WHERE post_id = ?")->execute([$id]);
     db()->prepare("DELETE FROM attachments WHERE post_id = ?")->execute([$id]);
     db()->prepare("DELETE FROM comments WHERE post_id = ?")->execute([$id]);
     db()->prepare("DELETE FROM likes WHERE post_id = ?")->execute([$id]);

@@ -486,6 +486,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 handleTaggedPhotoUploads($postId, $_FILES['action_photos'], '조치 후');
             }
 
+            syncNearMissPhotoLinks($postId);
+
             db()->commit();
             header('Location: view.php?id=' . $postId);
             exit;

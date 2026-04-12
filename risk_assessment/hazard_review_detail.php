@@ -90,7 +90,7 @@ function hazard_change_request_delete_allowed(array $viewer, array $requestRow):
         return true;
     }
 
-    return in_array((string)($viewer['role'] ?? ''), ['admin', 'manager'], true);
+    return in_array((string)($viewer['role'] ?? ''), ['admin', 'manager', 'safety_manager'], true);
 }
 
 function ensureWorkerHazardSelectionTable(PDO $pdo): void

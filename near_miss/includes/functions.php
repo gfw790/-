@@ -85,6 +85,26 @@ function ensureNearMissSchema() {
          ON DUPLICATE KEY UPDATE name = VALUES(name), is_active = VALUES(is_active)"
     )->execute();
 
+    db()->exec(
+        "CREATE TABLE IF NOT EXISTS near_miss_photo_links (
+            id INT NOT NULL AUTO_INCREMENT,
+            post_id INT NOT NULL,
+            report_id INT DEFAULT NULL,
+            attachment_id INT NOT NULL,
+            photo_key VARCHAR(80) NOT NULL,
+            photo_role ENUM('situation','action_before','action_after','action','other') NOT NULL DEFAULT 'other',
+            sort_order INT NOT NULL DEFAULT 0,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY uk_attachment_id (attachment_id),
+            UNIQUE KEY uk_photo_key (photo_key),
+            KEY idx_post_id (post_id),
+            KEY idx_report_id (report_id),
+            KEY idx_photo_role (photo_role)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+
     $done = true;
 }
 
@@ -456,6 +476,269 @@ function attachmentInlineUrl(array $att): string {
 /**
  * 첨부파일 업로드 처리
  */
+function attachmentDownloadUrl(array $att): string {
+    return 'download.php?' . http_build_query(
+        ['id' => (int)($att['id'] ?? 0)],
+        '',
+        '&',
+        PHP_QUERY_RFC3986
+    );
+}
+
+function nearMissAttachmentDownloadAbsoluteUrl(array $att): string {
+    $relative = attachmentDownloadUrl($att);
+    if (PHP_SAPI === 'cli') {
+        return $relative;
+    }
+
+    $host = trim((string)($_SERVER['HTTP_HOST'] ?? ''));
+    if ($host === '') {
+        return $relative;
+    }
+
+    $isHttps = !empty($_SERVER['HTTPS']) && strtolower((string)($_SERVER['HTTPS']) !== 'off');
+    $scheme = $isHttps ? 'https' : 'http';
+    $scriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? ''));
+    $basePath = rtrim(dirname($scriptName), '/\\');
+    if ($basePath === '.' || $basePath === '\\' || $basePath === '/') {
+        $basePath = '';
+    }
+
+    return $scheme . '://' . $host . ($basePath !== '' ? $basePath . '/' : '/') . $relative;
+}
+
+function isImageAttachment(array $att): bool {
+    $mime = strtolower(trim((string)($att['mime_type'] ?? '')));
+    if ($mime !== '' && str_starts_with($mime, 'image/')) {
+        return true;
+    }
+
+    $ext = strtolower(pathinfo((string)($att['original_name'] ?? ''), PATHINFO_EXTENSION));
+    return in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'], true);
+}
+
+function nearMissNormalizeText(string $value): string {
+    $value = trim($value);
+    if ($value === '') {
+        return '';
+    }
+    $value = preg_replace('/\s+/u', '', $value) ?? $value;
+    return function_exists('mb_strtolower')
+        ? mb_strtolower($value, 'UTF-8')
+        : strtolower($value);
+}
+
+function nearMissPhotoRoleFromAttachmentName(string $originalName): string {
+    $tag = '';
+    if (preg_match('/^\[([^\]]+)\]/u', $originalName, $m)) {
+        $tag = (string)($m[1] ?? '');
+    }
+
+    $normalizedTag = nearMissNormalizeText($tag);
+    $normalizedName = nearMissNormalizeText($originalName);
+    $target = $normalizedTag !== '' ? $normalizedTag : $normalizedName;
+
+    if ($target === '') {
+        return 'other';
+    }
+
+    if (str_contains($target, '상황')) {
+        return 'situation';
+    }
+
+    if ((str_contains($target, '조치') && str_contains($target, '전')) || str_contains($target, 'before')) {
+        return 'action_before';
+    }
+
+    if ((str_contains($target, '조치') && str_contains($target, '후')) || str_contains($target, 'after')) {
+        return 'action_after';
+    }
+
+    if (str_contains($target, '조치') || str_contains($target, 'action')) {
+        return 'action';
+    }
+
+    return 'other';
+}
+
+function nearMissPhotoRoleSortWeight(string $role): int {
+    static $weights = [
+        'situation' => 10,
+        'action_before' => 20,
+        'action_after' => 30,
+        'action' => 40,
+        'other' => 90,
+    ];
+    return $weights[$role] ?? 90;
+}
+
+function nearMissPhotoKey(int $postId, int $attachmentId): string {
+    return 'NM-' . $postId . '-' . $attachmentId;
+}
+
+function isNearMissPost(int $postId): bool {
+    if ($postId <= 0) {
+        return false;
+    }
+
+    $stmt = db()->prepare(
+        "SELECT 1
+         FROM posts p
+         JOIN categories c ON c.id = p.category_id
+         WHERE p.id = ?
+           AND c.code = 'near_miss'
+         LIMIT 1"
+    );
+    $stmt->execute([$postId]);
+    return (bool)$stmt->fetchColumn();
+}
+
+function getNearMissReportIdByPostId(int $postId): ?int {
+    if ($postId <= 0) {
+        return null;
+    }
+    $stmt = db()->prepare("SELECT id FROM near_miss_reports WHERE post_id = ? LIMIT 1");
+    $stmt->execute([$postId]);
+    $id = $stmt->fetchColumn();
+    if ($id === false || $id === null) {
+        return null;
+    }
+    return (int)$id;
+}
+
+function syncNearMissPhotoLinks(int $postId): void {
+    if ($postId <= 0) {
+        return;
+    }
+
+    ensureNearMissSchema();
+
+    if (!isNearMissPost($postId)) {
+        db()->prepare("DELETE FROM near_miss_photo_links WHERE post_id = ?")->execute([$postId]);
+        return;
+    }
+
+    $attachments = getAttachments($postId);
+    $rows = [];
+    $roleSeq = [];
+    foreach ($attachments as $att) {
+        $attachmentId = (int)($att['id'] ?? 0);
+        if ($attachmentId <= 0 || !isImageAttachment($att)) {
+            continue;
+        }
+
+        $role = nearMissPhotoRoleFromAttachmentName((string)($att['original_name'] ?? ''));
+        $roleSeq[$role] = ($roleSeq[$role] ?? 0) + 1;
+        $rows[] = [
+            'attachment_id' => $attachmentId,
+            'photo_key' => nearMissPhotoKey($postId, $attachmentId),
+            'photo_role' => $role,
+            'sort_order' => nearMissPhotoRoleSortWeight($role) * 10000 + $roleSeq[$role],
+        ];
+    }
+
+    if (empty($rows)) {
+        db()->prepare("DELETE FROM near_miss_photo_links WHERE post_id = ?")->execute([$postId]);
+        return;
+    }
+
+    $existingStmt = db()->prepare("SELECT attachment_id FROM near_miss_photo_links WHERE post_id = ?");
+    $existingStmt->execute([$postId]);
+    $existingIds = array_map('intval', array_column($existingStmt->fetchAll(), 'attachment_id'));
+    $activeIds = array_map(static fn(array $row): int => (int)$row['attachment_id'], $rows);
+    $deleteIds = array_values(array_diff($existingIds, $activeIds));
+
+    if (!empty($deleteIds)) {
+        $ph = implode(',', array_fill(0, count($deleteIds), '?'));
+        $params = array_merge([$postId], $deleteIds);
+        $deleteStmt = db()->prepare("DELETE FROM near_miss_photo_links WHERE post_id = ? AND attachment_id IN ($ph)");
+        $deleteStmt->execute($params);
+    }
+
+    $reportId = getNearMissReportIdByPostId($postId);
+    $upsert = db()->prepare(
+        "INSERT INTO near_miss_photo_links
+            (post_id, report_id, attachment_id, photo_key, photo_role, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+            post_id = VALUES(post_id),
+            report_id = VALUES(report_id),
+            photo_key = VALUES(photo_key),
+            photo_role = VALUES(photo_role),
+            sort_order = VALUES(sort_order)"
+    );
+
+    foreach ($rows as $row) {
+        $upsert->execute([
+            $postId,
+            $reportId,
+            (int)$row['attachment_id'],
+            (string)$row['photo_key'],
+            (string)$row['photo_role'],
+            (int)$row['sort_order'],
+        ]);
+    }
+}
+
+function syncAllNearMissPhotoLinks(): int {
+    ensureNearMissSchema();
+
+    $stmt = db()->query(
+        "SELECT p.id
+         FROM posts p
+         JOIN categories c ON c.id = p.category_id
+         WHERE c.code = 'near_miss'
+         ORDER BY p.id"
+    );
+    $postIds = array_map('intval', array_column($stmt->fetchAll(), 'id'));
+    foreach ($postIds as $postId) {
+        syncNearMissPhotoLinks($postId);
+    }
+
+    return count($postIds);
+}
+
+function getNearMissPhotoSummaryMap(array $postIds): array {
+    ensureNearMissSchema();
+
+    $ids = array_values(array_unique(array_filter(array_map('intval', $postIds), static fn($id) => $id > 0)));
+    if (empty($ids)) {
+        return [];
+    }
+
+    $map = [];
+    foreach ($ids as $postId) {
+        $map[$postId] = [
+            'photo_count' => 0,
+            'photo_keys' => [],
+            'photo_roles' => [],
+            'photo_urls' => [],
+        ];
+    }
+
+    $ph = implode(',', array_fill(0, count($ids), '?'));
+    $sql = "SELECT l.post_id, l.photo_key, l.photo_role, l.sort_order, a.id AS attachment_id,
+                   a.original_name, a.stored_name, a.file_size, a.mime_type, a.post_id
+            FROM near_miss_photo_links l
+            JOIN attachments a ON a.id = l.attachment_id
+            WHERE l.post_id IN ($ph)
+            ORDER BY l.post_id ASC, l.sort_order ASC, l.attachment_id ASC";
+    $stmt = db()->prepare($sql);
+    $stmt->execute($ids);
+    foreach ($stmt->fetchAll() as $row) {
+        $postId = (int)($row['post_id'] ?? 0);
+        if ($postId <= 0 || !isset($map[$postId])) {
+            continue;
+        }
+        $map[$postId]['photo_count']++;
+        $map[$postId]['photo_keys'][] = (string)($row['photo_key'] ?? '');
+        $map[$postId]['photo_roles'][] = (string)($row['photo_role'] ?? 'other');
+        $map[$postId]['photo_urls'][] = nearMissAttachmentDownloadAbsoluteUrl($row);
+    }
+
+    return $map;
+}
+
 function handleUploads($postId, $files) {
     $allowed = explode(',', ALLOWED_EXTENSIONS);
     $blocked = explode(',', BLOCKED_EXTENSIONS);

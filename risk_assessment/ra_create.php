@@ -30,7 +30,7 @@ $defaults = [
     'work_title' => $selectedTask['unit_title'] ?? '',
     'work_location' => $selectedTask['process_name'] ?? '',
     'contractor_name' => '',
-    'manager_name' => $user['role'] === 'manager' ? $user['name'] : '',
+    'manager_name' => in_array((string)($user['role'] ?? ''), ['manager', 'safety_manager'], true) ? $user['name'] : '',
     'leader_name' => $user['role'] === 'leader' ? $user['name'] : '',
     'remark' => '',
 ];

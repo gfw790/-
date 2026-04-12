@@ -225,6 +225,58 @@ function render_safety_standard_buttons_from_units(array $units): string
     return '<span class="unit-multi-lines">' . implode('', $items) . '</span>';
 }
 
+function render_completion_badge(bool $isCompleted): string
+{
+    $className = $isCompleted ? 'status-badge is-complete' : 'status-badge is-pending';
+    $label = $isCompleted ? '완료' : '대기';
+
+    return sprintf(
+        '<span class="%s">%s</span>',
+        h($className),
+        h($label)
+    );
+}
+
+function render_hazard_completion_badge(array $report): string
+{
+    $isCompleted = (bool)($report['hazard_review_completed'] ?? false);
+    if (!$isCompleted) {
+        return render_completion_badge(false);
+    }
+
+    $participants = $report['hazard_participants'] ?? [];
+    if (!is_array($participants)) {
+        $participants = [];
+    }
+
+    $participantCount = (int)($report['hazard_participant_count'] ?? count($participants));
+    if ($participantCount <= 0 && !empty($participants)) {
+        $participantCount = count($participants);
+    }
+
+    $participantsJson = json_encode(
+        array_values($participants),
+        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+    );
+    if (!is_string($participantsJson) || $participantsJson === '') {
+        $participantsJson = '[]';
+    }
+
+    $workTitle = trim((string)($report['work_title'] ?? ''));
+    $ariaLabel = $participantCount > 0
+        ? sprintf('위험성평가 완료, 참여인원 %d명 보기', $participantCount)
+        : '위험성평가 완료, 참여인원 보기';
+
+    return sprintf(
+        '<button type="button" class="%s" data-report-title="%s" data-participant-count="%d" data-participants="%s" aria-label="%s">완료</button>',
+        h('status-badge is-complete status-badge-button js-hazard-participant-trigger'),
+        h($workTitle),
+        $participantCount,
+        h($participantsJson),
+        h($ariaLabel)
+    );
+}
+
 function tableExists(PDO $pdo, string $tableName): bool
 {
     static $cache = [];
@@ -401,7 +453,8 @@ function report_team_context(array $report): string
 
 function filter_reports_for_user(array $reports, array $user): array
 {
-    if (auth_is_admin($user)) {
+    $userRole = (string)($user['role'] ?? '');
+    if (auth_is_admin($user) || $userRole === 'safety_manager') {
         return array_values($reports);
     }
 
@@ -417,6 +470,29 @@ function filter_reports_for_user(array $reports, array $user): array
 
         return $userLoginId !== '' && (string)($report['user_login_id'] ?? '') === $userLoginId;
     }));
+}
+
+function work_list_team_has_leader_account(string $teamName): bool
+{
+    $normalizedTeam = auth_normalize_team_name($teamName);
+    if ($normalizedTeam === '') {
+        return false;
+    }
+
+    $targetTeamKey = auth_team_key($normalizedTeam);
+    foreach (auth_accounts() as $account) {
+        $role = auth_normalize_role((string)($account['role'] ?? ''));
+        if ($role !== 'leader') {
+            continue;
+        }
+
+        $accountTeamKey = auth_team_key((string)($account['team'] ?? ''));
+        if ($accountTeamKey === $targetTeamKey) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 $pdo = getDB();
@@ -487,6 +563,41 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && ($_POST['action'] ?? '')
 $safeWorkStandardSelect = $hasSafeWorkStandardNo
     ? "h.safe_work_standard_no,"
     : "NULL AS safe_work_standard_no,";
+$hazardWorkerSelectionCountSelect = tableExists($pdo, 'work_report_worker_hazard_selection')
+    ? "(
+            SELECT COUNT(*)
+            FROM work_report_worker_hazard_selection ws
+            WHERE ws.report_id = wr.report_id
+        ) AS hazard_worker_selection_count,"
+    : "0 AS hazard_worker_selection_count,";
+$hazardParticipantCountSelect = tableExists($pdo, 'work_report_worker_hazard_selection')
+    ? "(
+            SELECT COUNT(DISTINCT ws.user_login_id)
+            FROM work_report_worker_hazard_selection ws
+            WHERE ws.report_id = wr.report_id
+        ) AS hazard_participant_count,"
+    : "0 AS hazard_participant_count,";
+$hazardSelectionCountSelect = tableExists($pdo, 'work_report_hazard_selection')
+    ? "(
+            SELECT COUNT(*)
+            FROM work_report_hazard_selection hs
+            WHERE hs.report_id = wr.report_id
+        ) AS hazard_selection_count,"
+    : "0 AS hazard_selection_count,";
+$hazardChangeRequestCountSelect = tableExists($pdo, 'work_report_hazard_change_request')
+    ? "(
+            SELECT COUNT(*)
+            FROM work_report_hazard_change_request hcr
+            WHERE hcr.report_id = wr.report_id
+        ) AS hazard_change_request_count,"
+    : "0 AS hazard_change_request_count,";
+$hazardAdditionCountSelect = tableExists($pdo, 'work_report_hazard_addition')
+    ? "(
+            SELECT COUNT(*)
+            FROM work_report_hazard_addition ha
+            WHERE ha.report_id = wr.report_id
+        ) AS hazard_addition_count,"
+    : "0 AS hazard_addition_count,";
 
 $reports = $pdo->query("
     SELECT
@@ -504,6 +615,11 @@ $reports = $pdo->query("
         h.unit_code,
         {$safeWorkStandardSelect}
         h.unit_title,
+        {$hazardWorkerSelectionCountSelect}
+        {$hazardParticipantCountSelect}
+        {$hazardSelectionCountSelect}
+        {$hazardChangeRequestCountSelect}
+        {$hazardAdditionCountSelect}
         (
             SELECT COUNT(*)
             FROM work_report_detail wd
@@ -574,10 +690,90 @@ foreach ($reports as &$report) {
         ];
     }
     $report['selected_units'] = $selectedUnits;
+    $workInputCompleted = (int)($report['leader_detail_count'] ?? 0) > 0;
+    $hazardSubmissionCount = (int)($report['hazard_worker_selection_count'] ?? 0)
+        + (int)($report['hazard_selection_count'] ?? 0)
+        + (int)($report['hazard_change_request_count'] ?? 0)
+        + (int)($report['hazard_addition_count'] ?? 0);
+    $report['work_input_completed'] = $workInputCompleted;
+    $report['hazard_review_completed'] = $hazardSubmissionCount > 0;
+    $report['hazard_participant_count'] = (int)($report['hazard_participant_count'] ?? 0);
 }
 unset($report);
 
 $reports = filter_reports_for_user($reports, $user);
+
+$hazardParticipantMap = [];
+if (!empty($reports) && tableExists($pdo, 'work_report_worker_hazard_selection')) {
+    $reportIds = array_values(array_unique(array_map(
+        static fn($row) => (int)($row['report_id'] ?? 0),
+        $reports
+    )));
+    $reportIds = array_values(array_filter($reportIds, static fn($id) => $id > 0));
+
+    if (!empty($reportIds)) {
+        $placeholders = implode(',', array_fill(0, count($reportIds), '?'));
+        $participantStmt = $pdo->prepare("
+            SELECT
+                report_id,
+                user_login_id,
+                user_name
+            FROM work_report_worker_hazard_selection
+            WHERE report_id IN ($placeholders)
+            GROUP BY report_id, user_login_id, user_name
+            ORDER BY user_name ASC, user_login_id ASC
+        ");
+        $participantStmt->execute($reportIds);
+        foreach ($participantStmt->fetchAll() as $participantRow) {
+            $mapReportId = (int)($participantRow['report_id'] ?? 0);
+            if ($mapReportId <= 0) {
+                continue;
+            }
+            if (!isset($hazardParticipantMap[$mapReportId])) {
+                $hazardParticipantMap[$mapReportId] = [];
+            }
+            $hazardParticipantMap[$mapReportId][] = [
+                'user_name' => (string)($participantRow['user_name'] ?? ''),
+                'user_login_id' => (string)($participantRow['user_login_id'] ?? ''),
+            ];
+        }
+    }
+}
+
+foreach ($reports as &$report) {
+    $reportIdKey = (int)($report['report_id'] ?? 0);
+    $participants = $hazardParticipantMap[$reportIdKey] ?? [];
+    $report['hazard_participants'] = $participants;
+    if ((int)($report['hazard_participant_count'] ?? 0) <= 0 && !empty($participants)) {
+        $report['hazard_participant_count'] = count($participants);
+    }
+}
+unset($report);
+
+$showLeaderInputColumn = false;
+if (auth_is_admin($user)) {
+    // 운영자는 전체 팀을 보므로 목록 데이터에 작업지휘자 팀이 있으면 칼럼을 보여준다.
+    foreach ($reports as $report) {
+        if (work_list_team_has_leader_account((string)($report['team_name_context'] ?? ''))) {
+            $showLeaderInputColumn = true;
+            break;
+        }
+    }
+} else {
+    // 일반/관리 계정은 본인이 볼 수 있는 팀 기준으로 칼럼 노출을 결정한다.
+    foreach (auth_work_list_visible_teams($user) as $teamName) {
+        if (work_list_team_has_leader_account((string)$teamName)) {
+            $showLeaderInputColumn = true;
+            break;
+        }
+    }
+}
+
+foreach ($reports as &$report) {
+    $report['requires_leader_input'] = work_list_team_has_leader_account((string)($report['team_name_context'] ?? ''));
+}
+unset($report);
+
 $workListDescription = '저장된 작업리스트를 확인하고 필요한 항목을 다시 열어볼 수 있습니다.';
 ?>
 <!DOCTYPE html>
@@ -855,7 +1051,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
   .mobile-meta-item span  { display: block; color: var(--text-hi); font-size: 13px; font-weight: 700; line-height: 1.45; word-break: keep-all; }
   .mobile-actions { display: flex; gap: 8px; flex-wrap: wrap; }
   .inline-form { display: inline-flex; }
-  table { width: 100%; border-collapse: collapse; min-width: 1020px; background: transparent !important; }
+  table { width: 100%; border-collapse: collapse; min-width: 1180px; background: transparent !important; }
   thead, tbody { background: transparent !important; }
   th, td {
     padding: 13px 12px;
@@ -937,6 +1133,43 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     font-weight: 600;
     line-height: 1.4;
   }
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 56px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .02em;
+    white-space: nowrap;
+    line-height: 1.3;
+  }
+  .status-badge.is-complete {
+    background: rgba(54, 179, 126, 0.14);
+    border-color: rgba(54, 179, 126, 0.45);
+    color: #99efc3;
+  }
+  .status-badge.is-pending {
+    background: rgba(245, 166, 35, 0.14);
+    border-color: rgba(245, 166, 35, 0.45);
+    color: #ffd28b;
+  }
+  .status-badge-button {
+    font-family: inherit;
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+  }
+  .status-badge-button:hover {
+    filter: brightness(1.08);
+  }
+  .status-badge-button:focus-visible {
+    outline: 2px solid rgba(245, 166, 35, 0.65);
+    outline-offset: 2px;
+  }
   .empty { padding: 48px 24px; text-align: center; color: var(--text-dim); }
   .modal-backdrop {
     position: fixed;
@@ -1017,6 +1250,15 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     color: var(--text-dim);
     background: rgba(255,255,255,0.03);
   }
+  .participant-list { display: grid; gap: 8px; list-style: none; }
+  .participant-item {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 11px 14px;
+  }
+  .participant-name { color: var(--text-hi); font-size: 14px; font-weight: 700; }
+  .participant-id { color: var(--text-dim); font-size: 12px; margin-top: 4px; }
   .unit-preview-error { color: #ffd3d1; border-color: rgba(214, 69, 65, 0.45); }
   .unit-preview-meta-grid {
     display: grid;
@@ -1240,6 +1482,16 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
                   <strong>작업표준서번호</strong>
                   <?= render_safety_standard_buttons_from_units($report['selected_units'] ?? []) ?>
                 </div>
+                <?php if ((bool)($report['requires_leader_input'] ?? false)): ?>
+                  <div class="mobile-meta-item">
+                    <strong>작업지휘자 입력</strong>
+                    <?= render_completion_badge((bool)($report['work_input_completed'] ?? false)) ?>
+                  </div>
+                <?php endif; ?>
+                <div class="mobile-meta-item">
+                  <strong>위험성평가</strong>
+                  <?= render_hazard_completion_badge($report) ?>
+                </div>
                 <div class="mobile-meta-item">
                   <strong>등록일</strong>
                   <span><?= h(substr((string)$report['created_at'], 0, 10)) ?></span>
@@ -1256,7 +1508,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
                   }
                 ?>
                 <?php $canWorkerOpen = !$isWorker || (int)($report['leader_detail_count'] ?? 0) > 0; ?>
-                <?php $canDeleteReport = $isAdmin || ($userRole === 'manager' && (string)($report['user_login_id'] ?? '') === (string)($user['login_id'] ?? '')); ?>
+                <?php $canDeleteReport = $isAdmin || (in_array($userRole, ['manager', 'safety_manager'], true) && (string)($report['user_login_id'] ?? '') === (string)($user['login_id'] ?? '')); ?>
                 <?php if ($canWorkerOpen): ?>
                   <?php if ($isAdmin): ?>
                     <a class="btn-secondary" href="<?= h(build_page_url('task_select.php', $adminManagerOpenParams)) ?>">관리열기</a>
@@ -1293,6 +1545,10 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
                 <th>작업유형</th>
                 <th>위험성평가번호</th>
                 <th>작업표준서번호</th>
+                <?php if ($showLeaderInputColumn): ?>
+                  <th>작업지휘자 입력</th>
+                <?php endif; ?>
+                <th>위험성평가</th>
                 <th>등록일</th>
                 <th>보기</th>
               </tr>
@@ -1311,6 +1567,16 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
                   <td><?= render_unit_title_list($report['selected_units'] ?? []) ?></td>
                   <td><?= render_unit_code_preview_buttons($report['selected_units'] ?? []) ?></td>
                   <td><?= render_safety_standard_buttons_from_units($report['selected_units'] ?? []) ?></td>
+                  <?php if ($showLeaderInputColumn): ?>
+                    <td>
+                      <?php if ((bool)($report['requires_leader_input'] ?? false)): ?>
+                        <?= render_completion_badge((bool)($report['work_input_completed'] ?? false)) ?>
+                      <?php else: ?>
+                        <span class="sub-text">-</span>
+                      <?php endif; ?>
+                    </td>
+                  <?php endif; ?>
+                  <td><?= render_hazard_completion_badge($report) ?></td>
                   <td><?= h(substr((string)$report['created_at'], 0, 10)) ?></td>
                   <td>
                     <div class="btn-group">
@@ -1324,7 +1590,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
                         }
                       ?>
                       <?php $canWorkerOpen = !$isWorker || (int)($report['leader_detail_count'] ?? 0) > 0; ?>
-                      <?php $canDeleteReport = $isAdmin || ($userRole === 'manager' && (string)($report['user_login_id'] ?? '') === (string)($user['login_id'] ?? '')); ?>
+                      <?php $canDeleteReport = $isAdmin || (in_array($userRole, ['manager', 'safety_manager'], true) && (string)($report['user_login_id'] ?? '') === (string)($user['login_id'] ?? '')); ?>
                       <?php if ($canWorkerOpen): ?>
                         <?php if ($isAdmin): ?>
                           <a class="btn-secondary" href="<?= h(build_page_url('task_select.php', $adminManagerOpenParams)) ?>">관리열기</a>
@@ -1386,6 +1652,24 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
       </div>
     </div>
   </div>
+  <div class="modal-backdrop" id="hazard-participant-modal" aria-hidden="true">
+    <div class="unit-preview-modal" role="dialog" aria-modal="true" aria-labelledby="hazard-participant-title">
+      <div class="unit-preview-head">
+        <div>
+          <h2 id="hazard-participant-title">위험성평가 참여인원</h2>
+          <p id="hazard-participant-subtitle">완료 배지를 누르면 참여인원을 확인할 수 있습니다.</p>
+        </div>
+        <button type="button" class="modal-close" data-hazard-participant-close aria-label="닫기">&times;</button>
+      </div>
+      <div class="unit-preview-body">
+        <ul class="participant-list" id="hazard-participant-list">
+          <li class="participant-item">
+            <div class="participant-name">참여자 정보가 없습니다.</div>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
   <script>
     (() => {
       const modal = document.getElementById('unit-preview-modal');
@@ -1397,12 +1681,35 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
       const safetySubtitleNode = document.getElementById('safety-preview-subtitle');
       const safetyBodyNode = document.getElementById('safety-preview-body');
       const safetyLinkNode = document.getElementById('safety-preview-link');
+      const hazardParticipantModal = document.getElementById('hazard-participant-modal');
+      const hazardParticipantTitleNode = document.getElementById('hazard-participant-title');
+      const hazardParticipantSubtitleNode = document.getElementById('hazard-participant-subtitle');
+      const hazardParticipantListNode = document.getElementById('hazard-participant-list');
       const standardSearchForm = document.getElementById('standard-search-form');
       const standardSearchInput = document.getElementById('standard-search-input');
       const standardSearchMeta = document.getElementById('standard-search-meta');
       const standardSearchResults = document.getElementById('standard-search-results');
       const standardSearchReset = document.getElementById('standard-search-reset');
-      if (!modal || !titleNode || !subtitleNode || !bodyNode || !safetyModal || !safetyTitleNode || !safetySubtitleNode || !safetyBodyNode || !safetyLinkNode || !standardSearchForm || !standardSearchInput || !standardSearchMeta || !standardSearchResults || !standardSearchReset) {
+      if (
+        !modal
+        || !titleNode
+        || !subtitleNode
+        || !bodyNode
+        || !safetyModal
+        || !safetyTitleNode
+        || !safetySubtitleNode
+        || !safetyBodyNode
+        || !safetyLinkNode
+        || !hazardParticipantModal
+        || !hazardParticipantTitleNode
+        || !hazardParticipantSubtitleNode
+        || !hazardParticipantListNode
+        || !standardSearchForm
+        || !standardSearchInput
+        || !standardSearchMeta
+        || !standardSearchResults
+        || !standardSearchReset
+      ) {
         return;
       }
 
@@ -1416,6 +1723,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
       let previousBodyOverflow = '';
       let safetyRequestToken = 0;
       let previousSafetyBodyOverflow = '';
+      let previousHazardParticipantBodyOverflow = '';
       let standardSearchDebounceTimer = 0;
       let standardSearchRequestToken = 0;
 
@@ -1654,6 +1962,23 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
         `;
       }
 
+      function renderParticipantItems(participants) {
+        if (!Array.isArray(participants) || participants.length === 0) {
+          return '<li class="participant-item"><div class="participant-name">참여자 정보가 없습니다.</div></li>';
+        }
+
+        return participants.map((participant) => {
+          const name = String(participant && participant.user_name ? participant.user_name : '').trim() || '-';
+          const loginId = String(participant && participant.user_login_id ? participant.user_login_id : '').trim();
+          return `
+            <li class="participant-item">
+              <div class="participant-name">${escapeHtml(name)}</div>
+              ${loginId !== '' ? `<div class="participant-id">${escapeHtml(loginId)}</div>` : ''}
+            </li>
+          `;
+        }).join('');
+      }
+
       function setStandardSearchMeta(message) {
         standardSearchMeta.textContent = message;
       }
@@ -1742,6 +2067,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
         }
 
         closeSafetyModal();
+        closeHazardParticipantModal();
         requestToken += 1;
         const currentToken = requestToken;
         previousBodyOverflow = document.body.style.overflow;
@@ -1787,6 +2113,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
 
         hideStandardSearchResults();
         closeModal();
+        closeHazardParticipantModal();
         safetyRequestToken += 1;
         const currentToken = safetyRequestToken;
         previousSafetyBodyOverflow = document.body.style.overflow;
@@ -1825,6 +2152,30 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
         document.body.style.overflow = previousSafetyBodyOverflow;
       }
 
+      function openHazardParticipantModal(workTitle, participants, participantCountHint = 0) {
+        const normalizedParticipants = Array.isArray(participants) ? participants : [];
+        const count = Math.max(Number(participantCountHint || 0), normalizedParticipants.length);
+
+        closeModal();
+        closeSafetyModal();
+
+        previousHazardParticipantBodyOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        hazardParticipantTitleNode.textContent = workTitle ? `${workTitle} 참여인원` : '위험성평가 참여인원';
+        hazardParticipantSubtitleNode.textContent = count > 0
+          ? `위험성평가 참여인원 ${count}명`
+          : '참여인원 정보가 아직 없습니다.';
+        hazardParticipantListNode.innerHTML = renderParticipantItems(normalizedParticipants);
+        hazardParticipantModal.classList.add('is-open');
+        hazardParticipantModal.setAttribute('aria-hidden', 'false');
+      }
+
+      function closeHazardParticipantModal() {
+        hazardParticipantModal.classList.remove('is-open');
+        hazardParticipantModal.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = previousHazardParticipantBodyOverflow;
+      }
+
       document.querySelectorAll('.js-unit-preview').forEach((button) => {
         button.addEventListener('click', () => {
           openModal(Number(button.dataset.unitRaId || 0));
@@ -1834,6 +2185,27 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
       document.querySelectorAll('.js-safety-standard-preview').forEach((button) => {
         button.addEventListener('click', () => {
           openSafetyModal(button.dataset.standardNo || '');
+        });
+      });
+
+      document.querySelectorAll('.js-hazard-participant-trigger[data-participants]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const workTitle = String(button.dataset.reportTitle || '').trim();
+          const participantCount = Number(button.dataset.participantCount || 0);
+          const rawParticipants = button.dataset.participants || '[]';
+          let participants = [];
+
+          try {
+            participants = JSON.parse(rawParticipants);
+          } catch (error) {
+            participants = [];
+          }
+
+          openHazardParticipantModal(
+            workTitle,
+            Array.isArray(participants) ? participants : [],
+            Number.isFinite(participantCount) ? participantCount : 0
+          );
         });
       });
 
@@ -1906,8 +2278,16 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
         }
       });
 
+      hazardParticipantModal.addEventListener('click', (event) => {
+        if (event.target === hazardParticipantModal || event.target.closest('[data-hazard-participant-close]')) {
+          closeHazardParticipantModal();
+        }
+      });
+
       document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape' && safetyModal.classList.contains('is-open')) {
+        if (event.key === 'Escape' && hazardParticipantModal.classList.contains('is-open')) {
+          closeHazardParticipantModal();
+        } else if (event.key === 'Escape' && safetyModal.classList.contains('is-open')) {
           closeSafetyModal();
         } else if (event.key === 'Escape' && modal.classList.contains('is-open')) {
           closeModal();

@@ -83,7 +83,7 @@ function getCurrentUser() {
  * 변경하려면 아래 배열만 수정하면 됩니다.
  */
 function mapBoardRole(string $companyRole): string {
-    $adminRoles = ['admin', 'manager']; // 게시판 관리자로 인정할 사내 역할
+    $adminRoles = ['admin', 'manager', 'safety_manager']; // 게시판 관리자로 인정할 사내 역할
     return in_array($companyRole, $adminRoles, true) ? 'admin' : 'user';
 }
 

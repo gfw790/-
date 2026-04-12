@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require_once 'includes/header.php';
 
 $page = max(1, (int)($_GET['page'] ?? 1));
@@ -33,6 +33,9 @@ function statusLabel(string $status): string {
     <span>아차사고 목록</span>
     <span class="page-title-right">
         <span class="sub">총 <?= number_format($total) ?>건 / <?= $page ?>페이지</span>
+        <?php if ($_currentUser && (string)($_currentUser['original_role'] ?? '') === 'safety_manager'): ?>
+            <a href="export_excel.php" class="btn">엑셀 다운로드</a>
+        <?php endif; ?>
         <?php if ($_currentUser): ?>
             <a href="write.php" class="btn btn-primary">아차사고 입력</a>
         <?php endif; ?>

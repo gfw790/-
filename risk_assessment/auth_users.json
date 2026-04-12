@@ -124,5 +124,11 @@
         "name": "엄기준",
         "role": "worker",
         "team": "공사팀-전기"
+    },
+    "5878": {
+        "password": "1234",
+        "name": "김남균",
+        "role": "safety_manager",
+        "team": "안전관리"
     }
 }

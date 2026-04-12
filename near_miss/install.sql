@@ -155,6 +155,25 @@ CREATE TABLE IF NOT EXISTS `near_miss_reports` (
     FOREIGN KEY (`post_id`) REFERENCES `posts`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 아차사고 사진 메타데이터 (DB-파일-엑셀 연동용)
+CREATE TABLE IF NOT EXISTS `near_miss_photo_links` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `post_id` INT NOT NULL,
+  `report_id` INT DEFAULT NULL,
+  `attachment_id` INT NOT NULL,
+  `photo_key` VARCHAR(80) NOT NULL,
+  `photo_role` ENUM('situation','action_before','action_after','action','other') NOT NULL DEFAULT 'other',
+  `sort_order` INT NOT NULL DEFAULT 0,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_attachment_id` (`attachment_id`),
+  UNIQUE KEY `uk_photo_key` (`photo_key`),
+  KEY `idx_post_id` (`post_id`),
+  KEY `idx_report_id` (`report_id`),
+  KEY `idx_photo_role` (`photo_role`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ============================================
 -- 기본 카테고리 데이터
 -- ============================================

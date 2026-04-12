@@ -190,7 +190,7 @@ function get_board_db(): PDO
 function hazard_board_role(array $user): string
 {
     $role = (string)($user['role'] ?? '');
-    return in_array($role, ['admin', 'manager'], true) ? 'admin' : 'user';
+    return in_array($role, ['admin', 'manager', 'safety_manager'], true) ? 'admin' : 'user';
 }
 
 function ensure_board_change_request_category(PDO $boardPdo): int
