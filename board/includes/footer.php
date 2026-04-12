@@ -9,6 +9,11 @@
   </footer>
 
 </div>
+<script src="assets/js/board.common-utils.js"></script>
+<script src="assets/js/board.likes.js"></script>
+<script src="assets/js/board.comments.js"></script>
+<script src="assets/js/board.init.js"></script>
+<script src="assets/js/board.image-editor-template.js"></script>
 <script src="assets/js/board.js"></script>
 </body>
 </html>

@@ -1118,5 +1118,10 @@ if ($form['incident_at'] !== '') {
 })();
 </script>
 
+<script src="../board/assets/js/board.common-utils.js"></script>
+<script src="../board/assets/js/board.likes.js"></script>
+<script src="../board/assets/js/board.comments.js"></script>
+<script src="../board/assets/js/board.init.js"></script>
+<script src="../board/assets/js/board.image-editor-template.js"></script>
 <script src="../board/assets/js/board.js"></script>
 <?php require_once 'includes/footer.php'; ?>

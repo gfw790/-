@@ -1,63 +1,26 @@
-﻿// 사내 게시판 클라이언트 스크립트
+// 사내 게시판 클라이언트 스크립트
 
 (function() {
     const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
-
-    // 좋아요
-    document.querySelectorAll('.like-btn').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            const postId = btn.dataset.postId;
-            try {
-                const fd = new FormData();
-                fd.append('post_id', postId);
-                fd.append('csrf', csrf);
-                const res = await fetch('like.php', { method: 'POST', body: fd });
-                const data = await res.json();
-                if (data.ok) {
-                    btn.classList.toggle('liked', data.liked);
-                    btn.querySelector('.like-count').textContent = data.count;
-                } else {
-                    alert(data.message || '오류가 발생했습니다.');
-                }
-            } catch (e) {
-                alert('네트워크 오류');
-            }
+    if (typeof window.BOARD_bindLikeButtons === 'function') {
+        window.BOARD_bindLikeButtons({
+            csrfToken: csrf,
         });
-    });
-
-    // 답글 폼 토글
-    document.querySelectorAll('.reply-toggle').forEach(link => {
-        link.addEventListener('click', (e) => {
-            e.preventDefault();
-            const id = link.dataset.commentId;
-            const form = document.getElementById('reply-form-' + id);
-            if (form) form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    }
+    if (typeof window.BOARD_bindCommentInteractions === 'function') {
+        window.BOARD_bindCommentInteractions({
+            csrfToken: csrf,
         });
-    });
-
-    // 댓글 삭제
-    document.querySelectorAll('.comment-delete').forEach(link => {
-        link.addEventListener('click', async (e) => {
-            e.preventDefault();
-            if (!confirm('이 댓글을 삭제하시겠습니까?')) return;
-            const id = link.dataset.commentId;
-            const fd = new FormData();
-            fd.append('action', 'delete');
-            fd.append('comment_id', id);
-            fd.append('csrf', csrf);
-            const res = await fetch('comment.php', { method: 'POST', body: fd });
-            const data = await res.json();
-            if (data.ok) location.reload();
-            else alert(data.message || '삭제 실패');
-        });
-    });
+    }
 
     // 글쓰기 - 첨부파일 삭제 / 본문 삽입
     const writeForm = document.querySelector('form.write-form, form#write-form');
-    const contentTextarea = document.getElementById('content') || document.querySelector('textarea[name="content"]');
+    const contentTextarea = document.getElementById('content') || document.querySelector(
+    'textarea[name="content"]');
     const contentEditor = document.getElementById('content-editor');
     const titleInput = writeForm?.querySelector('input[name="title"]');
-    const attachmentInput = document.getElementById('attachments') || document.querySelector('input[type="file"][name="attachments[]"]');
+    const attachmentInput = document.getElementById('attachments') || document.querySelector(
+        'input[type="file"][name="attachments[]"]');
     const newAttachmentTokenList = document.getElementById('new-attachment-token-list');
     const previewButton = document.getElementById('preview-write-btn');
     const previewModal = document.getElementById('write-preview-modal');
@@ -66,10 +29,17 @@
     const previewContent = document.getElementById('write-preview-content');
     const livePreviewBody = document.getElementById('live-content-preview-body');
     const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'];
-    const blockTags = new Set(['DIV', 'P', 'LI', 'UL', 'OL', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'PRE', 'FIGURE']);
+    const blockTags = new Set(['DIV', 'P', 'LI', 'UL', 'OL', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE',
+        'PRE', 'FIGURE'
+    ]);
     const RICHTEXT_PREFIX = '<!--richtext-->';
     const INLINE_FORMAT_TAGS = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'S', 'STRIKE', 'SPAN', 'FONT']);
-    const defaultEmbedOptions = { align: 'center', size: 'medium', rotate: 0, flip: false };
+    const defaultEmbedOptions = {
+        align: 'center',
+        size: 'medium',
+        rotate: 0,
+        flip: false
+    };
     const defaultTextStyle = {
         size: 22,
         bold: false,
@@ -94,13 +64,16 @@
         alpha: 1,
     };
     const textPresetColors = [
-        '#ff0000', '#ff5a00', '#ff9100', '#ffc400', '#ffe600', '#c6d300', '#8bc34a', '#00b894', '#00a8ff', '#2f80ed',
-        '#3f51b5', '#673ab7', '#9c27b0', '#e91e63', '#795548', '#9e9e9e', '#607d8b', '#000000', '#ffffff', '#f3e5f5'
+        '#ff0000', '#ff5a00', '#ff9100', '#ffc400', '#ffe600', '#c6d300', '#8bc34a', '#00b894', '#00a8ff',
+        '#2f80ed',
+        '#3f51b5', '#673ab7', '#9c27b0', '#e91e63', '#795548', '#9e9e9e', '#607d8b', '#000000', '#ffffff',
+        '#f3e5f5'
     ];
     const shapePresetColors = [
         'transparent',
         '#ff0000', '#ff5a00', '#ff9100', '#ffc400', '#ffe600', '#c6d300', '#8bc34a', '#00b894', '#00a8ff',
-        '#2f80ed', '#3f51b5', '#673ab7', '#9c27b0', '#e91e63', '#795548', '#9e9e9e', '#607d8b', '#000000', '#ffffff'
+        '#2f80ed', '#3f51b5', '#673ab7', '#9c27b0', '#e91e63', '#795548', '#9e9e9e', '#607d8b', '#000000',
+        '#ffffff'
     ];
     let modalPreviewObjectUrls = [];
     let livePreviewObjectUrls = [];
@@ -114,23 +87,27 @@
     let stagedUploadFiles = new Map();
     let nmFileEditCallback = null;
     let editedEmbedObjectUrls = [];
+    const boardCommonUtils = window.BOARD_commonUtils || {};
 
-    const escapeHtml = (str) => String(str)
+    const escapeHtml = boardCommonUtils.escapeHtml || ((str) => String(str)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
+        .replace(/'/g, '&#039;'));
 
     const isImageFileName = (fileName) => {
+        if (typeof boardCommonUtils.isImageFileName === 'function') {
+            return boardCommonUtils.isImageFileName(fileName, imageExts);
+        }
         const ext = String(fileName || '').toLowerCase().split('.').pop();
         return imageExts.includes(ext);
     };
 
-    const clearObjectUrls = (list) => {
+    const clearObjectUrls = boardCommonUtils.clearObjectUrls || ((list) => {
         list.forEach((url) => URL.revokeObjectURL(url));
         list.length = 0;
-    };
+    });
 
     const getUploadFileKey = (file) => String(file?.name || '').toLowerCase();
 
@@ -181,7 +158,11 @@
             if (!id) return;
 
             const name = el.dataset.originalName || ('첨부 ' + id);
-            const info = { id, name, src: 'download.php?id=' + id };
+            const info = {
+                id,
+                name,
+                src: 'download.php?id=' + id
+            };
             ordered.push(info);
             byId.set(id, info);
             byName.set(name.toLowerCase(), info);
@@ -192,7 +173,11 @@
             }
         });
 
-        return { byId, byName, ordered };
+        return {
+            byId,
+            byName,
+            ordered
+        };
     };
 
     const getSelectedImageFileByName = () => {
@@ -252,7 +237,8 @@
         if (!Number.isFinite(rotate)) rotate = defaultEmbedOptions.rotate;
         rotate = ((Math.round(rotate / 90) * 90) % 360 + 360) % 360;
         const flipRaw = opts.flip;
-        const flip = flipRaw === true || flipRaw === 1 || flipRaw === '1' || String(flipRaw).toLowerCase() === 'true';
+        const flip = flipRaw === true || flipRaw === 1 || flipRaw === '1' || String(flipRaw).toLowerCase() ===
+            'true';
         return {
             align: ['left', 'center', 'right'].includes(align) ? align : defaultEmbedOptions.align,
             size: ['small', 'medium', 'large'].includes(size) ? size : defaultEmbedOptions.size,
@@ -286,12 +272,16 @@
                 options.flip = value === '1' || value === 'true' || value === 'yes';
             }
         });
-        return { target, options: normalizeEmbedOptions(options) };
+        return {
+            target,
+            options: normalizeEmbedOptions(options)
+        };
     };
 
     const buildAttachmentTokenValue = (target, options) => {
         const normalized = normalizeEmbedOptions(options);
-        return `${target}|align=${normalized.align}|size=${normalized.size}|rotate=${normalized.rotate}|flip=${normalized.flip ? 1 : 0}`;
+        return `${target}|align=${normalized.align}|size=${normalized.size}` +
+            `|rotate=${normalized.rotate}|flip=${normalized.flip ? 1 : 0}`;
     };
 
     const applyImageTransformToElement = (imgElement, options = {}) => {
@@ -334,7 +324,8 @@
     const applyEmbedVisualClass = (figure, options) => {
         if (!figure) return;
         const normalized = normalizeEmbedOptions(options);
-        figure.classList.remove('align-left', 'align-center', 'align-right', 'size-small', 'size-medium', 'size-large');
+        figure.classList.remove('align-left', 'align-center', 'align-right', 'size-small', 'size-medium',
+            'size-large');
         figure.classList.add(`align-${normalized.align}`, `size-${normalized.size}`);
         figure.dataset.align = normalized.align;
         figure.dataset.size = normalized.size;
@@ -375,7 +366,8 @@
             if (plainText) appendTextWithBreaks(contentEditor, plainText);
 
             const parsed = parseAttachmentTokenValue(match[1]);
-            const imageInfo = resolveImageFromToken(parsed.target, existingImages, selectedFiles, editorObjectUrls);
+            const imageInfo = resolveImageFromToken(parsed.target, existingImages, selectedFiles,
+                editorObjectUrls);
             if (!imageInfo) {
                 appendTextWithBreaks(contentEditor, match[0]);
             } else {
@@ -416,12 +408,15 @@
                     if (el.tagName === 'SPAN' && el.dataset.embedIdx !== undefined) {
                         const tokenValue = embedTokens[parseInt(el.dataset.embedIdx, 10)];
                         const parsed = parseAttachmentTokenValue(tokenValue);
-                        const imageInfo = resolveImageFromToken(parsed.target, existingImages, selectedFiles, editorObjectUrls);
+                        const imageInfo = resolveImageFromToken(parsed.target, existingImages,
+                            selectedFiles, editorObjectUrls);
                         if (imageInfo) {
-                            targetParent.appendChild(createEditorEmbed(parsed.target, imageInfo, parsed.options));
+                            targetParent.appendChild(createEditorEmbed(parsed.target, imageInfo,
+                                parsed.options));
                             targetParent.appendChild(document.createElement('br'));
                         } else {
-                            targetParent.appendChild(document.createTextNode(`[[첨부:${tokenValue}]]`));
+                            targetParent.appendChild(document.createTextNode(
+                                `[[첨부:${tokenValue}]]`));
                         }
                         return;
                     }
@@ -432,10 +427,10 @@
                     }
                     // Inline format tags — clone with safe attributes and recurse
                     if (INLINE_FORMAT_TAGS.has(el.tagName)) {
-                        const tag = el.tagName === 'STRONG' ? 'b'
-                            : el.tagName === 'EM' ? 'i'
-                            : el.tagName === 'STRIKE' ? 's'
-                            : el.tagName.toLowerCase();
+                        const tag = el.tagName === 'STRONG' ? 'b' :
+                            el.tagName === 'EM' ? 'i' :
+                            el.tagName === 'STRIKE' ? 's' :
+                            el.tagName.toLowerCase();
                         const clone = document.createElement(tag);
                         if (el.tagName === 'SPAN') {
                             if (el.style.color) clone.style.color = el.style.color;
@@ -540,13 +535,15 @@
         if (el.tagName === 'BR') return '<br>';
 
         let inner = '';
-        el.childNodes.forEach((child) => { inner += serializeEditorNodeHTML(child); });
+        el.childNodes.forEach((child) => {
+            inner += serializeEditorNodeHTML(child);
+        });
 
         if (INLINE_FORMAT_TAGS.has(el.tagName)) {
-            const tag = el.tagName === 'STRONG' ? 'b'
-                : el.tagName === 'EM' ? 'i'
-                : el.tagName === 'STRIKE' ? 's'
-                : el.tagName.toLowerCase();
+            const tag = el.tagName === 'STRONG' ? 'b' :
+                el.tagName === 'EM' ? 'i' :
+                el.tagName === 'STRIKE' ? 's' :
+                el.tagName.toLowerCase();
             let attrs = '';
             if (el.tagName === 'SPAN') {
                 const parts = [];
@@ -581,6 +578,10 @@
         if (!contentTextarea || !contentEditor || contentEditor.hidden) return;
         contentTextarea.value = serializeEditorToText();
         syncEditorEmptyState();
+    };
+    const syncEditorOutput = () => {
+        syncTextareaFromEditor();
+        updateLivePreview();
     };
 
     const saveEditorRange = () => {
@@ -645,8 +646,7 @@
         }
 
         placeCaretAfterNode(br);
-        syncTextareaFromEditor();
-        updateLivePreview();
+        syncEditorOutput();
         return true;
     };
 
@@ -681,8 +681,7 @@
             rotate: patch.rotate ?? embed.dataset.rotate ?? defaultEmbedOptions.rotate,
             flip: patch.flip ?? embed.dataset.flip ?? defaultEmbedOptions.flip,
         });
-        syncTextareaFromEditor();
-        updateLivePreview();
+        syncEditorOutput();
         showImageToolbar(embed);
     };
 
@@ -694,67 +693,73 @@
         }
         embed.remove();
         hideImageToolbar();
-        syncTextareaFromEditor();
-        updateLivePreview();
+        syncEditorOutput();
     };
 
-    const getImageEditorCanvas = () => imageEditorModal?.querySelector('.image-edit-canvas');
-    const getImageEditorOverlay = () => imageEditorModal?.querySelector('.image-edit-overlay');
-    const getImageEditorMeta = () => imageEditorModal?.querySelector('.image-edit-meta');
-    const getImageEditorWidthInput = () => imageEditorModal?.querySelector('input[data-field="width"]');
-    const getImageEditorHeightInput = () => imageEditorModal?.querySelector('input[data-field="height"]');
-    const getImageEditorZoomSelect = () => imageEditorModal?.querySelector('select[data-field="zoom"]');
-    const getImageEditorPixelModeCheckbox = () => imageEditorModal?.querySelector('input[data-field="pixel-mode"]');
-    const getImageEditorRatioLockButton = () => imageEditorModal?.querySelector('button[data-action="toggle-ratio"]');
-    const getImageEditorStage = () => imageEditorModal?.querySelector('.image-edit-canvas-stage');
-    const getImageEditorCropActionButton = () => imageEditorModal?.querySelector('.image-crop-action');
-    const getImageEditorTextSettingButton = () => imageEditorModal?.querySelector('button[data-action="text-settings"]');
-    const getImageEditorTextPanel = () => imageEditorModal?.querySelector('.image-text-panel');
-    const getImageEditorTextSizeInput = () => imageEditorModal?.querySelector('input[data-field="text-size"]');
-    const getImageEditorTextSizeRange = () => imageEditorModal?.querySelector('input[data-field="text-size-range"]');
-    const getImageEditorTextColorDim = () => imageEditorModal?.querySelector('.image-text-color-dim');
-    const getImageEditorTextColorPicker = () => imageEditorModal?.querySelector('.image-text-color-picker');
-    const getImageEditorTextColorPreview = () => imageEditorModal?.querySelector('.image-text-color-preview');
-    const getImageEditorTextColorHexInput = () => imageEditorModal?.querySelector('input[data-field="text-color-hex"]');
-    const getImageEditorTextColorSvCanvas = () => imageEditorModal?.querySelector('canvas[data-field="text-color-sv"]');
-    const getImageEditorTextColorHueCanvas = () => imageEditorModal?.querySelector('canvas[data-field="text-color-hue"]');
-    const getImageEditorTextStyleButtons = () => imageEditorModal?.querySelectorAll('.image-text-style-btn') || [];
-    const getImageEditorTextPaletteButtons = () => imageEditorModal?.querySelectorAll('.image-text-color-palette .color-chip') || [];
-    const getImageEditorTextEntry = () => imageEditorModal?.querySelector('.image-text-entry');
-    const getImageEditorTextEntryInput = () => imageEditorModal?.querySelector('.image-text-entry-input');
-    const getImageEditorShapeSettingButton = () => imageEditorModal?.querySelector('button[data-action="shape-settings"]');
-    const getImageEditorShapePanel = () => imageEditorModal?.querySelector('.image-shape-panel');
-    const getImageEditorShapeTypeButtons = () => imageEditorModal?.querySelectorAll('.image-shape-type-btn') || [];
-    const getImageEditorShapeLineStyleButtons = () => imageEditorModal?.querySelectorAll('.image-shape-line-style-btn') || [];
-    const getImageEditorShapeColorTabButtons = () => imageEditorModal?.querySelectorAll('.image-shape-color-tab-btn') || [];
-    const getImageEditorShapeWidthInput = () => imageEditorModal?.querySelector('input[data-field="shape-line-width"]');
-    const getImageEditorShapeWidthRange = () => imageEditorModal?.querySelector('input[data-field="shape-line-width-range"]');
-    const getImageEditorShapePaletteButtons = () => imageEditorModal?.querySelectorAll('.image-shape-color-palette .color-chip') || [];
-    const getImageEditorShapeColorDim = () => imageEditorModal?.querySelector('.image-shape-color-dim');
-    const getImageEditorShapeColorPicker = () => imageEditorModal?.querySelector('.image-shape-color-picker');
-    const getImageEditorShapeColorPreview = () => imageEditorModal?.querySelector('.image-shape-color-preview');
-    const getImageEditorShapeColorHexInput = () => imageEditorModal?.querySelector('input[data-field="shape-color-hex"]');
-    const getImageEditorShapeColorSvCanvas = () => imageEditorModal?.querySelector('canvas[data-field="shape-color-sv"]');
-    const getImageEditorShapeColorHueCanvas = () => imageEditorModal?.querySelector('canvas[data-field="shape-color-hue"]');
-    const getImageEditorShapeOpacityRange = () => imageEditorModal?.querySelector('input[data-field="shape-color-alpha"]');
-    const getImageEditorShapeOpacityLabel = () => imageEditorModal?.querySelector('.shape-color-alpha-label');
-    const getImageEditorShapeInlineOpacityRange = () => imageEditorModal?.querySelector('input[data-field="shape-color-alpha-inline"]');
-    const getImageEditorShapeInlineOpacityLabel = () => imageEditorModal?.querySelector('.shape-color-alpha-inline-label');
-    const getImageEditorDrawSettingButton = () => imageEditorModal?.querySelector('button[data-action="draw-settings"]');
-    const getImageEditorDrawPanel = () => imageEditorModal?.querySelector('.image-draw-panel');
-    const getImageEditorDrawWidthInput = () => imageEditorModal?.querySelector('input[data-field="draw-line-width"]');
-    const getImageEditorDrawWidthRange = () => imageEditorModal?.querySelector('input[data-field="draw-line-width-range"]');
-    const getImageEditorDrawPaletteButtons = () => imageEditorModal?.querySelectorAll('.image-draw-color-palette .color-chip') || [];
-    const getImageEditorDrawColorDim = () => imageEditorModal?.querySelector('.image-draw-color-dim');
-    const getImageEditorDrawColorPicker = () => imageEditorModal?.querySelector('.image-draw-color-picker');
-    const getImageEditorDrawColorPreview = () => imageEditorModal?.querySelector('.image-draw-color-preview');
-    const getImageEditorDrawColorHexInput = () => imageEditorModal?.querySelector('input[data-field="draw-color-hex"]');
-    const getImageEditorDrawColorSvCanvas = () => imageEditorModal?.querySelector('canvas[data-field="draw-color-sv"]');
-    const getImageEditorDrawColorHueCanvas = () => imageEditorModal?.querySelector('canvas[data-field="draw-color-hue"]');
-    const getImageEditorDrawOpacityRange = () => imageEditorModal?.querySelector('input[data-field="draw-color-alpha"]');
-    const getImageEditorDrawOpacityLabel = () => imageEditorModal?.querySelector('.draw-color-alpha-label');
-    const getImageEditorDrawInlineOpacityRange = () => imageEditorModal?.querySelector('input[data-field="draw-color-alpha-inline"]');
-    const getImageEditorDrawInlineOpacityLabel = () => imageEditorModal?.querySelector('.draw-color-alpha-inline-label');
+    const queryImageEditor = (selector) => imageEditorModal?.querySelector(selector);
+    const queryImageEditorAll = (selector) => imageEditorModal?.querySelectorAll(selector) || [];
+    const makeImageEditorQuery = (selector) => () => queryImageEditor(selector);
+    const makeImageEditorQueryAll = (selector) => () => queryImageEditorAll(selector);
+
+    const getImageEditorCanvas = makeImageEditorQuery('.image-edit-canvas');
+    const getImageEditorOverlay = makeImageEditorQuery('.image-edit-overlay');
+    const getImageEditorMeta = makeImageEditorQuery('.image-edit-meta');
+    const getImageEditorWidthInput = makeImageEditorQuery('input[data-field="width"]');
+    const getImageEditorHeightInput = makeImageEditorQuery('input[data-field="height"]');
+    const getImageEditorZoomSelect = makeImageEditorQuery('select[data-field="zoom"]');
+    const getImageEditorPixelModeCheckbox = makeImageEditorQuery('input[data-field="pixel-mode"]');
+    const getImageEditorRatioLockButton = makeImageEditorQuery('button[data-action="toggle-ratio"]');
+    const getImageEditorStage = makeImageEditorQuery('.image-edit-canvas-stage');
+    const getImageEditorCropActionButton = makeImageEditorQuery('.image-crop-action');
+    const getImageEditorTextSettingButton = makeImageEditorQuery('button[data-action="text-settings"]');
+    const getImageEditorTextPanel = makeImageEditorQuery('.image-text-panel');
+    const getImageEditorTextSizeInput = makeImageEditorQuery('input[data-field="text-size"]');
+    const getImageEditorTextSizeRange = makeImageEditorQuery('input[data-field="text-size-range"]');
+    const getImageEditorTextColorDim = makeImageEditorQuery('.image-text-color-dim');
+    const getImageEditorTextColorPicker = makeImageEditorQuery('.image-text-color-picker');
+    const getImageEditorTextColorPreview = makeImageEditorQuery('.image-text-color-preview');
+    const getImageEditorTextColorHexInput = makeImageEditorQuery('input[data-field="text-color-hex"]');
+    const getImageEditorTextColorSvCanvas = makeImageEditorQuery('canvas[data-field="text-color-sv"]');
+    const getImageEditorTextColorHueCanvas = makeImageEditorQuery('canvas[data-field="text-color-hue"]');
+    const getImageEditorTextStyleButtons = makeImageEditorQueryAll('.image-text-style-btn');
+    const getImageEditorTextPaletteButtons = makeImageEditorQueryAll('.image-text-color-palette .color-chip');
+    const getImageEditorTextEntry = makeImageEditorQuery('.image-text-entry');
+    const getImageEditorTextEntryInput = makeImageEditorQuery('.image-text-entry-input');
+    const getImageEditorShapeSettingButton = makeImageEditorQuery('button[data-action="shape-settings"]');
+    const getImageEditorShapePanel = makeImageEditorQuery('.image-shape-panel');
+    const getImageEditorShapeTypeButtons = makeImageEditorQueryAll('.image-shape-type-btn');
+    const getImageEditorShapeLineStyleButtons = makeImageEditorQueryAll('.image-shape-line-style-btn');
+    const getImageEditorShapeColorTabButtons = makeImageEditorQueryAll('.image-shape-color-tab-btn');
+    const getImageEditorShapeWidthInput = makeImageEditorQuery('input[data-field="shape-line-width"]');
+    const getImageEditorShapeWidthRange = makeImageEditorQuery('input[data-field="shape-line-width-range"]');
+    const getImageEditorShapePaletteButtons = makeImageEditorQueryAll('.image-shape-color-palette .color-chip');
+    const getImageEditorShapeColorDim = makeImageEditorQuery('.image-shape-color-dim');
+    const getImageEditorShapeColorPicker = makeImageEditorQuery('.image-shape-color-picker');
+    const getImageEditorShapeColorPreview = makeImageEditorQuery('.image-shape-color-preview');
+    const getImageEditorShapeColorHexInput = makeImageEditorQuery('input[data-field="shape-color-hex"]');
+    const getImageEditorShapeColorSvCanvas = makeImageEditorQuery('canvas[data-field="shape-color-sv"]');
+    const getImageEditorShapeColorHueCanvas = makeImageEditorQuery('canvas[data-field="shape-color-hue"]');
+    const getImageEditorShapeOpacityRange = makeImageEditorQuery('input[data-field="shape-color-alpha"]');
+    const getImageEditorShapeOpacityLabel = makeImageEditorQuery('.shape-color-alpha-label');
+    const getImageEditorShapeInlineOpacityRange = makeImageEditorQuery(
+        'input[data-field="shape-color-alpha-inline"]');
+    const getImageEditorShapeInlineOpacityLabel = makeImageEditorQuery('.shape-color-alpha-inline-label');
+    const getImageEditorDrawSettingButton = makeImageEditorQuery('button[data-action="draw-settings"]');
+    const getImageEditorDrawPanel = makeImageEditorQuery('.image-draw-panel');
+    const getImageEditorDrawWidthInput = makeImageEditorQuery('input[data-field="draw-line-width"]');
+    const getImageEditorDrawWidthRange = makeImageEditorQuery('input[data-field="draw-line-width-range"]');
+    const getImageEditorDrawPaletteButtons = makeImageEditorQueryAll('.image-draw-color-palette .color-chip');
+    const getImageEditorDrawColorDim = makeImageEditorQuery('.image-draw-color-dim');
+    const getImageEditorDrawColorPicker = makeImageEditorQuery('.image-draw-color-picker');
+    const getImageEditorDrawColorPreview = makeImageEditorQuery('.image-draw-color-preview');
+    const getImageEditorDrawColorHexInput = makeImageEditorQuery('input[data-field="draw-color-hex"]');
+    const getImageEditorDrawColorSvCanvas = makeImageEditorQuery('canvas[data-field="draw-color-sv"]');
+    const getImageEditorDrawColorHueCanvas = makeImageEditorQuery('canvas[data-field="draw-color-hue"]');
+    const getImageEditorDrawOpacityRange = makeImageEditorQuery('input[data-field="draw-color-alpha"]');
+    const getImageEditorDrawOpacityLabel = makeImageEditorQuery('.draw-color-alpha-label');
+    const getImageEditorDrawInlineOpacityRange = makeImageEditorQuery(
+        'input[data-field="draw-color-alpha-inline"]');
+    const getImageEditorDrawInlineOpacityLabel = makeImageEditorQuery('.draw-color-alpha-inline-label');
     const textMeasureCanvas = document.createElement('canvas');
     const textMeasureContext = textMeasureCanvas.getContext('2d');
     const parsePxInputValue = (value) => {
@@ -762,7 +767,8 @@
         return match ? Number(match[1]) : 0;
     };
     const formatPxValue = (value) => `${Math.max(1, Math.round(Number(value) || 1))}px`;
-    const clampTextSize = (value) => Math.max(10, Math.min(120, Math.round(Number(value) || defaultTextStyle.size)));
+    const clampTextSize = (value) => Math.max(10, Math.min(120, Math.round(Number(value) || defaultTextStyle
+    .size)));
 
     const normalizeHexColor = (value, fallback = defaultTextStyle.color) => {
         const raw = String(value || '').trim().toLowerCase();
@@ -778,7 +784,10 @@
     };
 
     const copyTextStyle = (style) => {
-        const merged = { ...defaultTextStyle, ...(style || {}) };
+        const merged = {
+            ...defaultTextStyle,
+            ...(style || {})
+        };
         return {
             size: clampTextSize(merged.size),
             bold: !!merged.bold,
@@ -798,8 +807,13 @@
         }
         return imageEditorState.textStyle;
     };
+    const getSelectedImageEditorObject = () => {
+        if (!imageEditorState?.selectedObjectId) return null;
+        return (imageEditorState.objects || []).find((o) => o.id === imageEditorState.selectedObjectId) || null;
+    };
 
-    const clampShapeLineWidth = (value) => Math.max(1, Math.min(30, Math.round(Number(value) || defaultShapeStyle.lineWidth)));
+    const clampShapeLineWidth = (value) => Math.max(1, Math.min(30, Math.round(Number(value) || defaultShapeStyle
+        .lineWidth)));
     const normalizeAlpha = (value, fallback = 1) => {
         const n = Number(value);
         if (!Number.isFinite(n)) return fallback;
@@ -807,11 +821,16 @@
     };
 
     const copyShapeStyle = (style) => {
-        const merged = { ...defaultShapeStyle, ...(style || {}) };
+        const merged = {
+            ...defaultShapeStyle,
+            ...(style || {})
+        };
         return {
-            type: ['rect', 'roundRect', 'ellipse', 'line', 'freeQuad'].includes(String(merged.type)) ? String(merged.type) : defaultShapeStyle.type,
+            type: ['rect', 'roundRect', 'ellipse', 'line', 'freeQuad'].includes(String(merged.type)) ? String(
+                merged.type) : defaultShapeStyle.type,
             lineWidth: clampShapeLineWidth(merged.lineWidth),
-            lineStyle: ['solid', 'dash', 'dot'].includes(String(merged.lineStyle)) ? String(merged.lineStyle) : defaultShapeStyle.lineStyle,
+            lineStyle: ['solid', 'dash', 'dot'].includes(String(merged.lineStyle)) ? String(merged.lineStyle) :
+                defaultShapeStyle.lineStyle,
             colorTarget: merged.colorTarget === 'fill' ? 'fill' : 'stroke',
             strokeColor: normalizeHexColor(merged.strokeColor, defaultShapeStyle.strokeColor),
             strokeAlpha: normalizeAlpha(merged.strokeAlpha, defaultShapeStyle.strokeAlpha),
@@ -830,10 +849,14 @@
         return imageEditorState.shapeStyle;
     };
 
-    const clampDrawLineWidth = (value) => Math.max(1, Math.min(30, Math.round(Number(value) || defaultDrawStyle.lineWidth)));
+    const clampDrawLineWidth = (value) => Math.max(1, Math.min(30, Math.round(Number(value) || defaultDrawStyle
+        .lineWidth)));
 
     const copyDrawStyle = (style) => {
-        const merged = { ...defaultDrawStyle, ...(style || {}) };
+        const merged = {
+            ...defaultDrawStyle,
+            ...(style || {})
+        };
         return {
             lineWidth: clampDrawLineWidth(merged.lineWidth),
             color: normalizeHexColor(merged.color, defaultDrawStyle.color),
@@ -875,20 +898,34 @@
         const c = vv * ss;
         const x = c * (1 - Math.abs(((hh / 60) % 2) - 1));
         const m = vv - c;
-        let rr = 0, gg = 0, bb = 0;
+        let rr = 0,
+            gg = 0,
+            bb = 0;
 
         if (hh < 60) {
-            rr = c; gg = x; bb = 0;
+            rr = c;
+            gg = x;
+            bb = 0;
         } else if (hh < 120) {
-            rr = x; gg = c; bb = 0;
+            rr = x;
+            gg = c;
+            bb = 0;
         } else if (hh < 180) {
-            rr = 0; gg = c; bb = x;
+            rr = 0;
+            gg = c;
+            bb = x;
         } else if (hh < 240) {
-            rr = 0; gg = x; bb = c;
+            rr = 0;
+            gg = x;
+            bb = c;
         } else if (hh < 300) {
-            rr = x; gg = 0; bb = c;
+            rr = x;
+            gg = 0;
+            bb = c;
         } else {
-            rr = c; gg = 0; bb = x;
+            rr = c;
+            gg = 0;
+            bb = x;
         }
 
         return {
@@ -916,7 +953,11 @@
 
         const s = max === 0 ? 0 : delta / max;
         const v = max;
-        return { h, s, v };
+        return {
+            h,
+            s,
+            v
+        };
     };
 
     const colorToRgba = (hex, alpha = 1) => {
@@ -1049,8 +1090,7 @@
 
     // 선택된 객체의 스타일을 편집기 상태 스타일로 동기화 (객체 선택 시 호출)
     const syncSelectedObjectStyleToState = () => {
-        if (!imageEditorState?.selectedObjectId) return;
-        const sel = (imageEditorState.objects || []).find((o) => o.id === imageEditorState.selectedObjectId);
+        const sel = getSelectedImageEditorObject();
         if (!sel?.style) return;
         if (sel.type === 'text') imageEditorState.textStyle = copyTextStyle(sel.style);
         else if (sel.type === 'shape') imageEditorState.shapeStyle = copyShapeStyle(sel.style);
@@ -1059,9 +1099,8 @@
 
     // 편집기 상태 스타일을 선택된 객체에 적용 (select 도구 활성화 상태에서만)
     const applyStateStyleToSelectedObject = (type) => {
-        if (!imageEditorState?.selectedObjectId) return false;
         if (imageEditorState.tool !== 'select') return false;
-        const sel = (imageEditorState.objects || []).find((o) => o.id === imageEditorState.selectedObjectId);
+        const sel = getSelectedImageEditorObject();
         if (!sel || sel.type !== type) return false;
         if (type === 'text') {
             sel.style = copyTextStyle(ensureImageEditorTextStyle());
@@ -1219,7 +1258,8 @@
         if (!imageEditorState) return;
         const state = ensureTextColorPickerState();
         if (!state) return;
-        const canvas = target === 'hue' ? getImageEditorTextColorHueCanvas() : getImageEditorTextColorSvCanvas();
+        const canvas = target === 'hue' ? getImageEditorTextColorHueCanvas() :
+    getImageEditorTextColorSvCanvas();
         if (!canvas) return;
 
         const rect = canvas.getBoundingClientRect();
@@ -1316,8 +1356,10 @@
         let inside = false;
         const n = corners.length;
         for (let i = 0, j = n - 1; i < n; j = i++) {
-            const xi = corners[i].x, yi = corners[i].y;
-            const xj = corners[j].x, yj = corners[j].y;
+            const xi = corners[i].x,
+                yi = corners[i].y;
+            const xj = corners[j].x,
+                yj = corners[j].y;
             if (((yi > y) !== (yj > y)) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) {
                 inside = !inside;
             }
@@ -1339,9 +1381,14 @@
         const cx = snap.x + snap.width / 2;
         const cy = snap.y + snap.height / 2;
         const r = -(snap.rotation || 0) * D2R;
-        const cos = Math.cos(r), sin = Math.sin(r);
-        const dx = wx - cx, dy = wy - cy;
-        return { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
+        const cos = Math.cos(r),
+            sin = Math.sin(r);
+        const dx = wx - cx,
+            dy = wy - cy;
+        return {
+            x: dx * cos - dy * sin,
+            y: dx * sin + dy * cos
+        };
     };
 
     // 핸들 월드 좌표 반환
@@ -1349,20 +1396,28 @@
     // freeQuad: 4개 꼭지점 (0:TL 1:TR 2:BR 3:BL)
     const getObjHandles = (obj) => {
         if (obj.type === 'shape' && obj.style?.type === 'freeQuad' && obj.corners?.length === 4) {
-            return obj.corners.map((c) => ({ x: c.x, y: c.y }));
+            return obj.corners.map((c) => ({
+                x: c.x,
+                y: c.y
+            }));
         }
-        const { cx, cy } = getObjCenter(obj);
-        const hw = obj.width / 2, hh = obj.height / 2;
+        const {
+            cx,
+            cy
+        } = getObjCenter(obj);
+        const hw = obj.width / 2,
+            hh = obj.height / 2;
         const r = (obj.rotation || 0) * D2R;
-        const cos = Math.cos(r), sin = Math.sin(r);
+        const cos = Math.cos(r),
+            sin = Math.sin(r);
         const rot = (lx, ly) => ({
             x: cx + lx * cos - ly * sin,
             y: cy + lx * sin + ly * cos,
         });
         return [
             rot(-hw, -hh), rot(0, -hh), rot(hw, -hh),
-            rot(hw,   0),               rot(hw,  hh),
-            rot(0,   hh), rot(-hw,  hh), rot(-hw,  0),
+            rot(hw, 0), rot(hw, hh),
+            rot(0, hh), rot(-hw, hh), rot(-hw, 0),
             rot(0, -hh - OBJ_ROTATE_DIST),
         ];
     };
@@ -1400,7 +1455,8 @@
     const handleCursor = (hi) => {
         if (hi === 8) return 'grab';
         return ['nwse-resize', 'ns-resize', 'nesw-resize', 'ew-resize',
-                'nwse-resize', 'ns-resize', 'nesw-resize', 'ew-resize'][hi] || 'pointer';
+            'nwse-resize', 'ns-resize', 'nesw-resize', 'ew-resize'
+        ][hi] || 'pointer';
     };
 
     // 텍스트 객체 생성
@@ -1413,13 +1469,17 @@
         const textW = Math.max(10, m.width - m.paddingX * 2);
         const textH = Math.max(m.fontSize, numLines * m.lineHeight - lineGap);
         return {
-            id: genObjectId(), type: 'text',
+            id: genObjectId(),
+            type: 'text',
             text,
             x: x + m.paddingX,
             y: y + m.paddingY,
-            width: textW, height: textH,
-            naturalWidth: textW, naturalHeight: textH,
-            rotation: 0, style: copyTextStyle(style),
+            width: textW,
+            height: textH,
+            naturalWidth: textW,
+            naturalHeight: textH,
+            rotation: 0,
+            style: copyTextStyle(style),
         };
     };
 
@@ -1428,34 +1488,61 @@
         if (!points || points.length < 2) return null;
         const xs = points.map((p) => p.x);
         const ys = points.map((p) => p.y);
-        const x = Math.min(...xs), y = Math.min(...ys);
+        const x = Math.min(...xs),
+            y = Math.min(...ys);
         const w = Math.max(10, Math.max(...xs) - x);
         const h = Math.max(10, Math.max(...ys) - y);
         return {
-            id: genObjectId(), type: 'draw',
-            points: points.map((p) => ({ x: p.x - x, y: p.y - y })),  // 상대 좌표
-            x, y, width: w, height: h,
-            rotation: 0, style: copyDrawStyle(style),
+            id: genObjectId(),
+            type: 'draw',
+            points: points.map((p) => ({
+                x: p.x - x,
+                y: p.y - y
+            })), // 상대 좌표
+            x,
+            y,
+            width: w,
+            height: h,
+            rotation: 0,
+            style: copyDrawStyle(style),
         };
     };
 
     // 도형 객체 생성
     const createShapeObject = (x1, y1, x2, y2, style) => {
-        const x = Math.min(x1, x2), y = Math.min(y1, y2);
+        const x = Math.min(x1, x2),
+            y = Math.min(y1, y2);
         const w = Math.max(10, Math.abs(x2 - x1));
         const h = Math.max(10, Math.abs(y2 - y1));
         const obj = {
-            id: genObjectId(), type: 'shape',
-            x, y, width: w, height: h, rotation: 0,
-            lineFlipX: x2 < x1, lineFlipY: y2 < y1,
+            id: genObjectId(),
+            type: 'shape',
+            x,
+            y,
+            width: w,
+            height: h,
+            rotation: 0,
+            lineFlipX: x2 < x1,
+            lineFlipY: y2 < y1,
             style: copyShapeStyle(style),
         };
         if (style.type === 'freeQuad') {
-            obj.corners = [
-                { x: x,     y: y     },  // 좌상
-                { x: x + w, y: y     },  // 우상
-                { x: x + w, y: y + h },  // 우하
-                { x: x,     y: y + h },  // 좌하
+            obj.corners = [{
+                    x: x,
+                    y: y
+                }, // 좌상
+                {
+                    x: x + w,
+                    y: y
+                }, // 우상
+                {
+                    x: x + w,
+                    y: y + h
+                }, // 우하
+                {
+                    x: x,
+                    y: y + h
+                }, // 좌하
             ];
         }
         return obj;
@@ -1464,7 +1551,10 @@
     // 단일 객체를 ctx에 렌더링
     const renderObjectToCtx = (ctx, obj) => {
         if (!ctx || !obj) return;
-        const { cx, cy } = getObjCenter(obj);
+        const {
+            cx,
+            cy
+        } = getObjCenter(obj);
         const r = (obj.rotation || 0) * D2R;
         ctx.save();
         ctx.translate(cx, cy);
@@ -1505,11 +1595,16 @@
                 }
                 ctx.restore();
             } else {
-            const rx1 = obj.lineFlipX ? obj.x + obj.width : obj.x;
-            const ry1 = obj.lineFlipY ? obj.y + obj.height : obj.y;
-            const rx2 = obj.lineFlipX ? obj.x : obj.x + obj.width;
-            const ry2 = obj.lineFlipY ? obj.y : obj.y + obj.height;
-            drawShapeOnContext(ctx, { x1: rx1, y1: ry1, x2: rx2, y2: ry2 }, obj.style);
+                const rx1 = obj.lineFlipX ? obj.x + obj.width : obj.x;
+                const ry1 = obj.lineFlipY ? obj.y + obj.height : obj.y;
+                const rx2 = obj.lineFlipX ? obj.x : obj.x + obj.width;
+                const ry2 = obj.lineFlipY ? obj.y : obj.y + obj.height;
+                drawShapeOnContext(ctx, {
+                    x1: rx1,
+                    y1: ry1,
+                    x2: rx2,
+                    y2: ry2
+                }, obj.style);
             }
         } else if (obj.type === 'draw' && obj.points?.length >= 2) {
             ctx.beginPath();
@@ -1519,7 +1614,8 @@
             ctx.lineJoin = 'round';
             // points는 상대 좌표 → obj.x/y 더해서 절대 위치로 변환
             obj.points.forEach((pt, i) => {
-                const ax = obj.x + pt.x, ay = obj.y + pt.y;
+                const ax = obj.x + pt.x,
+                    ay = obj.y + pt.y;
                 if (i === 0) ctx.moveTo(ax, ay);
                 else ctx.lineTo(ax, ay);
             });
@@ -1560,8 +1656,12 @@
             return;
         }
 
-        const { cx, cy } = getObjCenter(obj);
-        const hw = obj.width / 2, hh = obj.height / 2;
+        const {
+            cx,
+            cy
+        } = getObjCenter(obj);
+        const hw = obj.width / 2,
+            hh = obj.height / 2;
         const r = (obj.rotation || 0) * D2R;
 
         // 선택 테두리
@@ -1651,7 +1751,9 @@
     // 선택 도구 활성화
     const activateSelectTool = () => {
         if (!imageEditorState) return;
-        closeImageEditorTextEntry({ commit: true });
+        closeImageEditorTextEntry({
+            commit: true
+        });
         hideImageEditorTextPanel();
         hideImageEditorShapePanel();
         hideImageEditorDrawPanel();
@@ -1668,9 +1770,9 @@
         const overlay = getImageEditorOverlay();
         if (!overlay || !imageEditorState) return;
         const selectedId = imageEditorState.selectedObjectId;
-        const selectedObj = selectedId
-            ? (imageEditorState.objects || []).find((o) => o.id === selectedId)
-            : null;
+        const selectedObj = selectedId ?
+            (imageEditorState.objects || []).find((o) => o.id === selectedId) :
+            null;
         if (selectedObj) {
             const hi = hitTestHandle(selectedObj, p.x, p.y);
             if (hi >= 0) {
@@ -1686,14 +1788,20 @@
     // 핸들 드래그로 리사이즈
     const applyHandleResize = (obj, ds, p) => {
         // freeQuad: 해당 꼭지점만 이동
-        if (obj.type === 'shape' && obj.style?.type === 'freeQuad'
-            && obj.corners?.length === 4 && ds.objSnapshot.corners?.length === 4) {
+        if (obj.type === 'shape' && obj.style?.type === 'freeQuad' &&
+            obj.corners?.length === 4 && ds.objSnapshot.corners?.length === 4) {
             const hi = ds.handleIndex;
             if (hi >= 0 && hi < 4) {
                 const dx = p.x - ds.startX;
                 const dy = p.y - ds.startY;
                 obj.corners = ds.objSnapshot.corners.map((c, i) =>
-                    i === hi ? { x: c.x + dx, y: c.y + dy } : { x: c.x, y: c.y }
+                    i === hi ? {
+                        x: c.x + dx,
+                        y: c.y + dy
+                    } : {
+                        x: c.x,
+                        y: c.y
+                    }
                 );
                 updateFreeQuadBBox(obj);
             }
@@ -1703,25 +1811,43 @@
         const snapCx = snap.x + snap.width / 2;
         const snapCy = snap.y + snap.height / 2;
         const local = worldToLocal(snap, p.x, p.y);
-        const hw = snap.width / 2, hh = snap.height / 2;
+        const hw = snap.width / 2,
+            hh = snap.height / 2;
         const hi = ds.handleIndex;
 
-        let nl = -hw, nr = hw, nt = -hh, nb = hh;
-        if (hi === 0) { nl = local.x; nt = local.y; }
-        else if (hi === 1) { nt = local.y; }
-        else if (hi === 2) { nr = local.x; nt = local.y; }
-        else if (hi === 3) { nr = local.x; }
-        else if (hi === 4) { nr = local.x; nb = local.y; }
-        else if (hi === 5) { nb = local.y; }
-        else if (hi === 6) { nl = local.x; nb = local.y; }
-        else if (hi === 7) { nl = local.x; }
+        let nl = -hw,
+            nr = hw,
+            nt = -hh,
+            nb = hh;
+        if (hi === 0) {
+            nl = local.x;
+            nt = local.y;
+        } else if (hi === 1) {
+            nt = local.y;
+        } else if (hi === 2) {
+            nr = local.x;
+            nt = local.y;
+        } else if (hi === 3) {
+            nr = local.x;
+        } else if (hi === 4) {
+            nr = local.x;
+            nb = local.y;
+        } else if (hi === 5) {
+            nb = local.y;
+        } else if (hi === 6) {
+            nl = local.x;
+            nb = local.y;
+        } else if (hi === 7) {
+            nl = local.x;
+        }
 
         const newW = Math.max(10, nr - nl);
         const newH = Math.max(10, nb - nt);
         const lCx = (nl + nr) / 2;
         const lCy = (nt + nb) / 2;
         const r = (snap.rotation || 0) * D2R;
-        const cos = Math.cos(r), sin = Math.sin(r);
+        const cos = Math.cos(r),
+            sin = Math.sin(r);
         const newCx = snapCx + lCx * cos - lCy * sin;
         const newCy = snapCy + lCx * sin + lCy * cos;
         obj.x = newCx - newW / 2;
@@ -1731,8 +1857,8 @@
 
         // 텍스트: 바운딩박스만 변경, 렌더 시 ctx.scale로 늘림/찌그러뜨림
         // 선그리기: 점들도 새 바운딩박스 크기에 맞춰 비례 스케일
-        if (obj.type === 'draw' && ds.objSnapshot.points
-            && ds.objSnapshot.width > 0 && ds.objSnapshot.height > 0) {
+        if (obj.type === 'draw' && ds.objSnapshot.points &&
+            ds.objSnapshot.width > 0 && ds.objSnapshot.height > 0) {
             const scaleX = newW / ds.objSnapshot.width;
             const scaleY = newH / ds.objSnapshot.height;
             obj.points = ds.objSnapshot.points.map((pt) => ({
@@ -1784,17 +1910,34 @@
         const width = Math.max(minWidth, Math.round(widest + paddingX * 2));
         const height = Math.max(minHeight, Math.round(textLines.length * lineHeight + paddingY * 2));
 
-        return { width, height, lineHeight, fontSize, paddingX, paddingY };
+        return {
+            width,
+            height,
+            lineHeight,
+            fontSize,
+            paddingX,
+            paddingY
+        };
     };
 
     const fitTextEntryIntoCanvas = (x, y, width, height) => {
         const canvas = getImageEditorCanvas();
-        if (!canvas) return { x, y, width, height };
+        if (!canvas) return {
+            x,
+            y,
+            width,
+            height
+        };
         const w = Math.min(Math.max(24, width), canvas.width);
         const h = Math.min(Math.max(20, height), canvas.height);
         const px = Math.max(0, Math.min(Math.round(x), Math.max(0, canvas.width - w)));
         const py = Math.max(0, Math.min(Math.round(y), Math.max(0, canvas.height - h)));
-        return { x: px, y: py, width: w, height: h };
+        return {
+            x: px,
+            y: py,
+            width: w,
+            height: h
+        };
     };
 
     const positionImageEditorTextEntryInViewport = () => {
@@ -1842,7 +1985,8 @@
         const overlay = getImageEditorOverlay();
         const overlayRect = overlay ? overlay.getBoundingClientRect() : null;
         const scaleX = (overlay && overlay.width > 0 && overlayRect) ? (overlayRect.width / overlay.width) : 1;
-        const scaleY = (overlay && overlay.height > 0 && overlayRect) ? (overlayRect.height / overlay.height) : 1;
+        const scaleY = (overlay && overlay.height > 0 && overlayRect) ? (overlayRect.height / overlay.height) :
+            1;
 
         const cssFontSize = Math.max(8, Math.round(metrics.fontSize * scaleX));
         const fontWeight = style.bold ? '700' : '400';
@@ -1855,8 +1999,10 @@
         input.style.color = style.color;
         input.style.caretColor = style.color;
         input.style.lineHeight = `${Math.round(metrics.lineHeight * scaleY)}px`;
-        input.style.padding = `${Math.round(metrics.paddingY * scaleY)}px ${Math.round(metrics.paddingX * scaleX)}px`;
-        input.style.textDecoration = `${style.underline ? 'underline ' : ''}${style.strike ? 'line-through' : ''}`.trim() || 'none';
+        input.style.padding =
+            `${Math.round(metrics.paddingY * scaleY)}px ${Math.round(metrics.paddingX * scaleX)}px`;
+        input.style.textDecoration =
+            `${style.underline ? 'underline ' : ''}${style.strike ? 'line-through' : ''}`.trim() || 'none';
     };
 
     const showImageEditorTextEntry = (point) => {
@@ -1887,7 +2033,9 @@
         imageEditorState.textEntryActive = true;
     };
 
-    const closeImageEditorTextEntry = ({ commit = true } = {}) => {
+    const closeImageEditorTextEntry = ({
+        commit = true
+    } = {}) => {
         if (!imageEditorState) return false;
         const entry = getImageEditorTextEntry();
         const input = getImageEditorTextEntryInput();
@@ -2041,7 +2189,8 @@
             if (isTransparentChip) {
                 active = activeAlpha <= 0;
             } else {
-                active = normalizeHexColor(btn.dataset.color || '', '#000000') === activeColor && activeAlpha > 0;
+                active = normalizeHexColor(btn.dataset.color || '', '#000000') === activeColor &&
+                    activeAlpha > 0;
             }
             btn.classList.toggle('active', active);
         });
@@ -2064,7 +2213,8 @@
     const setImageEditorShapeType = (type) => {
         if (!imageEditorState) return;
         const style = ensureImageEditorShapeStyle();
-        style.type = ['rect', 'roundRect', 'ellipse', 'line', 'freeQuad'].includes(String(type)) ? String(type) : style.type;
+        style.type = ['rect', 'roundRect', 'ellipse', 'line', 'freeQuad'].includes(String(type)) ? String(
+            type) : style.type;
         updateImageEditorShapeStyleUi();
         if (imageEditorState.tool === 'select') pushImageEditorHistory();
     };
@@ -2072,7 +2222,8 @@
     const setImageEditorShapeLineStyle = (lineStyle) => {
         if (!imageEditorState) return;
         const style = ensureImageEditorShapeStyle();
-        style.lineStyle = ['solid', 'dash', 'dot'].includes(String(lineStyle)) ? String(lineStyle) : style.lineStyle;
+        style.lineStyle = ['solid', 'dash', 'dot'].includes(String(lineStyle)) ? String(lineStyle) : style
+            .lineStyle;
         updateImageEditorShapeStyleUi();
         if (imageEditorState.tool === 'select') pushImageEditorHistory();
     };
@@ -2237,7 +2388,8 @@
         if (!imageEditorState) return;
         const state = ensureShapeColorPickerState();
         if (!state) return;
-        const canvas = target === 'hue' ? getImageEditorShapeColorHueCanvas() : getImageEditorShapeColorSvCanvas();
+        const canvas = target === 'hue' ? getImageEditorShapeColorHueCanvas() :
+            getImageEditorShapeColorSvCanvas();
         if (!canvas) return;
 
         const rect = canvas.getBoundingClientRect();
@@ -2455,7 +2607,8 @@
         if (!imageEditorState) return;
         const state = ensureDrawColorPickerState();
         if (!state) return;
-        const canvas = target === 'hue' ? getImageEditorDrawColorHueCanvas() : getImageEditorDrawColorSvCanvas();
+        const canvas = target === 'hue' ? getImageEditorDrawColorHueCanvas() :
+    getImageEditorDrawColorSvCanvas();
         if (!canvas) return;
 
         const rect = canvas.getBoundingClientRect();
@@ -2713,7 +2866,8 @@
                 imageEditorState.aspectRatio = canvas.width / canvas.height;
             }
         }
-        imageEditorModal.querySelectorAll('button[data-action="undo"], button[data-action="redo"]').forEach((btn) => {
+        imageEditorModal.querySelectorAll('button[data-action="undo"], button[data-action="redo"]').forEach((
+            btn) => {
             if (btn.dataset.action === 'undo') {
                 btn.disabled = imageEditorState.historyIndex <= 0;
             }
@@ -2733,7 +2887,9 @@
 
     const closeImageEditor = () => {
         if (!imageEditorModal) return;
-        closeImageEditorTextEntry({ commit: false });
+        closeImageEditorTextEntry({
+            commit: false
+        });
         imageEditorModal.hidden = true;
         hideCropActionButton();
         hideImageEditorTextPanel();
@@ -2806,7 +2962,9 @@
     };
 
     const rotateImageEditorCanvas = () => {
-        closeImageEditorTextEntry({ commit: true });
+        closeImageEditorTextEntry({
+            commit: true
+        });
         const canvas = getImageEditorCanvas();
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
@@ -2831,7 +2989,9 @@
 
     const addTextToImageEditor = () => {
         if (!imageEditorState) return;
-        closeImageEditorTextEntry({ commit: true });
+        closeImageEditorTextEntry({
+            commit: true
+        });
         hideImageEditorShapePanel();
         hideImageEditorDrawPanel();
         imageEditorState.tool = 'text';
@@ -2843,7 +3003,9 @@
 
     const addShapeToImageEditor = () => {
         if (!imageEditorState) return;
-        closeImageEditorTextEntry({ commit: true });
+        closeImageEditorTextEntry({
+            commit: true
+        });
         hideImageEditorTextPanel();
         hideImageEditorDrawPanel();
         imageEditorState.tool = 'shape';
@@ -2854,7 +3016,9 @@
 
     const toggleDrawModeInImageEditor = () => {
         if (!imageEditorState) return;
-        closeImageEditorTextEntry({ commit: true });
+        closeImageEditorTextEntry({
+            commit: true
+        });
         hideImageEditorTextPanel();
         hideImageEditorShapePanel();
         imageEditorState.tool = imageEditorState.tool === 'draw' ? 'none' : 'draw';
@@ -2867,7 +3031,9 @@
 
     const beginCropMode = () => {
         if (!imageEditorState) return;
-        closeImageEditorTextEntry({ commit: true });
+        closeImageEditorTextEntry({
+            commit: true
+        });
         hideImageEditorTextPanel();
         hideImageEditorShapePanel();
         hideImageEditorDrawPanel();
@@ -2904,7 +3070,9 @@
 
     const undoImageEditor = async () => {
         if (!imageEditorState) return;
-        closeImageEditorTextEntry({ commit: true });
+        closeImageEditorTextEntry({
+            commit: true
+        });
         if (imageEditorState.historyIndex <= 0) return;
         imageEditorState.historyIndex -= 1;
         await loadImageEditorSnapshot(imageEditorState.history[imageEditorState.historyIndex]);
@@ -2913,7 +3081,9 @@
 
     const redoImageEditor = async () => {
         if (!imageEditorState) return;
-        closeImageEditorTextEntry({ commit: true });
+        closeImageEditorTextEntry({
+            commit: true
+        });
         if (imageEditorState.historyIndex >= imageEditorState.history.length - 1) return;
         imageEditorState.historyIndex += 1;
         await loadImageEditorSnapshot(imageEditorState.history[imageEditorState.historyIndex]);
@@ -2922,7 +3092,9 @@
 
     const resetImageEditor = async () => {
         if (!imageEditorState || imageEditorState.history.length === 0) return;
-        closeImageEditorTextEntry({ commit: true });
+        closeImageEditorTextEntry({
+            commit: true
+        });
         imageEditorState.historyIndex = 0;
         await loadImageEditorSnapshot(imageEditorState.history[0]);
         updateImageEditorUi();
@@ -2930,11 +3102,19 @@
 
     const pointerToCanvasPoint = (event) => {
         const overlay = getImageEditorOverlay();
-        if (!overlay) return { x: 0, y: 0 };
+        if (!overlay) return {
+            x: 0,
+            y: 0
+        };
         const rect = overlay.getBoundingClientRect();
-        const x = Math.max(0, Math.min(overlay.width, Math.round((event.clientX - rect.left) * (overlay.width / rect.width))));
-        const y = Math.max(0, Math.min(overlay.height, Math.round((event.clientY - rect.top) * (overlay.height / rect.height))));
-        return { x, y };
+        const x = Math.max(0, Math.min(overlay.width, Math.round((event.clientX - rect.left) * (overlay.width /
+            rect.width))));
+        const y = Math.max(0, Math.min(overlay.height, Math.round((event.clientY - rect.top) * (overlay.height /
+            rect.height))));
+        return {
+            x,
+            y
+        };
     };
 
     const bindImageEditorPointerHandlers = () => {
@@ -2952,7 +3132,9 @@
 
             if (imageEditorState.tool === 'text') {
                 e.preventDefault();
-                closeImageEditorTextEntry({ commit: true });
+                closeImageEditorTextEntry({
+                    commit: true
+                });
                 showImageEditorTextEntry(p);
                 imageEditorState.pointerDown = false;
                 drawImageEditorOverlay();
@@ -2962,18 +3144,22 @@
             if (imageEditorState.tool === 'select') {
                 e.preventDefault();
                 const selectedId = imageEditorState.selectedObjectId;
-                const selectedObj = selectedId
-                    ? (imageEditorState.objects || []).find((o) => o.id === selectedId)
-                    : null;
+                const selectedObj = selectedId ?
+                    (imageEditorState.objects || []).find((o) => o.id === selectedId) :
+                    null;
                 // 핸들 먼저 체크
                 if (selectedObj) {
                     const hi = hitTestHandle(selectedObj, p.x, p.y);
                     if (hi >= 0) {
-                        const { cx, cy } = getObjCenter(selectedObj);
+                        const {
+                            cx,
+                            cy
+                        } = getObjCenter(selectedObj);
                         imageEditorState.selectDragState = {
                             type: hi === 8 ? 'rotate' : 'resize',
                             handleIndex: hi,
-                            startX: p.x, startY: p.y,
+                            startX: p.x,
+                            startY: p.y,
                             startAngle: hi === 8 ? Math.atan2(p.y - cy, p.x - cx) : 0,
                             objSnapshot: JSON.parse(JSON.stringify(selectedObj)),
                         };
@@ -2987,7 +3173,8 @@
                     syncSelectedObjectStyleToState();
                     imageEditorState.selectDragState = {
                         type: 'move',
-                        startX: p.x, startY: p.y,
+                        startX: p.x,
+                        startY: p.y,
                         objSnapshot: JSON.parse(JSON.stringify(hit)),
                     };
                 } else {
@@ -3001,11 +3188,24 @@
             imageEditorState.pointerDown = true;
 
             if (imageEditorState.tool === 'draw') {
-                imageEditorState.currentDrawPoints = [{ x: p.x, y: p.y }];
+                imageEditorState.currentDrawPoints = [{
+                    x: p.x,
+                    y: p.y
+                }];
             } else if (imageEditorState.tool === 'shape') {
-                imageEditorState.previewRect = { x1: p.x, y1: p.y, x2: p.x, y2: p.y };
+                imageEditorState.previewRect = {
+                    x1: p.x,
+                    y1: p.y,
+                    x2: p.x,
+                    y2: p.y
+                };
             } else if (imageEditorState.tool === 'crop') {
-                imageEditorState.cropRect = { x: p.x, y: p.y, w: 0, h: 0 };
+                imageEditorState.cropRect = {
+                    x: p.x,
+                    y: p.y,
+                    w: 0,
+                    h: 0
+                };
                 hideCropActionButton();
             }
             drawImageEditorOverlay();
@@ -3025,16 +3225,22 @@
                         if (ds.type === 'move') {
                             const mvDx = p.x - ds.startX;
                             const mvDy = p.y - ds.startY;
-                            if (selectedObj.type === 'shape' && selectedObj.style?.type === 'freeQuad'
-                                && selectedObj.corners?.length === 4 && ds.objSnapshot.corners?.length === 4) {
-                                selectedObj.corners = ds.objSnapshot.corners.map((c) => ({ x: c.x + mvDx, y: c.y + mvDy }));
+                            if (selectedObj.type === 'shape' && selectedObj.style?.type === 'freeQuad' &&
+                                selectedObj.corners?.length === 4 && ds.objSnapshot.corners?.length === 4) {
+                                selectedObj.corners = ds.objSnapshot.corners.map((c) => ({
+                                    x: c.x + mvDx,
+                                    y: c.y + mvDy
+                                }));
                                 updateFreeQuadBBox(selectedObj);
                             } else {
-                            selectedObj.x = ds.objSnapshot.x + mvDx;
-                            selectedObj.y = ds.objSnapshot.y + mvDy;
+                                selectedObj.x = ds.objSnapshot.x + mvDx;
+                                selectedObj.y = ds.objSnapshot.y + mvDy;
                             }
                         } else if (ds.type === 'rotate') {
-                            const { cx, cy } = getObjCenter(selectedObj);
+                            const {
+                                cx,
+                                cy
+                            } = getObjCenter(selectedObj);
                             const angle = Math.atan2(p.y - cy, p.x - cx);
                             const delta = (angle - ds.startAngle) * (180 / Math.PI);
                             selectedObj.rotation = ((ds.objSnapshot.rotation || 0) + delta + 360) % 360;
@@ -3053,7 +3259,10 @@
 
             if (imageEditorState.tool === 'draw') {
                 if (!imageEditorState.currentDrawPoints) imageEditorState.currentDrawPoints = [];
-                imageEditorState.currentDrawPoints.push({ x: p.x, y: p.y });
+                imageEditorState.currentDrawPoints.push({
+                    x: p.x,
+                    y: p.y
+                });
                 imageEditorState.lastPoint = p;
                 drawImageEditorOverlay();
                 return;
@@ -3145,7 +3354,10 @@
             }
         };
 
-        overlay.addEventListener('mousedown', (e) => { overlay.focus(); onDown(e); });
+        overlay.addEventListener('mousedown', (e) => {
+            overlay.focus();
+            onDown(e);
+        });
         overlay.addEventListener('mousemove', onMove);
         overlay.addEventListener('mouseup', onUp);
         overlay.addEventListener('mouseleave', onUp);
@@ -3157,7 +3369,9 @@
         if (nmFileEditCallback) {
             const cb = nmFileEditCallback;
             nmFileEditCallback = null;
-            closeImageEditorTextEntry({ commit: true });
+            closeImageEditorTextEntry({
+                commit: true
+            });
             commitObjectsToCanvas();
             const canvas = getImageEditorCanvas();
             if (!canvas) return;
@@ -3165,7 +3379,9 @@
                 if (!blob) return;
                 const safeName = cb.baseName.replace(/[^\w.\-]+/g, '_') || 'edited';
                 const fileName = safeName + '_편집_' + Date.now() + '.png';
-                const file = new File([blob], fileName, { type: 'image/png' });
+                const file = new File([blob], fileName, {
+                    type: 'image/png'
+                });
                 closeImageEditor();
                 cb.onDone(file, fileName);
             }, 'image/png');
@@ -3175,17 +3391,23 @@
         // toBlob() 콜백은 비동기로 실행되므로, 클로저가 닫히기 전에 참조를 캡처한다.
         // document click 핸들러가 activeEmbed를 null로 초기화하기 전에 콜백이 실행될 수 없기 때문.
         const targetEmbed = activeEmbed;
-        closeImageEditorTextEntry({ commit: true });
+        closeImageEditorTextEntry({
+            commit: true
+        });
         commitObjectsToCanvas();
         const canvas = getImageEditorCanvas();
         if (!canvas) return;
 
         canvas.toBlob((blob) => {
             if (!blob || !targetEmbed) return;
-            const baseNameRaw = (targetEmbed.querySelector('figcaption')?.textContent || 'edited_image').trim();
-            const baseName = baseNameRaw.replace(/\.[^/.]+$/, '').replace(/[^\w.-]+/g, '_') || 'edited_image';
+            const baseNameRaw = (targetEmbed.querySelector('figcaption')?.textContent || 'edited_image')
+                .trim();
+            const baseName = baseNameRaw.replace(/\.[^/.]+$/, '').replace(/[^\w.-]+/g, '_') ||
+                'edited_image';
             const fileName = `${baseName}_edited_${Date.now()}.png`;
-            const file = new File([blob], fileName, { type: 'image/png' });
+            const file = new File([blob], fileName, {
+                type: 'image/png'
+            });
             generatedEditedFiles.set(fileName.toLowerCase(), file);
             rebuildAttachmentInputFiles();
 
@@ -3201,7 +3423,10 @@
                 caption.textContent = fileName;
             }
             targetEmbed.dataset.tokenBase = fileName;
-            applyEmbedOption(targetEmbed, { rotate: 0, flip: false });
+            applyEmbedOption(targetEmbed, {
+                rotate: 0,
+                flip: false
+            });
             closeImageEditor();
         }, 'image/png');
     };
@@ -3217,7 +3442,11 @@
         activeEmbed = embed;
 
         // 본문 표시 사이즈(small/medium/large)에 따른 최대 너비
-        const embedSizeMaxWidth = { small: 280, medium: 520, large: 840 };
+        const embedSizeMaxWidth = {
+            small: 280,
+            medium: 520,
+            large: 840
+        };
         const embedSize = embed.dataset.size || defaultEmbedOptions.size;
         const displayMaxWidth = embedSizeMaxWidth[embedSize] || 520;
 
@@ -3277,7 +3506,10 @@
         const canvas = getImageEditorCanvas();
         if (!imageEditorModal || !canvas) return;
         activeEmbed = null;
-        nmFileEditCallback = { baseName: file.name.replace(/\.[^/.]+$/, ''), onDone };
+        nmFileEditCallback = {
+            baseName: file.name.replace(/\.[^/.]+$/, ''),
+            onDone
+        };
         const objectUrl = URL.createObjectURL(file);
         const load = new Image();
         load.onload = () => {
@@ -3288,7 +3520,10 @@
             const canvasH = natH > 0 ? Math.round(canvasW * (natH / natW)) : natH;
             setImageEditorCanvasSize(canvasW, canvasH);
             const ctx = canvas.getContext('2d');
-            if (!ctx) { nmFileEditCallback = null; return; }
+            if (!ctx) {
+                nmFileEditCallback = null;
+                return;
+            }
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(load, 0, 0, canvas.width, canvas.height);
             imageEditorState = {
@@ -3326,211 +3561,30 @@
             updateImageEditorUi();
             imageEditorModal.hidden = false;
         };
-        load.onerror = () => { URL.revokeObjectURL(objectUrl); nmFileEditCallback = null; };
+        load.onerror = () => {
+            URL.revokeObjectURL(objectUrl);
+            nmFileEditCallback = null;
+        };
         load.src = objectUrl;
     };
     window.NM_openImageEditorForFile = openImageEditorForFile;
 
-    const ensureImageEditorModal = () => {
-        if (imageEditorModal) return;
-
+    const createImageEditorModal = () => {
         imageEditorModal = document.createElement('div');
         imageEditorModal.className = 'image-edit-modal';
         imageEditorModal.hidden = true;
-        imageEditorModal.innerHTML = [
-            '<div class="image-edit-dialog" role="dialog" aria-modal="true" aria-label="이미지 편집">',
-            '  <div class="image-edit-head">',
-            '    <strong>이미지 편집</strong>',
-            '    <span class="image-edit-meta"></span>',
-            '    <button type="button" class="btn btn-sm" data-action="close">닫기</button>',
-            '  </div>',
-            '  <div class="image-edit-tools">',
-            '    <button type="button" class="tool-btn tool-select-btn" data-action="select" title="선택/이동" aria-label="선택/이동">↖</button>',
-            '    <span class="tool-sep"></span>',
-            '    <select class="editor-select" data-field="zoom"><option value="25">25%</option><option value="50">50%</option><option value="75">75%</option><option value="100" selected>100%</option><option value="125">125%</option><option value="150">150%</option></select>',
-            '    <label class="tool-check"><input type="checkbox" data-field="pixel-mode" title="픽셀 크기 조절"></label>',
-            '    <label class="tool-input">W <input type="text" inputmode="numeric" data-field="width" disabled></label>',
-            '    <button type="button" class="tool-btn" data-action="toggle-ratio" title="비율 고정">🔒</button>',
-            '    <label class="tool-input">H <input type="text" inputmode="numeric" data-field="height" disabled></label>',
-            '    <button type="button" class="tool-btn" data-action="crop" title="잘라내기" aria-label="잘라내기"><span class="nm-tool-icon nm-tool-icon-crop" aria-hidden="true"></span></button>',
-            '    <button type="button" class="tool-btn" data-action="rotate" title="회전" aria-label="회전"><span class="nm-tool-icon nm-tool-icon-rotate" aria-hidden="true"></span></button>',
-            '    <button type="button" class="tool-btn" data-action="text" title="텍스트 삽입" aria-label="텍스트 삽입"><span class="nm-tool-icon nm-tool-icon-text" aria-hidden="true"></span></button>',
-            '    <button type="button" class="tool-btn tool-btn-setting" data-action="text-settings" title="텍스트 옵션" aria-label="텍스트 옵션"><span class="nm-tool-icon nm-tool-icon-setting" aria-hidden="true"></span></button>',
-            '    <button type="button" class="tool-btn" data-action="shape" title="도형 넣기" aria-label="도형 넣기"><span class="nm-tool-icon nm-tool-icon-shape" aria-hidden="true"></span></button>',
-            '    <button type="button" class="tool-btn tool-btn-setting" data-action="shape-settings" title="도형 옵션" aria-label="도형 옵션"><span class="nm-tool-icon nm-tool-icon-setting" aria-hidden="true"></span></button>',
-            '    <button type="button" class="tool-btn" data-action="draw" title="그리기" aria-label="그리기"><span class="nm-tool-icon nm-tool-icon-draw" aria-hidden="true"></span></button>',
-            '    <button type="button" class="tool-btn tool-btn-setting" data-action="draw-settings" title="선 옵션" aria-label="선 옵션"><span class="nm-tool-icon nm-tool-icon-setting" aria-hidden="true"></span></button>',
-            '    <span class="tool-sep"></span>',
-            '    <button type="button" class="tool-btn" data-action="undo" title="전단계" aria-label="전단계"><span class="nm-tool-icon nm-tool-icon-undo" aria-hidden="true"></span></button>',
-            '    <button type="button" class="tool-btn" data-action="redo" title="다음단계" aria-label="다음단계"><span class="nm-tool-icon nm-tool-icon-redo" aria-hidden="true"></span></button>',
-            '    <button type="button" class="tool-btn" data-action="reset" title="되돌리기" aria-label="되돌리기"><span class="nm-tool-icon nm-tool-icon-reset" aria-hidden="true"></span></button>',
-            '    <button type="button" class="tool-btn danger" data-action="delete" title="삭제" aria-label="삭제"><span class="nm-tool-icon nm-tool-icon-remove" aria-hidden="true"></span></button>',
-            '  </div>',
-            '  <div class="image-edit-body">',
-            '    <div class="image-edit-canvas-stage-wrap">',
-            '      <div class="image-edit-canvas-stage">',
-            '        <canvas class="image-edit-canvas"></canvas>',
-            '        <canvas class="image-edit-overlay" tabindex="-1"></canvas>',
-            '      </div>',
-            '    </div>',
-            '    <button type="button" class="image-crop-action" data-action="apply-crop-selection" hidden></button>',
-            '    <div class="image-text-entry" hidden><textarea class="image-text-entry-input" spellcheck="false" wrap="off"></textarea></div>',
-            '    <div class="image-text-panel" hidden>',
-            '      <section class="image-text-section">',
-            '        <div class="image-text-label">글자크기</div>',
-            '        <div class="image-text-size-row">',
-            '          <input type="text" class="image-text-size-input" data-field="text-size" value="22px">',
-            '          <button type="button" class="image-text-size-btn" data-action="text-size-dec" title="글자크기 감소">−</button>',
-            '          <input type="range" class="image-text-size-range" data-field="text-size-range" min="10" max="120" step="1" value="22">',
-            '          <button type="button" class="image-text-size-btn" data-action="text-size-inc" title="글자크기 증가">+</button>',
-            '        </div>',
-            '      </section>',
-            '      <section class="image-text-section">',
-            '        <div class="image-text-label">글자 스타일</div>',
-            '        <div class="image-text-style-row">',
-            '          <button type="button" class="image-text-style-btn" data-style="bold" data-action="toggle-text-style" title="굵게">B</button>',
-            '          <button type="button" class="image-text-style-btn style-italic" data-style="italic" data-action="toggle-text-style" title="기울임">I</button>',
-            '          <button type="button" class="image-text-style-btn style-underline" data-style="underline" data-action="toggle-text-style" title="밑줄">U</button>',
-            '          <button type="button" class="image-text-style-btn style-strike" data-style="strike" data-action="toggle-text-style" title="취소선">S</button>',
-            '        </div>',
-            '      </section>',
-            '      <section class="image-text-section">',
-            '        <div class="image-text-color-head">',
-            '          <span class="image-text-label">글자 색상</span>',
-            '          <button type="button" class="image-text-more-btn" data-action="open-text-color-picker">더보기 &gt;</button>',
-            '        </div>',
-            '        <div class="image-text-color-palette">',
-            textPresetColors.map((color) => `          <button type="button" class="color-chip" data-action="set-text-color" data-color="${color}" style="--chip:${color};" title="${color}"></button>`).join(''),
-            '        </div>',
-            '      </section>',
-            '    </div>',
-            '    <div class="image-shape-panel" hidden>',
-            '      <section class="image-shape-section">',
-            '        <div class="image-shape-label">도형</div>',
-            '        <div class="image-shape-type-row">',
-            '          <button type="button" class="image-shape-type-btn" data-action="set-shape-type" data-shape="rect" title="사각형"><span class="shape-type-icon rect" aria-hidden="true"></span></button>',
-            '          <button type="button" class="image-shape-type-btn" data-action="set-shape-type" data-shape="roundRect" title="둥근 사각형"><span class="shape-type-icon round-rect" aria-hidden="true"></span></button>',
-            '          <button type="button" class="image-shape-type-btn" data-action="set-shape-type" data-shape="ellipse" title="원형"><span class="shape-type-icon ellipse" aria-hidden="true"></span></button>',
-            '          <button type="button" class="image-shape-type-btn" data-action="set-shape-type" data-shape="line" title="직선"><span class="shape-type-icon line" aria-hidden="true"></span></button>',
-            '          <button type="button" class="image-shape-type-btn" data-action="set-shape-type" data-shape="freeQuad" title="자유 사각형"><span class="shape-type-icon free-quad" aria-hidden="true"></span></button>',
-            '        </div>',
-            '      </section>',
-            '      <section class="image-shape-section">',
-            '        <div class="image-shape-label">선굵기</div>',
-            '        <div class="image-shape-width-row">',
-            '          <input type="text" class="image-shape-width-input" data-field="shape-line-width" value="2px">',
-            '          <button type="button" class="image-shape-width-btn" data-action="shape-line-width-dec" title="선굵기 감소">−</button>',
-            '          <input type="range" class="image-shape-width-range" data-field="shape-line-width-range" min="1" max="30" step="1" value="2">',
-            '          <button type="button" class="image-shape-width-btn" data-action="shape-line-width-inc" title="선굵기 증가">+</button>',
-            '        </div>',
-            '      </section>',
-            '      <section class="image-shape-section">',
-            '        <div class="image-shape-label">선종류</div>',
-            '        <div class="image-shape-line-style-row">',
-            '          <button type="button" class="image-shape-line-style-btn" data-action="set-shape-line-style" data-line-style="solid" title="실선"><span class="line-style-sample solid"></span></button>',
-            '          <button type="button" class="image-shape-line-style-btn" data-action="set-shape-line-style" data-line-style="dash" title="쇄선"><span class="line-style-sample dash"></span></button>',
-            '          <button type="button" class="image-shape-line-style-btn" data-action="set-shape-line-style" data-line-style="dot" title="점선"><span class="line-style-sample dot"></span></button>',
-            '        </div>',
-            '      </section>',
-            '      <section class="image-shape-section">',
-            '        <div class="image-shape-color-tab-row">',
-            '          <button type="button" class="image-shape-color-tab-btn" data-action="set-shape-color-tab" data-target="stroke">테두리</button>',
-            '          <button type="button" class="image-shape-color-tab-btn" data-action="set-shape-color-tab" data-target="fill">채우기</button>',
-            '          <button type="button" class="image-shape-color-tab-btn image-shape-more-btn" data-action="open-shape-color-picker">더보기 &gt;</button>',
-            '        </div>',
-            '        <div class="image-shape-color-palette">',
-            shapePresetColors.map((color) => (
-                color === 'transparent'
-                    ? '          <button type="button" class="color-chip transparent" data-action="set-shape-color" data-color="transparent" title="투명"></button>'
-                    : `          <button type="button" class="color-chip" data-action="set-shape-color" data-color="${color}" style="--chip:${color};" title="${color}"></button>`
-            )).join(''),
-            '        </div>',
-            '        <div class="image-shape-alpha-inline-row">',
-            '          <span class="image-shape-alpha-title">투명도</span>',
-            '          <input type="range" class="image-shape-alpha-range" data-field="shape-color-alpha-inline" min="0" max="100" step="1" value="100">',
-            '          <span class="shape-color-alpha-inline-label">100%</span>',
-            '        </div>',
-            '      </section>',
-            '    </div>',
-            '    <div class="image-shape-color-dim" hidden></div>',
-            '    <div class="image-shape-color-picker" hidden>',
-            '      <div class="image-shape-color-picker-top">',
-            '        <span class="image-shape-color-preview"></span>',
-            '        <input type="text" class="image-shape-color-hex" data-field="shape-color-hex" value="#ff2d2d">',
-            '        <button type="button" class="image-shape-color-apply-btn" data-action="apply-shape-color-hex">입력</button>',
-            '        <button type="button" class="image-shape-color-close-btn" data-action="close-shape-color-picker">×</button>',
-            '      </div>',
-            '      <canvas class="image-shape-color-sv" data-field="shape-color-sv" width="220" height="150"></canvas>',
-            '      <canvas class="image-shape-color-hue" data-field="shape-color-hue" width="220" height="12"></canvas>',
-            '      <div class="image-shape-alpha-row">',
-            '        <span class="image-shape-alpha-title">투명도</span>',
-            '        <input type="range" class="image-shape-alpha-range" data-field="shape-color-alpha" min="0" max="100" step="1" value="100">',
-            '        <span class="shape-color-alpha-label">100%</span>',
-            '      </div>',
-            '    </div>',
-            '    <div class="image-draw-panel" hidden>',
-            '      <section class="image-draw-section">',
-            '        <div class="image-draw-label">선굵기</div>',
-            '        <div class="image-draw-width-row">',
-            '          <input type="text" class="image-draw-width-input" data-field="draw-line-width" value="2px">',
-            '          <button type="button" class="image-draw-width-btn" data-action="draw-line-width-dec" title="선굵기 감소">−</button>',
-            '          <input type="range" class="image-draw-width-range" data-field="draw-line-width-range" min="1" max="30" step="1" value="2">',
-            '          <button type="button" class="image-draw-width-btn" data-action="draw-line-width-inc" title="선굵기 증가">+</button>',
-            '        </div>',
-            '      </section>',
-            '      <section class="image-draw-section">',
-            '        <div class="image-draw-color-head">',
-            '          <span class="image-draw-label">선색상</span>',
-            '          <button type="button" class="image-draw-more-btn" data-action="open-draw-color-picker">더보기 &gt;</button>',
-            '        </div>',
-            '        <div class="image-draw-color-palette">',
-            shapePresetColors.filter((color) => color !== 'transparent').map((color) => `          <button type="button" class="color-chip" data-action="set-draw-color" data-color="${color}" style="--chip:${color};" title="${color}"></button>`).join(''),
-            '        </div>',
-            '        <div class="image-draw-alpha-inline-row">',
-            '          <span class="image-draw-alpha-title">투명도</span>',
-            '          <input type="range" class="image-draw-alpha-range" data-field="draw-color-alpha-inline" min="0" max="100" step="1" value="100">',
-            '          <span class="draw-color-alpha-inline-label">100%</span>',
-            '        </div>',
-            '      </section>',
-            '    </div>',
-            '    <div class="image-draw-color-dim" hidden></div>',
-            '    <div class="image-draw-color-picker" hidden>',
-            '      <div class="image-draw-color-picker-top">',
-            '        <span class="image-draw-color-preview"></span>',
-            '        <input type="text" class="image-draw-color-hex" data-field="draw-color-hex" value="#ff2d2d">',
-            '        <button type="button" class="image-draw-color-apply-btn" data-action="apply-draw-color-hex">입력</button>',
-            '        <button type="button" class="image-draw-color-close-btn" data-action="close-draw-color-picker">×</button>',
-            '      </div>',
-            '      <canvas class="image-draw-color-sv" data-field="draw-color-sv" width="220" height="150"></canvas>',
-            '      <canvas class="image-draw-color-hue" data-field="draw-color-hue" width="220" height="12"></canvas>',
-            '      <div class="image-draw-alpha-row">',
-            '        <span class="image-draw-alpha-title">투명도</span>',
-            '        <input type="range" class="image-draw-alpha-range" data-field="draw-color-alpha" min="0" max="100" step="1" value="100">',
-            '        <span class="draw-color-alpha-label">100%</span>',
-            '      </div>',
-            '    </div>',
-            '    <div class="image-text-color-dim" hidden></div>',
-            '    <div class="image-text-color-picker" hidden>',
-            '      <div class="image-text-color-picker-top">',
-            '        <span class="image-text-color-preview"></span>',
-            '        <input type="text" class="image-text-color-hex" data-field="text-color-hex" value="#ff2d2d">',
-            '        <button type="button" class="image-text-color-apply-btn" data-action="apply-text-color-hex">입력</button>',
-            '        <button type="button" class="image-text-color-close-btn" data-action="close-text-color-picker">×</button>',
-            '      </div>',
-            '      <canvas class="image-text-color-sv" data-field="text-color-sv" width="220" height="150"></canvas>',
-            '      <canvas class="image-text-color-hue" data-field="text-color-hue" width="220" height="12"></canvas>',
-            '    </div>',
-            '  </div>',
-            '  <div class="image-edit-foot">',
-            '    <button type="button" class="btn" data-action="cancel">취소</button>',
-            '    <button type="button" class="btn btn-primary" data-action="apply">적용</button>',
-            '  </div>',
-            '</div>'
-        ].join('');
+        const buildImageEditorModalHtml = window.BOARD_buildImageEditorModalHtml;
+        if (typeof buildImageEditorModalHtml !== 'function') {
+            imageEditorModal = null;
+            console.error('BOARD_buildImageEditorModalHtml is not available.');
+            return false;
+        }
+        imageEditorModal.innerHTML = buildImageEditorModalHtml(textPresetColors, shapePresetColors);
         document.body.appendChild(imageEditorModal);
+        return true;
+    };
 
-        bindImageEditorPointerHandlers();
-
+    const bindImageEditorModalLayoutHandlers = () => {
         const editBody = imageEditorModal.querySelector('.image-edit-body');
         editBody?.addEventListener('scroll', () => {
             if (imageEditorState?.tool === 'crop' && imageEditorState.cropRect) {
@@ -3542,7 +3596,8 @@
             positionImageEditorTextPanel();
         });
         window.addEventListener('resize', () => {
-            if (imageEditorState?.tool === 'crop' && imageEditorState.cropRect && imageEditorModal && !imageEditorModal.hidden) {
+            if (imageEditorState?.tool === 'crop' && imageEditorState.cropRect && imageEditorModal && !
+                imageEditorModal.hidden) {
                 showCropActionButton(imageEditorState.cropRect);
             }
             positionImageEditorTextEntryInViewport();
@@ -3550,459 +3605,407 @@
             positionImageEditorDrawPanel();
             positionImageEditorTextPanel();
         });
+    };
 
-        imageEditorModal.addEventListener('click', async (e) => {
-            if (e.target === imageEditorModal) {
-                closeImageEditor();
-                return;
+    const imageEditorClickActionHandlers = {
+        'toggle-ratio': () => {
+            imageEditorState.keepRatio = !imageEditorState.keepRatio;
+            const canvas = getImageEditorCanvas();
+            if (imageEditorState.keepRatio && canvas && canvas.height > 0) {
+                imageEditorState.aspectRatio = canvas.width / canvas.height;
             }
-            const btn = e.target.closest('button[data-action]');
-            if (!btn) return;
-            const action = btn.dataset.action;
-
-            if (action === 'close' || action === 'cancel') {
-                closeImageEditor();
-                return;
-            }
-            if (!imageEditorState) return;
-
-            if (action === 'toggle-ratio') {
-                imageEditorState.keepRatio = !imageEditorState.keepRatio;
-                const canvas = getImageEditorCanvas();
-                if (imageEditorState.keepRatio && canvas && canvas.height > 0) {
-                    imageEditorState.aspectRatio = canvas.width / canvas.height;
-                }
-                refreshImageEditorControlState();
-                return;
-            }
-            if (action === 'text-settings') {
-                toggleImageEditorTextPanel();
-                return;
-            }
-            if (action === 'shape-settings') {
-                toggleImageEditorShapePanel();
-                return;
-            }
-            if (action === 'draw-settings') {
-                toggleImageEditorDrawPanel();
-                return;
-            }
-            if (action === 'text-size-dec') {
-                const style = ensureImageEditorTextStyle();
-                setImageEditorTextSize(style.size - 1);
-                return;
-            }
-            if (action === 'text-size-inc') {
-                const style = ensureImageEditorTextStyle();
-                setImageEditorTextSize(style.size + 1);
-                return;
-            }
-            if (action === 'toggle-text-style') {
-                const styleKey = btn.dataset.style || '';
-                toggleImageEditorTextStyle(styleKey);
-                return;
-            }
-            if (action === 'set-text-color') {
-                applyImageEditorTextColor(btn.dataset.color || '');
-                return;
-            }
-            if (action === 'open-text-color-picker') {
-                openImageEditorTextColorPicker();
-                return;
-            }
-            if (action === 'close-text-color-picker') {
-                hideImageEditorTextColorPicker();
-                return;
-            }
-            if (action === 'apply-text-color-hex') {
-                const hexInput = getImageEditorTextColorHexInput();
-                if (hexInput) applyImageEditorTextColor(hexInput.value || '');
-                return;
-            }
-            if (action === 'shape-line-width-dec') {
+            refreshImageEditorControlState();
+        },
+        'text-settings': () => toggleImageEditorTextPanel(),
+        'shape-settings': () => toggleImageEditorShapePanel(),
+        'draw-settings': () => toggleImageEditorDrawPanel(),
+        'text-size-dec': () => {
+            const style = ensureImageEditorTextStyle();
+            setImageEditorTextSize(style.size - 1);
+        },
+        'text-size-inc': () => {
+            const style = ensureImageEditorTextStyle();
+            setImageEditorTextSize(style.size + 1);
+        },
+        'toggle-text-style': (btn) => {
+            const styleKey = btn.dataset.style || '';
+            toggleImageEditorTextStyle(styleKey);
+        },
+        'set-text-color': (btn) => applyImageEditorTextColor(btn.dataset.color || ''),
+        'open-text-color-picker': () => openImageEditorTextColorPicker(),
+        'close-text-color-picker': () => hideImageEditorTextColorPicker(),
+        'apply-text-color-hex': () => {
+            const hexInput = getImageEditorTextColorHexInput();
+            if (hexInput) applyImageEditorTextColor(hexInput.value || '');
+        },
+        'shape-line-width-dec': () => {
+            const style = ensureImageEditorShapeStyle();
+            setImageEditorShapeLineWidth(style.lineWidth - 1);
+        },
+        'shape-line-width-inc': () => {
+            const style = ensureImageEditorShapeStyle();
+            setImageEditorShapeLineWidth(style.lineWidth + 1);
+        },
+        'set-shape-type': (btn) => setImageEditorShapeType(btn.dataset.shape || ''),
+        'set-shape-line-style': (btn) => setImageEditorShapeLineStyle(btn.dataset.lineStyle || ''),
+        'set-shape-color-tab': (btn) => setImageEditorShapeColorTarget(btn.dataset.target || 'stroke'),
+        'set-shape-color': (btn) => {
+            const color = String(btn.dataset.color || '').trim().toLowerCase();
+            if (color === 'transparent') {
+                applyImageEditorShapeTransparency(0);
+            } else {
                 const style = ensureImageEditorShapeStyle();
-                setImageEditorShapeLineWidth(style.lineWidth - 1);
-                return;
+                const alphaKey = getShapeAlphaKeyByTarget(style.colorTarget);
+                const alpha = normalizeAlpha(style[alphaKey], 1) <= 0 ? 1 : normalizeAlpha(style[alphaKey], 1);
+                applyImageEditorShapeColor(color, alpha);
             }
-            if (action === 'shape-line-width-inc') {
-                const style = ensureImageEditorShapeStyle();
-                setImageEditorShapeLineWidth(style.lineWidth + 1);
-                return;
-            }
-            if (action === 'set-shape-type') {
-                setImageEditorShapeType(btn.dataset.shape || '');
-                return;
-            }
-            if (action === 'set-shape-line-style') {
-                setImageEditorShapeLineStyle(btn.dataset.lineStyle || '');
-                return;
-            }
-            if (action === 'set-shape-color-tab') {
-                setImageEditorShapeColorTarget(btn.dataset.target || 'stroke');
-                return;
-            }
-            if (action === 'set-shape-color') {
-                const color = String(btn.dataset.color || '').trim().toLowerCase();
-                if (color === 'transparent') {
-                    applyImageEditorShapeTransparency(0);
-                } else {
-                    const style = ensureImageEditorShapeStyle();
-                    const alphaKey = getShapeAlphaKeyByTarget(style.colorTarget);
-                    const alpha = normalizeAlpha(style[alphaKey], 1) <= 0 ? 1 : normalizeAlpha(style[alphaKey], 1);
-                    applyImageEditorShapeColor(color, alpha);
-                }
-                return;
-            }
-            if (action === 'open-shape-color-picker') {
-                openImageEditorShapeColorPicker();
-                return;
-            }
-            if (action === 'close-shape-color-picker') {
-                hideImageEditorShapeColorPicker();
-                return;
-            }
-            if (action === 'apply-shape-color-hex') {
-                const hexInput = getImageEditorShapeColorHexInput();
-                if (hexInput) applyImageEditorShapeColor(hexInput.value || '');
-                return;
-            }
-            if (action === 'draw-line-width-dec') {
+        },
+        'open-shape-color-picker': () => openImageEditorShapeColorPicker(),
+        'close-shape-color-picker': () => hideImageEditorShapeColorPicker(),
+        'apply-shape-color-hex': () => {
+            const hexInput = getImageEditorShapeColorHexInput();
+            if (hexInput) applyImageEditorShapeColor(hexInput.value || '');
+        },
+        'draw-line-width-dec': () => {
+            const style = ensureImageEditorDrawStyle();
+            setImageEditorDrawLineWidth(style.lineWidth - 1);
+        },
+        'draw-line-width-inc': () => {
+            const style = ensureImageEditorDrawStyle();
+            setImageEditorDrawLineWidth(style.lineWidth + 1);
+        },
+        'set-draw-color': (btn) => {
+            const color = String(btn.dataset.color || '').trim().toLowerCase();
+            if (color) {
                 const style = ensureImageEditorDrawStyle();
-                setImageEditorDrawLineWidth(style.lineWidth - 1);
+                const alpha = normalizeAlpha(style.alpha, 1) <= 0 ? 1 : normalizeAlpha(style.alpha, 1);
+                applyImageEditorDrawColor(color, alpha);
+            }
+        },
+        'open-draw-color-picker': () => openImageEditorDrawColorPicker(),
+        'close-draw-color-picker': () => hideImageEditorDrawColorPicker(),
+        'apply-draw-color-hex': () => {
+            const hexInput = getImageEditorDrawColorHexInput();
+            if (hexInput) applyImageEditorDrawColor(hexInput.value || '');
+        },
+        'apply-crop-selection': () => applyCropFromImageEditor(),
+        'crop': () => {
+            hideImageEditorTextPanel();
+            hideImageEditorDrawPanel();
+            beginCropMode();
+        },
+        'rotate': () => {
+            hideImageEditorTextPanel();
+            hideImageEditorShapePanel();
+            hideImageEditorDrawPanel();
+            rotateImageEditorCanvas();
+        },
+        'select': () => activateSelectTool(),
+        'text': () => addTextToImageEditor(),
+        'shape': () => {
+            hideImageEditorTextPanel();
+            hideImageEditorDrawPanel();
+            addShapeToImageEditor();
+        },
+        'draw': () => {
+            hideImageEditorTextPanel();
+            hideImageEditorShapePanel();
+            toggleDrawModeInImageEditor();
+        },
+        'undo': async () => {
+            await undoImageEditor();
+        },
+        'redo': async () => {
+            await redoImageEditor();
+        },
+        'reset': async () => {
+            await resetImageEditor();
+        },
+        'delete': () => {
+            if (imageEditorState?.tool === 'select' && imageEditorState?.selectedObjectId) {
+                deleteSelectedObject();
                 return;
             }
-            if (action === 'draw-line-width-inc') {
-                const style = ensureImageEditorDrawStyle();
-                setImageEditorDrawLineWidth(style.lineWidth + 1);
-                return;
+            if (activeEmbed) {
+                deleteEmbed(activeEmbed);
             }
-            if (action === 'set-draw-color') {
-                const color = String(btn.dataset.color || '').trim().toLowerCase();
-                if (color) {
-                    const style = ensureImageEditorDrawStyle();
-                    const alpha = normalizeAlpha(style.alpha, 1) <= 0 ? 1 : normalizeAlpha(style.alpha, 1);
-                    applyImageEditorDrawColor(color, alpha);
-                }
-                return;
-            }
-            if (action === 'open-draw-color-picker') {
-                openImageEditorDrawColorPicker();
-                return;
-            }
-            if (action === 'close-draw-color-picker') {
-                hideImageEditorDrawColorPicker();
-                return;
-            }
-            if (action === 'apply-draw-color-hex') {
-                const hexInput = getImageEditorDrawColorHexInput();
-                if (hexInput) applyImageEditorDrawColor(hexInput.value || '');
-                return;
-            }
-            if (action === 'apply-crop-selection') {
-                applyCropFromImageEditor();
-                return;
-            }
-            if (action === 'crop') {
-                hideImageEditorTextPanel();
-                hideImageEditorDrawPanel();
-                beginCropMode();
-                return;
-            }
-            if (action === 'rotate') {
-                hideImageEditorTextPanel();
-                hideImageEditorShapePanel();
-                hideImageEditorDrawPanel();
-                rotateImageEditorCanvas();
-                return;
-            }
-            if (action === 'select') {
-                activateSelectTool();
-                return;
-            }
-            if (action === 'text') {
-                addTextToImageEditor();
-                return;
-            }
-            if (action === 'shape') {
-                hideImageEditorTextPanel();
-                hideImageEditorDrawPanel();
-                addShapeToImageEditor();
-                return;
-            }
-            if (action === 'draw') {
-                hideImageEditorTextPanel();
-                hideImageEditorShapePanel();
-                toggleDrawModeInImageEditor();
-                return;
-            }
-            if (action === 'undo') {
-                await undoImageEditor();
-                return;
-            }
-            if (action === 'redo') {
-                await redoImageEditor();
-                return;
-            }
-            if (action === 'reset') {
-                await resetImageEditor();
-                return;
-            }
-            if (action === 'delete') {
-                if (imageEditorState?.tool === 'select' && imageEditorState?.selectedObjectId) {
-                    deleteSelectedObject();
-                    return;
-                }
-                if (activeEmbed) {
-                    deleteEmbed(activeEmbed);
-                }
-                closeImageEditor();
-                return;
-            }
-            if (action === 'apply') {
-                applyEditedCanvasToEmbed();
-            }
-        });
+            closeImageEditor();
+        },
+        'apply': () => applyEditedCanvasToEmbed(),
+    };
 
-        imageEditorModal.addEventListener('change', (e) => {
-            if (!imageEditorState) return;
-            const zoomSelect = e.target.closest('select[data-field="zoom"]');
-            if (zoomSelect) {
-                const v = Number(zoomSelect.value || 100);
-                imageEditorState.zoom = Math.max(0.25, Math.min(2, v / 100));
-                applyImageEditorZoom();
-                return;
+    const handleImageEditorModalClick = async (e) => {
+        if (e.target === imageEditorModal) {
+            closeImageEditor();
+            return;
+        }
+        const btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+
+        const action = btn.dataset.action;
+        if (action === 'close' || action === 'cancel') {
+            closeImageEditor();
+            return;
+        }
+        if (!imageEditorState) return;
+
+        const handler = imageEditorClickActionHandlers[action];
+        if (!handler) return;
+        await handler(btn);
+    };
+
+    const handleImageEditorModalChange = (e) => {
+        if (!imageEditorState) return;
+        const zoomSelect = e.target.closest('select[data-field="zoom"]');
+        if (zoomSelect) {
+            const v = Number(zoomSelect.value || 100);
+            imageEditorState.zoom = Math.max(0.25, Math.min(2, v / 100));
+            applyImageEditorZoom();
+            return;
+        }
+
+        const textSizeInput = e.target.closest('input[data-field="text-size"]');
+        if (textSizeInput) {
+            setImageEditorTextSize(parsePxInputValue(textSizeInput.value));
+            return;
+        }
+
+        const textSizeRange = e.target.closest('input[data-field="text-size-range"]');
+        if (textSizeRange) {
+            setImageEditorTextSize(Number(textSizeRange.value || defaultTextStyle.size));
+            return;
+        }
+
+        const shapeWidthInput = e.target.closest('input[data-field="shape-line-width"]');
+        if (shapeWidthInput) {
+            setImageEditorShapeLineWidth(parsePxInputValue(shapeWidthInput.value));
+            return;
+        }
+
+        const shapeWidthRange = e.target.closest('input[data-field="shape-line-width-range"]');
+        if (shapeWidthRange) {
+            setImageEditorShapeLineWidth(Number(shapeWidthRange.value || defaultShapeStyle
+                .lineWidth));
+            return;
+        }
+
+        const shapeOpacityRange = e.target.closest(
+            'input[data-field="shape-color-alpha"], input[data-field="shape-color-alpha-inline"]'
+            );
+        if (shapeOpacityRange) {
+            applyImageEditorShapeTransparency(Number(shapeOpacityRange.value || 100));
+            return;
+        }
+
+        const drawWidthRange = e.target.closest('input[data-field="draw-line-width-range"]');
+        if (drawWidthRange) {
+            setImageEditorDrawLineWidth(Number(drawWidthRange.value || defaultDrawStyle.lineWidth));
+            return;
+        }
+
+        const drawHexInput = e.target.closest('input[data-field="draw-color-hex"]');
+        if (drawHexInput) {
+            const normalized = normalizeHexColor(drawHexInput.value || '', '');
+            if (normalized) {
+                applyImageEditorDrawColor(normalized);
             }
+            return;
+        }
 
-            const textSizeInput = e.target.closest('input[data-field="text-size"]');
-            if (textSizeInput) {
-                setImageEditorTextSize(parsePxInputValue(textSizeInput.value));
-                return;
+        const drawOpacityRange = e.target.closest(
+            'input[data-field="draw-color-alpha"], input[data-field="draw-color-alpha-inline"]');
+        if (drawOpacityRange) {
+            applyImageEditorDrawTransparency(Number(drawOpacityRange.value || 100));
+            return;
+        }
+
+        const drawWidthInput = e.target.closest('input[data-field="draw-line-width"]');
+        if (drawWidthInput) {
+            setImageEditorDrawLineWidth(parsePxInputValue(drawWidthInput.value));
+            return;
+        }
+
+        const pixelMode = e.target.closest('input[data-field="pixel-mode"]');
+        if (pixelMode) {
+            imageEditorState.pixelMode = !!pixelMode.checked;
+            const canvas = getImageEditorCanvas();
+            if (imageEditorState.pixelMode && canvas && canvas.height > 0) {
+                imageEditorState.aspectRatio = canvas.width / canvas.height;
             }
+            refreshImageEditorControlState();
+            return;
+        }
 
-            const textSizeRange = e.target.closest('input[data-field="text-size-range"]');
-            if (textSizeRange) {
-                setImageEditorTextSize(Number(textSizeRange.value || defaultTextStyle.size));
-                return;
+        const widthInput = e.target.closest('input[data-field="width"]');
+        if (widthInput) {
+            applyPixelResizeFromInputs('width');
+            return;
+        }
+
+        const heightInput = e.target.closest('input[data-field="height"]');
+        if (heightInput) {
+            applyPixelResizeFromInputs('height');
+        }
+    
+    };
+
+    const handleImageEditorModalInput = (e) => {
+        if (!imageEditorState) return;
+
+        const textSizeRange = e.target.closest('input[data-field="text-size-range"]');
+        if (textSizeRange) {
+            setImageEditorTextSize(Number(textSizeRange.value || defaultTextStyle.size));
+            return;
+        }
+
+        const textHexInput = e.target.closest('input[data-field="text-color-hex"]');
+        if (textHexInput) {
+            const normalized = normalizeHexColor(textHexInput.value || '', '');
+            if (normalized) {
+                applyImageEditorTextColor(normalized);
             }
+            return;
+        }
 
-            const shapeWidthInput = e.target.closest('input[data-field="shape-line-width"]');
-            if (shapeWidthInput) {
-                setImageEditorShapeLineWidth(parsePxInputValue(shapeWidthInput.value));
-                return;
+        const shapeWidthRange = e.target.closest('input[data-field="shape-line-width-range"]');
+        if (shapeWidthRange) {
+            setImageEditorShapeLineWidth(Number(shapeWidthRange.value || defaultShapeStyle
+                .lineWidth));
+            return;
+        }
+
+        const shapeHexInput = e.target.closest('input[data-field="shape-color-hex"]');
+        if (shapeHexInput) {
+            const normalized = normalizeHexColor(shapeHexInput.value || '', '');
+            if (normalized) {
+                applyImageEditorShapeColor(normalized);
             }
+            return;
+        }
 
-            const shapeWidthRange = e.target.closest('input[data-field="shape-line-width-range"]');
-            if (shapeWidthRange) {
-                setImageEditorShapeLineWidth(Number(shapeWidthRange.value || defaultShapeStyle.lineWidth));
-                return;
+        const shapeOpacityRange = e.target.closest(
+            'input[data-field="shape-color-alpha"], input[data-field="shape-color-alpha-inline"]'
+            );
+        if (shapeOpacityRange) {
+            applyImageEditorShapeTransparency(Number(shapeOpacityRange.value || 100));
+            return;
+        }
+
+        const drawWidthRange = e.target.closest('input[data-field="draw-line-width-range"]');
+        if (drawWidthRange) {
+            setImageEditorDrawLineWidth(Number(drawWidthRange.value || defaultDrawStyle.lineWidth));
+            return;
+        }
+
+        const drawHexInput = e.target.closest('input[data-field="draw-color-hex"]');
+        if (drawHexInput) {
+            const normalized = normalizeHexColor(drawHexInput.value || '', '');
+            if (normalized) {
+                applyImageEditorDrawColor(normalized);
             }
+            return;
+        }
 
-            const shapeOpacityRange = e.target.closest('input[data-field="shape-color-alpha"], input[data-field="shape-color-alpha-inline"]');
-            if (shapeOpacityRange) {
-                applyImageEditorShapeTransparency(Number(shapeOpacityRange.value || 100));
-                return;
+        const drawOpacityRange = e.target.closest(
+            'input[data-field="draw-color-alpha"], input[data-field="draw-color-alpha-inline"]');
+        if (drawOpacityRange) {
+            applyImageEditorDrawTransparency(Number(drawOpacityRange.value || 100));
+            return;
+        }
+
+        if (!imageEditorState.pixelMode || !imageEditorState.keepRatio) return;
+        const widthInput = e.target.closest('input[data-field="width"]');
+        const heightInput = e.target.closest('input[data-field="height"]');
+        if (!widthInput && !heightInput) return;
+
+        const ratio = Number(imageEditorState.aspectRatio) || 0;
+        if (ratio <= 0) return;
+
+        if (widthInput) {
+            const w = parsePxInputValue(widthInput.value);
+            if (w > 0) {
+                const h = Math.max(1, Math.round(w / ratio));
+                const hInput = getImageEditorHeightInput();
+                if (hInput) hInput.value = formatPxValue(h);
             }
-
-            const drawWidthRange = e.target.closest('input[data-field="draw-line-width-range"]');
-            if (drawWidthRange) {
-                setImageEditorDrawLineWidth(Number(drawWidthRange.value || defaultDrawStyle.lineWidth));
-                return;
+            return;
+        }
+        if (heightInput) {
+            const h = parsePxInputValue(heightInput.value);
+            if (h > 0) {
+                const w = Math.max(1, Math.round(h * ratio));
+                const wInput = getImageEditorWidthInput();
+                if (wInput) wInput.value = formatPxValue(w);
             }
+        }
+    
+    };
 
-            const drawHexInput = e.target.closest('input[data-field="draw-color-hex"]');
-            if (drawHexInput) {
-                const normalized = normalizeHexColor(drawHexInput.value || '', '');
-                if (normalized) {
-                    applyImageEditorDrawColor(normalized);
-                }
-                return;
-            }
+    const handleImageEditorModalKeydown = (e) => {
+        if (!imageEditorState) return;
 
-            const drawOpacityRange = e.target.closest('input[data-field="draw-color-alpha"], input[data-field="draw-color-alpha-inline"]');
-            if (drawOpacityRange) {
-                applyImageEditorDrawTransparency(Number(drawOpacityRange.value || 100));
-                return;
-            }
-
-            const drawWidthInput = e.target.closest('input[data-field="draw-line-width"]');
-            if (drawWidthInput) {
-                setImageEditorDrawLineWidth(parsePxInputValue(drawWidthInput.value));
-                return;
-            }
-
-            const pixelMode = e.target.closest('input[data-field="pixel-mode"]');
-            if (pixelMode) {
-                imageEditorState.pixelMode = !!pixelMode.checked;
-                const canvas = getImageEditorCanvas();
-                if (imageEditorState.pixelMode && canvas && canvas.height > 0) {
-                    imageEditorState.aspectRatio = canvas.width / canvas.height;
-                }
-                refreshImageEditorControlState();
-                return;
-            }
-
-            const widthInput = e.target.closest('input[data-field="width"]');
-            if (widthInput) {
-                applyPixelResizeFromInputs('width');
-                return;
-            }
-
-            const heightInput = e.target.closest('input[data-field="height"]');
-            if (heightInput) {
-                applyPixelResizeFromInputs('height');
-            }
-        });
-
-        imageEditorModal.addEventListener('input', (e) => {
-            if (!imageEditorState) return;
-
-            const textSizeRange = e.target.closest('input[data-field="text-size-range"]');
-            if (textSizeRange) {
-                setImageEditorTextSize(Number(textSizeRange.value || defaultTextStyle.size));
-                return;
-            }
-
-            const textHexInput = e.target.closest('input[data-field="text-color-hex"]');
-            if (textHexInput) {
-                const normalized = normalizeHexColor(textHexInput.value || '', '');
-                if (normalized) {
-                    applyImageEditorTextColor(normalized);
-                }
-                return;
-            }
-
-            const shapeWidthRange = e.target.closest('input[data-field="shape-line-width-range"]');
-            if (shapeWidthRange) {
-                setImageEditorShapeLineWidth(Number(shapeWidthRange.value || defaultShapeStyle.lineWidth));
-                return;
-            }
-
-            const shapeHexInput = e.target.closest('input[data-field="shape-color-hex"]');
-            if (shapeHexInput) {
-                const normalized = normalizeHexColor(shapeHexInput.value || '', '');
-                if (normalized) {
-                    applyImageEditorShapeColor(normalized);
-                }
-                return;
-            }
-
-            const shapeOpacityRange = e.target.closest('input[data-field="shape-color-alpha"], input[data-field="shape-color-alpha-inline"]');
-            if (shapeOpacityRange) {
-                applyImageEditorShapeTransparency(Number(shapeOpacityRange.value || 100));
-                return;
-            }
-
-            const drawWidthRange = e.target.closest('input[data-field="draw-line-width-range"]');
-            if (drawWidthRange) {
-                setImageEditorDrawLineWidth(Number(drawWidthRange.value || defaultDrawStyle.lineWidth));
-                return;
-            }
-
-            const drawHexInput = e.target.closest('input[data-field="draw-color-hex"]');
-            if (drawHexInput) {
-                const normalized = normalizeHexColor(drawHexInput.value || '', '');
-                if (normalized) {
-                    applyImageEditorDrawColor(normalized);
-                }
-                return;
-            }
-
-            const drawOpacityRange = e.target.closest('input[data-field="draw-color-alpha"], input[data-field="draw-color-alpha-inline"]');
-            if (drawOpacityRange) {
-                applyImageEditorDrawTransparency(Number(drawOpacityRange.value || 100));
-                return;
-            }
-
-            if (!imageEditorState.pixelMode || !imageEditorState.keepRatio) return;
-            const widthInput = e.target.closest('input[data-field="width"]');
-            const heightInput = e.target.closest('input[data-field="height"]');
-            if (!widthInput && !heightInput) return;
-
-            const ratio = Number(imageEditorState.aspectRatio) || 0;
-            if (ratio <= 0) return;
-
-            if (widthInput) {
-                const w = parsePxInputValue(widthInput.value);
-                if (w > 0) {
-                    const h = Math.max(1, Math.round(w / ratio));
-                    const hInput = getImageEditorHeightInput();
-                    if (hInput) hInput.value = formatPxValue(h);
-                }
-                return;
-            }
-            if (heightInput) {
-                const h = parsePxInputValue(heightInput.value);
-                if (h > 0) {
-                    const w = Math.max(1, Math.round(h * ratio));
-                    const wInput = getImageEditorWidthInput();
-                    if (wInput) wInput.value = formatPxValue(w);
-                }
-            }
-        });
-
-        imageEditorModal.addEventListener('keydown', (e) => {
-            if (!imageEditorState) return;
-
-            if ((e.key === 'Delete' || e.key === 'Backspace') && !imageEditorState.textEntryActive) {
-                if (imageEditorState.selectedObjectId) {
-                    e.preventDefault();
-                    deleteSelectedObject();
-                    return;
-                }
-            }
-
-            if (e.key !== 'Enter') return;
-
-            const textSizeInput = e.target.closest('input[data-field="text-size"]');
-            if (textSizeInput) {
+        if ((e.key === 'Delete' || e.key === 'Backspace') && !imageEditorState.textEntryActive) {
+            if (imageEditorState.selectedObjectId) {
                 e.preventDefault();
-                setImageEditorTextSize(parsePxInputValue(textSizeInput.value));
+                deleteSelectedObject();
                 return;
             }
+        }
 
-            const textHexInput = e.target.closest('input[data-field="text-color-hex"]');
-            if (textHexInput) {
-                e.preventDefault();
-                applyImageEditorTextColor(textHexInput.value || '');
-                return;
-            }
+        if (e.key !== 'Enter') return;
 
-            const shapeWidthInput = e.target.closest('input[data-field="shape-line-width"]');
-            if (shapeWidthInput) {
-                e.preventDefault();
-                setImageEditorShapeLineWidth(parsePxInputValue(shapeWidthInput.value));
-                return;
-            }
-
-            const shapeHexInput = e.target.closest('input[data-field="shape-color-hex"]');
-            if (shapeHexInput) {
-                e.preventDefault();
-                applyImageEditorShapeColor(shapeHexInput.value || '');
-                return;
-            }
-
-            const drawWidthInput = e.target.closest('input[data-field="draw-line-width"]');
-            if (drawWidthInput) {
-                e.preventDefault();
-                setImageEditorDrawLineWidth(parsePxInputValue(drawWidthInput.value));
-                return;
-            }
-
-            const drawHexInput = e.target.closest('input[data-field="draw-color-hex"]');
-            if (drawHexInput) {
-                e.preventDefault();
-                applyImageEditorDrawColor(drawHexInput.value || '');
-                return;
-            }
-
-            if (!imageEditorState.pixelMode) return;
-            const widthInput = e.target.closest('input[data-field="width"]');
-            const heightInput = e.target.closest('input[data-field="height"]');
-            if (!widthInput && !heightInput) return;
+        const textSizeInput = e.target.closest('input[data-field="text-size"]');
+        if (textSizeInput) {
             e.preventDefault();
-            applyPixelResizeFromInputs(widthInput ? 'width' : 'height');
-        });
+            setImageEditorTextSize(parsePxInputValue(textSizeInput.value));
+            return;
+        }
 
+        const textHexInput = e.target.closest('input[data-field="text-color-hex"]');
+        if (textHexInput) {
+            e.preventDefault();
+            applyImageEditorTextColor(textHexInput.value || '');
+            return;
+        }
+
+        const shapeWidthInput = e.target.closest('input[data-field="shape-line-width"]');
+        if (shapeWidthInput) {
+            e.preventDefault();
+            setImageEditorShapeLineWidth(parsePxInputValue(shapeWidthInput.value));
+            return;
+        }
+
+        const shapeHexInput = e.target.closest('input[data-field="shape-color-hex"]');
+        if (shapeHexInput) {
+            e.preventDefault();
+            applyImageEditorShapeColor(shapeHexInput.value || '');
+            return;
+        }
+
+        const drawWidthInput = e.target.closest('input[data-field="draw-line-width"]');
+        if (drawWidthInput) {
+            e.preventDefault();
+            setImageEditorDrawLineWidth(parsePxInputValue(drawWidthInput.value));
+            return;
+        }
+
+        const drawHexInput = e.target.closest('input[data-field="draw-color-hex"]');
+        if (drawHexInput) {
+            e.preventDefault();
+            applyImageEditorDrawColor(drawHexInput.value || '');
+            return;
+        }
+
+        if (!imageEditorState.pixelMode) return;
+        const widthInput = e.target.closest('input[data-field="width"]');
+        const heightInput = e.target.closest('input[data-field="height"]');
+        if (!widthInput && !heightInput) return;
+        e.preventDefault();
+        applyPixelResizeFromInputs(widthInput ? 'width' : 'height');
+    
+    };
+
+    const bindImageEditorColorInteractionHandlers = () => {
         const svCanvas = getImageEditorTextColorSvCanvas();
         const hueCanvas = getImageEditorTextColorHueCanvas();
         const colorDim = getImageEditorTextColorDim();
@@ -4022,7 +4025,7 @@
             imageEditorState.textColorPicker.dragging = '';
             textColorDragTarget = '';
             if (wasDragging && imageEditorState.tool === 'select' && imageEditorState.selectedObjectId) {
-                const sel = (imageEditorState.objects || []).find((o) => o.id === imageEditorState.selectedObjectId);
+                const sel = getSelectedImageEditorObject();
                 if (sel?.type === 'text') pushImageEditorHistory();
             }
         };
@@ -4042,7 +4045,7 @@
             imageEditorState.shapeColorPicker.dragging = '';
             shapeColorDragTarget = '';
             if (wasDragging && imageEditorState.tool === 'select' && imageEditorState.selectedObjectId) {
-                const sel = (imageEditorState.objects || []).find((o) => o.id === imageEditorState.selectedObjectId);
+                const sel = getSelectedImageEditorObject();
                 if (sel?.type === 'shape') pushImageEditorHistory();
             }
         };
@@ -4063,7 +4066,7 @@
             imageEditorState.drawColorPicker.dragging = '';
             drawColorDragTarget = '';
             if (wasDragging && imageEditorState.tool === 'select' && imageEditorState.selectedObjectId) {
-                const sel = (imageEditorState.objects || []).find((o) => o.id === imageEditorState.selectedObjectId);
+                const sel = getSelectedImageEditorObject();
                 if (sel?.type === 'draw') pushImageEditorHistory();
             }
         };
@@ -4162,7 +4165,8 @@
             if (shapePanel && !shapePanel.hidden) {
                 const hitShapePanel = shapePanel.contains(target);
                 const hitShapeSetting = shapeSettingBtn && shapeSettingBtn.contains(target);
-                const hitShapePicker = shapePicker && !shapePicker.hidden && shapePicker.contains(target);
+                const hitShapePicker = shapePicker && !shapePicker.hidden && shapePicker.contains(
+                    target);
                 if (!hitShapePanel && !hitShapeSetting && !hitShapePicker) {
                     hideImageEditorShapePanel();
                 }
@@ -4178,6 +4182,10 @@
             }
         });
 
+
+    };
+
+    const bindImageEditorTextEntryHandlers = () => {
         const textEntryInput = getImageEditorTextEntryInput();
         textEntryInput?.addEventListener('input', () => {
             if (!imageEditorModal || imageEditorModal.hidden) return;
@@ -4187,22 +4195,29 @@
             if (!imageEditorState) return;
             if (e.key === 'Escape') {
                 e.preventDefault();
-                closeImageEditorTextEntry({ commit: false });
+                closeImageEditorTextEntry({
+                    commit: false
+                });
                 return;
             }
             if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                 e.preventDefault();
-                closeImageEditorTextEntry({ commit: true });
+                closeImageEditorTextEntry({
+                    commit: true
+                });
                 return;
             }
             if (e.key === 'Tab') {
                 e.preventDefault();
-                closeImageEditorTextEntry({ commit: true });
+                closeImageEditorTextEntry({
+                    commit: true
+                });
             }
         });
         textEntryInput?.addEventListener('blur', () => {
             if (!imageEditorModal || imageEditorModal.hidden) return;
-            if (imageEditorState && Date.now() < Number(imageEditorState.textEntryIgnoreBlurUntil || 0)) {
+            if (imageEditorState && Date.now() < Number(imageEditorState.textEntryIgnoreBlurUntil ||
+                0)) {
                 requestAnimationFrame(() => {
                     const entry = getImageEditorTextEntry();
                     const input = getImageEditorTextEntryInput();
@@ -4217,9 +4232,31 @@
                 if (!imageEditorModal || imageEditorModal.hidden) return;
                 const active = document.activeElement;
                 if (active && active.closest && active.closest('.image-text-entry')) return;
-                closeImageEditorTextEntry({ commit: true });
+                closeImageEditorTextEntry({
+                    commit: true
+                });
             }, 30);
         });
+
+    };
+
+    const bindImageEditorModalEventHandlers = () => {
+        imageEditorModal.addEventListener('click', handleImageEditorModalClick);
+        imageEditorModal.addEventListener('change', handleImageEditorModalChange);
+        imageEditorModal.addEventListener('input', handleImageEditorModalInput);
+        imageEditorModal.addEventListener('keydown', handleImageEditorModalKeydown);
+
+        bindImageEditorColorInteractionHandlers();
+        bindImageEditorTextEntryHandlers();
+    };
+
+    const ensureImageEditorModal = () => {
+        if (imageEditorModal) return;
+
+        if (!createImageEditorModal()) return;
+        bindImageEditorPointerHandlers();
+        bindImageEditorModalLayoutHandlers();
+        bindImageEditorModalEventHandlers();
     };
 
     const ensureImageToolbar = () => {
@@ -4246,10 +4283,14 @@
             const action = button.dataset.action;
             const value = button.dataset.value;
             if (action === 'align' && value) {
-                applyEmbedOption(activeEmbed, { align: value });
+                applyEmbedOption(activeEmbed, {
+                    align: value
+                });
             } else if (action === 'size-cycle') {
                 const nextSize = cycleEmbedSize(activeEmbed.dataset.size || defaultEmbedOptions.size);
-                applyEmbedOption(activeEmbed, { size: nextSize });
+                applyEmbedOption(activeEmbed, {
+                    size: nextSize
+                });
             } else if (action === 'edit') {
                 openImageEditor(activeEmbed);
             } else if (action === 'delete') {
@@ -4327,7 +4368,9 @@
 
         const sizeSelect = toolbar.querySelector('select[data-action="fontSize"]');
         if (sizeSelect) {
-            sizeSelect.addEventListener('mousedown', (e) => { e.stopPropagation(); });
+            sizeSelect.addEventListener('mousedown', (e) => {
+                e.stopPropagation();
+            });
             sizeSelect.addEventListener('change', () => {
                 document.execCommand('fontSize', false, sizeSelect.value);
                 contentEditor.focus();
@@ -4394,11 +4437,13 @@
             temp.querySelectorAll('[data-preview-embed-idx]').forEach((placeholder) => {
                 const tokenValue = embedTokens[parseInt(placeholder.dataset.previewEmbedIdx, 10)];
                 const parsed = parseAttachmentTokenValue(tokenValue);
-                const imageInfo = resolveImageFromToken(parsed.target, existingImages, selectedFiles, objectUrlStore);
+                const imageInfo = resolveImageFromToken(parsed.target, existingImages, selectedFiles,
+                    objectUrlStore);
                 if (imageInfo) {
                     const figure = document.createElement('figure');
                     figure.className = 'write-preview-image-wrap';
-                    figure.classList.add(`align-${parsed.options.align}`, `size-${parsed.options.size}`);
+                    figure.classList.add(`align-${parsed.options.align}`,
+                    `size-${parsed.options.size}`);
                     const img = document.createElement('img');
                     img.src = imageInfo.src;
                     img.alt = imageInfo.name || '첨부 이미지';
@@ -4423,7 +4468,8 @@
                 if (plainText) targetElement.appendChild(document.createTextNode(plainText));
 
                 const parsed = parseAttachmentTokenValue(match[1]);
-                const imageInfo = resolveImageFromToken(parsed.target, existingImages, selectedFiles, objectUrlStore);
+                const imageInfo = resolveImageFromToken(parsed.target, existingImages, selectedFiles,
+                    objectUrlStore);
                 if (!imageInfo) {
                     targetElement.appendChild(document.createTextNode(match[0]));
                 } else {
@@ -4489,7 +4535,8 @@
             const existingImages = getExistingImageAttachments();
             const selectedFiles = getSelectedImageFileByName();
             const parsed = parseAttachmentTokenValue(tokenMatch ? tokenMatch[1] : '');
-            const imageInfo = resolveImageFromToken(parsed.target, existingImages, selectedFiles, editorObjectUrls);
+            const imageInfo = resolveImageFromToken(parsed.target, existingImages, selectedFiles,
+                editorObjectUrls);
 
             if (imageInfo && tokenMatch) {
                 const embed = createEditorEmbed(parsed.target, imageInfo, parsed.options);
@@ -4530,171 +4577,47 @@
         const items = imageFiles.map((file) => {
             const token = `[[첨부:${file.name}]]`;
             const key = file.name.toLowerCase();
-            return `<span class="existing-file" data-staged-key="${escapeHtml(key)}">${escapeHtml(file.name)} <button type="button" class="insert-attachment-token" data-token="${escapeHtml(token)}">본문삽입</button></span>`;
+            return `<span class="existing-file" data-staged-key="${escapeHtml(key)}">` +
+                `${escapeHtml(file.name)} ` +
+                `<button type="button" class="insert-attachment-token"` +
+                ` data-token="${escapeHtml(token)}">본문삽입</button></span>`;
         }).join('');
 
         newAttachmentTokenList.innerHTML = items;
         newAttachmentTokenList.style.display = '';
     };
 
-    document.querySelectorAll('.existing-file .del').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const id = btn.dataset.attachId;
-            btn.parentElement.style.opacity = '0.4';
-            btn.parentElement.style.textDecoration = 'line-through';
-            const hidden = document.createElement('input');
-            hidden.type = 'hidden';
-            hidden.name = 'delete_attachments[]';
-            hidden.value = id;
-            if (writeForm) {
-                writeForm.appendChild(hidden);
-            }
-            const tokenBtn = btn.parentElement.querySelector('.insert-attachment-token');
-            if (tokenBtn) tokenBtn.style.display = 'none';
-            btn.style.display = 'none';
-            btn.parentElement.dataset.deleted = '1';
-            updateLivePreview();
+    if (typeof window.BOARD_initWritePage === 'function') {
+        window.BOARD_initWritePage({
+            writeForm,
+            contentTextarea,
+            contentEditor,
+            attachmentInput,
+            previewButton,
+            previewModal,
+            previewCloseButton,
+            stagedUploadFiles,
+            generatedEditedFiles,
+            syncStagedUploadFilesFromInput,
+            rebuildAttachmentInputFiles,
+            updateLivePreview,
+            syncTextareaFromEditor,
+            renderEditorFromText,
+            renderNewAttachmentTokens,
+            insertTokenAtCursor,
+            openImageEditorForFile,
+            syncEditorOutput,
+            showImageToolbar,
+            hideImageToolbar,
+            saveEditorRange,
+            placeImageToolbar,
+            enableRichEditor,
+            openPreviewModal,
+            closePreviewModal,
+            closeImageEditor,
+            getImageToolbar: () => imageToolbar,
+            getImageEditorState: () => imageEditorState,
+            getImageEditorModal: () => imageEditorModal,
         });
-    });
-
-    document.addEventListener('click', (e) => {
-        const button = e.target.closest('.insert-attachment-token');
-        if (!button) return;
-        e.preventDefault();
-        const token = button.dataset.token || '';
-        if (!token) return;
-        insertTokenAtCursor(token);
-    });
-
-    // 첨부 "본문삽입" 버튼 클릭 시 에디터 커서를 유지해 여러 장 연속 삽입을 안정화한다.
-    document.addEventListener('mousedown', (e) => {
-        const button = e.target.closest('.insert-attachment-token');
-        if (!button) return;
-        e.preventDefault();
-    });
-
-    // 조치 후 스테이지 파일 "편집" 버튼
-    document.addEventListener('click', (e) => {
-        const btn = e.target.closest('.nm-edit-staged-file');
-        if (!btn) return;
-        e.preventDefault();
-        const key = btn.dataset.stagedKey || '';
-        if (!key) return;
-        const file = stagedUploadFiles.get(key) || generatedEditedFiles.get(key);
-        if (!file) return;
-        openImageEditorForFile(file, (editedFile) => {
-            const newKey = editedFile.name.toLowerCase();
-            stagedUploadFiles.delete(key);
-            generatedEditedFiles.delete(key);
-            stagedUploadFiles.set(newKey, editedFile);
-            rebuildAttachmentInputFiles();
-            updateLivePreview();
-        });
-    });
-
-    if (attachmentInput) {
-        attachmentInput.addEventListener('change', () => {
-            syncStagedUploadFilesFromInput();
-            rebuildAttachmentInputFiles();
-            updateLivePreview();
-            syncTextareaFromEditor();
-            renderEditorFromText(contentTextarea?.value || '');
-        });
-        renderNewAttachmentTokens();
-    }
-
-    if (contentTextarea) {
-        contentTextarea.addEventListener('input', updateLivePreview);
-    }
-    if (contentEditor) {
-        contentEditor.addEventListener('input', () => {
-            syncTextareaFromEditor();
-            updateLivePreview();
-        });
-        contentEditor.addEventListener('click', (e) => {
-            const embed = e.target.closest('.editor-embed');
-            if (embed && contentEditor.contains(embed)) {
-                showImageToolbar(embed);
-                return;
-            }
-            hideImageToolbar();
-        });
-        contentEditor.addEventListener('keyup', saveEditorRange);
-        contentEditor.addEventListener('mouseup', saveEditorRange);
-        document.addEventListener('selectionchange', saveEditorRange);
-        document.addEventListener('click', (e) => {
-            if (!imageToolbar || !imageToolbar.classList.contains('is-visible')) return;
-            // 이미지 편집 모달이 열려있는 동안은 툴바를 숨기지 않는다
-            if (imageEditorState) return;
-            if (imageToolbar.contains(e.target)) return;
-            if (contentEditor.contains(e.target) && e.target.closest('.editor-embed')) return;
-            hideImageToolbar();
-        });
-        window.addEventListener('scroll', placeImageToolbar, true);
-        window.addEventListener('resize', placeImageToolbar);
-    }
-
-    enableRichEditor();
-    updateLivePreview();
-
-    if (previewButton && previewModal) {
-        previewButton.addEventListener('click', openPreviewModal);
-        previewCloseButton?.addEventListener('click', closePreviewModal);
-        previewModal.addEventListener('click', (e) => {
-            if (e.target === previewModal) {
-                closePreviewModal();
-            }
-        });
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && !previewModal.hidden) {
-                closePreviewModal();
-            }
-            if (e.key === 'Escape' && imageEditorModal && !imageEditorModal.hidden) {
-                closeImageEditor();
-            }
-        });
-    }
-
-    if (writeForm) {
-        writeForm.addEventListener('submit', (e) => {
-            rebuildAttachmentInputFiles();
-            syncTextareaFromEditor();
-            if (!String(contentTextarea?.value || '').trim()) {
-                e.preventDefault();
-                alert('내용을 입력해 주세요.');
-                if (contentEditor && !contentEditor.hidden) {
-                    contentEditor.focus();
-                } else {
-                    contentTextarea?.focus();
-                }
-            }
-        });
-    }
-
-    // 글쓰기 - 투표 옵션 동적 추가
-    const addOptBtn = document.querySelector('.add-opt');
-    if (addOptBtn) {
-        addOptBtn.addEventListener('click', () => {
-            const wrap = document.querySelector('.poll-options-input');
-            const div = document.createElement('div');
-            div.className = 'poll-opt-input';
-            div.innerHTML = '<input type="text" name="poll_options[]" placeholder="선택지"><button type="button" class="add-opt remove-opt">삭제</button>';
-            wrap.appendChild(div);
-            div.querySelector('.remove-opt').addEventListener('click', () => div.remove());
-        });
-    }
-    document.querySelectorAll('.remove-opt').forEach(b => {
-        b.addEventListener('click', () => b.parentElement.remove());
-    });
-
-    // 글쓰기 - 투표 사용 여부
-    const usePoll = document.getElementById('use_poll');
-    if (usePoll) {
-        const toggle = () => {
-            const section = document.getElementById('poll_section');
-            if (section) section.style.display = usePoll.checked ? '' : 'none';
-        };
-        usePoll.addEventListener('change', toggle);
-        toggle();
     }
 })();
