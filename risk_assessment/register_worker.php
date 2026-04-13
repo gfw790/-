@@ -22,6 +22,7 @@ $form = [
     'login_id' => '',
     'team' => '',
     'role' => 'worker',
+    'phone' => '',
 ];
 $teamForm = [
     'team_name' => '',
@@ -48,6 +49,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     $error = $message;
                 }
+            }
+        }
+    } elseif ($action === 'update_account_phone') {
+        if (!$canManageAccounts) {
+            $error = '전화번호를 변경할 권한이 없습니다.';
+        } else {
+            $updateLoginId = trim((string)($_POST['update_login_id'] ?? ''));
+            $updatePhone   = trim((string)($_POST['update_phone'] ?? ''));
+            [$ok, $message] = auth_update_account_phone($updateLoginId, $updatePhone);
+            if ($ok) {
+                $success = $message;
+            } else {
+                $error = $message;
             }
         }
     } elseif ($action === 'update_account_role') {
@@ -117,17 +131,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $form['login_id'] = trim((string)($_POST['login_id'] ?? ''));
         $form['team'] = auth_normalize_team_name((string)($_POST['team'] ?? ''));
         $form['role'] = $canAssignRoles ? trim((string)($_POST['role'] ?? 'worker')) : 'worker';
+        $form['phone'] = trim((string)($_POST['phone'] ?? ''));
         $password = trim((string)($_POST['password'] ?? ''));
         $passwordConfirm = trim((string)($_POST['password_confirm'] ?? ''));
 
         if ($password !== $passwordConfirm) {
             $error = '비밀번호와 비밀번호 확인이 일치하지 않습니다.';
         } else {
-            [$ok, $message] = auth_register_worker($form['login_id'], $password, $form['name'], $form['team'], $form['role']);
+            [$ok, $message] = auth_register_worker($form['login_id'], $password, $form['name'], $form['team'], $form['role'], $form['phone']);
             if ($ok) {
                 $success = $message;
                 $teams = auth_read_teams();
-                $form = ['name' => '', 'login_id' => '', 'team' => !empty($teams) ? (string)$teams[0] : '', 'role' => 'worker'];
+                $form = ['name' => '', 'login_id' => '', 'team' => !empty($teams) ? (string)$teams[0] : '', 'role' => 'worker', 'phone' => ''];
             } else {
                 $error = $message;
             }
@@ -591,6 +606,41 @@ function h($value): string
     color: #9aa7b5;
     cursor: not-allowed;
   }
+  .phone-form {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-top: 7px;
+  }
+  .phone-input {
+    flex: 1;
+    padding: 6px 10px;
+    font-size: 12px;
+    border-radius: 8px;
+    border: 1px solid #c8d8e8;
+    background: #fff;
+    color: #243447;
+    font-family: inherit;
+    min-width: 0;
+  }
+  .phone-save-btn {
+    flex-shrink: 0;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid #c8d8e8;
+    background: #f3f8fc;
+    color: #486581;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .phone-save-btn:hover { background: #e3f0fb; }
+  .account-phone-display {
+    margin-top: 5px;
+    font-size: 12px;
+    color: #486581;
+  }
   @media (max-width: 860px) {
     .grid {
       grid-template-columns: 1fr;
@@ -640,25 +690,30 @@ function h($value): string
                 <input type="text" id="login_id" name="login_id" value="<?= h($form['login_id']) ?>" placeholder="예: worker02" required>
                 <div class="helper">아이디는 영문, 숫자, -, _ 만 사용할 수 있습니다.</div>
               </div>
-              <div class="field">
-                <label for="team">소속 팀</label>
-                <select id="team" name="team" required>
-                  <option value="">팀을 선택하세요</option>
-                  <?php foreach ($teams as $teamName): ?>
-                    <option value="<?= h($teamName) ?>" <?= $form['team'] === $teamName ? 'selected' : '' ?>><?= h($teamName) ?></option>
-                  <?php endforeach; ?>
-                </select>
-              </div>
               <?php if ($canAssignRoles): ?>
                 <div class="field">
                   <label for="role">역할</label>
-                  <select id="role" name="role" required>
+                  <select id="role" name="role" required onchange="onRoleChange(this.value)">
                     <?php foreach ($roleOptions as $roleOption): ?>
                       <option value="<?= h($roleOption) ?>" <?= $form['role'] === $roleOption ? 'selected' : '' ?>><?= h(auth_role_label($roleOption)) ?></option>
                     <?php endforeach; ?>
                   </select>
                 </div>
               <?php endif; ?>
+              <input type="hidden" name="team" value="">
+              <div class="field" id="field-team">
+                <label for="team">소속 팀</label>
+                <select id="team" name="team">
+                  <option value="">팀 미지정</option>
+                  <?php foreach ($teams as $teamName): ?>
+                    <option value="<?= h($teamName) ?>" <?= $form['team'] === $teamName ? 'selected' : '' ?>><?= h($teamName) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+              <div class="field">
+                <label for="phone">전화번호 <span style="font-weight:400;color:#6b7c93;">(선택)</span></label>
+                <input type="text" id="phone" name="phone" value="<?= h($form['phone']) ?>" placeholder="예: 010-1234-5678" maxlength="20">
+              </div>
               <div class="field">
                 <label for="password">비밀번호</label>
                 <input type="password" id="password" name="password" placeholder="비밀번호 입력" required>
@@ -710,6 +765,16 @@ function h($value): string
                                 <span class="role-chip"><?= h(auth_role_label((string)($account['role'] ?? ''))) ?></span>
                                 아이디 <?= h($loginId) ?> / 비밀번호 <?= h((string)($account['password'] ?? '')) ?>
                               </div>
+                              <?php if ($canManageAccounts): ?>
+                                <form method="post" class="phone-form">
+                                  <input type="hidden" name="action" value="update_account_phone">
+                                  <input type="hidden" name="update_login_id" value="<?= h($loginId) ?>">
+                                  <input type="text" name="update_phone" value="<?= h((string)($account['phone'] ?? '')) ?>" placeholder="전화번호" maxlength="20" class="phone-input" aria-label="전화번호">
+                                  <button type="submit" class="phone-save-btn">저장</button>
+                                </form>
+                              <?php elseif (!empty($account['phone'])): ?>
+                                <div class="account-phone-display"><?= h((string)($account['phone'])) ?></div>
+                              <?php endif; ?>
                             </div>
                             <div class="account-item-actions">
                               <?php if ($loginId === (string)($user['login_id'] ?? '')): ?>
@@ -802,6 +867,27 @@ function h($value): string
     </div>
   </div>
   <script>
+    // 팀 선택 불필요 역할 (운영자 권한)
+    const NO_TEAM_ROLES = new Set(['admin', 'ceo']);
+
+    function onRoleChange(role) {
+      const teamSel = document.getElementById('team');
+      if (!teamSel) return;
+
+      if (NO_TEAM_ROLES.has(role)) {
+        teamSel.value = '';        // 팀 미지정 선택
+        teamSel.disabled = true;
+      } else {
+        teamSel.disabled = false;
+      }
+    }
+
+    // 페이지 로드 시 현재 역할에 맞게 초기화
+    (function initRoleField() {
+      const roleSel = document.getElementById('role');
+      if (roleSel) onRoleChange(roleSel.value);
+    })();
+
     (() => {
       const storageKey = 'register_worker.account_group_visibility.v1';
       const groups = Array.from(document.querySelectorAll('.account-group[data-group-key]'));

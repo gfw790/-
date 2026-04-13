@@ -204,6 +204,7 @@ function ensure_board_change_request_category(PDO $boardPdo): int
     $stmt->execute([':code' => 'change_request']);
     $categoryId = (int)$stmt->fetchColumn();
     if ($categoryId > 0) {
+        $boardPdo->prepare("UPDATE categories SET name = '평가서수정' WHERE code = 'change_request' AND name != '평가서수정'")->execute();
         return $categoryId;
     }
 
@@ -214,7 +215,7 @@ function ensure_board_change_request_category(PDO $boardPdo): int
     ");
     $insertStmt->execute([
         ':code' => 'change_request',
-        ':name' => '수정요청',
+        ':name' => '평가서수정',
         ':sort_order' => $sortOrder,
         ':write_role' => 'user',
     ]);
@@ -1683,7 +1684,7 @@ if ($report) {
               </div>
               <div class="action-group">
                 <button type="button" class="btn-secondary" id="prev-page">이전</button>
-                <button type="button" class="btn-secondary" id="open-change-request">수정요청</button>
+                <button type="button" class="btn-secondary" id="open-change-request">평가서수정</button>
                 <button type="button" class="btn-secondary" id="open-addition-modal">추가</button>
                 <button type="button" class="btn-secondary" id="next-page">다음</button>
                 <button type="submit" class="btn-primary" id="submit-survey" hidden>제출</button>

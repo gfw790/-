@@ -217,6 +217,7 @@ function auth_team_members(string $teamName, ?array $includeRoles = null): array
             'login_id' => $loginId,
             'name' => trim((string)($account['name'] ?? '')) ?: $loginId,
             'role' => $role,
+            'phone' => trim((string)($account['phone'] ?? '')),
         ];
     }
 
@@ -342,6 +343,7 @@ function auth_read_stored_accounts(): array
             'name' => (string)($account['name'] ?? ''),
             'role' => $role,
             'team' => auth_normalize_team_name((string)($account['team'] ?? '')),
+            'phone' => trim((string)($account['phone'] ?? '')),
         ];
     }
 
@@ -360,7 +362,7 @@ function auth_write_stored_accounts(array $accounts): bool
 
 function auth_allowed_roles(): array
 {
-    return ['worker', 'leader', 'manager', 'safety_manager', 'admin'];
+    return ['worker', 'leader', 'manager', 'safety_manager', 'admin', 'ceo'];
 }
 
 function auth_normalize_role(string $role): string
@@ -464,6 +466,7 @@ function auth_role_label(string $role): string
         'safety_manager' => '안전관리자',
         'leader' => '작업지휘자(작업반장)',
         'admin' => '운영자',
+        'ceo' => '대표이사',
         'worker' => '일반작업자',
         default => '사용자',
     };
@@ -471,7 +474,7 @@ function auth_role_label(string $role): string
 
 function auth_is_admin(?array $user): bool
 {
-    return is_array($user) && (($user['role'] ?? '') === 'admin');
+    return is_array($user) && in_array((string)($user['role'] ?? ''), ['admin', 'ceo'], true);
 }
 
 function auth_can_manage(?array $user): bool
@@ -480,7 +483,7 @@ function auth_can_manage(?array $user): bool
         return false;
     }
 
-    return in_array((string)($user['role'] ?? ''), ['manager', 'safety_manager', 'admin'], true);
+    return in_array((string)($user['role'] ?? ''), ['manager', 'safety_manager', 'admin', 'ceo'], true);
 }
 
 function auth_can_lead(?array $user): bool
@@ -489,7 +492,7 @@ function auth_can_lead(?array $user): bool
         return false;
     }
 
-    return in_array((string)($user['role'] ?? ''), ['leader', 'admin'], true);
+    return in_array((string)($user['role'] ?? ''), ['leader', 'admin', 'ceo'], true);
 }
 
 function auth_is_worker(?array $user): bool
@@ -619,7 +622,7 @@ function auth_is_login_id_available(string $loginId): bool
     return auth_find_user($loginId) === null;
 }
 
-function auth_register_worker(string $loginId, string $password, string $name, string $teamName, string $role = 'worker'): array
+function auth_register_worker(string $loginId, string $password, string $name, string $teamName, string $role = 'worker', string $phone = ''): array
 {
     $loginId = trim($loginId);
     $password = trim($password);
@@ -639,11 +642,12 @@ function auth_register_worker(string $loginId, string $password, string $name, s
         return [false, '이름을 입력해주세요.'];
     }
 
-    if ($teamName === '') {
+    $teamRequired = !in_array($role, ['admin', 'ceo'], true);
+    if ($teamRequired && $teamName === '') {
         return [false, '소속 팀을 선택해주세요.'];
     }
 
-    if (!auth_team_exists($teamName)) {
+    if ($teamRequired && $teamName !== '' && !auth_team_exists($teamName)) {
         return [false, '선택한 팀을 찾을 수 없습니다.'];
     }
 
@@ -657,6 +661,7 @@ function auth_register_worker(string $loginId, string $password, string $name, s
         'name' => $name,
         'role' => $role,
         'team' => $teamName,
+        'phone' => trim($phone),
     ];
 
     if (!auth_write_stored_accounts($storedAccounts)) {
@@ -712,6 +717,57 @@ function auth_delete_stored_account(string $loginId): array
     }
 
     return [true, '계정이 삭제되었습니다.'];
+}
+
+function auth_update_account_phone(string $loginId, string $phone): array
+{
+    $loginId = trim($loginId);
+    if ($loginId === '') {
+        return [false, '계정을 찾을 수 없습니다.'];
+    }
+
+    $storedAccounts = auth_read_stored_accounts();
+    if (!isset($storedAccounts[$loginId])) {
+        return [false, '계정을 찾을 수 없습니다.'];
+    }
+
+    $storedAccounts[$loginId]['phone'] = trim($phone);
+
+    if (!auth_write_stored_accounts($storedAccounts)) {
+        return [false, '전화번호를 저장하지 못했습니다.'];
+    }
+
+    return [true, '전화번호가 저장되었습니다.'];
+}
+
+function auth_change_password(string $loginId, string $currentPassword, string $newPassword): array
+{
+    $loginId = trim($loginId);
+
+    if ($loginId === '') {
+        return [false, '계정 정보를 찾을 수 없습니다.'];
+    }
+
+    if (trim($newPassword) === '' || strlen(trim($newPassword)) < 4) {
+        return [false, '새 비밀번호는 4자 이상 입력해주세요.'];
+    }
+
+    $storedAccounts = auth_read_stored_accounts();
+    if (!isset($storedAccounts[$loginId])) {
+        return [false, '계정을 찾을 수 없습니다.'];
+    }
+
+    if ($storedAccounts[$loginId]['password'] !== trim($currentPassword)) {
+        return [false, '현재 비밀번호가 올바르지 않습니다.'];
+    }
+
+    $storedAccounts[$loginId]['password'] = trim($newPassword);
+
+    if (!auth_write_stored_accounts($storedAccounts)) {
+        return [false, '비밀번호를 저장하지 못했습니다.'];
+    }
+
+    return [true, '비밀번호가 변경되었습니다.'];
 }
 
 function auth_logout(): void

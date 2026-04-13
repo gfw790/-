@@ -1622,8 +1622,13 @@ if ($user !== null) {
                 );
 
             if ($isWorker && empty($savedReport['detail_tasks'])) {
-                header('Location: work_list.php');
-                exit;
+                // 팀에 작업지휘자가 없으면 작업자가 직접 열 수 있음
+                $workerTeamName = auth_normalize_team_name((string)($user['team'] ?? ''));
+                $workerTeamHasLeader = !empty(auth_team_members($workerTeamName, ['leader']));
+                if ($workerTeamHasLeader) {
+                    header('Location: work_list.php');
+                    exit;
+                }
             }
 
             if (

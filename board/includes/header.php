@@ -75,7 +75,7 @@ $_boardCssVersion = (string)@filemtime(__DIR__ . '/../assets/css/style.css');
           <li class="<?= $_currentCat === $cat['code'] ? 'active' : '' ?>">
             <a href="index.php?cat=<?= h($cat['code']) ?>"><?= h($cat['name']) ?></a>
           </li>
-          <?php if (($cat['name'] ?? '') === '수정요청' && !$allInserted): ?>
+          <?php if (in_array($cat['name'] ?? '', ['평가서수정', '수정요청'], true) && !$allInserted): ?>
             <li class="<?= $_currentCat === 'all' ? 'active' : '' ?>">
               <a href="index.php?cat=all">전체</a>
             </li>

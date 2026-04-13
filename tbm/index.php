@@ -29,9 +29,10 @@ $isOperator = $isAdmin || $userRole === 'safety_manager';
 $showAiButtons = $isOperator;
 
 // 팀 표시명 매핑: risk_assessment 팀 키 → TBM 표시명
+// 공사팀-전기와 공사팀-모터는 '공사팀'으로 통합
 $teamDisplayMap = [
-    '공사팀-전기' => '공사팀-전기',
-    '공사팀-모터' => '공사팀-모터',
+    '공사팀-전기' => '공사팀',
+    '공사팀-모터' => '공사팀',
     '가스팀'     => '가스팀',
     '제조팀'     => '삼척팀',
     '안전관리'   => '운영자',
@@ -41,6 +42,14 @@ $teamDisplayMap = [
 $userDisplayTeam = $teamDisplayMap[$userTeam] ?? $userTeam;
 $userLabel = $isOperator ? '운영자' : ($userDisplayTeam ?: auth_role_label($userRole));
 
+// TBM 참석 인명부에서 제외할 이름 (괄호 표기 제거 후 기준)
+$tbmExcludeNames = ['진종철'];
+
+// 이름에서 "(역할)" 괄호 표기 제거: "윤택천(작업지휘자)" → "윤택천"
+$tbmCleanName = static function(string $name): string {
+    return trim((string)preg_replace('/\s*\([^)]*\)/', '', $name));
+};
+
 // ── 팀별 인명부 구성 (risk_assessment auth 기반) ─────────────────────────
 $teamMembers = [];
 $allTeams = auth_read_teams(); // ['공사팀-전기','공사팀-모터','가스팀','제조팀','안전관리', ...]
@@ -48,8 +57,8 @@ $allTeams = auth_read_teams(); // ['공사팀-전기','공사팀-모터','가스
 foreach ($allTeams as $raTeam) {
     $displayName = $teamDisplayMap[$raTeam] ?? $raTeam;
 
-    // 비운영자: 본인 팀만 표시
-    if (!$isOperator && auth_team_key($raTeam) !== auth_team_key($userTeam)) {
+    // 비운영자: 본인 표시팀(통합명 기준)만 표시
+    if (!$isOperator && $displayName !== $userDisplayTeam) {
         continue;
     }
 
@@ -59,11 +68,12 @@ foreach ($allTeams as $raTeam) {
     }
 
     $names = auth_team_member_names($raTeam, ['worker', 'leader', 'manager']);
-    if (!empty($names)) {
-        $teamMembers[$displayName] = array_map(
-            static fn(string $n) => ['id' => 0, 'name' => $n, 'position' => ''],
-            $names
-        );
+    foreach ($names as $rawName) {
+        $cleanName = $tbmCleanName($rawName);
+        if ($cleanName === '' || in_array($cleanName, $tbmExcludeNames, true)) {
+            continue;
+        }
+        $teamMembers[$displayName][] = ['id' => 0, 'name' => $cleanName, 'position' => ''];
     }
 }
 
