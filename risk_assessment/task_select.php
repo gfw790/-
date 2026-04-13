@@ -722,8 +722,10 @@ if ($requestMethod === 'POST' && ($_POST['action'] ?? '') === 'login') {
             $nextPage = 'work_list.php';
         } elseif ($loggedInUser !== null && auth_can_lead($loggedInUser) && !auth_can_manage($loggedInUser)) {
             $nextPage = 'work_list.php';
+        } elseif ($loggedInUser !== null && auth_can_manage($loggedInUser) && auth_team_key((string)($loggedInUser['team'] ?? '')) === auth_team_key('가스팀')) {
+            $nextPage = 'work_list.php';
         } elseif ($loggedInUser !== null && auth_can_manage($loggedInUser)) {
-            $nextPage = 'task_select.php';
+            $nextPage = 'work_list.php';
         } else {
             $nextPage = 'work_list.php';
         }
@@ -1027,12 +1029,14 @@ if ($user !== null) {
             ORDER BY w.process_category ASC, w.major_category ASC, w.work_type ASC
         ");
         $targetOptions = $stmt->fetchAll();
+        $normalizedAllowedManagerProcessCategories = array_map('normalize_match_text', $allowedManagerProcessCategories);
+        $normalizedExcludedManagerProcessCategories = array_map('normalize_match_text', $excludedManagerProcessCategories);
         if (!empty($allowedManagerProcessCategories)) {
             $targetOptions = array_values(array_filter(
                 $targetOptions,
                 static fn($item) => in_array(
-                    trim((string)($item['process_category'] ?? '')),
-                    $allowedManagerProcessCategories,
+                    normalize_match_text(trim((string)($item['process_category'] ?? ''))),
+                    $normalizedAllowedManagerProcessCategories,
                     true
                 )
             ));
@@ -1041,8 +1045,8 @@ if ($user !== null) {
             $targetOptions = array_values(array_filter(
                 $targetOptions,
                 static fn($item) => !in_array(
-                    trim((string)($item['process_category'] ?? '')),
-                    $excludedManagerProcessCategories,
+                    normalize_match_text(trim((string)($item['process_category'] ?? ''))),
+                    $normalizedExcludedManagerProcessCategories,
                     true
                 )
             ));
@@ -1060,10 +1064,10 @@ if ($user !== null) {
             if ($processCategory === '' || $subName === '') {
                 continue;
             }
-            if (!empty($allowedManagerProcessCategories) && !in_array($processCategory, $allowedManagerProcessCategories, true)) {
+            if (!empty($allowedManagerProcessCategories) && !in_array(normalize_match_text($processCategory), $normalizedAllowedManagerProcessCategories, true)) {
                 continue;
             }
-            if (in_array($processCategory, $excludedManagerProcessCategories, true)) {
+            if (in_array(normalize_match_text($processCategory), $normalizedExcludedManagerProcessCategories, true)) {
                 continue;
             }
             if (!isset($workTypeSubOptions[$processCategory])) {
@@ -1184,18 +1188,27 @@ if ($user !== null) {
 
                 $reportId = $editingReportId;
                 if ($editingReportId > 0) {
+                    // 권한 확인: 작성자이거나, leader이면서 saved_report_id가 있는 경우 (기존 작업 열기)
                     $reportCheckStmt = $pdo->prepare("
                         SELECT report_id
                         FROM work_report
                         WHERE report_id = :report_id
-                          AND user_login_id = :user_login_id
                         LIMIT 1
                     ");
                     $reportCheckStmt->execute([
                         ':report_id' => $editingReportId,
-                        ':user_login_id' => $user['login_id'],
                     ]);
-                    if (!$reportCheckStmt->fetch()) {
+                    $existingReport = $reportCheckStmt->fetch();
+
+                    if (!$existingReport) {
+                        throw new RuntimeException('수정할 작업을 찾을 수 없거나 수정 권한이 없습니다.');
+                    }
+
+                    // 권한 체크: 작성자이거나, leader 역할인 경우
+                    $isOwner = (string)($existingReport['user_login_id'] ?? '') === (string)($user['login_id'] ?? '');
+                    $isLeader = $pageRole === 'leader';
+
+                    if (!$isOwner && !$isLeader) {
                         throw new RuntimeException('수정할 작업을 찾을 수 없거나 수정 권한이 없습니다.');
                     }
 
@@ -3020,6 +3033,18 @@ function type_label(string $type): string
           <a class="btn-secondary" href="work_list.php">작업목록</a>
           <?php if ($isAdmin): ?>
             <a class="btn-secondary" href="register_worker.php">계정관리</a>
+          <?php endif; ?>
+          <?php
+            $currentTeam = auth_normalize_team_name((string)($user['team'] ?? ''));
+            $activeGasTeam = auth_team_key($currentTeam) === auth_team_key('가스팀')
+                || auth_team_key((string)($selectedManagerTeam ?? '')) === auth_team_key('가스팀');
+            $isElectricalManager = auth_can_manage($user) && auth_team_key($currentTeam) === auth_team_key('공사팀-전기');
+          ?>
+          <?php if ($activeGasTeam && auth_can_manage($user)): ?>
+            <a class="btn-secondary" href="schedule.php">근무일정표</a>
+          <?php endif; ?>
+          <?php if ($isElectricalManager): ?>
+            <a class="btn-secondary" href="schedule.php?view_team=가스팀">가스팀근무표</a>
           <?php endif; ?>
           <a class="btn-secondary" href="<?= h($boardPageUrl) ?>">게시판</a>
           <a class="btn-secondary" href="../calendar/index.html">달력</a>
@@ -6913,11 +6938,13 @@ function type_label(string $type): string
   }
 
   if (currentRole === 'manager' && initialSelectedUnitRaId <= 0 && defaultManagerProcessCategory && group1 && !group1.value) {
-    const hasDefaultManagerProcessCategory = Array.from(group1.options).some(
-      (option) => option.value === defaultManagerProcessCategory
-    );
-    if (hasDefaultManagerProcessCategory) {
-      group1.value = defaultManagerProcessCategory;
+    const normalizedDefaultManagerProcessCategory = defaultManagerProcessCategory.replace(/\s+/g, '');
+    const matchedOption = Array.from(group1.options).find((option) => {
+      const value = String(option.value || '').trim();
+      return value === defaultManagerProcessCategory || value.replace(/\s+/g, '') === normalizedDefaultManagerProcessCategory;
+    });
+    if (matchedOption) {
+      group1.value = matchedOption.value;
       onGroup1Change();
     }
   }

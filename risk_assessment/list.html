@@ -372,12 +372,17 @@
 
 <div class="filter-bar">
   <span class="filter-label">유형</span>
-  <select id="filter-type" onchange="filterList()">
+  <select id="filter-type" onchange="onTypeChange()">
     <option value="">전체</option>
     <option value="target">작업대상</option>
     <option value="major_work">중대위험작업</option>
     <option value="tool">공구/장비</option>
     <option value="env">작업환경</option>
+  </select>
+  <div class="filter-divider"></div>
+  <span class="filter-label">대분류</span>
+  <select id="filter-major" onchange="filterList()">
+    <option value="">전체</option>
   </select>
   <div class="filter-divider"></div>
   <span class="filter-label">정렬</span>
@@ -414,6 +419,7 @@ const PAGE_SIZE = 20;
 let currentPage = 1;
 let editingCodeId = null;
 let sortDir = 'asc';
+let pendingMajorFilter = '';
 
 function restoreListStateFromUrl() {
   const params = new URLSearchParams(window.location.search);
@@ -429,6 +435,9 @@ function restoreListStateFromUrl() {
     const hasType = Array.from(filterType.options).some(option => option.value === typeVal);
     filterType.value = hasType ? typeVal : '';
   }
+
+  // major filter options are data-dependent; store for post-load application
+  pendingMajorFilter = params.get('major') || '';
 
   const sortVal = params.get('sort') || 'unit_code';
   if (sortKey) {
@@ -448,10 +457,12 @@ function buildListStateUrl() {
   const params = new URLSearchParams();
   const q = document.getElementById('search-input').value.trim();
   const typeVal = document.getElementById('filter-type').value;
+  const majorVal = document.getElementById('filter-major').value;
   const sortKey = document.getElementById('sort-key').value;
 
   if (q) params.set('q', q);
   if (typeVal) params.set('type', typeVal);
+  if (majorVal) params.set('major', majorVal);
   if (sortKey && sortKey !== 'unit_code') params.set('sort', sortKey);
   if (sortDir !== 'asc') params.set('dir', sortDir);
   if (currentPage > 1) params.set('page', String(currentPage));
@@ -470,6 +481,36 @@ const typeBadge = {
   tool: ['tool', '공구/장비'],
   env: ['env', '작업환경'],
 };
+
+function updateMajorOptions() {
+  const typeVal = document.getElementById('filter-type').value;
+  const majorSel = document.getElementById('filter-major');
+  const prevVal = majorSel.value;
+
+  const names = [...new Set(
+    allData
+      .filter(row => !typeVal || row.unit_type === typeVal)
+      .map(row => (row.process_name || '').trim())
+      .filter(Boolean)
+  )].sort((a, b) => a.localeCompare(b, 'ko'));
+
+  majorSel.innerHTML = '<option value="">전체</option>' +
+    names.map(n => `<option value="${escHtml(n)}"${n === prevVal ? ' selected' : ''}>${escHtml(n)}</option>`).join('');
+
+  // Apply any pending filter restored from URL (runs once after initial data load)
+  if (pendingMajorFilter) {
+    const hasPending = names.includes(pendingMajorFilter);
+    if (hasPending) majorSel.value = pendingMajorFilter;
+    pendingMajorFilter = '';
+  }
+}
+
+function onTypeChange() {
+  const majorSel = document.getElementById('filter-major');
+  majorSel.value = '';
+  updateMajorOptions();
+  filterList();
+}
 
 async function loadList() {
   document.getElementById('table-wrap').innerHTML = '<div class="loading">목록을 불러오는 중...</div>';
@@ -506,8 +547,10 @@ function getSortIcon(key) {
 }
 
 function filterList(preservePage = false) {
+  updateMajorOptions();
   const q = document.getElementById('search-input').value.trim().toLowerCase();
   const typeVal = document.getElementById('filter-type').value;
+  const majorVal = document.getElementById('filter-major').value;
   const sortKey = document.getElementById('sort-key').value;
 
   filtered = allData.filter(row => {
@@ -515,7 +558,8 @@ function filterList(preservePage = false) {
       || (row.unit_title || '').toLowerCase().includes(q)
       || (row.process_name || '').toLowerCase().includes(q);
     const matchType = !typeVal || row.unit_type === typeVal;
-    return matchQ && matchType;
+    const matchMajor = !majorVal || (row.process_name || '').trim() === majorVal;
+    return matchQ && matchType && matchMajor;
   });
 
   const typeOrder = { target: 1, major_work: 2, tool: 3, env: 4 };

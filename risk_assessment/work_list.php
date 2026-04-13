@@ -277,6 +277,12 @@ function render_hazard_completion_badge(array $report): string
     );
 }
 
+function report_view_content_hidden(array $report): bool
+{
+    return (bool)($report['work_input_completed'] ?? false)
+        && (bool)($report['hazard_review_completed'] ?? false);
+}
+
 function tableExists(PDO $pdo, string $tableName): bool
 {
     static $cache = [];
@@ -1397,6 +1403,17 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
       </div>
         <div class="identity">
         <span style="color:var(--text-hi);font-size:14px;font-weight:700"><?= h(auth_display_name($user)) ?></span>
+          <?php
+            $userTeamKey = auth_team_key((string)($user['team'] ?? ''));
+            $isGasTeam   = ($userTeamKey === auth_team_key('가스팀'));
+            $isElectricalManager = auth_can_manage($user) && ($userTeamKey === auth_team_key('공사팀-전기'));
+          ?>
+          <?php if ($isGasTeam): ?>
+            <a class="btn-secondary" href="schedule.php">근무일정표</a>
+          <?php endif; ?>
+          <?php if ($isElectricalManager): ?>
+            <a class="btn-secondary" href="schedule.php?view_team=가스팀">가스팀근무표</a>
+          <?php endif; ?>
           <?php if (!$isWorker): ?>
             <?php if ($isAdmin): ?>
               <?php foreach ($adminManagerTeams as $teamName): ?>
@@ -1409,6 +1426,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
               <a class="btn-secondary" href="register_worker.php">계정관리</a>
             <?php endif; ?>
           <?php endif; ?>
+        <a class="btn-secondary" href="../tbm/index.php">TBM일지</a>
         <a class="btn-secondary" href="../board/index.php">게시판</a>
         <a class="btn-secondary" href="../calendar/index.html">달력</a>
         <a class="btn-secondary" href="hazard_review.php">위험성평가목록</a>
@@ -1509,15 +1527,22 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
                 ?>
                 <?php $canWorkerOpen = !$isWorker || (int)($report['leader_detail_count'] ?? 0) > 0; ?>
                 <?php $canDeleteReport = $isAdmin || (in_array($userRole, ['manager', 'safety_manager'], true) && (string)($report['user_login_id'] ?? '') === (string)($user['login_id'] ?? '')); ?>
-                <?php if ($canWorkerOpen): ?>
+                <?php
+                  $workInputCompleted = (int)($report['leader_detail_count'] ?? 0) > 0;
+                  $hazardReviewCompleted = (bool)($report['hazard_review_completed'] ?? false);
+                  $allTasksCompleted = $workInputCompleted && $hazardReviewCompleted;
+                ?>
+                <?php if ($canWorkerOpen && !$allTasksCompleted): ?>
                   <?php if ($isAdmin): ?>
                     <a class="btn-secondary" href="<?= h(build_page_url('task_select.php', $adminManagerOpenParams)) ?>">관리열기</a>
-                    <a class="btn-secondary" href="leader_task_select.php?unit_ra_id=<?= (int)$report['unit_ra_id'] ?>&saved_report_id=<?= (int)$report['report_id'] ?>">지휘열기</a>
+                    <a class="btn-secondary" href="leader_task_select.php?unit_ra_id=<?= (int)$report['unit_ra_id'] ?>&saved_report_id=<?= (int)$report['report_id'] ?>&edit_report_id=<?= (int)$report['report_id'] ?>">지휘열기</a>
                   <?php else: ?>
-                    <a class="btn-secondary" href="<?= h($reportEntryPage) ?>?unit_ra_id=<?= (int)$report['unit_ra_id'] ?>&saved_report_id=<?= (int)$report['report_id'] ?>">열기</a>
+                    <a class="btn-secondary" href="<?= h($reportEntryPage) ?>?unit_ra_id=<?= (int)$report['unit_ra_id'] ?>&saved_report_id=<?= (int)$report['report_id'] ?>&edit_report_id=<?= (int)$report['report_id'] ?>">열기</a>
                   <?php endif; ?>
-                <?php elseif ($isWorker): ?>
+                <?php elseif ($isWorker && !$allTasksCompleted): ?>
                   <span class="sub-text">작업지휘자 입력 대기</span>
+                <?php elseif ($allTasksCompleted): ?>
+                  <span class="sub-text">완료</span>
                 <?php endif; ?>
                 <?php if ($report['unit_ra_id'] && $canManage): ?>
                   <a class="btn-secondary" href="unit_ra_excel_download.php?unit_ra_id=<?= (int)$report['unit_ra_id'] ?>" download>엑셀다운로드</a>
@@ -1591,15 +1616,22 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
                       ?>
                       <?php $canWorkerOpen = !$isWorker || (int)($report['leader_detail_count'] ?? 0) > 0; ?>
                       <?php $canDeleteReport = $isAdmin || (in_array($userRole, ['manager', 'safety_manager'], true) && (string)($report['user_login_id'] ?? '') === (string)($user['login_id'] ?? '')); ?>
-                      <?php if ($canWorkerOpen): ?>
+                      <?php
+                        $workInputCompleted = (int)($report['leader_detail_count'] ?? 0) > 0;
+                        $hazardReviewCompleted = (bool)($report['hazard_review_completed'] ?? false);
+                        $allTasksCompleted = $workInputCompleted && $hazardReviewCompleted;
+                      ?>
+                      <?php if ($canWorkerOpen && !$allTasksCompleted): ?>
                         <?php if ($isAdmin): ?>
                           <a class="btn-secondary" href="<?= h(build_page_url('task_select.php', $adminManagerOpenParams)) ?>">관리열기</a>
-                          <a class="btn-secondary" href="leader_task_select.php?unit_ra_id=<?= (int)$report['unit_ra_id'] ?>&saved_report_id=<?= (int)$report['report_id'] ?>">지휘열기</a>
+                          <a class="btn-secondary" href="leader_task_select.php?unit_ra_id=<?= (int)$report['unit_ra_id'] ?>&saved_report_id=<?= (int)$report['report_id'] ?>&edit_report_id=<?= (int)$report['report_id'] ?>">지휘열기</a>
                         <?php else: ?>
-                          <a class="btn-secondary" href="<?= h($reportEntryPage) ?>?unit_ra_id=<?= (int)$report['unit_ra_id'] ?>&saved_report_id=<?= (int)$report['report_id'] ?>">열기</a>
+                          <a class="btn-secondary" href="<?= h($reportEntryPage) ?>?unit_ra_id=<?= (int)$report['unit_ra_id'] ?>&saved_report_id=<?= (int)$report['report_id'] ?>&edit_report_id=<?= (int)$report['report_id'] ?>">열기</a>
                         <?php endif; ?>
-                      <?php elseif ($isWorker): ?>
+                      <?php elseif ($isWorker && !$allTasksCompleted): ?>
                         <span class="sub-text">작업지휘자 입력 대기</span>
+                      <?php elseif ($allTasksCompleted): ?>
+                        <span class="sub-text">완료</span>
                       <?php endif; ?>
                       <?php if ($report['unit_ra_id'] && $canManage): ?>
                         <a class="btn-secondary" href="unit_ra_excel_download.php?unit_ra_id=<?= (int)$report['unit_ra_id'] ?>" download>엑셀다운로드</a>

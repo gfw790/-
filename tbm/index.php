@@ -4,62 +4,79 @@ header('Content-Type: text/html; charset=utf-8');
 date_default_timezone_set('Asia/Seoul');
 
 // ============================================================
-// index.php  —  TBM 문서 생성 입력 화면 (동적 팀 선택 & 삭제 기능 추가)
+// index.php  —  TBM 문서 생성 입력 화면
 // ============================================================
 
 require_once __DIR__ . '/tbm_db.php';
 require_once __DIR__ . '/tbm_functions.php';
-require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/../risk_assessment/auth.php';
 
-tbm_auth_require_login();
+// risk_assessment 세션 인증 — 미로그인 시 작업목록으로 리다이렉트
+$raUser = auth_current_user();
+if ($raUser === null) {
+    header('Location: ../risk_assessment/task_select.php');
+    exit;
+}
 
-$authUser = tbm_auth_user();
-$allowedTeam = tbm_auth_current_team() ?? '';
+$isAdmin    = auth_is_admin($raUser);
+$userTeam   = auth_normalize_team_name((string)($raUser['team'] ?? ''));
+$userRole   = (string)($raUser['role'] ?? '');
 
-// ── DB에서 팀별 인명부 로드 ────────────────────────────────────────
+// 운영자 = admin 또는 safety_manager (안전관리자)
+$isOperator = $isAdmin || $userRole === 'safety_manager';
 
+// AI 버튼은 운영자만 볼 수 있음
+$showAiButtons = $isOperator;
+
+// 팀 표시명 매핑: risk_assessment 팀 키 → TBM 표시명
+$teamDisplayMap = [
+    '공사팀-전기' => '공사팀-전기',
+    '공사팀-모터' => '공사팀-모터',
+    '가스팀'     => '가스팀',
+    '제조팀'     => '삼척팀',
+    '안전관리'   => '운영자',
+];
+
+// 현재 사용자 표시 레이블
+$userDisplayTeam = $teamDisplayMap[$userTeam] ?? $userTeam;
+$userLabel = $isOperator ? '운영자' : ($userDisplayTeam ?: auth_role_label($userRole));
+
+// ── 팀별 인명부 구성 (risk_assessment auth 기반) ─────────────────────────
 $teamMembers = [];
-$dbOk = false;
-$instructor = ['name' => '김남균', 'position' => '과장'];
+$allTeams = auth_read_teams(); // ['공사팀-전기','공사팀-모터','가스팀','제조팀','안전관리', ...]
 
+foreach ($allTeams as $raTeam) {
+    $displayName = $teamDisplayMap[$raTeam] ?? $raTeam;
+
+    // 비운영자: 본인 팀만 표시
+    if (!$isOperator && auth_team_key($raTeam) !== auth_team_key($userTeam)) {
+        continue;
+    }
+
+    // 운영자(안전관리) 팀은 인명부 선택에서 제외 (TBM 참석자 아님)
+    if (auth_team_key($raTeam) === auth_team_key('안전관리')) {
+        continue;
+    }
+
+    $names = auth_team_member_names($raTeam, ['worker', 'leader', 'manager']);
+    if (!empty($names)) {
+        $teamMembers[$displayName] = array_map(
+            static fn(string $n) => ['id' => 0, 'name' => $n, 'position' => ''],
+            $names
+        );
+    }
+}
+
+// ── 강사 정보 로드 (TBM DB) ────────────────────────────────────────
+$instructor = ['name' => '김남균', 'position' => '과장'];
 try {
     $pdo = tbm_db();
-    
-    // 강사 로드
     $stmtInst = $pdo->query("SELECT name, position FROM tbm_instructors WHERE is_active = 1 ORDER BY id ASC LIMIT 1");
     if ($row = $stmtInst->fetch()) {
         $instructor = $row;
     }
-
-    // team 컬럼 존재 여부 확인
-    $colCheck = $pdo->query("SHOW COLUMNS FROM tbm_members LIKE 'team'");
-    if ($colCheck->rowCount() > 0) {
-        $stmt = $pdo->query("SELECT id, name, position, team FROM tbm_members WHERE is_active = 1 ORDER BY team, sort_order ASC, id ASC");
-        $rows = $stmt->fetchAll();
-        foreach ($rows as $r) {
-            $team = trim((string)$r['team']);
-            if ($team === '') $team = '기타팀';
-            $teamMembers[$team][] = $r;
-        }
-        $dbOk = true;
-    }
 } catch (Throwable $e) {
-    $dbErrMsg = $e->getMessage();
-}
-
-// DB에 'team' 컬럼이 없거나 데이터가 비어있을 때 사용하는 임시 데이터
-if (empty($teamMembers)) {
-    $teamMembers = [
-        '공사팀' => array_map(fn($n) => ['id'=>0, 'name'=>$n, 'position'=>''], ['윤택천','엄기준','윤순형','이정민','한지민','이돈희','김종훈','조한봉']),
-        '가스팀' => array_map(fn($n) => ['id'=>0, 'name'=>$n, 'position'=>''], ['김도담','김동훈','장진혁','정재호','이윤성','박재민','최정섭']),
-        '삼척팀' => array_map(fn($n) => ['id'=>0, 'name'=>$n, 'position'=>''], ['정주랑','우홍기','정민교','김성용','김진환','정영교']),
-    ];
-}
-// 자바스크립트에서 사용하기 위해 JSON으로 변환
-if ($allowedTeam !== '') {
-    $teamMembers = [
-        $allowedTeam => $teamMembers[$allowedTeam] ?? [],
-    ];
+    // 기본값 사용
 }
 
 $teamMembersJson = json_encode($teamMembers, JSON_UNESCAPED_UNICODE);
@@ -124,7 +141,7 @@ try {
 }
 
 if (!function_exists('h')) {
-    function h(string $v): string { return e($v); }
+    function h(string $v): string { return htmlspecialchars($v, ENT_QUOTES, 'UTF-8'); }
 }
 ?>
 <!DOCTYPE html>
@@ -195,8 +212,9 @@ body { font-family: "Malgun Gothic", sans-serif; margin: 0; background: #f5f6f7;
         <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
             <h2 style="margin-bottom:0;">📋 TBM 일지 생성</h2>
             <div style="font-size:.85rem;color:#475569;">
-                <strong><?= h($authUser['label'] ?? '') ?></strong>
-                <a href="login.php?logout=1" style="margin-left:10px;">로그아웃</a>
+                <strong><?= h($userLabel) ?></strong>
+                <a href="../risk_assessment/task_select.php" style="margin-left:10px;">작업목록</a>
+                <a href="../risk_assessment/task_select.php?logout=1" style="margin-left:10px;">로그아웃</a>
             </div>
         </div>
 
@@ -247,7 +265,7 @@ body { font-family: "Malgun Gothic", sans-serif; margin: 0; background: #f5f6f7;
 
             <div class="section-title">
                 교육내용 (뒷면 2페이지)
-                <?php if (($allowedTeam ?? '') === '공사팀'): ?>
+                <?php if ($showAiButtons): ?>
                 <button type="button" class="btn btn-sm btn-ai" style="margin-left:10px;" onclick="aiGenerate(false)">✨ AI 자동생성</button>
                 <button type="button" class="btn btn-sm btn-ai" style="margin-left:6px;background:#dc2626;" onclick="aiGenerate(true)">🆕 새 기사로 생성</button>
                 <?php endif; ?>

@@ -158,6 +158,16 @@
       color: #ffffff;
     }
 
+    .btn.danger {
+      border-color: #f3c9d2;
+      background: #fff5f7;
+      color: #b4234b;
+      margin-left: auto;
+    }
+    .btn.danger:hover {
+      background: #fde8ed;
+    }
+
     .search {
       min-width: 210px;
       display: flex;
@@ -661,9 +671,9 @@
             <div class="field">
               <label for="categoryInput">구분</label>
               <select id="categoryInput">
+                <option value="personal" selected>개인</option>
                 <option value="work">업무</option>
                 <option value="meeting">회의</option>
-                <option value="personal">개인</option>
               </select>
             </div>
 
@@ -675,6 +685,7 @@
             <div class="form-actions">
               <button type="submit" class="btn primary">저장</button>
               <button type="button" class="btn" id="cancelEditBtn">수정 취소</button>
+              <button type="button" class="btn danger" id="deleteEventBtn" style="display:none;">삭제</button>
             </div>
 
             <div class="helper">이 브라우저에 자동 저장됩니다. (localStorage)</div>
@@ -1335,6 +1346,24 @@
         }
       }
 
+      var deleteEventBtnEl = document.getElementById("deleteEventBtn");
+
+      deleteEventBtnEl.addEventListener("click", function () {
+        if (!state.editingId) {
+          return;
+        }
+        if (!confirm("이 일정을 삭제하시겠습니까?")) {
+          return;
+        }
+        var idToDelete = state.editingId;
+        state.events = state.events.filter(function (item) {
+          return item.id !== idToDelete;
+        });
+        persistEvents();
+        resetFormForCreate();
+        render();
+      });
+
       function startEdit(id) {
         var target = state.events.find(function (item) {
           return item.id === id;
@@ -1352,6 +1381,7 @@
         endTimeInputEl.value = target.endTime || "";
         categoryInputEl.value = target.category;
         memoInputEl.value = target.memo || "";
+        deleteEventBtnEl.style.display = "";
         eventTitleInputEl.focus();
       }
 
@@ -1361,7 +1391,8 @@
         eventIdInputEl.value = "";
         eventFormEl.reset();
         eventDateInputEl.value = state.selectedDate;
-        categoryInputEl.value = "work";
+        categoryInputEl.value = "personal";
+        deleteEventBtnEl.style.display = "none";
       }
 
       function buildEventPillLabel(item) {

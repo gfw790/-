@@ -1044,3 +1044,58 @@
 [2026-04-12 00:00:35] [이미지 정리] 미사용 fallback 삭제: output/images/article_7ea12862d8654496bb594c68bcb86bcc.jpg
 [2026-04-12 00:00:35] [이미지 정리] 삭제: output/images/siren_fddb0a6bfd76b02c.jpg
 [2026-04-12 00:00:35] [이미지 정리] 총 1개 미사용 파일 삭제
+[2026-04-13 00:00:02] [1순위] KOSHA 사이렌 수집 시작
+[2026-04-13 00:00:04] [1순위 실패] KOSHA 사용 가능 항목 없음 → 최근 7일 뉴스로 전환
+[2026-04-13 00:00:36] [점수 1위] score=35  incident_score=8  title=이상균 HD현대重 부회장, 사망 사고 담화문 참담한 마음…재발 방지 최...
+[2026-04-13 00:00:36] [점수 2위] score=29  incident_score=7  title=의사 판정도 없었는데 사망 정정 공시... HD현대중 잠수함 화재, 기준...
+[2026-04-13 00:00:36] [점수 3위] score=23  incident_score=6  title=중대재해처벌법 무색… 산재 사망자 오히려 늘었다
+[2026-04-13 00:00:36] [최종 선택] score=35  title=이상균 HD현대重 부회장, 사망 사고 담화문 참담한 마음…재발 방지 최...
+[2026-04-14 00:00:02] [1순위] KOSHA 사이렌 수집 시작
+[2026-04-14 00:00:04] [KOSHA enrich 시작] title=(260413)중대재해 발생 알림(3)
+[2026-04-14 00:00:04] [KOSHA enrich 상태] has_image_file=N / has_image_base64=Y
+[2026-04-14 00:00:04] [KOSHA 이미지 저장 성공] output/images/siren_881f33637142d418.jpg
+[2026-04-14 00:00:04] [KOSHA 이미지 crop 성공] output/images/crop_48b7e51b898ce5eef074.jpg
+[2026-04-14 00:00:04] [KOSHA crop 시도 완료]
+[2026-04-14 00:00:04] [KOSHA OCR 시작] image_file=output/images/crop_48b7e51b898ce5eef074.jpg
+[2026-04-14 00:00:04] [KOSHA OCR 대상] poster_image=output/images/siren_881f33637142d418.jpg
+[2026-04-14 00:00:19] [KOSHA 후보] title=(260413)중대재해 발생 알림(3) / summary_len=81 / prevention_len=102 / image=Y / ocr_ok=Y / vision=N
+[2026-04-14 00:00:19] [KOSHA enrich 시작] title=(260413)중대재해 발생 알림(2)
+[2026-04-14 00:00:19] [KOSHA enrich 상태] has_image_file=N / has_image_base64=Y
+[2026-04-14 00:00:19] [KOSHA 이미지 저장 성공] output/images/siren_a970dc52fda3202a.jpg
+[2026-04-14 00:00:19] [KOSHA 이미지 crop 성공] output/images/crop_92b2c5e7914604af5979.jpg
+[2026-04-14 00:00:19] [KOSHA crop 시도 완료]
+[2026-04-14 00:00:19] [KOSHA OCR 시작] image_file=output/images/crop_92b2c5e7914604af5979.jpg
+[2026-04-14 00:00:19] [KOSHA OCR 대상] poster_image=output/images/siren_a970dc52fda3202a.jpg
+[2026-04-14 00:00:31] [KOSHA 후보] title=(260413)중대재해 발생 알림(2) / summary_len=71 / prevention_len=116 / image=Y / ocr_ok=Y / vision=N
+[2026-04-14 00:00:31] [KOSHA enrich 시작] title=(260413)중대재해 발생 알림(1)
+[2026-04-14 00:00:31] [KOSHA enrich 상태] has_image_file=N / has_image_base64=Y
+[2026-04-14 00:00:31] [KOSHA 이미지 저장 성공] output/images/siren_9db4d3565df4c4ed.jpg
+[2026-04-14 00:00:31] [KOSHA 이미지 crop 성공] output/images/crop_d9b7a69ce255ab18ce6b.jpg
+[2026-04-14 00:00:31] [KOSHA crop 시도 완료]
+[2026-04-14 00:00:31] [KOSHA OCR 시작] image_file=output/images/crop_d9b7a69ce255ab18ce6b.jpg
+[2026-04-14 00:00:31] [KOSHA OCR 대상] poster_image=output/images/siren_9db4d3565df4c4ed.jpg
+[2026-04-14 00:00:42] [KOSHA 후보] title=(260413)중대재해 발생 알림(1) / summary_len=79 / prevention_len=120 / image=Y / ocr_ok=Y / vision=N
+[2026-04-14 00:00:42] [KOSHA enrich 시작] title=(260413)중대재해 발생 알림(3)
+[2026-04-14 00:00:42] [KOSHA enrich 상태] has_image_file=Y / has_image_base64=Y
+[2026-04-14 00:00:42] [KOSHA 저장 스킵] image_file 이미 있거나 image_base64 없음
+[2026-04-14 00:00:42] [KOSHA OCR 시작] image_file=output/images/crop_48b7e51b898ce5eef074.jpg
+[2026-04-14 00:00:42] [KOSHA OCR 대상] poster_image=output/images/siren_881f33637142d418.jpg
+[2026-04-14 00:00:42] [KOSHA enrich 시작] title=(260413)중대재해 발생 알림(2)
+[2026-04-14 00:00:42] [KOSHA enrich 상태] has_image_file=Y / has_image_base64=Y
+[2026-04-14 00:00:42] [KOSHA 저장 스킵] image_file 이미 있거나 image_base64 없음
+[2026-04-14 00:00:42] [KOSHA OCR 시작] image_file=output/images/crop_92b2c5e7914604af5979.jpg
+[2026-04-14 00:00:42] [KOSHA OCR 대상] poster_image=output/images/siren_a970dc52fda3202a.jpg
+[2026-04-14 00:00:42] [KOSHA enrich 시작] title=(260413)중대재해 발생 알림(1)
+[2026-04-14 00:00:42] [KOSHA enrich 상태] has_image_file=Y / has_image_base64=Y
+[2026-04-14 00:00:42] [KOSHA 저장 스킵] image_file 이미 있거나 image_base64 없음
+[2026-04-14 00:00:42] [KOSHA OCR 시작] image_file=output/images/crop_d9b7a69ce255ab18ce6b.jpg
+[2026-04-14 00:00:42] [KOSHA OCR 대상] poster_image=output/images/siren_9db4d3565df4c4ed.jpg
+[2026-04-14 00:00:42] [1순위 선택] KOSHA siren_score=0 / title=(260413)중대재해 발생 알림(3) / summary_len=81 / prevention_len=102
+[2026-04-14 00:00:57] [fallback 이미지] 성공: https://t1.daumcdn.net/cafeattach/Uzlo/abb5a26652da79949a974007d31d1714793eb843
+[2026-04-14 00:00:57] [이미지 정리] 미사용 fallback 삭제: output/images/article_39824b6c6da9af4fbf59f0d6128e80c1.jpg
+[2026-04-14 00:00:57] [이미지 정리] 삭제: output/images/siren_881f33637142d418.jpg
+[2026-04-14 00:00:57] [이미지 정리] 삭제: output/images/crop_92b2c5e7914604af5979.jpg
+[2026-04-14 00:00:57] [이미지 정리] 삭제: output/images/siren_a970dc52fda3202a.jpg
+[2026-04-14 00:00:57] [이미지 정리] 삭제: output/images/crop_d9b7a69ce255ab18ce6b.jpg
+[2026-04-14 00:00:57] [이미지 정리] 삭제: output/images/siren_9db4d3565df4c4ed.jpg
+[2026-04-14 00:00:57] [이미지 정리] 총 5개 미사용 파일 삭제

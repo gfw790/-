@@ -153,10 +153,12 @@ CREATE TABLE IF NOT EXISTS `near_miss_reports` (
 -- 기본 카테고리 데이터
 -- ============================================
 INSERT INTO `categories` (`code`, `name`, `sort_order`, `write_role`) VALUES
-('notice', '공지사항', 1, 'admin'),
-('free',   '자유게시판', 2, 'user'),
-('qna',    'Q&A',     3, 'user'),
-('data',   '자료실',    4, 'user'),
-('near_miss', '아차사고', 5, 'user')
+('notice',   '공지사항',  1,  'admin'),
+('free',     '자유게시판', 2,  'user'),
+('qna',      'Q&A',      3,  'user'),
+('data',     '자료실',    4,  'user'),
+('dwg',      '도면자료실', 40, 'user'),
+('handover', '인계사항',  45, 'user'),
+('near_miss','아차사고',  5,  'user')
 ON DUPLICATE KEY UPDATE `name`=VALUES(`name`);
 

@@ -137,11 +137,7 @@ function auth_team_exists(string $teamName): bool
 function auth_add_team(string $teamName): array
 {
     $teamName = auth_normalize_team_name($teamName);
-    if ($role === '') {
-        return [false, '역할을 올바르게 선택해 주세요.'];
-    }
-
-    if ($role !== 'admin' && $teamName === '') {
+    if ($teamName === '') {
         return [false, '팀 이름을 입력해주세요.'];
     }
 
@@ -192,6 +188,69 @@ function auth_count_team_members(string $teamName): int
 
     $counts = auth_team_member_counts();
     return (int)($counts[$normalizedTeam] ?? 0);
+}
+
+function auth_team_members(string $teamName, ?array $includeRoles = null): array
+{
+    $normalizedTeam = auth_normalize_team_name($teamName);
+    if ($normalizedTeam === '') {
+        return [];
+    }
+
+    if ($includeRoles === null) {
+        $includeRoles = ['worker'];
+    }
+
+    $members = [];
+    foreach (auth_accounts() as $loginId => $account) {
+        $accountTeam = auth_normalize_team_name((string)($account['team'] ?? ''));
+        if ($accountTeam !== $normalizedTeam) {
+            continue;
+        }
+
+        $role = (string)($account['role'] ?? '');
+        if (!in_array($role, $includeRoles, true)) {
+            continue;
+        }
+
+        $members[] = [
+            'login_id' => $loginId,
+            'name' => trim((string)($account['name'] ?? '')) ?: $loginId,
+            'role' => $role,
+        ];
+    }
+
+    usort($members, static fn(array $a, array $b) => strcmp((string)($a['name'] ?? ''), (string)($b['name'] ?? '')));
+    return $members;
+}
+
+function auth_team_worker_names(string $teamName): array
+{
+    $names = [];
+    foreach (auth_team_members($teamName, ['worker']) as $member) {
+        $name = trim((string)($member['name'] ?? ''));
+        if ($name === '') {
+            continue;
+        }
+        $names[] = $name;
+    }
+
+    return array_values($names);
+}
+
+function auth_team_member_names(string $teamName, ?array $includeRoles = null): array
+{
+    $roles = $includeRoles ?? ['worker', 'leader', 'manager', 'safety_manager'];
+    $names = [];
+    foreach (auth_team_members($teamName, $roles) as $member) {
+        $name = trim((string)($member['name'] ?? ''));
+        if ($name === '') {
+            continue;
+        }
+        $names[] = $name;
+    }
+
+    return array_values($names);
 }
 
 function auth_delete_team(string $teamName): array
@@ -478,6 +537,11 @@ function auth_team_process_preferences(?array $user): array
         $preferences['allowed_manager_process_categories'] = ['모터관련'];
     } elseif ($teamName === '공사팀-전기') {
         $preferences['excluded_manager_process_categories'] = ['모터관련'];
+    } elseif ($teamName === '가스팀') {
+        $preferences['default_manager_process_category'] = '가스분석 관련';
+        $preferences['allowed_manager_process_categories'] = ['가스분석관련', '가스분석 관련'];
+    } else {
+        $preferences['excluded_manager_process_categories'] = ['가스분석관련', '가스분석 관련'];
     }
 
     return $preferences;

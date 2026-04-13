@@ -3,8 +3,22 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/functions.php';
 
 ensureNearMissSchema();
+ensureHandoverCategory();
 $_currentUser = getCurrentUser();
-$_categories  = getCategories();
+
+// 가스팀 여부 판별
+$_userDept   = (string)($_currentUser['dept'] ?? '');
+$_isGasTeam  = (mb_strpos($_userDept, '가스') !== false);
+
+// 팀에 따라 카테고리 필터링
+// - 가스팀: '도면자료실'(dwg) 제외, '인계사항'(handover) 포함
+// - 그 외:  '인계사항'(handover) 제외, '도면자료실'(dwg) 포함
+$_categories = array_values(array_filter(getCategories(), function($cat) use ($_isGasTeam) {
+    $code = $cat['code'] ?? '';
+    if ($_isGasTeam && $code === 'dwg')      return false;
+    if (!$_isGasTeam && $code === 'handover') return false;
+    return true;
+}));
 $_currentPage = basename($_SERVER['PHP_SELF'] ?? '');
 if (isset($_GET['cat'])) {
   $_currentCat = (string)$_GET['cat'];

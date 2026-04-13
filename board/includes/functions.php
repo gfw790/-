@@ -69,6 +69,25 @@ function ensureNearMissSchema() {
     $done = true;
 }
 
+/**
+ * 인계사항 카테고리 보정 (가스팀 전용)
+ */
+function ensureHandoverCategory(): void {
+    static $done = false;
+    if ($done) {
+        return;
+    }
+
+    // 도면자료실(dwg) 의 sort_order 바로 뒤에 위치하도록 설정
+    db()->prepare(
+        "INSERT INTO categories (code, name, sort_order, write_role, is_active)
+         VALUES ('handover', '인계사항', 45, 'user', 1)
+         ON DUPLICATE KEY UPDATE name = VALUES(name), is_active = VALUES(is_active)"
+    )->execute();
+
+    $done = true;
+}
+
 function nearMissCategoryId(): int {
     ensureNearMissSchema();
     $stmt = db()->prepare("SELECT id FROM categories WHERE code = 'near_miss' LIMIT 1");
