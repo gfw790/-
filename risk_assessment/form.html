@@ -153,6 +153,17 @@ select:disabled { background: #f5f5f5; color: #aaa; cursor: not-allowed; }
         <select id="tool_id" onchange="onToolChange()">
           <option value="">— 선택하세요 —</option>
         </select>
+        <div class="inline-actions">
+          <button type="button" class="btn-inline" id="toggle-tool-adder" onclick="toggleToolAdder()" disabled>공구/장비 추가</button>
+        </div>
+        <div class="inline-add-panel hidden" id="tool_adder">
+          <div class="helper-text">새 공구/장비명을 입력하고 추가하세요.</div>
+          <input type="text" id="new_tool_name" placeholder="새 공구/장비명 입력">
+          <div class="inline-actions">
+            <button type="button" class="btn-inline primary" id="btn-add-tool" onclick="addTool()">추가</button>
+            <button type="button" class="btn-inline" onclick="closeToolAdder()">취소</button>
+          </div>
+        </div>
       </div>
 
       <!-- 작업환경(env) -->
@@ -263,6 +274,7 @@ async function onUnitTypeChange() {
     show('area_tool');
     if (!toolData.length) toolData = await loadData('tool');
     buildList('tool_id', toolData, 'tool_id', 'tool_name');
+    syncToolAdder();
 
   } else if (type === 'env') {
     show('area_env');
@@ -403,21 +415,36 @@ function syncWorkTypeAdder(process = document.getElementById('process_category')
   }
 }
 
-function toggleWorkTypeAdder() {
-  const panel = document.getElementById('work_type_adder');
-  const toggle = document.getElementById('toggle-work-type-adder');
+function resetToolAdder() {
+  const toggle = document.getElementById('toggle-tool-adder');
+  const panel = document.getElementById('tool_adder');
+  const input = document.getElementById('new_tool_name');
+  if (toggle) toggle.disabled = true;
+  if (panel) panel.classList.add('hidden');
+  if (input) input.value = '';
+}
+
+function syncToolAdder() {
+  const toggle = document.getElementById('toggle-tool-adder');
+  if (!toggle) return;
+  toggle.disabled = false;
+}
+
+function toggleToolAdder() {
+  const panel = document.getElementById('tool_adder');
+  const toggle = document.getElementById('toggle-tool-adder');
   if (!panel || !toggle || toggle.disabled) return;
   if (panel.classList.contains('hidden')) {
     panel.classList.remove('hidden');
-    document.getElementById('new_work_type').focus();
+    document.getElementById('new_tool_name').focus();
   } else {
-    closeWorkTypeAdder();
+    closeToolAdder();
   }
 }
 
-function closeWorkTypeAdder() {
-  const panel = document.getElementById('work_type_adder');
-  const input = document.getElementById('new_work_type');
+function closeToolAdder() {
+  const panel = document.getElementById('tool_adder');
+  const input = document.getElementById('new_tool_name');
   if (panel) panel.classList.add('hidden');
   if (input) input.value = '';
 }
@@ -724,6 +751,46 @@ function onToolChange() {
   const name = toolData.find(r => r.tool_id == id)?.tool_name || '';
   name ? setTitle(name) : resetTitle();
 }
+
+async function addTool() {
+  const newToolName = document.getElementById('new_tool_name').value.trim();
+  const addButton = document.getElementById('btn-add-tool');
+
+  if (!newToolName) {
+    showAlert('error', '추가할 공구/장비명을 입력해주세요.');
+    document.getElementById('new_tool_name').focus();
+    return;
+  }
+
+  addButton.disabled = true;
+  hideAlert();
+
+  try {
+    const res = await fetch('unit_ra_header_api.php?action=add_tool', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tool_name: newToolName }),
+    });
+    const json = await res.json();
+
+    if (!json.success) {
+      showAlert('error', json.message || '공구/장비 추가에 실패했습니다.');
+      return;
+    }
+
+    toolData = await loadData('tool');
+    buildList('tool_id', toolData, 'tool_id', 'tool_name');
+    document.getElementById('tool_id').value = String(json.data.tool_id || '');
+    onToolChange();
+    closeToolAdder();
+
+    showAlert('success', '공구/장비가 추가되었습니다. 방금 등록한 항목을 자동 선택했습니다.');
+  } catch (e) {
+    showAlert('error', '공구/장비 추가 중 오류가 발생했습니다: ' + e.message);
+  } finally {
+    addButton.disabled = false;
+  }
+}
 function onEnvChange() {
   const id   = document.getElementById('env_id').value;
   const name = envData.find(r => r.env_id == id)?.env_name || '';
@@ -747,6 +814,7 @@ function hideAllAreas() {
   resetProcessCategoryAdder();
   resetMajorCategoryAdder();
   resetWorkTypeAdder();
+  resetToolAdder();
 }
 function resetSel(id, placeholder, disabled) {
   const sel = document.getElementById(id);

@@ -177,6 +177,69 @@ if ($action === 'tool') {
     exit;
 }
 
+if ($action === 'add_tool' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $body = decode_json_body();
+    if (!$body) {
+        echo json_encode(['success'=>false,'message'=>'요청 데이터가 없습니다.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $toolName = trim((string)($body['tool_name'] ?? ''));
+    if ($toolName === '') {
+        echo json_encode(['success'=>false,'message'=>'추가할 공구/장비명을 입력해주세요.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $toolNameLength = function_exists('mb_strlen')
+        ? mb_strlen($toolName, 'UTF-8')
+        : strlen($toolName);
+    if ($toolNameLength > 255) {
+        echo json_encode(['success'=>false,'message'=>'공구/장비명은 255자 이내로 입력해주세요.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    try {
+        $pdo = getDB();
+        $stmt = $pdo->prepare("SELECT tool_id, use_yn FROM tool_master WHERE tool_name = :tool_name LIMIT 1");
+        $stmt->execute([':tool_name' => $toolName]);
+        $existing = $stmt->fetch();
+
+        if ($existing) {
+            if (($existing['use_yn'] ?? 'Y') === 'Y') {
+                echo json_encode(['success'=>false,'message'=>'이미 등록된 공구/장비입니다.'], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+
+            $updateStmt = $pdo->prepare("UPDATE tool_master SET use_yn = 'Y' WHERE tool_id = :tool_id");
+            $updateStmt->execute([':tool_id' => $existing['tool_id']]);
+            $toolId = (int)$existing['tool_id'];
+        } else {
+            $nextSortNo = (int)$pdo->query("SELECT COALESCE(MAX(sort_no), 0) FROM tool_master")->fetchColumn() + 1;
+            $insertStmt = $pdo->prepare("
+                INSERT INTO tool_master (tool_name, use_yn, sort_no)
+                VALUES (:tool_name, 'Y', :sort_no)
+            ");
+            $insertStmt->execute([
+                ':tool_name' => $toolName,
+                ':sort_no' => $nextSortNo,
+            ]);
+            $toolId = (int)$pdo->lastInsertId();
+        }
+
+        echo json_encode([
+            'success' => true,
+            'message' => '공구/장비가 추가되었습니다.',
+            'data' => [
+                'tool_id' => $toolId,
+                'tool_name' => $toolName,
+            ],
+        ], JSON_UNESCAPED_UNICODE);
+    } catch (\PDOException $e) {
+        echo json_encode(['success'=>false,'message'=>'DB 오류: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
+    }
+    exit;
+}
+
 // ── env_master 목록 조회 ──────────────────────────────────────────────
 if ($action === 'env') {
     try {
