@@ -34,6 +34,22 @@ function tbm_default_data(): array
 
 // ── POST 입력 수집 ────────────────────────────────────────────
 
+function tbm_normalize_display_team_name(string $team): string
+{
+    $map = [
+        '공사팀-전기' => '공사팀',
+        '공사팀-모터' => '공사팀',
+        '공사팀'      => '공사팀',
+        '가스팀'      => '가스팀',
+        '제조팀'      => '삼척팀',
+        '삼척팀'      => '삼척팀',
+        '안전관리'    => '운영자',
+    ];
+
+    $team = trim($team);
+    return $map[$team] ?? $team;
+}
+
 function tbm_request_data(): array
 {
     $base = tbm_default_data();

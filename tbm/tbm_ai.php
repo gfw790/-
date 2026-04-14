@@ -641,6 +641,59 @@ function tbm_parse_ai_json(string $text): array
     throw new RuntimeException('AI JSON 파싱 실패. json_last_error=' . json_last_error_msg() . ' / 응답 원문: ' . mb_substr($normalized, 0, 800));
 }
 
+function tbm_ai_validate_parsed_response(array $parsed): array
+{
+    $errors = [];
+    $bodyText = trim((string)($parsed['body_text'] ?? ''));
+    $firstLabel = '[사고내용 및 원인]';
+    $secondLabel = '[예방대책]';
+    $firstPos = mb_strpos($bodyText, $firstLabel);
+    $secondPos = mb_strpos($bodyText, $secondLabel);
+
+    if ($bodyText === '') {
+        $errors[] = 'body_text가 비어 있습니다.';
+    }
+
+    if ($firstPos === false || $secondPos === false || $secondPos <= $firstPos) {
+        $errors[] = 'body_text에 [사고내용 및 원인]과 [예방대책] 문단 레이블이 정확히 포함되어야 합니다.';
+    } else {
+        $firstBlock = trim(mb_substr($bodyText, $firstPos + mb_strlen($firstLabel, 'UTF-8'), $secondPos - ($firstPos + mb_strlen($firstLabel, 'UTF-8')), 'UTF-8'));
+        $secondBlock = trim(mb_substr($bodyText, $secondPos + mb_strlen($secondLabel, 'UTF-8'), null, 'UTF-8'));
+        $firstLen = mb_strlen($firstBlock, 'UTF-8');
+        $secondLen = mb_strlen($secondBlock, 'UTF-8');
+
+        if ($firstBlock === '') {
+            $errors[] = '사고내용 및 원인 본문이 비어 있습니다.';
+        }
+        if ($secondBlock === '') {
+            $errors[] = '예방대책 본문이 비어 있습니다.';
+        }
+        if ($firstLen < 220 || $firstLen > 250) {
+            $errors[] = "사고내용 및 원인 길이가 {$firstLen}자입니다. 220~250자여야 합니다.";
+        }
+        if ($secondLen < 140 || $secondLen > 160) {
+            $errors[] = "예방대책 길이가 {$secondLen}자입니다. 140~160자여야 합니다.";
+        }
+        if ($firstLen + $secondLen > 420) {
+            $errors[] = '사고내용 및 원인 + 예방대책 합계가 ' . ($firstLen + $secondLen) . '자입니다. 420자를 넘지 않아야 합니다.';
+        }
+    }
+
+    $quiz1 = trim((string)($parsed['quiz_1'] ?? ''));
+    $quiz2 = trim((string)($parsed['quiz_2'] ?? ''));
+    $quiz3 = trim((string)($parsed['quiz_3'] ?? ''));
+    $quizTotal = mb_strlen($quiz1, 'UTF-8') + mb_strlen($quiz2, 'UTF-8') + mb_strlen($quiz3, 'UTF-8');
+
+    if ($quiz1 === '' || $quiz2 === '' || $quiz3 === '') {
+        $errors[] = '퀴즈 3개 모두가 입력되어야 합니다.';
+    }
+    if ($quizTotal < 550 || $quizTotal > 600) {
+        $errors[] = "퀴즈 3개 총 글자 수가 {$quizTotal}자입니다. 550~600자여야 합니다.";
+    }
+
+    return ['valid' => empty($errors), 'errors' => $errors];
+}
+
 
 // (주석 처리된 tbm_ai_download_image_to_local 제거됨 — tbm_ai_download_and_validate_image로 대체)
 
@@ -719,6 +772,14 @@ function tbm_ai_generate_via_gemini(string $prompt, string $targetDate, ?string 
     ];
 
     $lastError = null;
+    $localImageFile = null;
+
+    if ($imageUrl !== null && trim($imageUrl) !== '') {
+        $localImageFile = tbm_ai_download_and_validate_image(trim($imageUrl));
+    }
+    if ($localImageFile === null && $imageKeyword !== null) {
+        $localImageFile = tbm_ai_fetch_fallback_image($imageKeyword);
+    }
 
     for ($attempt = 1; $attempt <= GEMINI_MAX_RETRIES + 1; $attempt++) {
         try {
@@ -727,6 +788,10 @@ function tbm_ai_generate_via_gemini(string $prompt, string $targetDate, ?string 
             file_put_contents(__DIR__ . '/gemini_raw.txt', $text);
 
             $parsed = tbm_parse_ai_json($text);
+            $validation = tbm_ai_validate_parsed_response($parsed);
+            if (!$validation['valid']) {
+                throw new RuntimeException('AI 출력 검증 실패: ' . implode('; ', $validation['errors']));
+            }
             $accidentTitle = trim((string)($parsed['accident_title'] ?? ''));
             $resolvedSourceUrl = trim((string)($parsed['source_url'] ?? ''));
 
@@ -736,20 +801,6 @@ function tbm_ai_generate_via_gemini(string $prompt, string $targetDate, ?string 
             if ($resolvedSourceUrl === '' && $accidentTitle !== '') {
                 $resolvedSourceUrl = tbm_make_fallback_source_url($accidentTitle);
             }
-
-            // 외부 이미지 URL → 서버 로컬에 다운로드
-            $localImageFile = null;
-
-            if ($imageUrl !== null && trim($imageUrl) !== '') {
-                $localImageFile = tbm_ai_download_and_validate_image(trim($imageUrl));
-            }
-            
-            // 🔥 fallback 추가
-            if ($localImageFile === null && $imageKeyword !== null) {
-                // 네이버 이미지 검색 or 기본 키워드 기반 이미지
-                $localImageFile = tbm_ai_fetch_fallback_image($imageKeyword);
-            }
-            
 
             return [
                 'accident_date'        => trim((string)($parsed['accident_date'] ?? $targetDate)),
@@ -773,10 +824,12 @@ function tbm_ai_generate_via_gemini(string $prompt, string $targetDate, ?string 
             if ($attempt > GEMINI_MAX_RETRIES) {
                 break;
             }
-            $payload['contents'][0]['parts'][0]['text'] .= "\n\n중요: JSON 객체만 반환하세요. 다른 문장은 절대 포함하지 마세요.";
+            $payload['contents'][0]['parts'][0]['text'] .= "\n\n중요: 아래 규칙을 정확히 지키세요.\n- 사고내용 및 원인은 220~250자, 예방대책은 140~160자.\n- body_text는 두 문단으로만 구성하고, [사고내용 및 원인]과 [예방대책] 레이블을 포함하세요.\n- 사고내용+예방대책 합계는 420자를 넘지 않아야 합니다.\n- 퀴즈 3개 총 글자 수는 550~600자여야 합니다.\n- JSON 키 이름과 형식을 정확히 유지하세요.\n- 순수 JSON 객체만 반환하세요.";
             usleep(700000);
         }
     }
+
+    throw new RuntimeException('AI 생성 실패: ' . ($lastError ? $lastError->getMessage() : '알 수 없는 오류'));
 
     throw new RuntimeException('AI 생성 실패: ' . ($lastError ? $lastError->getMessage() : '알 수 없는 오류'));
 }
@@ -1523,10 +1576,10 @@ function tbm_ai_build_article_prompt(string $targetDate, array $article, ?array 
 5. body_text는 반드시 아래 2개 단락으로 구성하세요.
    - [사고내용 및 원인]
    - [예방대책]
-6. 사고내용 및 원인은 220~250자 범위로 작성하세요. 반드시 250자를 초과하지 마세요.
-7. 예방대책은 140~160자 범위로 작성하세요. 반드시 160자를 초과하지 마세요.
+6. 사고내용 및 원인은 정확히 220~250자 범위로 작성하세요. 반드시 250자를 초과하지 마세요.
+7. 예방대책은 정확히 140~160자 범위로 작성하세요. 반드시 160자를 초과하지 마세요.
    (사고내용 + 예방대책 합계가 절대 420자를 넘지 않도록 하세요. 이는 인쇄 양식의 고정 영역 제한입니다.)
-8. 퀴즈는 보기 4개가 있는 객관식 문제 3개를 작성하되, 퀴즈 3개의 총 글자 수 합계가 550~600자 범위가 되도록 각 문제의 질문과 보기를 구체적이고 상세하게 작성하세요.
+8. 퀴즈는 보기 4개가 있는 객관식 문제 3개를 작성하되, 퀴즈 3개의 총 글자 수 합계가 정확히 550~600자 범위가 되도록 각 문제의 질문과 보기를 구체적이고 상세하게 작성하세요.
 9. source_url에는 아래 실제 기사 URL을 그대로 넣으세요.
    {$articleUrl}
 10. accident_title은 기사 내용을 바탕으로 20자 내외로 간결하게 작성하세요.
@@ -1582,10 +1635,10 @@ function tbm_ai_build_siren_prompt(string $targetDate, array $siren): string
 5. body_text는 반드시 아래 2개 단락으로 구성하세요.
    - [사고내용 및 원인]
    - [예방대책]
-6. 사고내용 및 원인은 220~250자 범위로 작성하세요. 반드시 250자를 초과하지 마세요.
-7. 예방대책은 140~160자 범위로 작성하세요. 반드시 160자를 초과하지 마세요.
+6. 사고내용 및 원인은 정확히 220~250자 범위로 작성하세요. 반드시 250자를 초과하지 마세요.
+7. 예방대책은 정확히 140~160자 범위로 작성하세요. 반드시 160자를 초과하지 마세요.
    (사고내용 + 예방대책 합계가 절대 420자를 넘지 않도록 하세요. 이는 인쇄 양식의 고정 영역 제한입니다.)
-8. 퀴즈는 보기 4개가 있는 객관식 문제 3개를 작성하되, 퀴즈 3개의 총 글자 수 합계가 550~600자 범위가 되도록 각 문제의 질문과 보기를 구체적이고 상세하게 작성하세요.
+8. 퀴즈는 보기 4개가 있는 객관식 문제 3개를 작성하되, 퀴즈 3개의 총 글자 수 합계가 정확히 550~600자 범위가 되도록 각 문제의 질문과 보기를 구체적이고 상세하게 작성하세요.
 9. source_url에는 아래 상세 URL을 그대로 넣으세요.
    {$detailUrl}
 10. accident_title은 20자 내외로 간결하게 작성하세요.

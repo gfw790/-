@@ -2,9 +2,12 @@
 declare(strict_types=1);
 date_default_timezone_set('Asia/Seoul');
 
-require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/../risk_assessment/auth.php';
 
-tbm_auth_require_login();
+if (auth_current_user() === null) {
+    header('Location: ../risk_assessment/task_select.php');
+    exit;
+}
 
 $file = trim((string)($_GET['file'] ?? ''));
 $file = basename($file);

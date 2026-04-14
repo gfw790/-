@@ -18,19 +18,34 @@ if ($effectiveCatCode !== '') {
     }
 }
 
-$noticeStmt = db()->prepare(
+// [전체] 탭에서는 가스팀을 제외한 일반 사용자에게 인계사항을 제외함
+if ($isAllTab && !($_isGasTeam ?? false) && (($_currentUser['role'] ?? '') !== 'admin')) {
+    $where .= ' AND c.code <> ?';
+    $params[] = 'handover';
+}
+
+$noticeQuery =
     "SELECT p.*, c.name AS cat_name, c.code AS cat_code,
             (SELECT COUNT(*) FROM attachments WHERE post_id = p.id) AS attach_cnt
      FROM posts p
      JOIN categories c ON p.category_id = c.id
-     WHERE p.is_notice = 1 " . ($category ? "AND p.category_id = ?" : "") . "
-     ORDER BY p.created_at DESC
-     LIMIT 5"
-);
-$noticeStmt->execute($category ? [$category['id']] : []);
+     WHERE p.is_notice = 1";
+$noticeParams = [];
+if ($category) {
+    $noticeQuery .= " AND p.category_id = ?";
+    $noticeParams[] = $category['id'];
+}
+if ($isAllTab && !($_isGasTeam ?? false)) {
+    $noticeQuery .= " AND c.code <> ?";
+    $noticeParams[] = 'handover';
+}
+$noticeQuery .= "\n     ORDER BY p.created_at DESC\n     LIMIT 5";
+
+$noticeStmt = db()->prepare($noticeQuery);
+$noticeStmt->execute($noticeParams);
 $notices = $noticeStmt->fetchAll();
 
-$countStmt = db()->prepare("SELECT COUNT(*) FROM posts p WHERE $where AND p.is_notice = 0");
+$countStmt = db()->prepare("SELECT COUNT(*) FROM posts p JOIN categories c ON p.category_id = c.id WHERE $where AND p.is_notice = 0");
 $countStmt->execute($params);
 $total = (int)$countStmt->fetchColumn();
 

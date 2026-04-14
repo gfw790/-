@@ -13,10 +13,10 @@ $_isGasTeam  = (mb_strpos($_userDept, '가스') !== false);
 // 팀에 따라 카테고리 필터링
 // - 가스팀: '도면자료실'(dwg) 제외, '인계사항'(handover) 포함
 // - 그 외:  '인계사항'(handover) 제외, '도면자료실'(dwg) 포함
-$_categories = array_values(array_filter(getCategories(), function($cat) use ($_isGasTeam) {
+$_categories = array_values(array_filter(getCategories(), function($cat) use ($_isGasTeam, $_currentUser) {
     $code = $cat['code'] ?? '';
-    if ($_isGasTeam && $code === 'dwg')      return false;
-    if (!$_isGasTeam && $code === 'handover') return false;
+    if ($_isGasTeam && $code === 'dwg') return false;
+    if (!$_isGasTeam && $code === 'handover' && ($_currentUser['role'] ?? '') !== 'admin') return false;
     return true;
 }));
 $_currentPage = basename($_SERVER['PHP_SELF'] ?? '');

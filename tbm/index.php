@@ -135,20 +135,33 @@ $formImageFile   = $existingDoc['image_file'] ?? $cachedAiDoc['image_file'] ?? '
 // ── 최근 생성 목록 (최근 10건) ────────────────────────────────
 
 $recentDocs = [];
+$teamRecentDocs = [
+    '공사팀' => [],
+    '가스팀' => [],
+    '삼척팀' => [],
+];
 try {
     $pdo  = tbm_db();
     $stmt = $pdo->query(
-        'SELECT d.doc_date, d.generation_status, d.output_filename,
+        'SELECT d.doc_date, d.team, d.generation_status, d.output_filename,
                 d.generated_at, c.edu_title
            FROM tbm_documents d
       LEFT JOIN tbm_accident_content c ON d.content_id = c.id
           ORDER BY d.doc_date DESC
-          LIMIT 10'
+          LIMIT 20'
     );
     $recentDocs = $stmt->fetchAll();
+    foreach ($recentDocs as $doc) {
+        $teamName = trim((string)($doc['team'] ?? ''));
+        if (isset($teamRecentDocs[$teamName])) {
+            $teamRecentDocs[$teamName][] = $doc;
+        }
+    }
 } catch (Throwable $e) {
     $recentDocs = [];
 }
+
+$teamRecentDocsJson = json_encode($teamRecentDocs, JSON_UNESCAPED_UNICODE);
 
 if (!function_exists('h')) {
     function h(string $v): string { return htmlspecialchars($v, ENT_QUOTES, 'UTF-8'); }
@@ -303,6 +316,7 @@ body { font-family: "Malgun Gothic", sans-serif; margin: 0; background: #f5f6f7;
                 <textarea name="remarks" style="min-height:60px;" placeholder="특이사항 없음"><?= h($formRemarks) ?></textarea>
             </div>
 
+            <input type="hidden" id="selected_team" name="selected_team" value="">
             <input type="hidden" id="source_url" name="source_url" value="<?= h($formSourceUrl) ?>">
             <input type="hidden" id="image_file" name="image_file" value="<?= h($formImageFile) ?>">
 
@@ -347,26 +361,8 @@ body { font-family: "Malgun Gothic", sans-serif; margin: 0; background: #f5f6f7;
 
         <div class="side-box">
             <h3>📁 최근 생성 일지</h3>
-            <?php if (!empty($recentDocs)): ?>
-            <ul class="recent-list">
-                <?php foreach ($recentDocs as $doc): ?>
-                <li>
-                    <a href="index.php?date=<?= h($doc['doc_date']) ?>" class="recent-date"><?= h($doc['doc_date']) ?></a>
-                    <span class="badge badge-<?= h($doc['generation_status']) ?>" style="margin-left:4px;">
-                        <?= $doc['generation_status'] === 'success' ? '완료' : ($doc['generation_status'] === 'pending' ? '대기' : '실패') ?>
-                    </span>
-                    <?php if (!empty($doc['edu_title'])): ?>
-                    <br><a href="index.php?date=<?= h($doc['doc_date']) ?>" style="font-size:.8rem; color:#374151;"><?= h($doc['edu_title']) ?></a>
-                    <?php endif; ?>
-                    <?php if (!empty($doc['output_filename']) && $doc['generation_status'] === 'success'): ?>
-                    <br><a href="view_output.php?file=<?= h(rawurlencode($doc['output_filename'])) ?>" target="_blank" style="font-size:.78rem;">📄 열기</a>
-                    <?php endif; ?>
-                </li>
-                <?php endforeach; ?>
-            </ul>
-            <?php else: ?>
-            <p style="font-size:.88rem;color:#9ca3af;">생성된 일지가 없습니다.</p>
-            <?php endif; ?>
+            <p style="font-size:.85rem; color:#475569; margin:0 0 10px;">왼쪽 팀 선택 버튼을 눌러 해당 팀의 최근 생성 일지를 확인하세요.</p>
+            <div id="recent-list-container"></div>
         </div>
     </div>
 </div>
@@ -374,7 +370,49 @@ body { font-family: "Malgun Gothic", sans-serif; margin: 0; background: #f5f6f7;
 <script>
 // PHP에서 넘겨받은 팀별 인명부 JSON
 const teamData = <?= $teamMembersJson ?>;
+const recentDocsByTeam = <?= $teamRecentDocsJson ?>;
+const initialTeam = <?= json_encode($userDisplayTeam, JSON_UNESCAPED_UNICODE) ?>;
 let currentSlotCount = 0;
+let selectedRecentTeam = '';
+
+function renderRecentDocs(teamName) {
+    selectedRecentTeam = teamName;
+    const container = document.getElementById('recent-list-container');
+    const docs = recentDocsByTeam[teamName] ?? [];
+
+    if (!container) {
+        return;
+    }
+
+    if (docs.length === 0) {
+        container.innerHTML = '<p style="font-size:.88rem;color:#6b7280;">선택한 팀의 최근 생성된 일지가 없습니다.</p>';
+        return;
+    }
+
+    const items = docs.slice(0, 10).map(doc => {
+        const statusLabel = doc.generation_status === 'success' ? '완료' : (doc.generation_status === 'pending' ? '대기' : '실패');
+        const fileLink = doc.output_filename && doc.generation_status === 'success'
+            ? '<br><a href="view_output.php?file=' + encodeURIComponent(doc.output_filename) + '" target="_blank" style="font-size:.78rem;">📄 열기</a>'
+            : '';
+
+        return '<li style="padding:8px 0; border-bottom:1px solid #f3f4f6;">'
+            + '<a href="index.php?date=' + encodeURIComponent(doc.doc_date) + '" class="recent-date">' + escapeHtml(doc.doc_date) + '</a>'
+            + ' <span class="badge badge-' + escapeHtml(doc.generation_status) + '" style="margin-left:4px;">' + escapeHtml(statusLabel) + '</span>'
+            + fileLink
+            + '</li>';
+    }).join('');
+
+    container.innerHTML = '<ul class="recent-list" style="margin:0;">' + items + '</ul>';
+}
+
+function escapeHtml(text) {
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
 
 // 팀 선택 시 좌측 표 다시 그리기
 function applyTeam(teamName) {
@@ -382,6 +420,12 @@ function applyTeam(teamName) {
     grid.innerHTML = '';
     currentSlotCount = 0;
     
+    // 선택 팀 저장
+    const selectedTeamInput = document.getElementById('selected_team');
+    if (selectedTeamInput) {
+        selectedTeamInput.value = teamName;
+    }
+
     // 버튼 색상 하이라이트
     document.querySelectorAll('.team-btn').forEach(btn => {
         btn.classList.remove('btn-primary');
@@ -403,6 +447,8 @@ function applyTeam(teamName) {
     while (currentSlotCount < 8) {
         addInputSlot('');
     }
+
+    renderRecentDocs(teamName);
 }
 
 // 📌 칸 생성 로직 (개별 X 버튼 포함)
@@ -498,8 +544,9 @@ function addNameSlot() {
 // 페이지 로드 시 첫 번째 팀 자동 선택 + 카운터 초기화
 window.addEventListener('DOMContentLoaded', () => {
     const teams = Object.keys(teamData);
-    if (teams.length > 0) {
-        applyTeam(teams[0]);
+    const chooseTeam = initialTeam && teamData[initialTeam] ? initialTeam : (teams[0] ?? '');
+    if (chooseTeam) {
+        applyTeam(chooseTeam);
     } else {
         while(currentSlotCount < 8) addInputSlot('');
     }
@@ -582,10 +629,20 @@ async function aiGenerate(forceNew = false) {
     try {
         const response = await fetch('ajax_ai_generate.php', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'date=' + encodeURIComponent(date) + '&force_new=' + (forceNew ? '1' : '0')
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: 'ajax=1&date=' + encodeURIComponent(date) + '&force_new=' + (forceNew ? '1' : '0')
         });
+        const contentType = response.headers.get('Content-Type') || '';
+        if (!contentType.includes('application/json')) {
+            const text = await response.text();
+            throw new Error('서버 응답이 JSON이 아닙니다. ' + text.substring(0, 200));
+        }
         const data = await response.json();
+        if (!response.ok) throw new Error(data.error || '서버 인증이 필요합니다.');
         if (data.error) throw new Error(data.error);
 
         document.getElementById('edu_title').value = data.edu_title || '';

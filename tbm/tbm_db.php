@@ -66,6 +66,7 @@ function tbm_db(): PDO
 
     try {
         $pdo = new PDO($dsn, TBM_DB_USER, TBM_DB_PASS, $options);
+        tbm_db_ensure_document_team_column($pdo);
     } catch (PDOException $e) {
         // 운영 환경에서는 로그만 남기고 사용자에게 상세 오류를 노출하지 않는다.
         error_log('[TBM DB] 연결 실패: ' . $e->getMessage());
@@ -73,6 +74,25 @@ function tbm_db(): PDO
     }
 
     return $pdo;
+}
+
+function tbm_db_ensure_document_team_column(PDO $pdo): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+
+    try {
+        $stmt = $pdo->prepare("SHOW COLUMNS FROM tbm_documents LIKE 'team'");
+        $stmt->execute();
+        if ($stmt->fetch() === false) {
+            $pdo->exec("ALTER TABLE tbm_documents ADD COLUMN team VARCHAR(50) NULL AFTER doc_date");
+        }
+    } catch (Throwable $e) {
+        // team 컬럼 추가 권한이 없거나 테이블이 없는 경우에도 기존 동작 유지
+    }
 }
 
 
@@ -333,15 +353,15 @@ function tbm_get_document(string $date): ?array
  * 일지를 신규 생성(pending 상태)한다.
  * 반환: 삽입된 doc_id
  */
-function tbm_create_document(string $date, int $instructorId, ?int $contentId): int
+function tbm_create_document(string $date, int $instructorId, ?int $contentId, ?string $team = null): int
 {
     $pdo  = tbm_db();
     $stmt = $pdo->prepare(
         'INSERT INTO tbm_documents
-            (doc_date, is_business_day, instructor_id, content_id,
+            (doc_date, team, is_business_day, instructor_id, content_id,
              risk_checks, risk_rows, generation_status)
          VALUES
-            (:doc_date, :is_biz, :instructor_id, :content_id,
+            (:doc_date, :team, :is_biz, :instructor_id, :content_id,
              :risk_checks, :risk_rows, "pending")'
     );
 
@@ -352,6 +372,7 @@ function tbm_create_document(string $date, int $instructorId, ?int $contentId): 
 
     $stmt->execute([
         ':doc_date'      => $date,
+        ':team'          => $team,
         ':is_biz'        => 1,
         ':instructor_id' => $instructorId,
         ':content_id'    => $contentId,

@@ -8,12 +8,21 @@ define('TBM_OUTPUT_DIR', TBM_ROOT . '/output');
 
 require_once TBM_ROOT . '/tbm_db.php';
 require_once TBM_ROOT . '/tbm_functions.php';
-require_once TBM_ROOT . '/auth.php';
+require_once __DIR__ . '/../risk_assessment/auth.php';
 require_once __DIR__ . '/phpqrcode/qrlib.php';
 
-tbm_auth_require_login();
-
+if (auth_current_user() === null) {
+    header('Location: ../risk_assessment/task_select.php');
+    exit;
+}
+$raUser = auth_current_user();
 $data = tbm_request_data();
+$postedTeam = trim($_POST['selected_team'] ?? '');
+if ($postedTeam !== '') {
+    $documentTeam = tbm_normalize_display_team_name(auth_normalize_team_name($postedTeam));
+} else {
+    $documentTeam = tbm_normalize_display_team_name(auth_normalize_team_name((string)($raUser['team'] ?? '')));
+}
 
 if (!is_dir(TBM_OUTPUT_DIR)) {
     mkdir(TBM_OUTPUT_DIR, 0777, true);
@@ -56,24 +65,25 @@ try {
     if (tbm_document_exists($docDate)) {
         $stmt = $pdo->prepare(
             'UPDATE tbm_documents
-                SET instructor_id=:iid, content_id=:cid,
+                SET team=:team, instructor_id=:iid, content_id=:cid,
                     today_work_1=:tw1, today_work_2=:tw2,
                     risk_checks=:checks, risk_rows=:rows,
                     remarks=:remarks, generation_status="pending", updated_at=NOW()
               WHERE doc_date=:doc_date'
         );
         $stmt->execute([
-            ':iid'      => $instructorId, ':cid'   => $contentId,
-            ':tw1'      => $data['today_work_1'], ':tw2' => $data['today_work_2'],
-            ':checks'   => json_encode($data['risk_checks'], JSON_UNESCAPED_UNICODE),
-            ':rows'     => json_encode($data['risk_rows'],   JSON_UNESCAPED_UNICODE),
-            ':remarks'  => $data['remarks'], ':doc_date' => $docDate,
+            ':team'      => $documentTeam,
+            ':iid'       => $instructorId, ':cid'   => $contentId,
+            ':tw1'       => $data['today_work_1'], ':tw2' => $data['today_work_2'],
+            ':checks'    => json_encode($data['risk_checks'], JSON_UNESCAPED_UNICODE),
+            ':rows'      => json_encode($data['risk_rows'],   JSON_UNESCAPED_UNICODE),
+            ':remarks'   => $data['remarks'], ':doc_date' => $docDate,
         ]);
         $s2 = $pdo->prepare('SELECT id FROM tbm_documents WHERE doc_date=? LIMIT 1');
         $s2->execute([$docDate]);
         $docId = (int)$s2->fetchColumn();
     } else {
-        $docId = tbm_create_document($docDate, $instructorId, $contentId);
+        $docId = tbm_create_document($docDate, $instructorId, $contentId, $documentTeam);
         $stmt = $pdo->prepare(
             'UPDATE tbm_documents SET today_work_1=:tw1, today_work_2=:tw2,
              risk_checks=:checks, risk_rows=:rows, remarks=:remarks WHERE id=:id'
