@@ -77,6 +77,16 @@ foreach ($allTeams as $raTeam) {
     }
 }
 
+$requestedTeam = trim((string)($_GET['team'] ?? ''));
+$initialTeamValue = '';
+if ($requestedTeam !== '' && isset($teamMembers[$requestedTeam])) {
+    $initialTeamValue = $requestedTeam;
+} elseif (isset($teamMembers[$userDisplayTeam])) {
+    $initialTeamValue = $userDisplayTeam;
+} elseif (!empty($teamMembers)) {
+    $initialTeamValue = array_keys($teamMembers)[0];
+}
+
 // ── 강사 정보 로드 (TBM DB) ────────────────────────────────────────
 $instructor = ['name' => '김남균', 'position' => '과장'];
 try {
@@ -90,6 +100,7 @@ try {
 }
 
 $teamMembersJson = json_encode($teamMembers, JSON_UNESCAPED_UNICODE);
+$initialTeamJson = json_encode($initialTeamValue, JSON_UNESCAPED_UNICODE);
 
 
 // ── 날짜 선택에 따라 기존 일지 로드 (GET ?date=) ──────────────
@@ -140,6 +151,7 @@ $teamRecentDocs = [
     '가스팀' => [],
     '삼척팀' => [],
 ];
+$fallbackRecentDocs = [];
 try {
     $pdo  = tbm_db();
     $stmt = $pdo->query(
@@ -153,6 +165,10 @@ try {
     $recentDocs = $stmt->fetchAll();
     foreach ($recentDocs as $doc) {
         $teamName = trim((string)($doc['team'] ?? ''));
+        if ($teamName === '') {
+            $fallbackRecentDocs[] = $doc;
+            continue;
+        }
         if (isset($teamRecentDocs[$teamName])) {
             $teamRecentDocs[$teamName][] = $doc;
         }
@@ -162,6 +178,7 @@ try {
 }
 
 $teamRecentDocsJson = json_encode($teamRecentDocs, JSON_UNESCAPED_UNICODE);
+$fallbackRecentDocsJson = json_encode($fallbackRecentDocs, JSON_UNESCAPED_UNICODE);
 
 if (!function_exists('h')) {
     function h(string $v): string { return htmlspecialchars($v, ENT_QUOTES, 'UTF-8'); }
@@ -316,7 +333,7 @@ body { font-family: "Malgun Gothic", sans-serif; margin: 0; background: #f5f6f7;
                 <textarea name="remarks" style="min-height:60px;" placeholder="특이사항 없음"><?= h($formRemarks) ?></textarea>
             </div>
 
-            <input type="hidden" id="selected_team" name="selected_team" value="">
+            <input type="hidden" id="selected_team" name="selected_team" value="<?= h($initialTeamValue) ?>">
             <input type="hidden" id="source_url" name="source_url" value="<?= h($formSourceUrl) ?>">
             <input type="hidden" id="image_file" name="image_file" value="<?= h($formImageFile) ?>">
 
@@ -371,14 +388,18 @@ body { font-family: "Malgun Gothic", sans-serif; margin: 0; background: #f5f6f7;
 // PHP에서 넘겨받은 팀별 인명부 JSON
 const teamData = <?= $teamMembersJson ?>;
 const recentDocsByTeam = <?= $teamRecentDocsJson ?>;
-const initialTeam = <?= json_encode($userDisplayTeam, JSON_UNESCAPED_UNICODE) ?>;
+const fallbackRecentDocs = <?= $fallbackRecentDocsJson ?>;
+const initialTeam = <?= $initialTeamJson ?>;
 let currentSlotCount = 0;
 let selectedRecentTeam = '';
 
 function renderRecentDocs(teamName) {
     selectedRecentTeam = teamName;
     const container = document.getElementById('recent-list-container');
-    const docs = recentDocsByTeam[teamName] ?? [];
+    const docs = [
+        ...(recentDocsByTeam[teamName] ?? []),
+        ...fallbackRecentDocs,
+    ];
 
     if (!container) {
         return;
@@ -391,13 +412,15 @@ function renderRecentDocs(teamName) {
 
     const items = docs.slice(0, 10).map(doc => {
         const statusLabel = doc.generation_status === 'success' ? '완료' : (doc.generation_status === 'pending' ? '대기' : '실패');
+        const titleText = doc.edu_title ? doc.edu_title : '(제목 없음)';
         const fileLink = doc.output_filename && doc.generation_status === 'success'
             ? '<br><a href="view_output.php?file=' + encodeURIComponent(doc.output_filename) + '" target="_blank" style="font-size:.78rem;">📄 열기</a>'
             : '';
 
-        return '<li style="padding:8px 0; border-bottom:1px solid #f3f4f6;">'
-            + '<a href="index.php?date=' + encodeURIComponent(doc.doc_date) + '" class="recent-date">' + escapeHtml(doc.doc_date) + '</a>'
-            + ' <span class="badge badge-' + escapeHtml(doc.generation_status) + '" style="margin-left:4px;">' + escapeHtml(statusLabel) + '</span>'
+        return '<li style="padding:10px 0; border-bottom:1px solid #f3f4f6;">'
+            + '<div><a href="index.php?date=' + encodeURIComponent(doc.doc_date) + '" class="recent-date">' + escapeHtml(doc.doc_date) + '</a>'
+            + ' <span class="badge badge-' + escapeHtml(doc.generation_status) + '" style="margin-left:4px;">' + escapeHtml(statusLabel) + '</span></div>'
+            + '<div style="margin-top:4px; font-size:.85rem; color:#475569;">' + escapeHtml(titleText) + '</div>'
             + fileLink
             + '</li>';
     }).join('');

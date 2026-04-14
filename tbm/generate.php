@@ -23,6 +23,7 @@ if ($postedTeam !== '') {
 } else {
     $documentTeam = tbm_normalize_display_team_name(auth_normalize_team_name((string)($raUser['team'] ?? '')));
 }
+$returnTeam = $postedTeam !== '' ? $postedTeam : $documentTeam;
 
 if (!is_dir(TBM_OUTPUT_DIR)) {
     mkdir(TBM_OUTPUT_DIR, 0777, true);
@@ -165,7 +166,7 @@ a{color:#0b57d0;text-decoration:none;}a:hover{text-decoration:underline;}
     <?php else: ?>
         <p style="color:#666;font-size:.9em;">✔ DB 저장 완료 (doc_id: <?= (int)$docId ?>)</p>
     <?php endif; ?>
-    <p><a href="index.php">← 다시 입력하기</a></p>
+    <p><a href="index.php?team=<?= h(rawurlencode($returnTeam)) ?>">← 다시 입력하기</a></p>
 </div>
 </body>
 </html>

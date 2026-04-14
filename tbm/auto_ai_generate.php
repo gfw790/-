@@ -251,6 +251,7 @@ function tbm_auto_write_document(string $targetDate, array $content): array
 
     try {
         $pdo = tbm_db();
+        $defaultTeam = tbm_normalize_display_team_name('공사팀');
 
         if ($existingDoc) {
             $docId = (int)$existingDoc['id'];
@@ -278,7 +279,7 @@ function tbm_auto_write_document(string $targetDate, array $content): array
                 ':id' => $docId,
             ]);
         } else {
-            $docId = tbm_create_document($targetDate, $instructorId, $contentId);
+            $docId = tbm_create_document($targetDate, $instructorId, $contentId, $defaultTeam);
             $stmt = $pdo->prepare(
                 'UPDATE tbm_documents
                     SET today_work_1 = :tw1,
