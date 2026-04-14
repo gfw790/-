@@ -357,6 +357,19 @@ function ensureWorkReportTables(PDO $pdo): void
         ]);
     }
 
+    // tool_master에 없는 항목만 추가 (엑셀 동기화와 충돌 없이 보완)
+    $toolSeeds = [
+        ['전동드릴(유선)', 500],
+        ['전동드릴(무선)', 510],
+    ];
+    foreach ($toolSeeds as [$toolName, $sortNo]) {
+        $pdo->exec("
+            INSERT INTO tool_master (tool_name, use_yn, sort_no)
+            SELECT '{$toolName}', 'Y', {$sortNo} FROM DUAL
+            WHERE NOT EXISTS (SELECT 1 FROM tool_master WHERE tool_name = '{$toolName}')
+        ");
+    }
+
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS work_report (
             report_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -2205,11 +2218,14 @@ function type_label(string $type): string
     background-size: 18px 18px;
     padding-right: 42px;
   }
+  input[type="date"] {
+    cursor: pointer;
+  }
   input[type="date"]::-webkit-calendar-picker-indicator {
     opacity: 0;
-    width: 24px;
-    height: 24px;
-    cursor: pointer;
+    pointer-events: none;
+    width: 0;
+    height: 0;
   }
   input[type="date"]:focus,
   .form-field input[type="text"]:focus {
@@ -3209,6 +3225,7 @@ function type_label(string $type): string
                   <label for="work_date">작업일자</label>
                   <input type="date" id="work_date" name="work_date" value="<?= h($formDefaults['work_date']) ?>">
                 </div>
+                <?php if (!($activeGasTeam && auth_can_manage($user))): ?>
                 <div class="form-field full">
                   <label>중장비 사용 여부</label>
                   <input type="hidden" name="use_equipment_yn" value="N">
@@ -3249,6 +3266,7 @@ function type_label(string $type): string
                     <?php endif; ?>
                   </div>
                 </div>
+                <?php endif; ?>
               </div>
 
 
@@ -3318,7 +3336,11 @@ function type_label(string $type): string
             <div style="margin-top: 22px;">
               <h2 style="font-size:17px;">세부사항</h2>
               <div class="task-info"><?= $leaderElectricalDetailOnlyMode ? '관리감독자가 입력한 작업요약을 바탕으로 필요한 세부사항만 선택해 저장합니다.' : '세부사항을 선택하면 상단 선택된 작업 카드와 같은 형식으로 함께 표시됩니다.' ?></div>
+              <?php
+                $gasTeamAllowedTools = ['작업선', '그라인더(유선)', '그라인더(무선)', '전동드릴(유선)', '전동드릴(무선)'];
+              ?>
               <?php foreach ($detailLabels as $detailType => $detailLabel): ?>
+                <?php if ($activeGasTeam && auth_can_manage($user) && $detailType === 'major_work') continue; ?>
                 <div class="detail-group">
                   <h3><?= h($detailLabel) ?></h3>
                   <?php if (!empty($detailOptionGroups[$detailType])): ?>
@@ -3403,6 +3425,13 @@ function type_label(string $type): string
                     <?php else: ?>
                       <div class="detail-task-grid">
                         <?php foreach ($detailOptionGroups[$detailType] as $detailTitle): ?>
+                          <?php
+                            // 가스팀 관리자: 공구/장비는 지정 항목만, 작업환경은 기름기 제외
+                            if ($activeGasTeam && auth_can_manage($user)) {
+                                if ($detailType === 'tool' && !in_array($detailTitle, $gasTeamAllowedTools, true)) continue;
+                                if ($detailType === 'env' && $detailTitle === '기름기') continue;
+                            }
+                          ?>
                           <?php
                             $detailValue = detail_selection_value($detailType, $detailTitle);
                             $isToolDetail = $detailType === 'tool';
@@ -7593,6 +7622,15 @@ function type_label(string $type): string
   } else {
     renderSelectedTask(null);
   }
+
+  // 날짜 입력 달력 아이콘 클릭 영역 불일치 해결:
+  // indicator에 pointer-events:none을 주어 클릭이 input으로 통과되게 하고
+  // input 클릭 시 showPicker()로 달력을 연다.
+  document.querySelectorAll('input[type="date"]').forEach(function(input) {
+    input.addEventListener('click', function() {
+      try { this.showPicker(); } catch(e) {}
+    });
+  });
   </script>
 </body>
 </html>
