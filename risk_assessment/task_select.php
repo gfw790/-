@@ -3337,7 +3337,7 @@ function type_label(string $type): string
               <h2 style="font-size:17px;">세부사항</h2>
               <div class="task-info"><?= $leaderElectricalDetailOnlyMode ? '관리감독자가 입력한 작업요약을 바탕으로 필요한 세부사항만 선택해 저장합니다.' : '세부사항을 선택하면 상단 선택된 작업 카드와 같은 형식으로 함께 표시됩니다.' ?></div>
               <?php
-                $gasTeamAllowedTools = ['작업선', '그라인더(유선)', '그라인더(무선)', '전동드릴(유선)', '전동드릴(무선)'];
+                $gasTeamAllowedTools = ['작업선', '그라인더(유선)', '그라인더(무선)', '전동드릴(유선)', '전동드릴(무선)','위험수공구(파이프렌치/몽키)'];
               ?>
               <?php foreach ($detailLabels as $detailType => $detailLabel): ?>
                 <?php if ($activeGasTeam && auth_can_manage($user) && $detailType === 'major_work') continue; ?>
