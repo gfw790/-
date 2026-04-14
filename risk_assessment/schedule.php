@@ -15,10 +15,14 @@ $boardPageUrl = '../board/index.php';
 $user = auth_current_user();
 $userTeamName = auth_normalize_team_name((string)($user['team'] ?? ''));
 
-// 요청한 팀 파라미터 확인 (공사팀-전기 관리감독자가 다른 팀의 일정을 볼 때)
+// 요청한 팀 파라미터 확인 (공사팀-전기 관리감독자 혹은 운영자/안전관리자가 다른 팀의 일정을 볼 때)
 $requestedTeamName = '';
 $isViewingOtherTeam = false;
-$canViewOtherTeam = auth_can_manage($user) && auth_team_key($userTeamName) === auth_team_key('공사팀-전기');
+$canViewOtherTeam = auth_can_manage($user) && (
+    auth_team_key($userTeamName) === auth_team_key('공사팀-전기')
+    || auth_is_admin($user)
+    || (string)($user['role'] ?? '') === 'safety_manager'
+);
 
 if (!empty($_GET['view_team'])) {
     $requestedTeamName = auth_normalize_team_name((string)($_GET['view_team']));

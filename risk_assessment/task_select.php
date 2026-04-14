@@ -3060,11 +3060,15 @@ function type_label(string $type): string
             $activeGasTeam = auth_team_key($currentTeam) === auth_team_key('가스팀')
                 || auth_team_key((string)($selectedManagerTeam ?? '')) === auth_team_key('가스팀');
             $isElectricalManager = auth_can_manage($user) && auth_team_key($currentTeam) === auth_team_key('공사팀-전기');
+            $isOperatorViewGasSchedule = auth_can_manage($user) && (
+                auth_is_admin($user)
+                || (string)($user['role'] ?? '') === 'safety_manager'
+            );
           ?>
           <?php if ($activeGasTeam && auth_can_manage($user)): ?>
             <a class="btn-secondary" href="schedule.php">근무일정표</a>
           <?php endif; ?>
-          <?php if ($isElectricalManager): ?>
+          <?php if ($isElectricalManager || $isOperatorViewGasSchedule): ?>
             <a class="btn-secondary" href="schedule.php?view_team=가스팀">가스팀근무표</a>
           <?php endif; ?>
           <a class="btn-secondary" href="<?= h($boardPageUrl) ?>">게시판</a>
