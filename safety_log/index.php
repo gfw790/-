@@ -243,7 +243,6 @@ include __DIR__ . '/includes/header.php';
     </div>
 
     <script>
-        // 삭제 버튼 클릭 시 확인창을 표시하고, 사용자가 확인한 경우에만 기본 링크 이동을 허용합니다.
         document.addEventListener('DOMContentLoaded', function () {
             document.querySelectorAll('.confirm-delete').forEach(function (deleteLink) {
                 deleteLink.addEventListener('click', function (event) {
