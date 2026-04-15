@@ -52,7 +52,7 @@ if (file_exists($_envFile)) {
 
 define('GEMINI_API_KEY', getenv('GEMINI_API_KEY') ?: '');
 define('GEMINI_MODEL', 'gemini-2.5-flash');
-define('GEMINI_MAX_RETRIES', 2);
+define('GEMINI_MAX_RETRIES', 5);
 define('TBM_AI_CACHE_PREFIX', 'tbm_ai_');
 define('TBM_AI_USED_SOURCE_LOOKBACK_DAYS', 45);
 define('TBM_AI_SIREN_FETCH_LIMIT', 5);
@@ -753,14 +753,41 @@ function tbm_ai_article_candidate_is_usable(array $article): bool
     return true;
 }
 
+function tbm_ai_is_length_validation_error(string $message): bool
+{
+    return str_contains($message, '길이가')
+        || str_contains($message, '합계가')
+        || str_contains($message, '퀴즈 3개 총 글자 수');
+}
+
+function tbm_ai_get_validation_retry_prompt(bool $shorten = false): string
+{
+    $text = "\n\n중요: 아래 규칙을 정확히 지키세요.\n"
+        . "- 사고내용 및 원인은 220~250자, 예방대책은 140~160자.\n"
+        . "- body_text는 두 문단으로만 구성하고, [사고내용 및 원인]과 [예방대책] 레이블을 정확히 포함하세요.\n"
+        . "- 사고내용+예방대책 합계는 420자를 넘지 않아야 합니다.\n"
+        . "- 퀴즈 3개 총 글자 수는 550~600자여야 합니다.\n"
+        . "- JSON 키 이름과 형식을 정확히 유지하세요.\n"
+        . "- 순수 JSON 객체만 반환하세요.";
+
+    if ($shorten) {
+        $text .= "\n- 이전 출력이 길이를 초과했습니다. 이번에는 더 간결하고 짧게 작성하세요.\n"
+            . "- 불필요한 수식어를 제거하고, 요구 길이 내부에서만 답변하세요.\n"
+            . "- 사고내용 및 원인은 220~240자, 예방대책은 140~150자로 작성하고 총 420자 이하로 유지하세요.";
+    }
+
+    return $text;
+}
+
 function tbm_ai_generate_via_gemini(string $prompt, string $targetDate, ?string $sourceUrl = null, ?string $imageUrl = null, ?string $imageKeyword = null): array
 {
     // gemini-2.5-flash는 thinking 모델이므로 maxOutputTokens에 thinking 토큰이 포함됨
     // 4096이면 thinking에 소진되고 실제 출력이 잘림 → 65536으로 확대
     // thinkingConfig.thinkingBudget으로 thinking 토큰을 제한하여 출력 토큰 확보
+    $basePrompt = $prompt;
     $payload = [
         'contents' => [[
-            'parts' => [['text' => $prompt]],
+            'parts' => [['text' => $basePrompt]],
         ]],
         'generationConfig' => [
             'temperature'     => 0.45,
@@ -781,7 +808,8 @@ function tbm_ai_generate_via_gemini(string $prompt, string $targetDate, ?string 
         $localImageFile = tbm_ai_fetch_fallback_image($imageKeyword);
     }
 
-    for ($attempt = 1; $attempt <= GEMINI_MAX_RETRIES + 1; $attempt++) {
+    $maxAttempts = GEMINI_MAX_RETRIES + 1;
+    for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
         try {
             $decoded = tbm_call_gemini_api($payload);
             $text = tbm_extract_gemini_text($decoded);
@@ -817,14 +845,21 @@ function tbm_ai_generate_via_gemini(string $prompt, string $targetDate, ?string 
             ];
         } catch (Throwable $e) {
             $lastError = $e;
-            @file_put_contents(__DIR__ . '/gemini_error.txt', '[' . date('c') . '] ' . $e->getMessage() . "\n", FILE_APPEND);
+            @file_put_contents(__DIR__ . '/gemini_error.txt', '[' . date('c') . '] [attempt ' . $attempt . '] ' . $e->getMessage() . "\n", FILE_APPEND);
             if (str_contains($e->getMessage(), 'GEMINI_QUOTA_EXCEEDED::')) {
                 break;
             }
-            if ($attempt > GEMINI_MAX_RETRIES) {
+            if ($attempt >= $maxAttempts) {
                 break;
             }
-            $payload['contents'][0]['parts'][0]['text'] .= "\n\n중요: 아래 규칙을 정확히 지키세요.\n- 사고내용 및 원인은 220~250자, 예방대책은 140~160자.\n- body_text는 두 문단으로만 구성하고, [사고내용 및 원인]과 [예방대책] 레이블을 포함하세요.\n- 사고내용+예방대책 합계는 420자를 넘지 않아야 합니다.\n- 퀴즈 3개 총 글자 수는 550~600자여야 합니다.\n- JSON 키 이름과 형식을 정확히 유지하세요.\n- 순수 JSON 객체만 반환하세요.";
+
+            $shorten = false;
+            if (str_contains($e->getMessage(), 'AI 출력 검증 실패')) {
+                $shorten = tbm_ai_is_length_validation_error($e->getMessage());
+            }
+
+            $payload['contents'][0]['parts'][0]['text'] = $basePrompt . tbm_ai_get_validation_retry_prompt($shorten);
+            @file_put_contents(__DIR__ . '/gemini_error.txt', '[' . date('c') . '] [retrying] prompt updated for attempt ' . ($attempt + 1) . "\n", FILE_APPEND);
             usleep(700000);
         }
     }
