@@ -222,11 +222,11 @@ function legacyCategoryUploadDirMap(): array {
     }
 
     $rawMap = [
-        'free' => 'A:\\risk_server\\upload file\\board-upload\\01_chat',
-        'qna' => 'A:\\risk_server\\upload file\\board-upload\\02_Q&A',
-        'data' => 'A:\\risk_server\\upload file\\board-upload\\03_data',
-        'dwg' => 'A:\\risk_server\\upload file\\board-upload\\04_dwg',
-        'near_miss' => 'A:\\risk_server\\upload file\\board-upload\\05_naer_miss',
+        'free' => 'A:\\risk_server\\uploads\\board-upload\\01_chat',
+        'qna' => 'A:\\risk_server\\uploads\\board-upload\\02_Q&A',
+        'data' => 'A:\\risk_server\\uploads\\board-upload\\03_data',
+        'dwg' => 'A:\\risk_server\\uploads\\board-upload\\04_dwg',
+        'near_miss' => 'A:\\risk_server\\uploads\\board-upload\\05_naer_miss',
     ];
 
     $map = [];
