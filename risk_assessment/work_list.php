@@ -436,6 +436,14 @@ $isWorker = auth_is_worker($user);
 $isLeaderOnly = $canLead && !$canManage;
 $entryPage = $canLead && !$canManage ? 'leader_task_select.php' : 'task_select.php';
 $adminManagerTeams = $isAdmin ? auth_read_teams() : [];
+$managerShortcutTeams = [];
+if ($canManage && !$isAdmin) {
+    $currentTeam = auth_normalize_team_name((string)($user['team'] ?? ''));
+    $managerShortcutTeams = auth_unique_team_list(array_merge(
+        $currentTeam !== '' ? [$currentTeam] : [],
+        $currentTeam !== '' ? auth_supervised_teams($currentTeam) : []
+    ));
+}
 
 function work_list_entry_page(array $user, array $report, string $defaultPage): string
 {
@@ -1456,8 +1464,38 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     width:2px; height:36px; background:var(--border2);
   }
   .org-team-card { background:var(--bg2); border:1px solid var(--border2); border-radius:8px; min-width:110px; overflow:hidden; }
+  .org-team-card-child { min-width:190px; }
   .org-team-head { background:var(--accent); color:#fff; text-align:center; padding:7px 14px; font-size:12px; font-weight:700; }
   .org-team-body { padding:10px 12px; }
+  .org-team-children-wrap {
+    position:relative;
+    width:100%;
+    margin-top:18px;
+    display:flex;
+    justify-content:center;
+  }
+  .org-team-children-wrap::before {
+    content:'';
+    position:absolute;
+    top:0;
+    left:50%;
+    transform:translateX(-50%);
+    width:2px;
+    height:16px;
+    background:var(--border2);
+  }
+  .org-team-children-row {
+    display:flex;
+    gap:16px;
+    padding-top:16px;
+    width:100%;
+    justify-content:center;
+  }
+  .org-subteam-col {
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+  }
   .org-role-sec { padding:5px 0; border-top:1px solid var(--border2); }
   .org-role-sec:first-child { border-top:none; padding-top:0; }
   .org-role-lbl { font-size:10px; color:var(--text-lo); margin-bottom:2px; }
@@ -1503,7 +1541,12 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
               <?php foreach ($adminManagerTeams as $teamName): ?>
                 <a class="btn-secondary" href="<?= h(build_page_url('task_select.php', ['manager_team' => $teamName])) ?>"><?= h($teamName) ?> 관리등록</a>
               <?php endforeach; ?>
-            <?php elseif (!$isLeaderOnly): ?>
+            <?php elseif ($canManage): ?>
+              <?php foreach ($managerShortcutTeams as $teamName): ?>
+                <a class="btn-secondary" href="<?= h(build_page_url('task_select.php', ['manager_team' => $teamName])) ?>"><?= h($teamName) ?> 관리등록</a>
+              <?php endforeach; ?>
+            <?php endif; ?>
+            <?php if (!$isLeaderOnly): ?>
               <a class="btn-secondary" href="<?= h($entryPage) ?>">작업 등록</a>
             <?php endif; ?>
             <?php if ($isAdmin): ?>
@@ -1630,11 +1673,15 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
                     <a class="btn-secondary" href="<?= h(build_page_url('task_select.php', $adminManagerOpenParams)) ?>">관리열기</a>
                     <a class="btn-secondary" href="leader_task_select.php?unit_ra_id=<?= (int)$report['unit_ra_id'] ?>&saved_report_id=<?= (int)$report['report_id'] ?>&edit_report_id=<?= (int)$report['report_id'] ?>">지휘열기</a>
                   <?php else: ?>
-                    <?php if ($isWorker): ?>
-                      <a class="btn-secondary" href="<?= h($reportEntryPage) ?>?unit_ra_id=<?= (int)$report['unit_ra_id'] ?>&saved_report_id=<?= (int)$report['report_id'] ?>">열기</a>
-                    <?php else: ?>
-                      <a class="btn-secondary" href="<?= h($reportEntryPage) ?>?unit_ra_id=<?= (int)$report['unit_ra_id'] ?>&saved_report_id=<?= (int)$report['report_id'] ?>">열기</a>
-                    <?php endif;?>
+                    <?php $managerOpenParams = [
+                        'unit_ra_id' => (int)$report['unit_ra_id'],
+                        'saved_report_id' => (int)$report['report_id'],
+                    ];
+                    if ($canManage && ($report['team_name_context'] ?? '') !== '') {
+                        $managerOpenParams['manager_team'] = (string)$report['team_name_context'];
+                    }
+                    ?>
+                    <a class="btn-secondary" href="<?= h(build_page_url($reportEntryPage, $managerOpenParams)) ?>">열기</a>
                   <?php endif; ?>
                 <?php elseif ($isWorker && !$allTasksCompleted): ?>
                   <span class="sub-text">작업지휘자 입력 대기</span>
@@ -1724,11 +1771,15 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
                           <a class="btn-secondary" href="<?= h(build_page_url('task_select.php', $adminManagerOpenParams)) ?>">관리열기</a>
                           <a class="btn-secondary" href="leader_task_select.php?unit_ra_id=<?= (int)$report['unit_ra_id'] ?>&saved_report_id=<?= (int)$report['report_id'] ?>&edit_report_id=<?= (int)$report['report_id'] ?>">지휘열기</a>
                         <?php else: ?>
-                          <?php if ($isWorker): ?>
-                            <a class="btn-secondary" href="<?= h($reportEntryPage) ?>?unit_ra_id=<?= (int)$report['unit_ra_id'] ?>&saved_report_id=<?= (int)$report['report_id'] ?>">열기</a>
-                          <?php else: ?>
-                            <a class="btn-secondary" href="<?= h($reportEntryPage) ?>?unit_ra_id=<?= (int)$report['unit_ra_id'] ?>&saved_report_id=<?= (int)$report['report_id'] ?>">열기</a>
-                          <?php endif; ?>
+                          <?php $managerOpenParams = [
+                              'unit_ra_id' => (int)$report['unit_ra_id'],
+                              'saved_report_id' => (int)$report['report_id'],
+                          ];
+                          if ($canManage && ($report['team_name_context'] ?? '') !== '') {
+                              $managerOpenParams['manager_team'] = (string)$report['team_name_context'];
+                          }
+                          ?>
+                          <a class="btn-secondary" href="<?= h(build_page_url($reportEntryPage, $managerOpenParams)) ?>">열기</a>
                         <?php endif; ?>
                       <?php elseif ($isWorker && !$allTasksCompleted): ?>
                         <span class="sub-text">작업지휘자 입력 대기</span>
@@ -1864,9 +1915,12 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
             if ($role === 'ceo') $orgCeo[] = $entry;
             elseif ($role === 'safety_manager') $orgSafety[] = $entry;
         }
-        $orgTeams = [];
+        $teamSupervisors = auth_read_team_supervisors();
+        $orgTeamEntries = [];
         foreach (auth_read_teams() as $orgTeamName) {
-            if (auth_team_key($orgTeamName) === auth_team_key('안전관리')) continue;
+            if (auth_team_key($orgTeamName) === auth_team_key('안전관리')) {
+                continue;
+            }
             $toMembers = static function(array $members) use ($orgStrip): array {
                 $result = [];
                 foreach ($members as $m) {
@@ -1876,12 +1930,35 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
                 }
                 return $result;
             };
-            $orgTeams[] = [
+            $orgTeamEntries[$orgTeamName] = [
                 'name'     => $orgTeamName,
                 'managers' => $toMembers(auth_team_members($orgTeamName, ['manager'])),
                 'leaders'  => $toMembers(auth_team_members($orgTeamName, ['leader'])),
                 'workers'  => $toMembers(auth_team_members($orgTeamName, ['worker'])),
+                'children' => [],
             ];
+        }
+
+        $orgTeamParent = [];
+        foreach ($orgTeamEntries as $teamName => $_) {
+            $supervisor = $teamSupervisors[$teamName] ?? '';
+            if ($supervisor !== '' && auth_team_exists($supervisor)) {
+                $orgTeamParent[$teamName] = $supervisor;
+            }
+        }
+
+        $orgTeams = [];
+        foreach ($orgTeamEntries as $teamName => $entry) {
+            if (isset($orgTeamParent[$teamName])) {
+                continue;
+            }
+            $entry['children'] = [];
+            foreach ($orgTeamEntries as $possibleChildName => $possibleChildEntry) {
+                if (isset($orgTeamParent[$possibleChildName]) && auth_team_key($orgTeamParent[$possibleChildName]) === auth_team_key($teamName)) {
+                    $entry['children'][] = $possibleChildEntry;
+                }
+            }
+            $orgTeams[] = $entry;
         }
         ?>
         <?php
@@ -1959,6 +2036,45 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
                     <?php endif; ?>
                   </div>
                 </div><!-- org-team-card -->
+                <?php if (!empty($orgTeam['children'])): ?>
+                  <div class="org-team-children-wrap">
+                    <div class="org-team-children-row">
+                      <?php foreach ($orgTeam['children'] as $childTeam): ?>
+                        <div class="org-subteam-col">
+                          <div class="org-team-card org-team-card-child">
+                            <div class="org-team-head"><?= h($childTeam['name']) ?></div>
+                            <div class="org-team-body">
+                              <?php if (!empty($childTeam['managers'])): ?>
+                                <div class="org-role-sec">
+                                  <div class="org-role-lbl">관리감독자</div>
+                                  <?php foreach ($childTeam['managers'] as $m): ?>
+                                    <?= $orgNameHtml($m) ?>
+                                  <?php endforeach; ?>
+                                </div>
+                              <?php endif; ?>
+                              <?php if (!empty($childTeam['leaders'])): ?>
+                                <div class="org-role-sec">
+                                  <div class="org-role-lbl">작업지휘자</div>
+                                  <?php foreach ($childTeam['leaders'] as $m): ?>
+                                    <?= $orgNameHtml($m) ?>
+                                  <?php endforeach; ?>
+                                </div>
+                              <?php endif; ?>
+                              <?php if (!empty($childTeam['workers'])): ?>
+                                <div class="org-role-sec">
+                                  <div class="org-role-lbl">일반작업자</div>
+                                  <?php foreach ($childTeam['workers'] as $m): ?>
+                                    <?= $orgNameHtml($m) ?>
+                                  <?php endforeach; ?>
+                                </div>
+                              <?php endif; ?>
+                            </div>
+                          </div>
+                        </div>
+                      <?php endforeach; ?>
+                    </div>
+                  </div>
+                <?php endif; ?>
                 </div><!-- org-team-col -->
               <?php endforeach; ?>
             </div>

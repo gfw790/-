@@ -753,7 +753,19 @@ $isAdmin = auth_is_admin($user);
 $canManage = auth_can_manage($user);
 $canLead = auth_can_lead($user);
 $isWorker = auth_is_worker($user);
-$managerShortcutTeams = (!$isLeaderPage && $isAdmin) ? auth_read_teams() : [];
+$managerShortcutTeams = [];
+if (!$isLeaderPage) {
+    if ($isAdmin) {
+        $managerShortcutTeams = auth_read_teams();
+    } elseif ($canManage) {
+        $currentTeam = auth_normalize_team_name((string)($user['team'] ?? ''));
+        $supervisedTeams = auth_supervised_teams($currentTeam);
+        $managerShortcutTeams = auth_unique_team_list(array_merge(
+            $currentTeam !== '' ? [$currentTeam] : [],
+            $supervisedTeams
+        ));
+    }
+}
 $selectedManagerTeam = resolve_team_from_list(
     $managerShortcutTeams,
     trim((string)($_GET['manager_team'] ?? $_POST['manager_team'] ?? ''))
@@ -3084,13 +3096,15 @@ function type_label(string $type): string
         <div class="success">위험성평가 등록이 완료되었습니다. 저장된 문서 번호는 RA_ID <?= (int)$savedRaId ?> 입니다.</div>
       <?php endif; ?>
 
-      <?php if ($isAdmin && !$isLeaderPage && !empty($managerShortcutTeams)): ?>
+      <?php if (!$isLeaderPage && count($managerShortcutTeams) > 1): ?>
         <div class="team-context-bar">
-          <div class="team-context-label">운영자 팀 컨텍스트</div>
+          <div class="team-context-label"><?= $isAdmin ? '운영자 팀 컨텍스트' : '관리감독팀 작업팀 선택' ?></div>
           <div class="team-context-text">
             <?= $selectedManagerTeam !== '' ? h($selectedManagerTeam) . ' 기준으로 관리등록 중입니다.' : '아래 버튼을 눌러 해당 팀 기준으로 관리등록을 시작할 수 있습니다.' ?>
           </div>
-          <div class="team-context-note">운영자는 팀별 버튼으로 관리등록 화면을 바로 전환할 수 있고, 저장한 작업도 같은 팀 문맥으로 이어집니다.</div>
+          <div class="team-context-note">
+            <?= $isAdmin ? '운영자는 팀별 버튼으로 관리등록 화면을 바로 전환할 수 있고, 저장한 작업도 같은 팀 문맥으로 이어집니다.' : '관리감독자는 자신의 팀 또는 관리감독을 받는 작업팀 중 하나를 선택하여 작업지휘자를 결정할 수 있습니다.' ?>
+          </div>
           <div class="team-context-actions">
             <?php foreach ($managerShortcutTeams as $teamName): ?>
               <?php $isActiveManagerTeam = $selectedManagerTeam === $teamName; ?>

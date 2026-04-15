@@ -26,6 +26,7 @@ $form = [
 ];
 $teamForm = [
     'team_name' => '',
+    'team_supervisor' => '',
 ];
 $teams = auth_read_teams();
 if ($form['team'] === '' && !empty($teams)) {
@@ -95,19 +96,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif ($action === 'create_team') {
         $teamForm['team_name'] = trim((string)($_POST['team_name'] ?? ''));
+        $teamForm['team_supervisor'] = auth_normalize_team_name((string)($_POST['team_supervisor'] ?? ''));
         if (!$canManageTeams) {
             $error = '팀을 추가할 권한이 없습니다.';
         } else {
-            [$ok, $message] = auth_add_team($teamForm['team_name']);
+            [$ok, $message] = auth_add_team($teamForm['team_name'], $teamForm['team_supervisor']);
             if ($ok) {
                 $success = $message;
-                $teamForm = ['team_name' => ''];
+                $teamForm = ['team_name' => '', 'team_supervisor' => ''];
                 $teams = auth_read_teams();
                 if ($form['team'] === '' && !empty($teams)) {
                     $form['team'] = (string)$teams[0];
                 }
             } else {
                 $error = $message;
+            }
+        }
+    } elseif ($action === 'set_team_supervisor') {
+        $teamName = auth_normalize_team_name((string)($_POST['team_name'] ?? ''));
+        $supervisorTeam = auth_normalize_team_name((string)($_POST['team_supervisor'] ?? ''));
+        if (!$canManageTeams) {
+            $error = '관리감독팀을 지정할 권한이 없습니다.';
+        } elseif ($teamName === '') {
+            $error = '팀을 선택해주세요.';
+        } else {
+            if ($supervisorTeam !== '' && !auth_team_exists($supervisorTeam)) {
+                $error = '유효한 관리감독팀을 선택해주세요.';
+            } elseif (auth_set_team_supervisor($teamName, $supervisorTeam)) {
+                $success = '관리감독팀 정보가 저장되었습니다.';
+            } else {
+                $error = '관리감독팀 정보를 저장하지 못했습니다.';
             }
         }
     } elseif ($action === 'delete_team') {
@@ -129,7 +147,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $form['name'] = trim((string)($_POST['name'] ?? ''));
         $form['login_id'] = trim((string)($_POST['login_id'] ?? ''));
-        $form['team'] = auth_normalize_team_name((string)($_POST['team'] ?? ''));
+                $form['team'] = auth_normalize_team_name((string)($_POST['team'] ?? ''));
         $form['role'] = $canAssignRoles ? trim((string)($_POST['role'] ?? 'worker')) : 'worker';
         $form['phone'] = trim((string)($_POST['phone'] ?? ''));
         $password = trim((string)($_POST['password'] ?? ''));
@@ -559,31 +577,48 @@ function h($value): string
     white-space: nowrap;
   }
   .team-list {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     gap: 10px;
     margin-top: 14px;
   }
   .team-pill {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    flex-direction: column;
     gap: 8px;
-    padding: 9px 12px;
-    border-radius: 999px;
+    padding: 12px;
+    border-radius: 16px;
     border: 1px solid #d7e3ef;
     background: #fff;
     color: #12344d;
     font-size: 13px;
+    font-weight: 400;
+  }
+  .team-pill-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
     font-weight: 700;
   }
-  .team-pill small {
-    color: #6b7c93;
+  .team-pill-supervisor {
+    color: #49637a;
     font-size: 12px;
-    font-weight: 600;
+    padding: 6px 10px;
+    border-radius: 12px;
+    background: #f5f8fb;
   }
   .team-pill form {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
     margin: 0;
+    width: 100%;
+  }
+  .team-pill form select {
+    flex: 1;
+    min-width: 0;
   }
   .btn-team-delete {
     width: auto;
@@ -820,15 +855,43 @@ function h($value): string
                     <label for="team_name">새 팀 이름</label>
                     <input type="text" id="team_name" name="team_name" value="<?= h($teamForm['team_name']) ?>" placeholder="예: 품질팀" required>
                   </div>
+                  <div class="field">
+                    <label for="team_supervisor">관리감독팀 (선택)</label>
+                    <select id="team_supervisor" name="team_supervisor">
+                      <option value="">선택 안함</option>
+                      <?php foreach ($teams as $supervisorTeamName): ?>
+                        <option value="<?= h($supervisorTeamName) ?>" <?= $teamForm['team_supervisor'] === $supervisorTeamName ? 'selected' : '' ?>><?= h($supervisorTeamName) ?></option>
+                      <?php endforeach; ?>
+                    </select>
+                    <div class="helper">팀에 내부 관리감독자가 없는 경우, 이 팀을 관리할 감독팀을 선택하세요.</div>
+                  </div>
                   <button class="btn-primary" type="submit">팀 만들기</button>
                 </form>
                 <?php if (!empty($teams)): ?>
                   <div class="team-list">
                     <?php foreach ($teams as $teamName): ?>
                       <?php $memberCount = (int)($teamCounts[$teamName] ?? 0); ?>
+                      <?php $supervisorTeam = auth_get_team_supervisor($teamName); ?>
                       <div class="team-pill">
-                        <span><?= h($teamName) ?></span>
-                        <small><?= $memberCount ?>명</small>
+                        <div class="team-pill-header">
+                          <span><?= h($teamName) ?></span>
+                          <small><?= $memberCount ?>명</small>
+                        </div>
+                        <?php if ($supervisorTeam !== ''): ?>
+                          <div class="team-pill-supervisor">관리감독팀: <?= h($supervisorTeam) ?></div>
+                        <?php endif; ?>
+                        <form method="post" class="team-supervisor-form">
+                          <input type="hidden" name="action" value="set_team_supervisor">
+                          <input type="hidden" name="team_name" value="<?= h($teamName) ?>">
+                          <select name="team_supervisor">
+                            <option value="" <?= $supervisorTeam === '' ? 'selected' : '' ?>>미지정</option>
+                            <?php foreach ($teams as $supervisorTeamName): ?>
+                              <?php if (auth_team_key($supervisorTeamName) === auth_team_key($teamName)) { continue; } ?>
+                              <option value="<?= h($supervisorTeamName) ?>" <?= $supervisorTeam === $supervisorTeamName ? 'selected' : '' ?>><?= h($supervisorTeamName) ?></option>
+                            <?php endforeach; ?>
+                          </select>
+                          <button class="btn-secondary btn-inline" type="submit">저장</button>
+                        </form>
                         <form method="post" onsubmit="return confirm('이 팀을 삭제하시겠습니까?');">
                           <input type="hidden" name="action" value="delete_team">
                           <input type="hidden" name="delete_team_name" value="<?= h($teamName) ?>">

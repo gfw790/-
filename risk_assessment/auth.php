@@ -14,6 +14,11 @@ function auth_team_store_path(): string
     return __DIR__ . '/auth_teams.json';
 }
 
+function auth_team_supervisor_store_path(): string
+{
+    return __DIR__ . '/auth_team_supervisors.json';
+}
+
 function auth_default_teams(): array
 {
     return ['공사팀-전기', '공사팀-모터'];
@@ -134,9 +139,178 @@ function auth_team_exists(string $teamName): bool
     return false;
 }
 
-function auth_add_team(string $teamName): array
+function auth_read_team_supervisors(): array
+{
+    $path = auth_team_supervisor_store_path();
+    if (!is_file($path)) {
+        return [];
+    }
+
+    $contents = file_get_contents($path);
+    if ($contents === false || trim($contents) === '') {
+        return [];
+    }
+
+    $decoded = json_decode($contents, true);
+    if (!is_array($decoded)) {
+        return [];
+    }
+
+    $supervisors = [];
+    foreach ($decoded as $teamName => $supervisorTeam) {
+        if (!is_string($teamName) || !is_string($supervisorTeam)) {
+            continue;
+        }
+
+        $normalizedTeam = auth_normalize_team_name($teamName);
+        $normalizedSupervisor = auth_normalize_team_name($supervisorTeam);
+        if ($normalizedTeam === '' || $normalizedSupervisor === '') {
+            continue;
+        }
+
+        if (!auth_team_exists($normalizedTeam) || !auth_team_exists($normalizedSupervisor)) {
+            continue;
+        }
+
+        $supervisors[$normalizedTeam] = $normalizedSupervisor;
+    }
+
+    return $supervisors;
+}
+
+function auth_write_team_supervisors(array $supervisors): bool
+{
+    $payload = [];
+    foreach ($supervisors as $teamName => $supervisorTeam) {
+        $normalizedTeam = auth_normalize_team_name((string)$teamName);
+        $normalizedSupervisor = auth_normalize_team_name((string)$supervisorTeam);
+        if ($normalizedTeam === '' || $normalizedSupervisor === '') {
+            continue;
+        }
+        $payload[$normalizedTeam] = $normalizedSupervisor;
+    }
+
+    $json = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false) {
+        return false;
+    }
+
+    return file_put_contents(auth_team_supervisor_store_path(), $json, LOCK_EX) !== false;
+}
+
+function auth_get_team_supervisor(string $teamName): string
+{
+    $normalizedTeam = auth_normalize_team_name($teamName);
+    if ($normalizedTeam === '') {
+        return '';
+    }
+
+    $supervisors = auth_read_team_supervisors();
+    return $supervisors[$normalizedTeam] ?? '';
+}
+
+function auth_supervised_teams(string $supervisorTeam): array
+{
+    $normalizedSupervisor = auth_normalize_team_name($supervisorTeam);
+    if ($normalizedSupervisor === '') {
+        return [];
+    }
+
+    $supervisors = auth_read_team_supervisors();
+    $supervisedTeams = [];
+    $pending = [$normalizedSupervisor];
+    $seen = [];
+
+    while (!empty($pending)) {
+        $currentSupervisor = array_pop($pending);
+        foreach ($supervisors as $teamName => $managedTeam) {
+            if (auth_team_key($managedTeam) !== auth_team_key($currentSupervisor)) {
+                continue;
+            }
+            $normalizedTeamName = auth_normalize_team_name($teamName);
+            $teamKey = auth_team_key($normalizedTeamName);
+            if ($teamKey === '' || isset($seen[$teamKey])) {
+                continue;
+            }
+            $seen[$teamKey] = true;
+            $supervisedTeams[] = $normalizedTeamName;
+            $pending[] = $normalizedTeamName;
+        }
+    }
+
+    return auth_unique_team_list($supervisedTeams);
+}
+
+function auth_set_team_supervisor(string $teamName, string $supervisorTeamName): bool
+{
+    $normalizedTeam = auth_normalize_team_name($teamName);
+    $normalizedSupervisor = auth_normalize_team_name($supervisorTeamName);
+    if ($normalizedTeam === '') {
+        return false;
+    }
+
+    $supervisors = auth_read_team_supervisors();
+    if ($normalizedSupervisor === '') {
+        unset($supervisors[$normalizedTeam]);
+        return auth_write_team_supervisors($supervisors);
+    }
+
+    if (!auth_team_exists($normalizedTeam) || !auth_team_exists($normalizedSupervisor)) {
+        return false;
+    }
+
+    if (auth_team_key($normalizedTeam) === auth_team_key($normalizedSupervisor)) {
+        return false;
+    }
+
+    $supervisors[$normalizedTeam] = $normalizedSupervisor;
+    return auth_write_team_supervisors($supervisors);
+}
+
+function auth_remove_team_supervisor(string $teamName): bool
+{
+    $normalizedTeam = auth_normalize_team_name($teamName);
+    if ($normalizedTeam === '') {
+        return false;
+    }
+
+    $supervisors = auth_read_team_supervisors();
+    foreach ($supervisors as $team => $supervisor) {
+        if (auth_team_key($team) === auth_team_key($normalizedTeam) || auth_team_key($supervisor) === auth_team_key($normalizedTeam)) {
+            unset($supervisors[$team]);
+        }
+    }
+
+    return auth_write_team_supervisors($supervisors);
+}
+
+function auth_team_has_leader_account(string $teamName): bool
+{
+    $normalizedTeam = auth_normalize_team_name($teamName);
+    if ($normalizedTeam === '') {
+        return false;
+    }
+
+    $targetTeamKey = auth_team_key($normalizedTeam);
+    foreach (auth_accounts() as $account) {
+        $role = auth_normalize_role((string)($account['role'] ?? ''));
+        if ($role !== 'leader') {
+            continue;
+        }
+
+        $accountTeamKey = auth_team_key((string)($account['team'] ?? ''));
+        if ($accountTeamKey === $targetTeamKey) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function auth_add_team(string $teamName, string $teamSupervisor = ''): array
 {
     $teamName = auth_normalize_team_name($teamName);
+    $teamSupervisor = auth_normalize_team_name($teamSupervisor);
     if ($teamName === '') {
         return [false, '팀 이름을 입력해주세요.'];
     }
@@ -150,11 +324,23 @@ function auth_add_team(string $teamName): array
         return [false, '이미 등록된 팀입니다.'];
     }
 
+    if ($teamSupervisor !== '' && !auth_team_exists($teamSupervisor)) {
+        return [false, '관리감독팀을 선택해주세요.'];
+    }
+
+    if ($teamSupervisor !== '' && auth_team_key($teamName) === auth_team_key($teamSupervisor)) {
+        return [false, '관리감독팀은 자신과 같을 수 없습니다.'];
+    }
+
     $teams = auth_read_teams();
     $teams[] = $teamName;
 
     if (!auth_write_teams($teams)) {
         return [false, '팀 정보를 저장하지 못했습니다.'];
+    }
+
+    if ($teamSupervisor !== '' && !auth_set_team_supervisor($teamName, $teamSupervisor)) {
+        return [false, '관리감독팀 정보를 저장하지 못했습니다.'];
     }
 
     return [true, '팀이 추가되었습니다.'];
@@ -277,6 +463,8 @@ function auth_delete_team(string $teamName): array
     if (!auth_write_teams($teams)) {
         return [false, '팀 정보를 저장하지 못했습니다.'];
     }
+
+    auth_remove_team_supervisor($teamName);
 
     return [true, '팀이 삭제되었습니다.'];
 }
@@ -562,10 +750,25 @@ function auth_work_list_visible_teams(?array $user): array
     }
 
     if (auth_can_manage($user) && auth_team_key($teamName) === auth_team_key('공사팀-전기')) {
-        return auth_unique_team_list(['공사팀-전기', '공사팀-모터', '가스팀']);
+        return auth_unique_team_list(array_merge(
+            ['공사팀-전기', '공사팀-모터', '가스팀'],
+            auth_supervised_teams($teamName)
+        ));
     }
 
-    return [$teamName];
+    $visibleTeams = [$teamName];
+    if (auth_can_manage($user)) {
+        $visibleTeams = array_merge($visibleTeams, auth_supervised_teams($teamName));
+    }
+
+    if (!auth_team_has_leader_account($teamName)) {
+        $supervisorTeam = auth_get_team_supervisor($teamName);
+        if ($supervisorTeam !== '') {
+            $visibleTeams[] = $supervisorTeam;
+        }
+    }
+
+    return auth_unique_team_list($visibleTeams);
 }
 
 function auth_display_name(?array $user): string
