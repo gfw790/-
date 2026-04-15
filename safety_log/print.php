@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../risk_assessment/db_config.php';
+require_once __DIR__ . '/../../risk_server/db_config.php';
 
 /**
  * HTML escape helper.
@@ -240,7 +240,7 @@ if ($id === false || $id === null) {
                     <div class="row gy-3 image-block">
                         <?php foreach ($images as $image): ?>
                             <div class="col-md-6">
-                                <img src="uploads/safety_log/<?= h($image) ?>" alt="업무일지 사진">
+                                <img src="show_image.php?file=<?= h(rawurlencode($image)) ?>" alt="업무일지 사진">
                             </div>
                         <?php endforeach; ?>
                     </div>

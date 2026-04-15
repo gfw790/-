@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../risk_assessment/db_config.php';
+require_once __DIR__ . '/../../risk_server/db_config.php';
 
 function h($value)
 {

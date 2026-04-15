@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../risk_assessment/db_config.php';
+require_once __DIR__ . '/../../risk_server/db_config.php';
 
 /**
  * HTML escape helper.
@@ -158,8 +158,8 @@ if ($id === false || $id === null) {
                                     <td><?= h($detail['status']) ?></td>
                                     <td>
                                         <?php if (!empty($detail['photo_1'])): ?>
-                                            <a href="uploads/safety_log/<?= h($detail['photo_1']) ?>" target="_blank">
-                                                <img src="uploads/safety_log/<?= h($detail['photo_1']) ?>" alt="사진1" class="img-fluid img-thumbnail" style="max-height: 120px;">
+                                            <a href="show_image.php?file=<?= h(rawurlencode($detail['photo_1'])) ?>" target="_blank">
+                                                <img src="show_image.php?file=<?= h(rawurlencode($detail['photo_1'])) ?>" alt="사진1" class="img-fluid img-thumbnail" style="max-height: 120px;">
                                             </a>
                                         <?php else: ?>
                                             <span class="text-muted">없음</span>
@@ -167,8 +167,8 @@ if ($id === false || $id === null) {
                                     </td>
                                     <td>
                                         <?php if (!empty($detail['photo_2'])): ?>
-                                            <a href="uploads/safety_log/<?= h($detail['photo_2']) ?>" target="_blank">
-                                                <img src="uploads/safety_log/<?= h($detail['photo_2']) ?>" alt="사진2" class="img-fluid img-thumbnail" style="max-height: 120px;">
+                                            <a href="show_image.php?file=<?= h(rawurlencode($detail['photo_2'])) ?>" target="_blank">
+                                                <img src="show_image.php?file=<?= h(rawurlencode($detail['photo_2'])) ?>" alt="사진2" class="img-fluid img-thumbnail" style="max-height: 120px;">
                                             </a>
                                         <?php else: ?>
                                             <span class="text-muted">없음</span>
