@@ -193,7 +193,7 @@ try {
     }
 
     $pdo->commit();
-    header('Location: create.php');
+    header('Location: index.php');
     exit;
 
 } catch (Throwable $e) {
