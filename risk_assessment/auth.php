@@ -43,6 +43,98 @@ function auth_manager_leader_teams(): array
     return ['공사팀-모터', '가스팀', '제조팀'];
 }
 
+function auth_protected_team_names(): array
+{
+    return auth_unique_team_list(array_merge(
+        auth_default_teams(),
+        auth_manager_leader_teams(),
+        ['공사팀-전기', '가스팀', '제조팀', '안전관리']
+    ));
+}
+
+function auth_is_protected_team_name(string $teamName): bool
+{
+    $teamKey = auth_team_key($teamName);
+    if ($teamKey === '') {
+        return false;
+    }
+
+    foreach (auth_protected_team_names() as $protectedTeamName) {
+        if (auth_team_key($protectedTeamName) === $teamKey) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function auth_would_create_supervisor_cycle(string $teamName, string $supervisorTeamName): bool
+{
+    $normalizedTeam = auth_normalize_team_name($teamName);
+    $normalizedSupervisor = auth_normalize_team_name($supervisorTeamName);
+    if ($normalizedTeam === '' || $normalizedSupervisor === '') {
+        return false;
+    }
+
+    if (auth_team_key($normalizedTeam) === auth_team_key($normalizedSupervisor)) {
+        return true;
+    }
+
+    $supervisors = auth_read_team_supervisors();
+    $pending = [$normalizedSupervisor];
+    $seen = [];
+
+    while (!empty($pending)) {
+        $currentTeam = array_pop($pending);
+        $currentKey = auth_team_key($currentTeam);
+        if ($currentKey === '' || isset($seen[$currentKey])) {
+            continue;
+        }
+        $seen[$currentKey] = true;
+
+        if ($currentKey === auth_team_key($normalizedTeam)) {
+            return true;
+        }
+
+        if (!empty($supervisors[$currentTeam])) {
+            $pending[] = auth_normalize_team_name((string)$supervisors[$currentTeam]);
+        }
+    }
+
+    return false;
+}
+
+function auth_supervisor_map_has_cycle(array $supervisors): bool
+{
+    $graph = [];
+    foreach ($supervisors as $teamName => $supervisorTeam) {
+        $normalizedTeam = auth_normalize_team_name((string)$teamName);
+        $normalizedSupervisor = auth_normalize_team_name((string)$supervisorTeam);
+        if ($normalizedTeam === '' || $normalizedSupervisor === '') {
+            continue;
+        }
+        $graph[$normalizedTeam] = $normalizedSupervisor;
+    }
+
+    foreach ($graph as $teamName => $_) {
+        $seen = [];
+        $currentTeam = $teamName;
+        while (isset($graph[$currentTeam])) {
+            $teamKey = auth_team_key($currentTeam);
+            if ($teamKey === '') {
+                break;
+            }
+            if (isset($seen[$teamKey])) {
+                return true;
+            }
+            $seen[$teamKey] = true;
+            $currentTeam = $graph[$currentTeam];
+        }
+    }
+
+    return false;
+}
+
 function auth_team_requires_manager_leader_role(string $teamName): bool
 {
     $normalizedTeam = auth_normalize_team_name($teamName);
@@ -263,6 +355,10 @@ function auth_set_team_supervisor(string $teamName, string $supervisorTeamName):
         return false;
     }
 
+    if (auth_would_create_supervisor_cycle($normalizedTeam, $normalizedSupervisor)) {
+        return false;
+    }
+
     $supervisors[$normalizedTeam] = $normalizedSupervisor;
     return auth_write_team_supervisors($supervisors);
 }
@@ -467,6 +563,164 @@ function auth_delete_team(string $teamName): array
     auth_remove_team_supervisor($teamName);
 
     return [true, '팀이 삭제되었습니다.'];
+}
+
+function auth_sync_team_name_in_work_reports(string $oldTeamName, string $newTeamName): array
+{
+    $normalizedOldTeam = auth_normalize_team_name($oldTeamName);
+    $normalizedNewTeam = auth_normalize_team_name($newTeamName);
+    if ($normalizedOldTeam === '' || $normalizedNewTeam === '') {
+        return [false, '작업 이력 팀명 동기화 대상이 올바르지 않습니다.'];
+    }
+
+    $dbConfigPath = __DIR__ . '/db_config.php';
+    if (!is_file($dbConfigPath)) {
+        return [false, 'DB 설정 파일을 찾을 수 없습니다.'];
+    }
+
+    require_once $dbConfigPath;
+
+    if (!function_exists('getDB')) {
+        return [false, 'DB 연결 함수를 찾을 수 없습니다.'];
+    }
+
+    try {
+        $pdo = getDB();
+        $tableCheckStmt = $pdo->query("SHOW TABLES LIKE 'work_report'");
+        $workReportTableExists = $tableCheckStmt !== false && $tableCheckStmt->fetchColumn() !== false;
+        if (!$workReportTableExists) {
+            return [true, '작업 이력 테이블이 아직 없어 동기화할 데이터가 없습니다.'];
+        }
+        $stmt = $pdo->prepare("UPDATE work_report SET team_name = :new_team_name WHERE team_name = :old_team_name");
+        $stmt->execute([
+            ':new_team_name' => $normalizedNewTeam,
+            ':old_team_name' => $normalizedOldTeam,
+        ]);
+    } catch (Throwable $e) {
+        return [false, '작업 이력 팀명을 변경하지 못했습니다: ' . $e->getMessage()];
+    }
+
+    return [true, '작업 이력 팀명이 동기화되었습니다.'];
+}
+
+function auth_rename_team(string $currentTeamName, string $newTeamName): array
+{
+    $currentTeamName = auth_normalize_team_name($currentTeamName);
+    $newTeamName = auth_normalize_team_name($newTeamName);
+
+    if ($currentTeamName === '') {
+        return [false, '수정할 팀을 찾을 수 없습니다.'];
+    }
+
+    if (!auth_team_exists($currentTeamName)) {
+        return [false, '수정할 팀을 찾을 수 없습니다.'];
+    }
+
+    if ($newTeamName === '') {
+        return [false, '새 팀 이름을 입력해주세요.'];
+    }
+
+    $teamLength = function_exists('mb_strlen') ? mb_strlen($newTeamName, 'UTF-8') : strlen($newTeamName);
+    if ($teamLength > 30) {
+        return [false, '팀 이름은 30자 이하로 입력해주세요.'];
+    }
+
+    if (auth_team_key($currentTeamName) === auth_team_key($newTeamName)) {
+        return [false, '변경할 팀 이름이 현재 이름과 같습니다.'];
+    }
+
+    if (auth_team_exists($newTeamName)) {
+        return [false, '이미 등록된 팀 이름입니다.'];
+    }
+
+    if (auth_is_protected_team_name($currentTeamName) || auth_is_protected_team_name($newTeamName)) {
+        return [false, '시스템 규칙에 연결된 기본 팀은 이름을 변경할 수 없습니다.'];
+    }
+
+    $teams = auth_read_teams();
+    $updatedTeams = [];
+    $renamed = false;
+    foreach ($teams as $teamName) {
+        if (auth_team_key((string)$teamName) === auth_team_key($currentTeamName)) {
+            $updatedTeams[] = $newTeamName;
+            $renamed = true;
+            continue;
+        }
+        $updatedTeams[] = auth_normalize_team_name((string)$teamName);
+    }
+
+    if (!$renamed) {
+        return [false, '수정할 팀을 찾을 수 없습니다.'];
+    }
+
+    $storedAccounts = auth_read_stored_accounts();
+    $originalStoredAccounts = $storedAccounts;
+    foreach ($storedAccounts as $loginId => $account) {
+        $accountTeam = auth_normalize_team_name((string)($account['team'] ?? ''));
+        if (auth_team_key($accountTeam) === auth_team_key($currentTeamName)) {
+            $storedAccounts[$loginId]['team'] = $newTeamName;
+        }
+    }
+
+    $supervisors = auth_read_team_supervisors();
+    $originalSupervisors = $supervisors;
+    $updatedSupervisors = [];
+    foreach ($supervisors as $teamName => $supervisorTeam) {
+        $normalizedTeam = auth_normalize_team_name((string)$teamName);
+        $normalizedSupervisor = auth_normalize_team_name((string)$supervisorTeam);
+
+        if (auth_team_key($normalizedTeam) === auth_team_key($currentTeamName)) {
+            $normalizedTeam = $newTeamName;
+        }
+        if (auth_team_key($normalizedSupervisor) === auth_team_key($currentTeamName)) {
+            $normalizedSupervisor = $newTeamName;
+        }
+
+        if ($normalizedTeam === '' || $normalizedSupervisor === '') {
+            continue;
+        }
+        $updatedSupervisors[$normalizedTeam] = $normalizedSupervisor;
+    }
+
+    foreach ($updatedSupervisors as $teamName => $supervisorTeam) {
+        if (auth_team_key($teamName) === auth_team_key($supervisorTeam)) {
+            return [false, '팀 이름 변경 후 관리감독팀 연결이 자기 자신을 가리키게 됩니다.'];
+        }
+    }
+    if (auth_supervisor_map_has_cycle($updatedSupervisors)) {
+        return [false, '팀 이름 변경 후 관리감독팀 연결에 순환이 생깁니다.'];
+    }
+
+    $originalSessionTeam = auth_normalize_team_name((string)($_SESSION['auth_user']['team'] ?? ''));
+
+    if (!auth_write_teams($updatedTeams)) {
+        return [false, '팀 정보를 저장하지 못했습니다.'];
+    }
+
+    if (!auth_write_stored_accounts($storedAccounts)) {
+        auth_write_teams($teams);
+        return [false, '팀 소속 계정 정보를 저장하지 못했습니다.'];
+    }
+
+    if (!auth_write_team_supervisors($updatedSupervisors)) {
+        auth_write_stored_accounts($originalStoredAccounts);
+        auth_write_teams($teams);
+        return [false, '관리감독팀 연결 정보를 저장하지 못했습니다.'];
+    }
+
+    [$synced, $syncMessage] = auth_sync_team_name_in_work_reports($currentTeamName, $newTeamName);
+    if (!$synced) {
+        auth_write_team_supervisors($originalSupervisors);
+        auth_write_stored_accounts($originalStoredAccounts);
+        auth_write_teams($teams);
+        return [false, $syncMessage];
+    }
+
+    if ($originalSessionTeam !== '' && auth_team_key($originalSessionTeam) === auth_team_key($currentTeamName) && isset($_SESSION['auth_user']) && is_array($_SESSION['auth_user'])) {
+        $_SESSION['auth_user']['team'] = $newTeamName;
+    }
+
+    return [true, '팀 이름이 수정되었습니다.'];
 }
 
 function auth_default_accounts(): array

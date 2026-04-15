@@ -367,6 +367,38 @@ function deleteReportRelatedRows(PDO $pdo, int $reportId): void
     }
 }
 
+function work_list_report_is_completed_by_id(PDO $pdo, int $reportId): bool
+{
+  if ($reportId <= 0) {
+    return false;
+  }
+
+  $workInputCompleted = false;
+  if (tableExists($pdo, 'work_report_detail')) {
+    $detailStmt = $pdo->prepare("SELECT COUNT(*) FROM work_report_detail WHERE report_id = :report_id");
+    $detailStmt->execute([':report_id' => $reportId]);
+    $workInputCompleted = (int)$detailStmt->fetchColumn() > 0;
+  }
+
+  $hazardSubmissionCount = 0;
+  $hazardTables = [
+    'work_report_worker_hazard_selection',
+    'work_report_hazard_selection',
+    'work_report_hazard_change_request',
+    'work_report_hazard_addition',
+  ];
+  foreach ($hazardTables as $tableName) {
+    if (!tableExists($pdo, $tableName)) {
+      continue;
+    }
+    $hazardStmt = $pdo->prepare("SELECT COUNT(*) FROM {$tableName} WHERE report_id = :report_id");
+    $hazardStmt->execute([':report_id' => $reportId]);
+    $hazardSubmissionCount += (int)$hazardStmt->fetchColumn();
+  }
+
+  return $workInputCompleted && $hazardSubmissionCount > 0;
+}
+
 function ensureWorkListTables(PDO $pdo): void
 {
     $pdo->exec("
@@ -465,6 +497,34 @@ function report_team_context(array $report): string
     return auth_normalize_team_name((string)($ownerAccount['team'] ?? ''));
 }
 
+  function work_list_user_can_delete_report(array $user, array $report, bool $isCompleted): bool
+  {
+    if ($isCompleted) {
+      return false;
+    }
+
+    if (auth_is_admin($user)) {
+      return true;
+    }
+
+    if (!auth_can_manage($user)) {
+      return false;
+    }
+
+    $reportTeamName = report_team_context($report);
+    if ($reportTeamName === '') {
+      return false;
+    }
+
+    $visibleTeams = auth_work_list_visible_teams($user);
+    if (empty($visibleTeams)) {
+      return false;
+    }
+
+    $visibleTeamKeys = array_fill_keys(array_map('auth_team_key', $visibleTeams), true);
+    return isset($visibleTeamKeys[auth_team_key($reportTeamName)]);
+  }
+
 function filter_reports_for_user(array $reports, array $user): array
 {
     $userRole = (string)($user['role'] ?? '');
@@ -521,38 +581,28 @@ $successMessage = isset($_GET['deleted']) && $_GET['deleted'] === '1'
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && ($_POST['action'] ?? '') === 'delete_report') {
     $deleteReportId = (int)($_POST['report_id'] ?? 0);
 
-    if (!$canManage) {
-        $errorMessage = '삭제는 관리감독자 또는 운영자만 할 수 있습니다.';
+  if (!$canManage) {
+    $errorMessage = '삭제는 관리감독자 또는 운영자만 할 수 있습니다.';
     } elseif ($deleteReportId <= 0) {
         $errorMessage = '삭제할 작업을 찾을 수 없습니다.';
     } else {
-        if ($isAdmin) {
-            $ownerStmt = $pdo->prepare("
-                SELECT report_id
-                FROM work_report
-                WHERE report_id = :report_id
-                LIMIT 1
-            ");
-            $ownerStmt->execute([
-                ':report_id' => $deleteReportId,
-            ]);
-        } else {
-            $ownerStmt = $pdo->prepare("
-                SELECT report_id
-                FROM work_report
-                WHERE report_id = :report_id
-                  AND user_login_id = :user_login_id
-                LIMIT 1
-            ");
-            $ownerStmt->execute([
-                ':report_id' => $deleteReportId,
-                ':user_login_id' => $user['login_id'],
-            ]);
-        }
+    $ownerStmt = $pdo->prepare("
+      SELECT report_id, user_login_id, team_name
+      FROM work_report
+      WHERE report_id = :report_id
+      LIMIT 1
+    ");
+    $ownerStmt->execute([
+      ':report_id' => $deleteReportId,
+    ]);
         $deleteTarget = $ownerStmt->fetch();
 
         if (!$deleteTarget) {
-            $errorMessage = $isAdmin ? '삭제할 작업을 찾을 수 없습니다.' : '본인이 등록한 작업만 삭제할 수 있습니다.';
+      $errorMessage = '삭제할 작업을 찾을 수 없습니다.';
+    } elseif (work_list_report_is_completed_by_id($pdo, $deleteReportId)) {
+      $errorMessage = '완료된 작업문서는 삭제할 수 없습니다.';
+    } elseif (!work_list_user_can_delete_report($user, $deleteTarget, false)) {
+      $errorMessage = '본인 팀 또는 관리감독 대상 팀의 진행 중 작업문서만 삭제할 수 있습니다.';
         } else {
             try {
                 $pdo->beginTransaction();
@@ -1537,16 +1587,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
             <a class="btn-secondary" href="schedule.php?view_team=가스팀">가스팀근무표</a>
           <?php endif; ?>
           <?php if (!$isWorker): ?>
-            <?php if ($isAdmin): ?>
-              <?php foreach ($adminManagerTeams as $teamName): ?>
-                <a class="btn-secondary" href="<?= h(build_page_url('task_select.php', ['manager_team' => $teamName])) ?>"><?= h($teamName) ?> 관리등록</a>
-              <?php endforeach; ?>
-            <?php elseif ($canManage): ?>
-              <?php foreach ($managerShortcutTeams as $teamName): ?>
-                <a class="btn-secondary" href="<?= h(build_page_url('task_select.php', ['manager_team' => $teamName])) ?>"><?= h($teamName) ?> 관리등록</a>
-              <?php endforeach; ?>
-            <?php endif; ?>
-            <?php if (!$isLeaderOnly): ?>
+            <?php if (!$isLeaderOnly && $userRole !== 'safety_manager'): ?>
               <a class="btn-secondary" href="<?= h($entryPage) ?>">작업 등록</a>
             <?php endif; ?>
             <?php if ($isAdmin): ?>
@@ -1657,9 +1698,8 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
                       $adminManagerOpenParams['manager_team'] = (string)$report['team_name_context'];
                   }
                 ?>
-                <?php $canWorkerOpen = !$isWorker || $teamHasNoLeader || (int)($report['leader_detail_count'] ?? 0) > 0; ?>
-                <?php $canDeleteReport = $isAdmin || (in_array($userRole, ['manager', 'safety_manager'], true) && (string)($report['user_login_id'] ?? '') === (string)($user['login_id'] ?? '')); ?>
                 <?php
+                  $canWorkerOpen = !$isWorker || $teamHasNoLeader || (int)($report['leader_detail_count'] ?? 0) > 0;
                   $workInputCompleted = $teamHasNoLeader || (int)($report['leader_detail_count'] ?? 0) > 0;
                   if ($isWorker) {
                       $allTasksCompleted = $workInputCompleted && (int)($report['current_user_hazard_submitted'] ?? 0) > 0;
@@ -1667,6 +1707,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
                       $hazardReviewCompleted = (bool)($report['hazard_review_completed'] ?? false);
                       $allTasksCompleted = $workInputCompleted && $hazardReviewCompleted;
                   }
+                  $canDeleteReport = work_list_user_can_delete_report($user, $report, $allTasksCompleted);
                 ?>
                 <?php if ($canWorkerOpen && !$allTasksCompleted): ?>
                   <?php if ($isAdmin): ?>
@@ -1755,9 +1796,8 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
                             $adminManagerOpenParams['manager_team'] = (string)$report['team_name_context'];
                         }
                       ?>
-                      <?php $canWorkerOpen = !$isWorker || $teamHasNoLeader || (int)($report['leader_detail_count'] ?? 0) > 0; ?>
-                      <?php $canDeleteReport = $isAdmin || (in_array($userRole, ['manager', 'safety_manager'], true) && (string)($report['user_login_id'] ?? '') === (string)($user['login_id'] ?? '')); ?>
                       <?php
+                        $canWorkerOpen = !$isWorker || $teamHasNoLeader || (int)($report['leader_detail_count'] ?? 0) > 0;
                         $workInputCompleted = $teamHasNoLeader || (int)($report['leader_detail_count'] ?? 0) > 0;
                         if ($isWorker) {
                             $allTasksCompleted = $workInputCompleted && (int)($report['current_user_hazard_submitted'] ?? 0) > 0;
@@ -1765,6 +1805,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
                             $hazardReviewCompleted = (bool)($report['hazard_review_completed'] ?? false);
                             $allTasksCompleted = $workInputCompleted && $hazardReviewCompleted;
                         }
+                        $canDeleteReport = work_list_user_can_delete_report($user, $report, $allTasksCompleted);
                       ?>
                       <?php if ($canWorkerOpen && !$allTasksCompleted): ?>
                         <?php if ($isAdmin): ?>

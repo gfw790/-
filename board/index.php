@@ -7,6 +7,11 @@ $effectiveCatCode = $isAllTab ? '' : $catCode;
 $page = max(1, (int)($_GET['page'] ?? 1));
 $offset = ($page - 1) * POSTS_PER_PAGE;
 
+$allTabAllowedCodes = ['notice', 'free', 'qna', 'data', 'change_request'];
+$allTabSharedDeptCodes = ['notice', 'data'];
+$allTabStrictDeptCodes = ['free', 'qna', 'change_request'];
+$currentDept = trim((string)($_currentUser['dept'] ?? ''));
+
 $where = '1=1';
 $params = [];
 $category = null;
@@ -18,10 +23,17 @@ if ($effectiveCatCode !== '') {
     }
 }
 
-// [전체] 탭에서는 가스팀을 제외한 일반 사용자에게 인계사항을 제외함
-if ($isAllTab && !($_isGasTeam ?? false) && (($_currentUser['role'] ?? '') !== 'admin')) {
-    $where .= ' AND c.code <> ?';
-    $params[] = 'handover';
+if ($isAllTab) {
+    $allTabPlaceholders = implode(',', array_fill(0, count($allTabAllowedCodes), '?'));
+    $where .= " AND c.code IN ($allTabPlaceholders)";
+    $params = array_merge($params, $allTabAllowedCodes);
+
+    if ($currentDept !== '') {
+        $sharedDeptPlaceholders = implode(',', array_fill(0, count($allTabSharedDeptCodes), '?'));
+        $strictDeptPlaceholders = implode(',', array_fill(0, count($allTabStrictDeptCodes), '?'));
+        $where .= " AND ((c.code IN ($sharedDeptPlaceholders) AND (COALESCE(p.author_dept, '') = '' OR p.author_dept = ?)) OR (c.code IN ($strictDeptPlaceholders) AND p.author_dept = ?))";
+        $params = array_merge($params, $allTabSharedDeptCodes, [$currentDept], $allTabStrictDeptCodes, [$currentDept]);
+    }
 }
 
 $noticeQuery =
@@ -35,9 +47,15 @@ if ($category) {
     $noticeQuery .= " AND p.category_id = ?";
     $noticeParams[] = $category['id'];
 }
-if ($isAllTab && !($_isGasTeam ?? false)) {
-    $noticeQuery .= " AND c.code <> ?";
-    $noticeParams[] = 'handover';
+if ($isAllTab) {
+    $allTabNoticePlaceholders = implode(',', array_fill(0, count($allTabAllowedCodes), '?'));
+    $noticeQuery .= " AND c.code IN ($allTabNoticePlaceholders)";
+    $noticeParams = array_merge($noticeParams, $allTabAllowedCodes);
+
+    if ($currentDept !== '') {
+        $noticeQuery .= " AND (COALESCE(p.author_dept, '') = '' OR p.author_dept = ?)";
+        $noticeParams[] = $currentDept;
+    }
 }
 $noticeQuery .= "\n     ORDER BY p.created_at DESC\n     LIMIT 5";
 

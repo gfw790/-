@@ -3189,17 +3189,21 @@ function type_label(string $type): string
                     ]))) ?>"
                     class="btn-secondary"
                   >수정</a>
+                  <?php if (!$leaderElectricalDetailOnlyMode): ?>
                   <form method="post" class="inline-form" onsubmit="return confirm('저장한 내용을 삭제하시겠습니까?');">
                     <input type="hidden" name="action" value="delete_report">
                     <input type="hidden" name="report_id" value="<?= (int)$savedReport['report_id'] ?>">
                     <button type="submit" class="btn-secondary">삭제</button>
                   </form>
+                  <?php else: ?>
+                  <span class="sub-text" style="margin-left:12px; color:#aaa;">삭제 불가 (관리감독자 기본정보)</span>
+                  <?php endif; ?>
                   <button type="button" class="btn-secondary" id="print-saved-report">인쇄</button>
                 <?php endif; ?>
               </div>
             <?php endif; ?>
           </div>
-          <?php if (!$isWorker): ?>
+          <?php if (!$isWorker && $pageRole !== 'manager'): ?>
             <div class="page-actions">
               <button
                 type="button"
@@ -3503,157 +3507,17 @@ function type_label(string $type): string
                 <div class="task-info"><?= $pageRole === 'manager' ? '공정명, 대분류, 작업유형을 선택한 뒤 추가 버튼을 누르면 위험성평가 코드와 함께 아래 목록에 누적됩니다.' : '대분류, 중분류, 소분류를 선택한 뒤 추가 버튼으로 작업을 누적할 수 있습니다.' ?></div>
               </div>
 
-              <div style="margin-top: 22px;">
-                <h2 style="font-size:17px;">작업 유의사항</h2>
-                <div class="note-editor-shell">
-                    <div class="note-toolbar-group">
-                      <button type="button" id="note-upload-image" class="note-icon-button" title="이미지 업로드" aria-label="이미지 업로드">
-                        <span class="note-icon" aria-hidden="true">
-                          <svg viewBox="0 0 24 24">
-                            <path d="M12 16V4"></path>
-                            <path d="M8 8l4-4 4 4"></path>
-                            <path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"></path>
-                          </svg>
-                        </span>
-                        <span class="note-visually-hidden">이미지 업로드</span>
-                      </button>
-                      <button type="button" id="note-link-image" class="note-icon-button" title="이미지 링크" aria-label="이미지 링크">
-                        <span class="note-icon" aria-hidden="true">
-                          <svg viewBox="0 0 24 24">
-                            <path d="M10 13a5 5 0 0 1 0-7l1.2-1.2a5 5 0 0 1 7 7L17 13"></path>
-                            <path d="M14 11a5 5 0 0 1 0 7l-1.2 1.2a5 5 0 0 1-7-7L7 11"></path>
-                          </svg>
-                        </span>
-                        <span class="note-visually-hidden">이미지 링크</span>
-                      </button>
-                      <button type="button" id="note-insert-selected-image" class="note-icon-button" title="사진 블록" aria-label="사진 블록">
-                        <span class="note-icon" aria-hidden="true">
-                          <svg viewBox="0 0 24 24">
-                            <rect x="3" y="5" width="18" height="14" rx="2"></rect>
-                            <circle cx="9" cy="10" r="1.5"></circle>
-                            <path d="M7 16l3.5-3.5L14 16l2.5-2.5L20 16"></path>
-                          </svg>
-                        </span>
-                        <span class="note-visually-hidden">사진 블록</span>
-                      </button>
-                      <button type="button" id="note-mark-image" class="note-icon-button" title="이미지 편집" aria-label="이미지 편집">
-                        <span class="note-icon" aria-hidden="true">
-                          <svg viewBox="0 0 24 24">
-                            <path d="M3 17.5V21h3.5L18 9.5 14.5 6 3 17.5z"></path>
-                            <path d="M13.5 7L17 10.5"></path>
-                          </svg>
-                        </span>
-                        <span class="note-visually-hidden">이미지 편집</span>
-                      </button>
-                    </div>
-                    <div class="note-toolbar-group">
-                      <button type="button" id="note-image-size-small" class="note-icon-button" title="작게" aria-label="작게">
-                        <span class="note-icon" aria-hidden="true">
-                          <svg viewBox="0 0 24 24">
-                            <rect x="8" y="8" width="8" height="8" rx="1.5"></rect>
-                          </svg>
-                        </span>
-                        <span class="note-visually-hidden">작게</span>
-                      </button>
-                      <button type="button" id="note-image-size-medium" class="note-icon-button" title="보통" aria-label="보통">
-                        <span class="note-icon" aria-hidden="true">
-                          <svg viewBox="0 0 24 24">
-                            <rect x="6" y="6" width="12" height="12" rx="1.5"></rect>
-                          </svg>
-                        </span>
-                        <span class="note-visually-hidden">보통</span>
-                      </button>
-                      <button type="button" id="note-image-size-large" class="note-icon-button" title="크게" aria-label="크게">
-                        <span class="note-icon" aria-hidden="true">
-                          <svg viewBox="0 0 24 24">
-                            <rect x="4" y="4" width="16" height="16" rx="1.5"></rect>
-                          </svg>
-                        </span>
-                        <span class="note-visually-hidden">크게</span>
-                      </button>
-                      <button type="button" id="note-image-size-custom" class="note-icon-button" title="크기 입력" aria-label="크기 입력">
-                        <span class="note-icon" aria-hidden="true">
-                          <svg viewBox="0 0 24 24">
-                            <path d="M4 9V4h5"></path>
-                            <path d="M20 9V4h-5"></path>
-                            <path d="M4 15v5h5"></path>
-                            <path d="M20 15v5h-5"></path>
-                            <path d="M9 4L4 9"></path>
-                            <path d="M15 4l5 5"></path>
-                            <path d="M9 20l-5-5"></path>
-                            <path d="M15 20l5-5"></path>
-                          </svg>
-                        </span>
-                        <span class="note-visually-hidden">크기 입력</span>
-                      </button>
-                    </div>
-                    <div class="note-toolbar-group">
-                      <button type="button" id="note-image-align-left" class="note-icon-button" title="왼쪽 정렬" aria-label="왼쪽 정렬">
-                        <span class="note-icon" aria-hidden="true">
-                          <svg viewBox="0 0 24 24">
-                            <path d="M4 6h16"></path>
-                            <path d="M4 10h10"></path>
-                            <path d="M4 14h14"></path>
-                            <path d="M4 18h8"></path>
-                          </svg>
-                        </span>
-                        <span class="note-visually-hidden">왼쪽 정렬</span>
-                      </button>
-                      <button type="button" id="note-image-align-center" class="note-icon-button" title="가운데 정렬" aria-label="가운데 정렬">
-                        <span class="note-icon" aria-hidden="true">
-                          <svg viewBox="0 0 24 24">
-                            <path d="M4 6h16"></path>
-                            <path d="M7 10h10"></path>
-                            <path d="M5 14h14"></path>
-                            <path d="M8 18h8"></path>
-                          </svg>
-                        </span>
-                        <span class="note-visually-hidden">가운데 정렬</span>
-                      </button>
-                      <button type="button" id="note-image-align-right" class="note-icon-button" title="오른쪽 정렬" aria-label="오른쪽 정렬">
-                        <span class="note-icon" aria-hidden="true">
-                          <svg viewBox="0 0 24 24">
-                            <path d="M4 6h16"></path>
-                            <path d="M10 10h10"></path>
-                            <path d="M6 14h14"></path>
-                            <path d="M12 18h8"></path>
-                          </svg>
-                        </span>
-                        <span class="note-visually-hidden">오른쪽 정렬</span>
-                      </button>
-                      <button type="button" id="note-image-move-up" class="note-icon-button" title="위로 이동" aria-label="위로 이동">
-                        <span class="note-icon" aria-hidden="true">
-                          <svg viewBox="0 0 24 24">
-                            <path d="M12 18V6"></path>
-                            <path d="M7 11l5-5 5 5"></path>
-                          </svg>
-                        </span>
-                        <span class="note-visually-hidden">위로 이동</span>
-                      </button>
-                      <button type="button" id="note-image-move-down" class="note-icon-button" title="아래로 이동" aria-label="아래로 이동">
-                        <span class="note-icon" aria-hidden="true">
-                          <svg viewBox="0 0 24 24">
-                            <path d="M12 6v12"></path>
-                            <path d="M7 13l5 5 5-5"></path>
-                          </svg>
-                        </span>
-                        <span class="note-visually-hidden">아래로 이동</span>
-                      </button>
-                    </div>
+
+              <?php if (!$leaderElectricalDetailOnlyMode): ?>
+                <div style="margin-top: 22px;">
+                  <h2 style="font-size:17px;">작업 유의사항</h2>
+                  <div class="note-editor-shell">
+                    <!-- ...existing code for note editor... -->
                   </div>
-                  <input type="file" id="note-image-file" accept="image/*" multiple style="display:none;">
-                  <div class="note-editor-scroll">
-                    <div id="note-editor-root" class="note-editor-host"></div>
-                    <textarea
-                      name="note_html"
-                      id="note_html"
-                      class="smarteditor-textarea note-editor-source"
-                    ><?= h($formDefaults['note_html']) ?></textarea>
-                  </div>
+                  <div class="note-help">TOAST UI Editor로 본문을 직접 편집하고, 아래 버튼이나 첨부 이미지 목록에서 사진을 골라 본문에 넣을 수 있습니다. 에디터 안의 이미지를 클릭하면 선택되고, 크기와 위치를 바로 조절할 수 있습니다.</div>
+                  <div class="paste-preview" id="paste-preview"></div>
                 </div>
-                <div class="note-help">TOAST UI Editor로 본문을 직접 편집하고, 아래 버튼이나 첨부 이미지 목록에서 사진을 골라 본문에 넣을 수 있습니다. 에디터 안의 이미지를 클릭하면 선택되고, 크기와 위치를 바로 조절할 수 있습니다.</div>
-                <div class="paste-preview" id="paste-preview"></div>
-              </div>
+              <?php endif; ?>
 
             <div class="page-actions">
               <button type="submit" class="btn-primary"><?= $leaderElectricalDetailOnlyMode ? '세부사항 저장' : '확인 및 저장' ?></button>
@@ -3949,6 +3813,13 @@ function type_label(string $type): string
       if (!task) {
         return '';
       }
+      if (typeof leaderElectricalDetailOnlyMode !== 'undefined' && leaderElectricalDetailOnlyMode) {
+        return `
+          <div class="selected-task-detail-line">
+            <span class="task-inline-info selected-task-detail-line-text">작업유형: ${escapeHtml(task.unit_title)} / 위험성평가번호: ${escapeHtml(task.unit_code || '코드 없음')}</span>
+          </div>
+        `;
+      }
       return `
         <div class="selected-task-detail-line is-removable">
           <span class="task-inline-info selected-task-detail-line-text">작업유형: ${escapeHtml(task.unit_title)} / 위험성평가번호: ${escapeHtml(task.unit_code || '코드 없음')}</span>
@@ -4195,13 +4066,17 @@ function type_label(string $type): string
       return;
     }
 
+    // 중복 제거: leaderElectricalDetailOnlyMode에서는 '현재 선택' 라인 없이 summary만 보여줌
+    // 관리자 페이지에서 모든 셀렉터가 비어있으면 '현재 선택' 라인도 숨김
+    const isManagerAndSelectorsEmpty = (
+      currentRole === 'manager' &&
+      (!group1.value || !group2.value || !group3.value)
+    );
     selectedTaskBox.innerHTML = `
       <h2>선택된 작업</h2>
       <div class="task-info">${introText}</div>
       ${selectedUnitSummaryHtml}
-      <div class="task-inline-info">
-        현재 선택: ${escapeHtml(task.unit_title)} / 위험성평가번호: ${escapeHtml(task.unit_code || '코드 없음')}
-      </div>
+      ${(!leaderElectricalDetailOnlyMode && !isManagerAndSelectorsEmpty ? `<div class="task-inline-info">현재 선택: ${escapeHtml(task.unit_title)} / 위험성평가번호: ${escapeHtml(task.unit_code || '코드 없음')}</div>` : '')}
       ${detailSummaryHtml}
     `;
   }

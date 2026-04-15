@@ -27,6 +27,8 @@ $form = [
 $teamForm = [
     'team_name' => '',
     'team_supervisor' => '',
+    'rename_team_name' => '',
+    'rename_team_target' => '',
 ];
 $teams = auth_read_teams();
 if ($form['team'] === '' && !empty($teams)) {
@@ -103,7 +105,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             [$ok, $message] = auth_add_team($teamForm['team_name'], $teamForm['team_supervisor']);
             if ($ok) {
                 $success = $message;
-                $teamForm = ['team_name' => '', 'team_supervisor' => ''];
+              $teamForm = [
+                'team_name' => '',
+                'team_supervisor' => '',
+                'rename_team_name' => '',
+                'rename_team_target' => '',
+              ];
                 $teams = auth_read_teams();
                 if ($form['team'] === '' && !empty($teams)) {
                     $form['team'] = (string)$teams[0];
@@ -122,10 +129,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             if ($supervisorTeam !== '' && !auth_team_exists($supervisorTeam)) {
                 $error = '유효한 관리감독팀을 선택해주세요.';
+            } elseif ($supervisorTeam !== '' && auth_would_create_supervisor_cycle($teamName, $supervisorTeam)) {
+                $error = '관리감독팀 연결에 순환이 생겨 저장할 수 없습니다.';
             } elseif (auth_set_team_supervisor($teamName, $supervisorTeam)) {
                 $success = '관리감독팀 정보가 저장되었습니다.';
             } else {
                 $error = '관리감독팀 정보를 저장하지 못했습니다.';
+            }
+        }
+    } elseif ($action === 'rename_team') {
+        $teamForm['rename_team_name'] = auth_normalize_team_name((string)($_POST['rename_team_name'] ?? ''));
+        $teamForm['rename_team_target'] = trim((string)($_POST['rename_team_target'] ?? ''));
+        if (!$canManageTeams) {
+            $error = '팀 이름을 수정할 권한이 없습니다.';
+        } else {
+            $previousTeamName = $teamForm['rename_team_name'];
+            $renamedTeamName = auth_normalize_team_name($teamForm['rename_team_target']);
+            [$ok, $message] = auth_rename_team($previousTeamName, $teamForm['rename_team_target']);
+            if ($ok) {
+                $success = $message;
+                $teams = auth_read_teams();
+                $teamForm['rename_team_name'] = '';
+                $teamForm['rename_team_target'] = '';
+                if ($form['team'] !== '' && auth_team_key($form['team']) === auth_team_key($previousTeamName)) {
+                    $form['team'] = $renamedTeamName;
+                } elseif ($form['team'] !== '' && !auth_team_exists($form['team'])) {
+                    $form['team'] = !empty($teams) ? (string)$teams[0] : '';
+                }
+            } else {
+                $error = $message;
             }
         }
     } elseif ($action === 'delete_team') {
@@ -147,7 +179,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $form['name'] = trim((string)($_POST['name'] ?? ''));
         $form['login_id'] = trim((string)($_POST['login_id'] ?? ''));
-                $form['team'] = auth_normalize_team_name((string)($_POST['team'] ?? ''));
+              $form['team'] = auth_normalize_team_name((string)($_POST['team'] ?? ''));
         $form['role'] = $canAssignRoles ? trim((string)($_POST['role'] ?? 'worker')) : 'worker';
         $form['phone'] = trim((string)($_POST['phone'] ?? ''));
         $password = trim((string)($_POST['password'] ?? ''));
@@ -848,7 +880,7 @@ function h($value): string
             <?php if ($canManageTeams): ?>
               <div class="account-panel">
                 <h2>팀 관리</h2>
-                <p>새 팀을 추가하고 현재 사용할 팀 목록을 관리할 수 있습니다. 팀원이 0명인 팀만 삭제할 수 있습니다.</p>
+                <p>새 팀을 추가하고 현재 사용할 팀 목록을 관리할 수 있습니다. 팀명이 바뀌면 계정 소속팀, 관리감독팀 연결, 저장된 작업 팀명도 함께 갱신됩니다.</p>
                 <form method="post">
                   <input type="hidden" name="action" value="create_team">
                   <div class="field">
@@ -877,8 +909,26 @@ function h($value): string
                           <span><?= h($teamName) ?></span>
                           <small><?= $memberCount ?>명</small>
                         </div>
+                        <?php $isProtectedTeam = auth_is_protected_team_name($teamName); ?>
                         <?php if ($supervisorTeam !== ''): ?>
                           <div class="team-pill-supervisor">관리감독팀: <?= h($supervisorTeam) ?></div>
+                        <?php endif; ?>
+                        <form method="post">
+                          <input type="hidden" name="action" value="rename_team">
+                          <input type="hidden" name="rename_team_name" value="<?= h($teamName) ?>">
+                          <input
+                            type="text"
+                            name="rename_team_target"
+                            value="<?= $teamForm['rename_team_name'] === $teamName ? h($teamForm['rename_team_target']) : h($teamName) ?>"
+                            placeholder="새 팀 이름"
+                            maxlength="30"
+                            <?= $isProtectedTeam ? 'disabled' : '' ?>
+                            required
+                          >
+                          <button class="btn-secondary btn-inline" type="submit" <?= $isProtectedTeam ? 'disabled' : '' ?>>팀명 수정</button>
+                        </form>
+                        <?php if ($isProtectedTeam): ?>
+                          <div class="helper">이 팀은 화면 규칙과 권한 정책에 연결되어 있어 이름을 바꿀 수 없습니다.</div>
                         <?php endif; ?>
                         <form method="post" class="team-supervisor-form">
                           <input type="hidden" name="action" value="set_team_supervisor">

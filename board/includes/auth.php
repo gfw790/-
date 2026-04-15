@@ -32,6 +32,7 @@ if (file_exists($_sharedAuthPath)) {
  * 권한 매핑:
  *   - admin   → admin (게시판 관리자)
  *   - manager → admin (관리감독자도 게시판 관리자 권한)
+ *     단, 일부 예외 계정은 user로 강등 가능
  *   - leader  → user  (작업지휘자)
  *   - worker  → user  (일반작업자)
  *
@@ -59,7 +60,7 @@ function getCurrentUser() {
         'id'   => $loginId,
         'name' => (string)($sessionUser['name'] ?? $loginId),
         'dept' => (string)($sessionUser['team'] ?? ''),
-        'role' => mapBoardRole((string)($sessionUser['role'] ?? '')),
+        'role' => mapBoardRole($loginId, (string)($sessionUser['role'] ?? '')),
         // 게시판에서 추가로 활용 가능한 원본 정보
         'original_role'       => (string)($sessionUser['role'] ?? ''),
         'original_role_label' => (string)($sessionUser['role_label'] ?? ''),
@@ -82,7 +83,12 @@ function getCurrentUser() {
  *
  * 변경하려면 아래 배열만 수정하면 됩니다.
  */
-function mapBoardRole(string $companyRole): string {
+function mapBoardRole(string $loginId, string $companyRole): string {
+    $forcedUserIds = ['7204'];
+    if (in_array(trim($loginId), $forcedUserIds, true)) {
+        return 'user';
+    }
+
     $adminRoles = ['admin', 'manager']; // 게시판 관리자로 인정할 사내 역할
     return in_array($companyRole, $adminRoles, true) ? 'admin' : 'user';
 }
