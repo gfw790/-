@@ -803,6 +803,7 @@ if ($user !== null) {
 $savedRaId = isset($_GET['saved_ra_id']) ? (int)$_GET['saved_ra_id'] : 0;
 $savedReportId = isset($_GET['saved_report_id']) ? (int)$_GET['saved_report_id'] : 0;
 $editingReportId = isset($_GET['edit_report_id']) ? (int)$_GET['edit_report_id'] : (int)($_POST['report_id'] ?? 0);
+$addMode = isset($_GET['add_mode']) && trim((string)$_GET['add_mode']) === '1';
 $tasks = [];
 $targetOptions = [];
 $workTypeSubOptions = [];
@@ -1217,11 +1218,12 @@ if ($user !== null) {
                         throw new RuntimeException('수정할 작업을 찾을 수 없거나 수정 권한이 없습니다.');
                     }
 
-                    // 권한 체크: 작성자이거나, leader 역할인 경우
+                    // 권한 체크: 작성자이거나, leader 또는 관리권한이 있는 사용자
                     $isOwner = (string)($existingReport['user_login_id'] ?? '') === (string)($user['login_id'] ?? '');
                     $isLeader = $pageRole === 'leader';
+                    $isManager = auth_can_manage($user);
 
-                    if (!$isOwner && !$isLeader) {
+                    if (!$isOwner && !$isLeader && !$isManager) {
                         throw new RuntimeException('수정할 작업을 찾을 수 없거나 수정 권한이 없습니다.');
                     }
 
@@ -3189,7 +3191,14 @@ function type_label(string $type): string
           </div>
           <?php if (!$isWorker): ?>
             <div class="page-actions">
-              <button type="button" class="btn-secondary" id="show-entry-form"><?= $leaderElectricalDetailOnlyMode ? '입력' : '작업 추가' ?></button>
+              <button
+                type="button"
+                class="btn-secondary"
+                id="show-entry-form"
+                data-edit-url="<?= h(build_page_url($selfPage, array_merge($managerContextParams, [
+                  'add_mode' => '1',
+                ]))) ?>"
+              ><?= $leaderElectricalDetailOnlyMode ? '입력' : '작업 추가' ?></button>
             </div>
           <?php endif; ?>
         <?php endif; ?>
@@ -3723,6 +3732,7 @@ function type_label(string $type): string
       ],
       $formDefaults['pasted_images']
   ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+  const isAddMode = <?= $addMode ? 'true' : 'false' ?>;
 
   const group1 = document.getElementById('group1');
   const group2 = document.getElementById('group2');
@@ -7395,6 +7405,11 @@ function type_label(string $type): string
 
   if (showEntryFormButton && reportForm) {
     showEntryFormButton.addEventListener('click', () => {
+      const editUrl = String(showEntryFormButton.dataset.editUrl || '').trim();
+      if (editUrl !== '') {
+        window.location.assign(editUrl);
+        return;
+      }
       reportForm.classList.remove('is-hidden');
       showEntryFormButton.classList.add('is-hidden');
       reportForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -7620,7 +7635,7 @@ function type_label(string $type): string
   }
 
   syncSelectedUnitRaIdsField();
-  if (initialSelectedUnitRaId > 0) {
+  if (initialSelectedUnitRaId > 0 && !isAddMode) {
     const initialTask = tasks.find((item) => item.unit_ra_id === initialSelectedUnitRaId) || null;
     renderSelectedTask(initialTask);
   } else {
