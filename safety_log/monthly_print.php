@@ -191,5 +191,4 @@ include __DIR__ . '/includes/header.php';
             </div>
         <?php endif; ?>
     </div>
-</div>
 <?php include __DIR__ . '/includes/footer.php'; ?>

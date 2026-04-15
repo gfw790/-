@@ -200,7 +200,6 @@ include __DIR__ . '/includes/header.php';
             <button type="button" class="btn btn-secondary" onclick="window.location.reload()">취소</button>
         </div>
     </form>
-</div>
 
 <script>
     const detailBody = document.getElementById('details-body');

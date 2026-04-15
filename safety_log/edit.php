@@ -217,7 +217,6 @@ include __DIR__ . '/includes/header.php';
             <a href="view.php?id=<?= h($id) ?>" class="btn btn-secondary">취소</a>
         </div>
     </form>
-</div>
 
 <script>
     const detailBody = document.getElementById('details-body');

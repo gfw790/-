@@ -183,7 +183,6 @@ include __DIR__ . '/includes/header.php';
             </div>
         </div>
     <?php endif; ?>
-    </div>
 
     <script>
         // 상세보기에서도 삭제 확인을 동일하게 처리합니다.
