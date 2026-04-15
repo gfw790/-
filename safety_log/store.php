@@ -28,27 +28,60 @@ function restructureFilesArray(array $files): array
     return $result;
 }
 
-function saveUploadedFile(array $file, string $uploadDir): string
+function normalizeDetailFiles(array $files): array
+{
+    $result = [];
+
+    if (!isset($files['name']) || !is_array($files['name'])) {
+        return $result;
+    }
+
+    foreach ($files['name'] as $index => $fields) {
+        foreach ($fields as $fieldName => $value) {
+            $result[$index][$fieldName] = [
+                'name' => $files['name'][$index][$fieldName] ?? '',
+                'type' => $files['type'][$index][$fieldName] ?? '',
+                'tmp_name' => $files['tmp_name'][$index][$fieldName] ?? '',
+                'error' => $files['error'][$index][$fieldName] ?? UPLOAD_ERR_NO_FILE,
+                'size' => $files['size'][$index][$fieldName] ?? 0,
+            ];
+        }
+    }
+
+    return $result;
+}
+
+function saveDetailFile(array $file, string $uploadRoot, string $relativeDir): string
 {
     if (empty($file['tmp_name']) || $file['error'] !== UPLOAD_ERR_OK) {
         return '';
     }
 
-    if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true)) {
-        return '';
+    if (!is_uploaded_file($file['tmp_name'])) {
+        throw new RuntimeException('유효한 업로드 파일이 아닙니다.');
     }
 
     $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
-    $filename = pathinfo($file['name'], PATHINFO_FILENAME);
-    $filename = preg_replace('/[^a-zA-Z0-9_-]/', '_', $filename);
-    $uniqueName = sprintf('%s_%s.%s', $filename, uniqid('', true), $extension ?: 'dat');
-    $targetPath = rtrim($uploadDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $uniqueName;
+    $extension = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $extension));
+    $extension = $extension !== '' ? '.' . $extension : '';
 
-    if (move_uploaded_file($file['tmp_name'], $targetPath)) {
-        return $targetPath;
+    $timestamp = date('Ymd_His');
+    $randomSuffix = random_int(1000, 9999);
+    $filename = sprintf('safety_%s_%s%s', $timestamp, $randomSuffix, $extension);
+
+    $relativeDir = trim($relativeDir, '/');
+    $targetDir = rtrim($uploadRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relativeDir);
+
+    if (!is_dir($targetDir) && !mkdir($targetDir, 0755, true)) {
+        throw new RuntimeException('업로드 폴더를 생성할 수 없습니다: ' . $targetDir);
     }
 
-    return '';
+    $targetPath = $targetDir . DIRECTORY_SEPARATOR . $filename;
+    if (!move_uploaded_file($file['tmp_name'], $targetPath)) {
+        throw new RuntimeException('파일 이동에 실패했습니다: ' . $file['name']);
+    }
+
+    return $relativeDir . '/' . $filename;
 }
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -102,11 +135,7 @@ try {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
     );
 
-    $transactionStarted = $pdo->beginTransaction();
-
-    if (!$transactionStarted) {
-        throw new RuntimeException('트랜잭션을 시작할 수 없습니다.');
-    }
+    $pdo->beginTransaction();
 
     $insertLog = $pdo->prepare(
         'INSERT INTO safety_manager_log (log_date, manager_name, site_name, work_location, weather, subject, summary, remark)
@@ -128,7 +157,15 @@ try {
         'INSERT INTO safety_manager_log_detail (log_id, item_no, work_time, activity, description, status, photo_1, photo_2)
          VALUES (:log_id, :item_no, :work_time, :activity, :description, :status, :photo_1, :photo_2)'
     );
-    $uploadDir = 'A:\\risk_server\\uploads\\2026';
+
+    $uploadRoot = 'A:\\risk_server\\uploads\\safety_log';
+    if (!is_dir($uploadRoot) && !mkdir($uploadRoot, 0755, true)) {
+        throw new RuntimeException('업로드 루트 경로를 생성할 수 없습니다: ' . $uploadRoot);
+    }
+
+    $year = date('Y');
+    $month = date('m');
+    $relativeDir = sprintf('%s/%s', $year, $month);
 
     foreach ($details as $index => $detail) {
         $workTime = trim($detail['work_time'] ?? '');
@@ -136,12 +173,12 @@ try {
         $description = trim($detail['description'] ?? '');
         $status = trim($detail['status'] ?? '');
 
-        if ($workTime === '' && $activity === '' && $description === '' && $status === '') {
+        $photo1 = saveDetailFile($files[$index]['photo_1'] ?? [], $uploadRoot, $relativeDir);
+        $photo2 = saveDetailFile($files[$index]['photo_2'] ?? [], $uploadRoot, $relativeDir);
+
+        if ($workTime === '' && $activity === '' && $description === '' && $status === '' && $photo1 === '' && $photo2 === '') {
             continue;
         }
-
-        $photo1 = saveUploadedFile($files[$index]['photo_1'] ?? [], $uploadDir);
-        $photo2 = saveUploadedFile($files[$index]['photo_2'] ?? [], $uploadDir);
 
         $insertDetail->execute([
             ':log_id' => $logId,
@@ -156,10 +193,11 @@ try {
     }
 
     $pdo->commit();
-    header('Location: index.php');
+    header('Location: create.php');
     exit;
+
 } catch (Throwable $e) {
-    if (isset($pdo) && isset($transactionStarted) && $transactionStarted && $pdo->inTransaction()) {
+    if (isset($pdo) && $pdo->inTransaction()) {
         try {
             $pdo->rollBack();
         } catch (Throwable $rollbackException) {
