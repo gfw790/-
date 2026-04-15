@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../risk_server/db_config.php';
+require_once __DIR__ . '/log_validation.php';
 
 /**
  * HTML escape helper.
@@ -12,44 +13,33 @@ function h($value)
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
 
-$id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
-if ($id === false || $id === null) {
-    $errorMessage = '유효한 업무일지 ID가 전달되지 않았습니다.';
+try {
+    $pdo = getDB();
+    $id = getValidLogId($pdo);
+
+    // safety_manager_log에서 단일 항목을 조회합니다.
+    $stmt = $pdo->prepare(
+        'SELECT id, log_date, manager_name, site_name, work_location, weather, subject, summary, remark, created_at
+         FROM safety_manager_log
+         WHERE id = :id'
+    );
+    $stmt->execute([':id' => $id]);
+    $log = $stmt->fetch();
+
+    // safety_manager_log_detail 목록을 조회합니다.
+    $detailStmt = $pdo->prepare(
+        'SELECT item_no, work_time, activity, description, status, photo_1, photo_2
+         FROM safety_manager_log_detail
+         WHERE log_id = :log_id
+         ORDER BY item_no ASC'
+    );
+    $detailStmt->execute([':log_id' => $id]);
+    $details = $detailStmt->fetchAll();
+    $errorMessage = '';
+} catch (Throwable $e) {
+    $errorMessage = '데이터를 불러오는 중 오류가 발생했습니다: ' . $e->getMessage();
     $log = null;
     $details = [];
-} else {
-    try {
-        $pdo = getDB();
-
-        // safety_manager_log에서 단일 항목을 조회합니다.
-        $stmt = $pdo->prepare(
-            'SELECT id, log_date, manager_name, site_name, work_location, weather, subject, summary, remark, created_at
-             FROM safety_manager_log
-             WHERE id = :id'
-        );
-        $stmt->execute([':id' => $id]);
-        $log = $stmt->fetch();
-
-        if (!$log) {
-            $errorMessage = '요청하신 업무일지를 찾을 수 없습니다.';
-            $details = [];
-        } else {
-            // safety_manager_log_detail 목록을 조회합니다.
-            $detailStmt = $pdo->prepare(
-                'SELECT item_no, work_time, activity, description, status, photo_1, photo_2
-                 FROM safety_manager_log_detail
-                 WHERE log_id = :log_id
-                 ORDER BY item_no ASC'
-            );
-            $detailStmt->execute([':log_id' => $id]);
-            $details = $detailStmt->fetchAll();
-            $errorMessage = '';
-        }
-    } catch (Throwable $e) {
-        $errorMessage = '데이터를 불러오는 중 오류가 발생했습니다: ' . $e->getMessage();
-        $log = null;
-        $details = [];
-    }
 }
 ?>
 <!DOCTYPE html>

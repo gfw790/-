@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../risk_server/db_config.php';
+require_once __DIR__ . '/log_validation.php';
 
 /**
  * HTML escape helper.
@@ -12,18 +13,8 @@ function h($value)
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
 
-// GET 또는 POST에서 id를 받아옵니다.
-$id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
-if ($id === false || $id === null) {
-    $id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
-}
-
-if ($id === false || $id === null) {
-    http_response_code(400);
-    echo '<h1>잘못된 요청입니다.</h1>';
-    echo '<p>유효한 업무일지 ID가 전달되지 않았습니다.</p>';
-    exit;
-}
+$pdo = getDB();
+$id = getValidLogId($pdo);
 
 try {
     $pdo = getDB();
@@ -38,8 +29,8 @@ try {
 
     $pdo->commit();
 
-    // 삭제 후 목록 페이지로 이동합니다.
-    header('Location: index.php');
+    // 삭제 성공 시 목록 페이지로 이동하고 성공 메시지를 전달합니다.
+    header('Location: index.php?type=success&message=' . rawurlencode('업무일지가 삭제되었습니다.'));
     exit;
 } catch (Throwable $e) {
     if (isset($pdo) && $pdo->inTransaction()) {
@@ -49,8 +40,7 @@ try {
             // rollback 실패 시 무시합니다.
         }
     }
-    http_response_code(500);
-    echo '<h1>삭제 중 오류가 발생했습니다.</h1>';
-    echo '<p>' . h($e->getMessage()) . '</p>';
+    // 삭제 실패 시 목록 페이지로 이동하고 에러 메시지를 전달합니다.
+    header('Location: index.php?type=error&message=' . rawurlencode('업무일지 삭제 중 오류가 발생했습니다.'));
     exit;
 }

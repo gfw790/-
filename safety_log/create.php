@@ -97,20 +97,11 @@ function renderDetailRow(array $detail, int $index): string
     );
 }
 ?>
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>안전관리자 업무일지 등록</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-VnY9Xl60G7eusM0ZyEJ+X8LwKUQ/yqPn2rGHXeFQ0WlQg5KL6N37pP3cT7QeFk0I" crossorigin="anonymous">
-    <style>
-        .detail-table th, .detail-table td { vertical-align: middle; }
-        .form-control-plaintext { margin-bottom: 0; }
-    </style>
-</head>
-<body>
-<div class="container py-4">
+<?php
+$pageTitle = '안전관리자 업무일지 등록';
+$extraHead = '<style> .detail-table th, .detail-table td { vertical-align: middle; } .form-control-plaintext { margin-bottom: 0; } </style>';
+include __DIR__ . '/includes/header.php';
+?>
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="h4">안전관리자 업무일지 등록</h1>
     </div>
@@ -285,5 +276,4 @@ function renderDetailRow(array $detail, int $index): string
 
     detailBody.addEventListener('click', onDeleteRow);
 </script>
-</body>
-</html>
+<?php include __DIR__ . '/includes/footer.php'; ?>

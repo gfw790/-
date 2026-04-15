@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../risk_server/db_config.php';
+require_once __DIR__ . '/upload_validation.php';
 
 function h($value)
 {
@@ -53,9 +54,18 @@ function normalizeDetailFiles(array $files): array
 
 function saveDetailFile(array $file, string $uploadRoot, string $relativeDir): string
 {
-    if (empty($file['tmp_name']) || $file['error'] !== UPLOAD_ERR_OK) {
+    // 업로드된 파일이 없으면 정상 처리합니다.
+    if ($file['error'] === UPLOAD_ERR_NO_FILE) {
         return '';
     }
+
+    // 그 외 업로드 오류가 있으면 예외로 처리합니다.
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        throw new RuntimeException('이미지 업로드 중 오류가 발생했습니다.');
+    }
+
+    // 업로드된 이미지에 대한 확장자, MIME 타입, 용량 검증
+    validateUploadedImage($file);
 
     if (!is_uploaded_file($file['tmp_name'])) {
         throw new RuntimeException('유효한 업로드 파일이 아닙니다.');
@@ -193,7 +203,8 @@ try {
     }
 
     $pdo->commit();
-    header('Location: index.php');
+    // 등록 성공 시 목록 페이지로 이동하고 성공 메시지를 전달합니다.
+    header('Location: index.php?type=success&message=' . rawurlencode('업무일지가 등록되었습니다.'));
     exit;
 
 } catch (Throwable $e) {
@@ -205,8 +216,7 @@ try {
         }
     }
 
-    http_response_code(500);
-    echo '<h1>저장 중 오류가 발생했습니다.</h1>';
-    echo '<p>' . h($e->getMessage()) . '</p>';
+    // 등록 실패 시 목록 페이지로 이동하고 에러 메시지를 전달합니다.
+    header('Location: index.php?type=error&message=' . rawurlencode('업무일지 등록 중 오류가 발생했습니다.'));
     exit;
 }

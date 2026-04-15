@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../risk_server/db_config.php';
+require_once __DIR__ . '/upload_validation.php';
 
 /**
  * HTML escape helper.
@@ -50,9 +51,18 @@ function normalizeDetailFiles(array $files): array
  */
 function saveDetailFile(array $file, string $uploadRoot, string $relativeDir): string
 {
-    if (empty($file['tmp_name']) || $file['error'] !== UPLOAD_ERR_OK) {
+    // 업로드된 파일이 없으면 정상 처리합니다.
+    if ($file['error'] === UPLOAD_ERR_NO_FILE) {
         return '';
     }
+
+    // 그 외 업로드 오류가 있으면 예외로 처리합니다.
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        throw new RuntimeException('이미지 업로드 중 오류가 발생했습니다.');
+    }
+
+    // 업로드된 이미지에 대한 확장자, MIME 타입, 용량 검증
+    validateUploadedImage($file);
 
     if (!is_uploaded_file($file['tmp_name'])) {
         return '';
@@ -190,7 +200,8 @@ try {
     }
 
     $pdo->commit();
-    header('Location: view.php?id=' . $id);
+    // 수정 성공 시 상세보기 페이지로 이동하고 성공 메시지를 전달합니다.
+    header('Location: view.php?id=' . $id . '&type=success&message=' . rawurlencode('업무일지가 수정되었습니다.'));
     exit;
 } catch (Throwable $e) {
     if (isset($pdo) && $pdo->inTransaction()) {
@@ -201,8 +212,7 @@ try {
         }
     }
 
-    http_response_code(500);
-    echo '<h1>수정 중 오류가 발생했습니다.</h1>';
-    echo '<p>' . h($e->getMessage()) . '</p>';
+    // 수정 실패 시 상세보기 페이지로 이동하고 에러 메시지를 전달합니다.
+    header('Location: view.php?id=' . $id . '&type=error&message=' . rawurlencode('업무일지 수정 중 오류가 발생했습니다.'));
     exit;
 }
