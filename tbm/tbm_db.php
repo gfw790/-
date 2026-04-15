@@ -289,6 +289,94 @@ function tbm_document_exists(string $date): bool
     return $stmt->fetchColumn() !== false;
 }
 
+function tbm_document_exists_for_team(string $date, ?string $team): bool
+{
+    $pdo = tbm_db();
+
+    if (trim((string)$team) === '') {
+        $stmt = $pdo->prepare('SELECT 1 FROM tbm_documents WHERE doc_date = ? AND (team IS NULL OR team = "") LIMIT 1');
+        $stmt->execute([$date]);
+    } else {
+        $stmt = $pdo->prepare('SELECT 1 FROM tbm_documents WHERE doc_date = ? AND team = ? LIMIT 1');
+        $stmt->execute([$date, $team]);
+    }
+
+    return $stmt->fetchColumn() !== false;
+}
+
+function tbm_get_document_for_team(string $date, ?string $team): ?array
+{
+    $pdo = tbm_db();
+    if (trim((string)$team) === '') {
+        $stmt = $pdo->prepare(
+            'SELECT d.*, c.edu_title, c.body_text, c.source_url, c.image_file,
+                    c.quiz_1, c.quiz_2, c.quiz_3,
+                    i.name AS instructor_name, i.position AS instructor_position
+               FROM tbm_documents d
+          LEFT JOIN tbm_accident_content c ON d.content_id = c.id
+          LEFT JOIN tbm_instructors      i ON d.instructor_id = i.id
+              WHERE d.doc_date = ?
+                AND (d.team IS NULL OR d.team = "")
+              LIMIT 1'
+        );
+        $stmt->execute([$date]);
+    } else {
+        $stmt = $pdo->prepare(
+            'SELECT d.*, c.edu_title, c.body_text, c.source_url, c.image_file,
+                    c.quiz_1, c.quiz_2, c.quiz_3,
+                    i.name AS instructor_name, i.position AS instructor_position
+               FROM tbm_documents d
+          LEFT JOIN tbm_accident_content c ON d.content_id = c.id
+          LEFT JOIN tbm_instructors      i ON d.instructor_id = i.id
+              WHERE d.doc_date = ?
+                AND d.team = ?
+              LIMIT 1'
+        );
+        $stmt->execute([$date, $team]);
+    }
+
+    $row = $stmt->fetch();
+    if ($row && (
+        empty($row['content_id']) ||
+        (
+            trim((string)($row['edu_title'] ?? '')) === '' &&
+            trim((string)($row['body_text'] ?? '')) === '' &&
+            trim((string)($row['quiz_1'] ?? '')) === '' &&
+            trim((string)($row['quiz_2'] ?? '')) === '' &&
+            trim((string)($row['quiz_3'] ?? '')) === ''
+        )
+    )) {
+        $fallbackStmt = $pdo->prepare(
+            'SELECT *
+               FROM tbm_accident_content
+              WHERE DATE(created_at) = ?
+              ORDER BY id DESC
+              LIMIT 1'
+        );
+        $fallbackStmt->execute([$date]);
+        $fallback = $fallbackStmt->fetch();
+
+        if ($fallback) {
+            $linkStmt = $pdo->prepare('UPDATE tbm_documents SET content_id = :content_id, updated_at = NOW() WHERE id = :id');
+            $linkStmt->execute([
+                ':content_id' => (int)$fallback['id'],
+                ':id'         => (int)$row['id'],
+            ]);
+
+            $row['content_id']  = (int)$fallback['id'];
+            $row['edu_title']   = $fallback['edu_title'] ?? '';
+            $row['body_text']   = $fallback['body_text'] ?? '';
+            $row['source_url']  = $fallback['source_url'] ?? '';
+            $row['image_file']  = $fallback['image_file'] ?? '';
+            $row['quiz_1']      = $fallback['quiz_1'] ?? '';
+            $row['quiz_2']      = $fallback['quiz_2'] ?? '';
+            $row['quiz_3']      = $fallback['quiz_3'] ?? '';
+        }
+    }
+
+    return $row ?: null;
+}
+
 /**
  * 해당 날짜의 일지를 반환한다. 없으면 null.
  */

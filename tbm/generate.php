@@ -40,10 +40,11 @@ try {
     $instructorId = (int)($stmt->fetchColumn() ?: 1);
     
     $sourceUrl = trim($_POST['source_url'] ?? '');
-    
+    $existingDoc = tbm_get_document_for_team($data['doc_date'], $documentTeam);
+
     if ($sourceUrl === '') {
-        $existingDoc = tbm_get_document($data['doc_date']);
-        $sourceUrl = trim($existingDoc['source_url'] ?? '');
+        $fallbackDoc = tbm_get_document($data['doc_date']);
+        $sourceUrl = trim($fallbackDoc['source_url'] ?? '');
     }
 
     // quiz_1 / quiz_2 / quiz_3 키로 저장
@@ -63,14 +64,15 @@ try {
 
     $docDate = $data['doc_date'];
 
-    if (tbm_document_exists($docDate)) {
+    if ($existingDoc) {
+        $docId = (int)$existingDoc['id'];
         $stmt = $pdo->prepare(
             'UPDATE tbm_documents
                 SET team=:team, instructor_id=:iid, content_id=:cid,
                     today_work_1=:tw1, today_work_2=:tw2,
                     risk_checks=:checks, risk_rows=:rows,
                     remarks=:remarks, generation_status="pending", updated_at=NOW()
-              WHERE doc_date=:doc_date'
+              WHERE id=:id'
         );
         $stmt->execute([
             ':team'      => $documentTeam,
@@ -78,11 +80,8 @@ try {
             ':tw1'       => $data['today_work_1'], ':tw2' => $data['today_work_2'],
             ':checks'    => json_encode($data['risk_checks'], JSON_UNESCAPED_UNICODE),
             ':rows'      => json_encode($data['risk_rows'],   JSON_UNESCAPED_UNICODE),
-            ':remarks'   => $data['remarks'], ':doc_date' => $docDate,
+            ':remarks'   => $data['remarks'], ':id' => $docId,
         ]);
-        $s2 = $pdo->prepare('SELECT id FROM tbm_documents WHERE doc_date=? LIMIT 1');
-        $s2->execute([$docDate]);
-        $docId = (int)$s2->fetchColumn();
     } else {
         $docId = tbm_create_document($docDate, $instructorId, $contentId, $documentTeam);
         $stmt = $pdo->prepare(

@@ -87,6 +87,8 @@ if ($requestedTeam !== '' && isset($teamMembers[$requestedTeam])) {
     $initialTeamValue = array_keys($teamMembers)[0];
 }
 
+$selectedTeam = $initialTeamValue;
+
 // ── 강사 정보 로드 (TBM DB) ────────────────────────────────────────
 $instructor = ['name' => '김남균', 'position' => '과장'];
 try {
@@ -112,7 +114,7 @@ if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $selectedDate)) {
 
 $existingDoc = null;
 try {
-    $existingDoc = tbm_get_document($selectedDate);
+    $existingDoc = tbm_get_document_for_team($selectedDate, $selectedTeam);
 } catch (Throwable $e) {
     $existingDoc = null;
 }
@@ -146,11 +148,7 @@ $formImageFile   = $existingDoc['image_file'] ?? $cachedAiDoc['image_file'] ?? '
 // ── 최근 생성 목록 (최근 10건) ────────────────────────────────
 
 $recentDocs = [];
-$teamRecentDocs = [
-    '공사팀' => [],
-    '가스팀' => [],
-    '삼척팀' => [],
-];
+$teamRecentDocs = array_fill_keys(array_keys($teamMembers), []);
 $fallbackRecentDocs = [];
 try {
     $pdo  = tbm_db();
@@ -418,7 +416,7 @@ function renderRecentDocs(teamName) {
             : '';
 
         return '<li style="padding:10px 0; border-bottom:1px solid #f3f4f6;">'
-            + '<div><a href="index.php?date=' + encodeURIComponent(doc.doc_date) + '" class="recent-date">' + escapeHtml(doc.doc_date) + '</a>'
+            + '<div><a href="index.php?date=' + encodeURIComponent(doc.doc_date) + '&team=' + encodeURIComponent(teamName) + '" class="recent-date">' + escapeHtml(doc.doc_date) + '</a>'
             + ' <span class="badge badge-' + escapeHtml(doc.generation_status) + '" style="margin-left:4px;">' + escapeHtml(statusLabel) + '</span></div>'
             + '<div style="margin-top:4px; font-size:.85rem; color:#475569;">' + escapeHtml(titleText) + '</div>'
             + fileLink
