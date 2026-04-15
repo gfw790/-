@@ -446,10 +446,12 @@ function sanitizeRichtextInline(string $html): string {
     if ($html === '') return '';
 
     $doc = new DOMDocument();
-    // Wrap in a div so we have a root; suppress warnings for HTML5 entities
-    $wrapped = '<?xml encoding="UTF-8"><div>' . $html . '</div>';
     libxml_use_internal_errors(true);
-    $doc->loadHTML($wrapped, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+    // Use a full HTML document with explicit charset declaration — more reliable
+    // than LIBXML_HTML_NOIMPLIED on all platforms (esp. Windows libxml builds).
+    $doc->loadHTML(
+        '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>' . $html . '</body></html>'
+    );
     libxml_clear_errors();
 
     $allowedTags = ['b', 'i', 'u', 's', 'br', 'span', 'font'];
@@ -469,8 +471,8 @@ function sanitizeRichtextInline(string $html): string {
             $inner .= $walk($child);
         }
 
-        if ($tag === 'div' || $tag === 'body' || $tag === 'html') {
-            // Transparent wrapper — just return children
+        // Transparent wrappers — just return children
+        if (in_array($tag, ['html', 'head', 'body', 'div'], true)) {
             return $inner;
         }
 
@@ -506,10 +508,10 @@ function sanitizeRichtextInline(string $html): string {
         return "<{$tag}{$attrs}>{$inner}</{$tag}>";
     };
 
-    $root = $doc->getElementsByTagName('div')->item(0);
-    if (!$root) return '';
+    $body = $doc->getElementsByTagName('body')->item(0);
+    if (!$body) return h($html);
     $result = '';
-    foreach ($root->childNodes as $child) {
+    foreach ($body->childNodes as $child) {
         $result .= $walk($child);
     }
     return $result;

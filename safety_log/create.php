@@ -64,6 +64,51 @@ $values = [
 ];
 $details = [];
 
+// ── 안전관리자 목록 (auth_users.json) ──────────────────────
+$safetyManagers = [];
+$authUsersFile = __DIR__ . '/../risk_assessment/auth_users.json';
+if (is_file($authUsersFile)) {
+    $stored = json_decode((string)file_get_contents($authUsersFile), true) ?? [];
+    foreach ($stored as $account) {
+        if (!is_array($account)) {
+            continue;
+        }
+        if ((string)($account['role'] ?? '') === 'safety_manager') {
+            $name = trim((string)($account['name'] ?? ''));
+            if ($name !== '') {
+                $safetyManagers[] = $name;
+            }
+        }
+    }
+    sort($safetyManagers);
+}
+
+// ── 금일 작업목록 (risk_assessment DB) ─────────────────────
+$todayWorkList = [];
+try {
+    $raPdo = new PDO(
+        'mysql:host=' . DB_HOST . ';dbname=risk_assessment;charset=' . DB_CHARSET,
+        DB_USER,
+        DB_PASS,
+        [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES   => false,
+        ]
+    );
+    $wStmt = $raPdo->prepare(
+        'SELECT work_title, work_place, team_name
+         FROM work_report
+         WHERE work_date = :today
+         GROUP BY work_title, work_place, team_name
+         ORDER BY team_name, work_title'
+    );
+    $wStmt->execute([':today' => date('Y-m-d')]);
+    $todayWorkList = $wStmt->fetchAll();
+} catch (Throwable $e) {
+    // risk_assessment DB 연결 실패 시 빈 배열 유지
+}
+
 function renderDetailRow(array $detail, int $index): string
 {
     return sprintf(
@@ -124,15 +169,42 @@ include __DIR__ . '/includes/header.php';
                     </div>
                     <div class="col-md-3">
                         <label class="form-label">작성자</label>
-                        <input type="text" name="manager_name" class="form-control" value="<?= h($values['manager_name']) ?>" required>
+                        <?php if (!empty($safetyManagers)): ?>
+                            <select name="manager_name" class="form-select" required>
+                                <option value="">-- 작성자 선택 --</option>
+                                <?php foreach ($safetyManagers as $mgr): ?>
+                                    <option value="<?= h($mgr) ?>" <?= $values['manager_name'] === $mgr ? 'selected' : '' ?>>
+                                        <?= h($mgr) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        <?php else: ?>
+                            <input type="text" name="manager_name" class="form-control" value="<?= h($values['manager_name']) ?>" required placeholder="작성자 이름">
+                        <?php endif; ?>
                     </div>
                     <div class="col-md-3">
                         <label class="form-label">현장명</label>
-                        <input type="text" name="site_name" class="form-control" value="<?= h($values['site_name']) ?>" required>
+                        <?php if (!empty($todayWorkList)): ?>
+                            <select id="work_picker" class="form-select mb-2">
+                                <option value="">-- 오늘 작업목록에서 선택 --</option>
+                                <?php foreach ($todayWorkList as $w): ?>
+                                    <option value="<?= h($w['work_title']) ?>"
+                                            data-place="<?= h($w['work_place']) ?>">
+                                        <?= h($w['work_title']) ?>
+                                        <?= !empty($w['team_name']) ? '(' . h($w['team_name']) . ')' : '' ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        <?php endif; ?>
+                        <input type="text" name="site_name" id="site_name"
+                               class="form-control" value="<?= h($values['site_name']) ?>"
+                               required placeholder="현장명 직접 입력 가능">
                     </div>
                     <div class="col-md-3">
                         <label class="form-label">작업 위치</label>
-                        <input type="text" name="work_location" class="form-control" value="<?= h($values['work_location']) ?>">
+                        <input type="text" name="work_location" id="work_location"
+                               class="form-control" value="<?= h($values['work_location']) ?>"
+                               placeholder="작업 위치">
                     </div>
                 </div>
 
@@ -274,5 +346,16 @@ include __DIR__ . '/includes/header.php';
     });
 
     detailBody.addEventListener('click', onDeleteRow);
+
+    // 오늘 작업 선택 시 현장명 · 작업위치 자동 입력
+    const workPicker = document.getElementById('work_picker');
+    if (workPicker) {
+        workPicker.addEventListener('change', function () {
+            const opt = this.options[this.selectedIndex];
+            if (!opt.value) return;
+            document.getElementById('site_name').value = opt.value;
+            document.getElementById('work_location').value = opt.dataset.place || '';
+        });
+    }
 </script>
 <?php include __DIR__ . '/includes/footer.php'; ?>

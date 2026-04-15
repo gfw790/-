@@ -32,6 +32,8 @@ if ($editId > 0) {
     }
 }
 
+$canWriteAdminCat = $user['role'] === 'admin' || ($user['original_role'] ?? '') === 'safety_manager';
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     checkCsrf($_POST['csrf'] ?? '');
 
@@ -55,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $content = $rawContent;
     }
     $categoryId = (int)($_POST['category_id'] ?? 0);
-    $isNotice = !empty($_POST['is_notice']) && $user['role'] === 'admin' ? 1 : 0;
+    $isNotice = !empty($_POST['is_notice']) && $canWriteAdminCat ? 1 : 0;
 
     if ($title === '' || $content === '' || $categoryId === 0) {
         $error = '제목, 분류, 내용을 모두 입력해 주세요.';
@@ -63,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $cat = getCategoryById($categoryId);
         if (!$cat) {
             $error = '올바르지 않은 분류입니다.';
-        } elseif ($cat['write_role'] === 'admin' && $user['role'] !== 'admin') {
+        } elseif ($cat['write_role'] === 'admin' && !$canWriteAdminCat) {
             $error = '해당 분류는 관리자만 작성할 수 있습니다.';
         }
     }
@@ -176,14 +178,14 @@ if (!$selectedCat && !empty($_GET['cat'])) {
             <select name="category_id" required>
                 <option value="">선택</option>
                 <?php foreach (getCategories() as $cat): ?>
-                    <?php if ($cat['write_role'] === 'admin' && $user['role'] !== 'admin') continue; ?>
+                    <?php if ($cat['write_role'] === 'admin' && !$canWriteAdminCat) continue; ?>
                     <option value="<?= (int)$cat['id'] ?>" <?= $selectedCat == $cat['id'] ? 'selected' : '' ?>>
                         <?= h($cat['name']) ?>
                     </option>
                 <?php endforeach; ?>
             </select>
 
-            <?php if ($user['role'] === 'admin'): ?>
+            <?php if ($canWriteAdminCat): ?>
                 <label style="margin-left:14px;font-size:12px;">
                     <input type="checkbox" name="is_notice" value="1" <?= !empty($post['is_notice']) ? 'checked' : '' ?>>
                     공지글로 등록

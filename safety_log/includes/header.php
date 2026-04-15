@@ -14,7 +14,7 @@ if (!isset($extraHead)) {
 }
 ?>
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -23,8 +23,9 @@ if (!isset($extraHead)) {
           rel="stylesheet"
           integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
           crossorigin="anonymous">
+    <link rel="stylesheet" href="assets/theme.css">
     <?= $extraHead ?>
 </head>
-<body class="bg-light">
+<body>
 <?php include __DIR__ . '/navbar.php'; ?>
 <div class="container py-4">

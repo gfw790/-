@@ -8,30 +8,26 @@ $navItems = [
     'monthly_print.php'  => '월간 출력',
 ];
 ?>
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
-    <div class="container-fluid">
-        <a class="navbar-brand fw-bold" href="dashboard.php">
-            &#128203; 안전관리자 업무일지
+<div class="sl-topbar">
+    <div class="sl-topbar-inner">
+        <a class="sl-brand-title" href="dashboard.php">
+            <div class="sl-brand-label">SAFETY LOG &middot; SYSTEM</div>
+            안전관리자 <span>업무일지</span>
         </a>
-        <button class="navbar-toggler" type="button"
-                data-bs-toggle="collapse"
-                data-bs-target="#safetyLogNavbar"
-                aria-controls="safetyLogNavbar"
-                aria-expanded="false"
-                aria-label="메뉴 토글">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="safetyLogNavbar">
-            <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
-                <?php foreach ($navItems as $file => $label): ?>
-                    <li class="nav-item">
-                        <a class="nav-link<?= $currentPage === $file ? ' active fw-semibold' : '' ?>"
-                           href="<?= h($file) ?>">
-                            <?= h($label) ?>
-                        </a>
-                    </li>
-                <?php endforeach; ?>
-            </ul>
-        </div>
+        <button class="sl-nav-toggle" aria-label="메뉴 열기" onclick="
+            var nav = document.getElementById('slNav');
+            nav.classList.toggle('is-open');
+        ">&#9776;</button>
+        <nav class="sl-nav" id="slNav">
+            <?php foreach ($navItems as $file => $label): ?>
+                <a href="<?= h($file) ?>"
+                   class="sl-nav-link<?= $currentPage === $file ? ' is-active' : '' ?>">
+                    <?= h($label) ?>
+                </a>
+            <?php endforeach; ?>
+            <a href="../risk_assessment/work_list.php" class="sl-nav-link">
+                &larr; 작업목록
+            </a>
+        </nav>
     </div>
-</nav>
+</div>
