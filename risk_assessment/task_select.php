@@ -1551,8 +1551,7 @@ if ($user !== null) {
             }
             $savedReportTeamName = auth_normalize_team_name((string)($savedReport['team_name'] ?? ''));
             $savedReportContextTeamName = $savedReportTeamName !== '' ? $savedReportTeamName : $effectiveReportTeamName;
-            $leaderElectricalDetailOnlyMode = $pageRole === 'leader'
-                && auth_team_key($savedReportContextTeamName) === auth_team_key('공사팀-전기');
+            $leaderElectricalDetailOnlyMode = $pageRole === 'leader' && $savedReportId > 0;
 
             $taskStmt = $pdo->prepare("SELECT task_name FROM work_report_task WHERE report_id = :report_id ORDER BY sort_no ASC, report_task_id ASC");
             $taskStmt->execute([':report_id' => $savedReportId]);
@@ -1658,10 +1657,7 @@ if ($user !== null) {
                 }
             }
 
-            if (
-                ($leaderElectricalDetailOnlyMode && $requestMethod !== 'POST')
-                || ($editingReportId > 0 && (int)$savedReport['report_id'] === $editingReportId)
-            ) {
+            if ($savedReportId > 0 && $requestMethod !== 'POST') {
                 $selectedUnitRaIds = normalize_unit_ra_id_values($savedReport['selected_unit_ra_ids'] ?? []);
                 if (empty($selectedUnitRaIds) && (int)$savedReport['unit_ra_id'] > 0) {
                     $selectedUnitRaIds[] = (int)$savedReport['unit_ra_id'];
@@ -3362,7 +3358,7 @@ function type_label(string $type): string
             <?php if ($showLeaderDetailSection): ?>
             <div style="margin-top: 22px;">
               <h2 style="font-size:17px;">세부사항</h2>
-              <div class="task-info"><?= $leaderElectricalDetailOnlyMode ? '관리감독자가 입력한 작업요약을 바탕으로 필요한 세부사항만 선택해 저장합니다.' : '세부사항을 선택하면 상단 선택된 작업 카드와 같은 형식으로 함께 표시됩니다.' ?></div>
+              <div class="task-info"><?= $leaderElectricalDetailOnlyMode ? '관리감독자가 저장한 기본 정보를 바탕으로 필요한 세부사항만 선택해 저장합니다.' : '세부사항을 선택하면 상단 선택된 작업 카드와 같은 형식으로 함께 표시됩니다.' ?></div>
               <?php
                 $gasTeamAllowedTools = ['작업선', '그라인더(유선)', '그라인더(무선)', '전동드릴(유선)', '전동드릴(무선)','위험수공구(파이프렌치/몽키)'];
               ?>
@@ -3499,7 +3495,6 @@ function type_label(string $type): string
             </div>
             <?php endif; ?>
 
-            <?php if (!$leaderElectricalDetailOnlyMode): ?>
               <div class="selected-task" id="selected-task" style="margin-top: 22px;">
                 <h2>선택된 작업</h2>
                 <div class="task-info"><?= $pageRole === 'manager' ? '공정명, 대분류, 작업유형을 선택한 뒤 추가 버튼을 누르면 위험성평가 코드와 함께 아래 목록에 누적됩니다.' : '대분류, 중분류, 소분류를 선택한 뒤 추가 버튼으로 작업을 누적할 수 있습니다.' ?></div>
@@ -3508,7 +3503,6 @@ function type_label(string $type): string
               <div style="margin-top: 22px;">
                 <h2 style="font-size:17px;">작업 유의사항</h2>
                 <div class="note-editor-shell">
-                  <div class="note-toolbar" id="note-toolbar">
                     <div class="note-toolbar-group">
                       <button type="button" id="note-upload-image" class="note-icon-button" title="이미지 업로드" aria-label="이미지 업로드">
                         <span class="note-icon" aria-hidden="true">
@@ -3657,7 +3651,6 @@ function type_label(string $type): string
                 <div class="note-help">TOAST UI Editor로 본문을 직접 편집하고, 아래 버튼이나 첨부 이미지 목록에서 사진을 골라 본문에 넣을 수 있습니다. 에디터 안의 이미지를 클릭하면 선택되고, 크기와 위치를 바로 조절할 수 있습니다.</div>
                 <div class="paste-preview" id="paste-preview"></div>
               </div>
-            <?php endif; ?>
 
             <div class="page-actions">
               <button type="submit" class="btn-primary"><?= $leaderElectricalDetailOnlyMode ? '세부사항 저장' : '확인 및 저장' ?></button>
@@ -3731,6 +3724,7 @@ function type_label(string $type): string
   const taskItemsByUnit = <?= json_encode($taskItemsByUnit, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const currentRole = <?= json_encode($pageRole, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const showLeaderDetailSection = <?= $showLeaderDetailSection ? 'true' : 'false' ?>;
+  const leaderElectricalDetailOnlyMode = <?= $leaderElectricalDetailOnlyMode ? 'true' : 'false' ?>;
   const detailCodeLookup = <?= json_encode($unitCodeLookup, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const detailSummaryLabels = <?= json_encode(array_merge($detailLabels, [
       'major_work_sub' => '중대위험작업 세부',
@@ -4171,9 +4165,11 @@ function type_label(string $type): string
 
     const detailSummaryHtml = buildSelectedTaskDetailSummaryHtml();
     const selectedUnitSummaryHtml = renderSelectedUnitSummaryHtml();
-    const introText = currentRole === 'manager'
-      ? '공정명, 대분류, 작업유형을 선택한 뒤 추가 버튼을 눌러 작업을 계속 누적할 수 있습니다.'
-      : '대분류, 중분류, 소분류를 선택한 뒤 추가 버튼으로 작업을 누적할 수 있습니다.';
+    const introText = currentRole === 'leader' && leaderElectricalDetailOnlyMode
+      ? '관리감독자가 저장한 기본 정보를 바탕으로 필요한 세부사항을 선택해 저장합니다.'
+      : (currentRole === 'manager'
+        ? '공정명, 대분류, 작업유형을 선택한 뒤 추가 버튼을 눌러 작업을 계속 누적할 수 있습니다.'
+        : '대분류, 중분류, 소분류를 선택한 뒤 추가 버튼으로 작업을 누적할 수 있습니다.');
 
     if (!task) {
       selectedTaskBox.innerHTML = `
