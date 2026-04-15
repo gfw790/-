@@ -3206,7 +3206,10 @@ function type_label(string $type): string
                 class="btn-secondary"
                 id="show-entry-form"
                 data-edit-url="<?= h(build_page_url($selfPage, array_merge($managerContextParams, [
-                  'add_mode' => '1',
+                  'unit_ra_id' => isset($savedReport['unit_ra_id']) ? (int)$savedReport['unit_ra_id'] : (int)$selectedUnitRaId,
+                  'saved_report_id' => isset($savedReport['report_id']) ? (int)$savedReport['report_id'] : 0,
+                  'edit_report_id' => isset($savedReport['report_id']) ? (int)$savedReport['report_id'] : 0,
+                  'selected_unit_ra_ids' => isset($savedReport['selected_unit_ra_ids']) ? json_encode($savedReport['selected_unit_ra_ids'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : json_encode($selectedUnitRaIds, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                 ]))) ?>"
               ><?= $leaderElectricalDetailOnlyMode ? '입력' : '작업 추가' ?></button>
             </div>
