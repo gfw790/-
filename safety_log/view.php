@@ -13,6 +13,33 @@ function h($value)
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
 
+function parseSiteVisitData($rawValue): array
+{
+    if (!is_string($rawValue) || trim($rawValue) === '') {
+        return [];
+    }
+
+    $decoded = json_decode($rawValue, true);
+    return is_array($decoded) ? $decoded : [];
+}
+
+function safetyLogHasColumn(PDO $pdo, string $tableName, string $columnName): bool
+{
+    $stmt = $pdo->prepare(
+        'SELECT COUNT(*)
+         FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = :table_name
+           AND COLUMN_NAME = :column_name'
+    );
+    $stmt->execute([
+        ':table_name' => $tableName,
+        ':column_name' => $columnName,
+    ]);
+
+    return (int)$stmt->fetchColumn() > 0;
+}
+
 $alertType = $_GET['type'] ?? '';
 $alertMessage = trim($_GET['message'] ?? '');
 $alertClass = '';
@@ -27,10 +54,12 @@ if ($alertMessage !== '') {
 try {
     $pdo = getDB();
     $id = getValidLogId($pdo);
+    $hasSiteVisitDataColumn = safetyLogHasColumn($pdo, 'safety_manager_log', 'site_visit_data');
 
     // safety_manager_log에서 단일 항목을 조회합니다.
     $logStmt = $pdo->prepare(
-        'SELECT id, log_date, manager_name, site_name, work_location, weather, subject, summary, remark, created_at
+        'SELECT id, log_date, manager_name, site_name, work_location, '
+        . ($hasSiteVisitDataColumn ? 'site_visit_data' : 'NULL AS site_visit_data') . ', weather, subject, summary, remark, created_at
          FROM safety_manager_log
          WHERE id = :id'
     );
@@ -46,10 +75,12 @@ try {
     );
     $detailStmt->execute([':log_id' => $id]);
     $details = $detailStmt->fetchAll();
+    $siteVisitRows = parseSiteVisitData($log['site_visit_data'] ?? '');
 } catch (Throwable $e) {
     $errorMessage = '데이터를 불러오는 중 오류가 발생했습니다: ' . $e->getMessage();
     $log = null;
     $details = [];
+    $siteVisitRows = [];
 }
 ?>
 <?php
@@ -103,6 +134,38 @@ include __DIR__ . '/includes/header.php';
                         <strong>작업위치</strong>
                         <div><?= h($log['work_location']) ?></div>
                     </div>
+                    <?php if (!empty($siteVisitRows)): ?>
+                        <div class="col-12">
+                            <strong>현장 방문 목록</strong>
+                            <div class="table-responsive mt-2">
+                                <table class="table table-bordered table-sm mb-0">
+                                    <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 90px;">선택</th>
+                                        <th>작업명</th>
+                                        <th>작업장소</th>
+                                        <th>미방문사유</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    <?php foreach ($siteVisitRows as $siteVisitRow): ?>
+                                        <tr>
+                                            <td><?= !empty($siteVisitRow['selected']) ? '방문' : '미방문' ?></td>
+                                            <td>
+                                                <?= h((string)($siteVisitRow['work_title'] ?? '')) ?>
+                                                <?php if (!empty($siteVisitRow['team_name'])): ?>
+                                                    <div class="text-muted small"><?= h((string)$siteVisitRow['team_name']) ?></div>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td><?= h((string)($siteVisitRow['work_place'] ?? '')) ?></td>
+                                            <td><?= h((string)($siteVisitRow['non_visit_reason'] ?? '')) ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    <?php endif; ?>
                     <div class="col-md-4">
                         <strong>날씨</strong>
                         <div><?= h($log['weather']) ?></div>

@@ -141,10 +141,50 @@ function renderDetailRow(array $detail, int $index): string
         ($detail['status'] ?? '') === '후속조치필요' ? ' selected' : ''
     );
 }
+
+function formatWorkLabel(array $work): string
+{
+    $title = trim((string)($work['work_title'] ?? ''));
+    $teamName = trim((string)($work['team_name'] ?? ''));
+
+    if ($teamName === '') {
+        return $title;
+    }
+
+    return $title . ' (' . $teamName . ')';
+}
 ?>
 <?php
 $pageTitle = '안전관리자 업무일지 등록';
-$extraHead = '<style> .detail-table th, .detail-table td { vertical-align: middle; } .form-control-plaintext { margin-bottom: 0; } </style>';
+$extraHead = '<style>
+    .detail-table th, .detail-table td { vertical-align: middle; }
+    .site-visit-table th, .site-visit-table td { vertical-align: middle; }
+    .form-control-plaintext { margin-bottom: 0; }
+    .form-select {
+        color: #f8fafc;
+        background-color: #162033;
+        border-color: #8b6b2f;
+    }
+    .form-select:focus {
+        color: #f8fafc;
+        background-color: #162033;
+        border-color: #d6a545;
+        box-shadow: 0 0 0 0.2rem rgba(214, 165, 69, 0.2);
+    }
+    .form-select option {
+        color: #0f172a;
+        background-color: #f8fafc;
+    }
+    .form-select option[value=""] {
+        color: #475569;
+    }
+    .site-visit-meta {
+        display: block;
+        margin-top: 4px;
+        color: #94a3b8;
+        font-size: 12px;
+    }
+</style>';
 include __DIR__ . '/includes/header.php';
 ?>
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -159,6 +199,9 @@ include __DIR__ . '/includes/header.php';
     <?php endif; ?>
 
     <form method="post" action="store.php" enctype="multipart/form-data">
+        <input type="hidden" name="site_name" id="site_name" value="<?= h($values['site_name']) ?>">
+        <input type="hidden" name="work_location" id="work_location" value="<?= h($values['work_location']) ?>">
+        <input type="hidden" name="site_visit_data" id="site_visit_data" value="[]">
         <div class="card mb-4">
             <div class="card-header">기본 정보</div>
             <div class="card-body">
@@ -183,39 +226,64 @@ include __DIR__ . '/includes/header.php';
                         <?php endif; ?>
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label">현장명</label>
-                        <?php if (!empty($todayWorkList)): ?>
-                            <select id="work_picker" class="form-select mb-2">
-                                <option value="">-- 오늘 작업목록에서 선택 --</option>
-                                <?php foreach ($todayWorkList as $w): ?>
-                                    <option value="<?= h($w['work_title']) ?>"
-                                            data-place="<?= h($w['work_place']) ?>">
-                                        <?= h($w['work_title']) ?>
-                                        <?= !empty($w['team_name']) ? '(' . h($w['team_name']) . ')' : '' ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        <?php endif; ?>
-                        <input type="text" name="site_name" id="site_name"
-                               class="form-control" value="<?= h($values['site_name']) ?>"
-                               required placeholder="현장명 직접 입력 가능">
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">작업 위치</label>
-                        <input type="text" name="work_location" id="work_location"
-                               class="form-control" value="<?= h($values['work_location']) ?>"
-                               placeholder="작업 위치">
-                    </div>
-                </div>
-
-                <div class="row g-3 mt-3">
-                    <div class="col-md-3">
                         <label class="form-label">날씨</label>
                         <input type="text" name="weather" class="form-control" value="<?= h($values['weather']) ?>">
                     </div>
                     <div class="col-md-9">
                         <label class="form-label">제목</label>
                         <input type="text" name="subject" class="form-control" value="<?= h($values['subject']) ?>" required>
+                    </div>
+                </div>
+
+                <div class="row g-3 mt-3">
+                    <div class="col-12">
+                        <label class="form-label">현장명</label>
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-hover mb-0 site-visit-table">
+                                <thead class="table-light">
+                                <tr>
+                                    <th style="width: 72px;">선택</th>
+                                    <th style="width: 34%;">작업명</th>
+                                    <th style="width: 34%;">작업장소</th>
+                                    <th>미방문사유</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <?php if (empty($todayWorkList)): ?>
+                                    <tr>
+                                        <td colspan="4" class="text-center text-muted py-4">조회된 작업이 없습니다.</td>
+                                    </tr>
+                                <?php else: ?>
+                                    <?php foreach ($todayWorkList as $index => $w): ?>
+                                        <tr class="site-visit-row">
+                                            <td class="text-center">
+                                                <input type="checkbox"
+                                                       class="form-check-input js-site-visit-check"
+                                                       id="site_visit_<?= (int)$index ?>"
+                                                       data-title="<?= h((string)($w['work_title'] ?? '')) ?>"
+                                                       data-place="<?= h((string)($w['work_place'] ?? '')) ?>"
+                                                       data-team="<?= h((string)($w['team_name'] ?? '')) ?>">
+                                            </td>
+                                            <td>
+                                                <label for="site_visit_<?= (int)$index ?>" class="mb-0 w-100">
+                                                    <?= h((string)($w['work_title'] ?? '')) ?>
+                                                    <?php if (!empty($w['team_name'])): ?>
+                                                        <span class="site-visit-meta"><?= h((string)$w['team_name']) ?></span>
+                                                    <?php endif; ?>
+                                                </label>
+                                            </td>
+                                            <td><?= h((string)($w['work_place'] ?? '')) ?></td>
+                                            <td>
+                                                <input type="text"
+                                                       class="form-control form-control-sm js-site-visit-reason"
+                                                       placeholder="미방문 시 사유 입력">
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
@@ -276,6 +344,10 @@ include __DIR__ . '/includes/header.php';
 <script>
     const detailBody = document.getElementById('details-body');
     const addDetailButton = document.getElementById('add-detail');
+    const siteVisitRows = document.querySelectorAll('.site-visit-row');
+    const siteNameInput = document.getElementById('site_name');
+    const workLocationInput = document.getElementById('work_location');
+    const siteVisitDataInput = document.getElementById('site_visit_data');
 
     function getDetailRowHtml(index, data = {}) {
         const workTime = data.work_time ?? '';
@@ -347,15 +419,56 @@ include __DIR__ . '/includes/header.php';
 
     detailBody.addEventListener('click', onDeleteRow);
 
-    // 오늘 작업 선택 시 현장명 · 작업위치 자동 입력
-    const workPicker = document.getElementById('work_picker');
-    if (workPicker) {
-        workPicker.addEventListener('change', function () {
-            const opt = this.options[this.selectedIndex];
-            if (!opt.value) return;
-            document.getElementById('site_name').value = opt.value;
-            document.getElementById('work_location').value = opt.dataset.place || '';
+    function updateSiteVisitSummary() {
+        const rows = Array.from(siteVisitRows).map((row) => {
+            const checkbox = row.querySelector('.js-site-visit-check');
+            const reasonInput = row.querySelector('.js-site-visit-reason');
+            return {
+                selected: checkbox ? checkbox.checked : false,
+                work_title: checkbox ? checkbox.dataset.title || '' : '',
+                work_place: checkbox ? checkbox.dataset.place || '' : '',
+                team_name: checkbox ? checkbox.dataset.team || '' : '',
+                non_visit_reason: reasonInput ? reasonInput.value.trim() : ''
+            };
         });
+
+        const selectedTitles = [];
+        const selectedPlaces = [];
+
+        rows.forEach((row) => {
+            if (!row.selected) {
+                return;
+            }
+            if (row.work_title && !selectedTitles.includes(row.work_title)) {
+                selectedTitles.push(row.work_title);
+            }
+            if (row.work_place && !selectedPlaces.includes(row.work_place)) {
+                selectedPlaces.push(row.work_place);
+            }
+        });
+
+        siteNameInput.value = selectedTitles.join(', ');
+        workLocationInput.value = selectedPlaces.join(', ');
+        siteVisitDataInput.value = JSON.stringify(rows);
     }
+
+    siteVisitRows.forEach((row) => {
+        const checkbox = row.querySelector('.js-site-visit-check');
+        const reasonInput = row.querySelector('.js-site-visit-reason');
+
+        if (checkbox) {
+            checkbox.addEventListener('change', updateSiteVisitSummary);
+        }
+        if (reasonInput) {
+            reasonInput.addEventListener('input', updateSiteVisitSummary);
+        }
+    });
+
+    const createForm = document.querySelector('form[action="store.php"]');
+    if (createForm) {
+        createForm.addEventListener('submit', updateSiteVisitSummary);
+    }
+
+    updateSiteVisitSummary();
 </script>
 <?php include __DIR__ . '/includes/footer.php'; ?>

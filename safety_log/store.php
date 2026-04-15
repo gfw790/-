@@ -94,6 +94,74 @@ function saveDetailFile(array $file, string $uploadRoot, string $relativeDir): s
     return $relativeDir . '/' . $filename;
 }
 
+function parseSiteVisitRows($rawValue): array
+{
+    if (!is_string($rawValue) || trim($rawValue) === '') {
+        return [];
+    }
+
+    $decoded = json_decode($rawValue, true);
+    if (!is_array($decoded)) {
+        return [];
+    }
+
+    $rows = [];
+    foreach ($decoded as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+
+        $rows[] = [
+            'selected' => !empty($row['selected']),
+            'work_title' => trim((string)($row['work_title'] ?? '')),
+            'work_place' => trim((string)($row['work_place'] ?? '')),
+            'team_name' => trim((string)($row['team_name'] ?? '')),
+            'non_visit_reason' => trim((string)($row['non_visit_reason'] ?? '')),
+        ];
+    }
+
+    return $rows;
+}
+
+function buildSelectedVisitSummary(array $rows, string $fieldName): string
+{
+    $values = [];
+    $seen = [];
+
+    foreach ($rows as $row) {
+        if (empty($row['selected'])) {
+            continue;
+        }
+
+        $value = trim((string)($row[$fieldName] ?? ''));
+        if ($value === '' || isset($seen[$value])) {
+            continue;
+        }
+
+        $seen[$value] = true;
+        $values[] = $value;
+    }
+
+    return implode(', ', $values);
+}
+
+function safetyLogHasColumn(PDO $pdo, string $tableName, string $columnName): bool
+{
+    $stmt = $pdo->prepare(
+        'SELECT COUNT(*)
+         FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = :table_name
+           AND COLUMN_NAME = :column_name'
+    );
+    $stmt->execute([
+        ':table_name' => $tableName,
+        ':column_name' => $columnName,
+    ]);
+
+    return (int)$stmt->fetchColumn() > 0;
+}
+
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Location: index.php');
     exit;
@@ -101,8 +169,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $logDate = trim($_POST['log_date'] ?? '');
 $managerName = trim($_POST['manager_name'] ?? '');
-$siteName = trim($_POST['site_name'] ?? '');
-$workLocation = trim($_POST['work_location'] ?? '');
+$siteVisitRows = parseSiteVisitRows($_POST['site_visit_data'] ?? '');
+$siteName = buildSelectedVisitSummary($siteVisitRows, 'work_title');
+$workLocation = buildSelectedVisitSummary($siteVisitRows, 'work_place');
 $weather = trim($_POST['weather'] ?? '');
 $subject = trim($_POST['subject'] ?? '');
 $summary = trim($_POST['summary'] ?? '');
@@ -120,6 +189,7 @@ try {
             manager_name VARCHAR(255),
             site_name VARCHAR(255),
             work_location VARCHAR(255),
+            site_visit_data LONGTEXT NULL,
             weather VARCHAR(255),
             subject VARCHAR(255),
             summary TEXT,
@@ -145,17 +215,22 @@ try {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
     );
 
+    if (!safetyLogHasColumn($pdo, 'safety_manager_log', 'site_visit_data')) {
+        $pdo->exec('ALTER TABLE safety_manager_log ADD COLUMN site_visit_data LONGTEXT NULL AFTER work_location');
+    }
+
     $pdo->beginTransaction();
 
     $insertLog = $pdo->prepare(
-        'INSERT INTO safety_manager_log (log_date, manager_name, site_name, work_location, weather, subject, summary, remark)
-         VALUES (:log_date, :manager_name, :site_name, :work_location, :weather, :subject, :summary, :remark)'
+        'INSERT INTO safety_manager_log (log_date, manager_name, site_name, work_location, site_visit_data, weather, subject, summary, remark)
+         VALUES (:log_date, :manager_name, :site_name, :work_location, :site_visit_data, :weather, :subject, :summary, :remark)'
     );
     $insertLog->execute([
         ':log_date' => $logDate,
         ':manager_name' => $managerName,
         ':site_name' => $siteName,
         ':work_location' => $workLocation,
+        ':site_visit_data' => json_encode($siteVisitRows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ':weather' => $weather,
         ':subject' => $subject,
         ':summary' => $summary,
