@@ -283,8 +283,8 @@ function tbm_build_article_image_url(?string $imageUrl): string
 {
     $url = trim((string)$imageUrl);
 
-    if ($url === '') {
-        return '../template/TBM_default_image.png';
+    if ($url === '' || $url === '__NO_IMAGE__') {
+        return 'data:image/gif;base64,R0lGODlhAQABAAAAACwAAAAAAQABAAA=';
     }
 
     $url = preg_replace('~^output/~', '', $url);
@@ -379,6 +379,16 @@ function tbm_resize_image_for_display(string $srcPath, int $maxW, int $maxH): ?s
 
 function tbm_build_article_image_block(?string $imageFile, float $maxWidth = 82.0, float $maxHeight = 28.0): string
 {
+    $rawImageFile = trim((string)$imageFile);
+    if ($rawImageFile === '' || $rawImageFile === '__NO_IMAGE__') {
+        return '<div style="'
+             . 'width:' . number_format($maxWidth, 1, '.', '') . 'mm;'
+             . 'height:' . number_format($maxHeight, 1, '.', '') . 'mm;'
+             . 'overflow:hidden;'
+             . 'display:block;'
+             . '"></div>';
+    }
+
     $url = tbm_build_article_image_url($imageFile);
 
     return '<div style="'
@@ -456,11 +466,31 @@ function tbm_trim_body(string $body): string
     return $part2 !== '' ? $part1 . "\n\n" . $part2 : $part1;
 }
 
-function tbm_build_edu_body_block(string $body): string
+function tbm_is_csi_content(array $data): bool
+{
+    $sourceUrl = trim((string)($data['source_url'] ?? ''));
+    if ($sourceUrl !== '') {
+        $sourceUrlLower = mb_strtolower($sourceUrl, 'UTF-8');
+        if (str_contains($sourceUrlLower, 'csi.go.kr')) {
+            return true;
+        }
+    }
+
+    $eduTitle = trim((string)($data['edu_title'] ?? ''));
+    return preg_match('/^사고사례\s*(?:\(|$)/u', $eduTitle) === 1;
+}
+
+function tbm_build_edu_body_heading(array $data): string
+{
+    return tbm_is_csi_content($data) ? '♣ 사고사례 전파' : '♣ 중대재해 전파';
+}
+
+function tbm_build_edu_body_block(string $body, ?string $heading = null): string
 {
     $text       = str_replace("\r\n", "\n", trim($body));
     $paragraphs = explode("\n", $text);
     $paragraphs = array_map('trim', $paragraphs);
+    $heading    = trim((string)$heading);
 
     $last = end($paragraphs);
     if ($last === '[사고내용 및 원인]' || $last === '[예방대책]') {
@@ -520,6 +550,11 @@ function tbm_build_edu_body_block(string $body): string
     }
 
     $html .= "</div>\n";
+
+    if ($heading !== '' && $heading !== '♣ 중대재해 전파') {
+        $html = str_replace('♣ 중대재해 전파', e($heading), $html);
+    }
+
     return $html;
 }
 
@@ -582,7 +617,10 @@ function tbm_render_template(array $data): string
         '{{TBM_DATE_BACK}}'       => $dateLine,
         '{{EDU_TITLE}}'           => e($data['edu_title'] ?? ''),
         '{{DYNAMIC_FRONT_TABLES}}'=> tbm_build_dynamic_tables($data), // 동적 테이블 삽입
-        '{{EDU_BODY_BLOCK}}'      => tbm_build_edu_body_block(tbm_trim_body($data['left_content'] ?? '')),
+        '{{EDU_BODY_BLOCK}}'      => tbm_build_edu_body_block(
+            tbm_trim_body($data['left_content'] ?? ''),
+            tbm_build_edu_body_heading($data)
+        ),
         '{{ARTICLE_IMAGE_URL}}'   => tbm_build_article_image_url($data['image_file'] ?? ''),
         '{{ARTICLE_IMAGE_BLOCK}}' => tbm_build_article_image_block($data['image_file'] ?? ''),
         '{{QR_BLOCK}}'            => tbm_build_qr_block($data['source_url'] ?? ''),

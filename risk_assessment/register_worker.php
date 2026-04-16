@@ -731,7 +731,10 @@ function h($value): string
             <p><?= $canAssignRoles ? '관리자는 계정을 추가하고, 저장된 계정의 역할을 변경하거나 삭제할 수 있습니다.' : ($canManageAccounts ? '계정을 추가하고, 저장된 계정을 직접 삭제할 수 있습니다.' : '일반작업자 계정을 직접 생성할 수 있습니다. 가입 후 로그인하면 바로 작업목록으로 이동할 수 있습니다.') ?></p>
           </div>
           <?php if ($canManageAccounts): ?>
-            <a class="btn-secondary btn-head-back" href="work_list.php">뒤로가기</a>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <a class="btn-secondary btn-head-back" href="../employees/">직원명부</a>
+              <a class="btn-secondary btn-head-back" href="work_list.php">뒤로가기</a>
+            </div>
           <?php endif; ?>
         </div>
       </div>

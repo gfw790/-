@@ -1131,7 +1131,14 @@ function tbm_ai_build_revision_prompt(string $basePrompt, array $parsed, array $
         . $json;
 }
 
-function tbm_ai_generate_via_gemini(string $prompt, string $targetDate, ?string $sourceUrl = null, ?string $imageUrl = null, ?string $imageKeyword = null): array
+function tbm_ai_generate_via_gemini(
+    string $prompt,
+    string $targetDate,
+    ?string $sourceUrl = null,
+    ?string $imageUrl = null,
+    ?string $imageKeyword = null,
+    bool $allowKeywordFallbackImage = true
+): array
 {
     // gemini-2.5-flash는 thinking 모델이므로 maxOutputTokens에 thinking 토큰이 포함됨
     // 4096이면 thinking에 소진되고 실제 출력이 잘림 → 65536으로 확대
@@ -1156,7 +1163,7 @@ function tbm_ai_generate_via_gemini(string $prompt, string $targetDate, ?string 
     if ($imageUrl !== null && trim($imageUrl) !== '') {
         $localImageFile = tbm_ai_download_and_validate_image(trim($imageUrl));
     }
-    if ($localImageFile === null && $imageKeyword !== null) {
+    if ($localImageFile === null && $allowKeywordFallbackImage && $imageKeyword !== null) {
         $localImageFile = tbm_ai_fetch_fallback_image($imageKeyword);
     }
 
@@ -1998,6 +2005,157 @@ function tbm_ai_extract_csi_field_by_regex(string $html, string $label): string
     return '';
 }
 
+function tbm_ai_make_csi_absolute_url(string $url): string
+{
+    $url = html_entity_decode(trim($url), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    if ($url === '') {
+        return '';
+    }
+
+    if (preg_match('~^https?://~i', $url) === 1) {
+        return function_exists('tbm_news_clean_url') ? tbm_news_clean_url($url) : $url;
+    }
+
+    $url = preg_replace('~^(?:\./|\.\./)+~', '/', $url);
+    if ($url === '') {
+        return '';
+    }
+
+    if ($url[0] !== '/') {
+        $url = '/' . ltrim($url, '/');
+    }
+
+    return 'https://www.csi.go.kr' . $url;
+}
+
+function tbm_ai_fetch_csi_photo_html(string $accdNo): string
+{
+    static $cache = [];
+
+    $accdNo = trim($accdNo);
+    if ($accdNo === '') {
+        return '';
+    }
+
+    if (array_key_exists($accdNo, $cache)) {
+        return $cache[$accdNo];
+    }
+
+    if (!function_exists('curl_init')) {
+        $cache[$accdNo] = '';
+        return '';
+    }
+
+    $ch = curl_init('https://www.csi.go.kr/acd/photoInc.do');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS      => 3,
+        CURLOPT_TIMEOUT        => 20,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => http_build_query([
+            'biz_id' => 'acdDB',
+            'accd_no' => $accdNo,
+            'popup_yn' => '',
+            'menu_id' => 'ACD00148',
+            'start_ymd' => '',
+            'end_ymd' => '',
+            'search_key' => '',
+            'search_val' => '',
+            'page_count' => '1',
+        ]),
+        CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+        CURLOPT_HTTPHEADER     => [
+            'Accept-Language: ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Cache-Control: no-cache',
+            'Content-Type: application/x-www-form-urlencoded; charset=UTF-8',
+            'Origin: https://www.csi.go.kr',
+            'Referer: https://www.csi.go.kr/acd/acdCaseList.do',
+        ],
+    ]);
+
+    $response = curl_exec($ch);
+    $err = curl_error($ch);
+    $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($response === false || $err !== '' || $httpCode >= 400 || !is_string($response)) {
+        $cache[$accdNo] = '';
+        return '';
+    }
+
+    $cache[$accdNo] = $response;
+    return $response;
+}
+
+function tbm_ai_extract_csi_photo_image_url(string $html): string
+{
+    if ($html === '') {
+        return '';
+    }
+
+    if (preg_match_all('/<img[^>]+src=["\']([^"\']+)["\'][^>]*>/iu', $html, $matches) > 0) {
+        foreach (($matches[1] ?? []) as $src) {
+            $src = trim((string)$src);
+            if ($src === '') {
+                continue;
+            }
+
+            $lowerSrc = mb_strtolower($src, 'UTF-8');
+            if (str_contains($lowerSrc, '/com/img/noimg.jpg')) {
+                continue;
+            }
+            if (!str_contains($lowerSrc, 'imageviewproc.do?file_no=')) {
+                continue;
+            }
+
+            return tbm_ai_make_csi_absolute_url($src);
+        }
+    }
+
+    if (preg_match('/data-image-no=["\']([^"\']+)["\']/iu', $html, $matches) === 1) {
+        $fileNo = trim(html_entity_decode((string)$matches[1], ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+        if ($fileNo !== '') {
+            return 'https://www.csi.go.kr/com/imageViewProc.do?file_no=' . rawurlencode($fileNo);
+        }
+    }
+
+    return '';
+}
+
+function tbm_ai_resolve_csi_image_url(?string $accdNo = null, ?string $caseNo = null, ?string $detailUrl = null): string
+{
+    static $cache = [];
+
+    $accdNo = trim((string)$accdNo);
+    $caseNo = trim((string)$caseNo);
+    $detailUrl = trim((string)$detailUrl);
+    $cacheKey = $accdNo . '|' . $caseNo . '|' . $detailUrl;
+
+    if (array_key_exists($cacheKey, $cache)) {
+        return $cache[$cacheKey];
+    }
+
+    if ($caseNo === '' && $detailUrl !== '') {
+        $caseNo = tbm_ai_extract_csi_detail_case_no($detailUrl);
+    }
+
+    if ($accdNo === '' && $caseNo !== '') {
+        $detail = tbm_ai_fetch_csi_case_detail($caseNo);
+        $accdNo = trim((string)($detail['accd_no'] ?? ''));
+    }
+
+    if ($accdNo === '') {
+        $cache[$cacheKey] = '';
+        return '';
+    }
+
+    $cache[$cacheKey] = tbm_ai_extract_csi_photo_image_url(tbm_ai_fetch_csi_photo_html($accdNo));
+    return $cache[$cacheKey];
+}
+
 function tbm_ai_fetch_csi_case_detail(string $caseNo): array
 {
     $caseNo = trim($caseNo);
@@ -2119,7 +2277,7 @@ function tbm_ai_build_csi_article(array $listItem, array $detail): array
         'article_url' => trim((string)($detail['detail_url'] ?? $listItem['detail_url'] ?? '')),
         'accident_date' => $accidentDate,
         'published_at' => $accidentDate,
-        'image_url' => '',
+        'image_url' => trim((string)($detail['image_url'] ?? '')),
         'has_context' => $body !== '' ? 1 : 0,
         'incident_score' => 9,
         'source_name' => 'CSI',
@@ -2548,6 +2706,63 @@ function tbm_ai_build_article_prompt(string $targetDate, array $article, ?array 
 PROMPT;
 }
 
+function tbm_ai_build_csi_prompt(string $targetDate, array $article): string
+{
+    $articleTitle = trim((string)($article['article_title'] ?? ''));
+    $articleBody  = trim((string)($article['article_body'] ?? ''));
+    $articleBody  = mb_substr($articleBody, 0, 900, 'UTF-8');
+    $articleUrl   = trim((string)($article['article_url'] ?? ''));
+    $articleAccidentDate = trim((string)($article['accident_date'] ?? ''));
+
+    return <<<PROMPT
+다음은 CSI 사고사례 상세 자료입니다.
+
+[사고사례 제목]
+{$articleTitle}
+
+[사고사례 본문]
+{$articleBody}
+
+[자료에서 확인한 사고일자]
+{$articleAccidentDate}
+
+위 자료만 근거로 {$targetDate} TBM(Tool Box Meeting)용 "사고사례 교육 자료"를 작성하세요.
+
+반드시 아래 조건을 모두 지키세요.
+1. 출력은 순수 JSON 객체 1개만 반환하세요.
+2. 설명문, 마크다운, 코드블록, 백틱(```), 머리말/꼬리말을 넣지 마세요.
+3. 자료에 없는 내용을 추측해서 쓰지 마세요.
+4. 본문은 서술형 평어체로 작성하세요. 경어체("-습니다", "-입니다")는 쓰지 마세요.
+5. 이 자료는 "중대재해 전파"가 아니라 "사고사례" 요약 자료입니다. 사고 경위, 원인, 재발방지대책이 현장 공유용으로 잘 드러나도록 정리하세요.
+6. edu_title은 반드시 "사고사례(사고 제목 요약)" 형식으로 작성하세요.
+7. body_text는 반드시 아래 2개 섹션으로 구성하세요.
+   - [사고내용 및 원인]
+   - [예방대책]
+8. [사고내용 및 원인]은 자료의 사고경위와 사고원인을 중심으로 220~250자 범위로 작성하세요. 가능하면 235~245자를 목표로 하세요.
+9. [예방대책]은 자료의 재발방지대책과 후속조치 내용을 중심으로 140~160자 범위로 작성하세요. 가능하면 145~155자를 목표로 하세요.
+10. 사고내용 및 원인 + 예방대책 합계는 420자를 넘기지 마세요.
+11. 퀴즈는 보기 4개가 있는 객관식 문제 3개를 작성하되, 퀴즈 3개의 총 글자 수 합계가 550~600자 범위가 되도록 각 문항을 대체로 185~195자 정도로 맞추세요.
+12. source_url에는 아래 실제 상세 URL을 그대로 넣으세요.
+   {$articleUrl}
+13. accident_title은 사고사례 핵심 내용을 20자 이내로 간결하게 작성하세요.
+14. image_search_keyword는 사고유형과 작업대상을 함께 드러내는 구체적 검색어를 12~30자 이내로 작성하세요.
+15. 모든 줄바꿈은 반드시 \\n 으로만 표현하고, 문자열 안 따옴표는 반드시 \\\" 로 이스케이프하세요.
+
+반드시 아래 JSON 키 이름을 그대로 사용하세요.
+{
+  "accident_date": "{$articleAccidentDate}",
+  "accident_title": "사고 제목",
+  "edu_title": "사고사례(사고 제목 요약)",
+  "body_text": "[사고내용 및 원인]\\n내용...\\n\\n[예방대책]\\n내용...",
+  "source_url": "{$articleUrl}",
+  "image_search_keyword": "{$articleTitle}",
+  "quiz_1": "1. 관련 안전퀴즈 질문\\n① 보기1\\n② 보기2\\n③ 보기3\\n④ 보기4",
+  "quiz_2": "2. 관련 안전퀴즈 질문\\n① 보기1\\n② 보기2\\n③ 보기3\\n④ 보기4",
+  "quiz_3": "3. 관련 안전퀴즈 질문\\n① 보기1\\n② 보기2\\n③ 보기3\\n④ 보기4"
+}
+PROMPT;
+}
+
 function tbm_ai_build_siren_prompt(string $targetDate, array $siren): string
 {
     $title       = trim((string)($siren['title'] ?? ''));
@@ -2679,14 +2894,41 @@ function tbm_ai_generate_content(string $targetDate, bool $forceNew = false): ar
             mb_strlen(trim((string)($pickedSiren['prevention'] ?? '')), 'UTF-8')
         ));
 
+        $isCsiSiren = ($pickedSiren['_source'] ?? '') === 'csi';
+
+        $csiSirenImageUrl = null;
+        if ($isCsiSiren) {
+            $csiSirenImageUrl = tbm_ai_resolve_csi_image_url(
+                (string)($pickedSiren['accd_no'] ?? $pickedSiren['source_id'] ?? ''),
+                (string)($pickedSiren['case_no'] ?? ''),
+                (string)($pickedSiren['detail_url'] ?? '')
+            );
+
+            if ($csiSirenImageUrl !== '') {
+                tbm_ai_log_debug('[CSI siren 이미지] 원본 이미지 URL 확인: ' . $csiSirenImageUrl);
+            }
+        }
+
         $prompt = tbm_ai_build_siren_prompt($targetDate, $pickedSiren);
         $result = tbm_ai_generate_via_gemini(
             $prompt,
             $targetDate,
             trim((string)($pickedSiren['detail_url'] ?? '')),
-            null,
-            trim((string)($pickedSiren['title'] ?? ''))
+            $csiSirenImageUrl,
+            $isCsiSiren ? null : trim((string)($pickedSiren['title'] ?? '')),
+            !$isCsiSiren
         );
+
+        // CSI 폴백 소스인 경우: edu_title 변경 + 원본 이미지 없으면 빈 영역 유지
+        if ($isCsiSiren) {
+            $accidentTitle = trim((string)($result['accident_title'] ?? ''));
+            $result['edu_title'] = '사고사례' . ($accidentTitle !== '' ? '(' . $accidentTitle . ')' : '');
+
+            if (trim((string)($result['image_file'] ?? '')) === '') {
+                $result['image_file'] = '__NO_IMAGE__';
+                tbm_ai_log_debug('[CSI siren 이미지] 원본 이미지 없음, 외부 fallback 이미지 사용 안 함');
+            }
+        }
 
         // Gemini가 생성한 fallback 이미지 경로 (siren 이미지로 덮어씌우기 전)
         $geminiImageFile = trim((string)($result['image_file'] ?? ''));
@@ -2728,18 +2970,34 @@ function tbm_ai_generate_content(string $targetDate, bool $forceNew = false): ar
     if (is_array($pickedCsi)) {
         $article = $pickedCsi['article'];
         $article['article_body'] = mb_substr(trim((string)($article['article_body'] ?? '')), 0, 900, 'UTF-8');
+        $csiCase = is_array($pickedCsi['csi_case'] ?? null) ? $pickedCsi['csi_case'] : [];
+        $article['image_url'] = tbm_ai_resolve_csi_image_url(
+            (string)($csiCase['accd_no'] ?? ''),
+            (string)($csiCase['case_no'] ?? ''),
+            (string)($article['article_url'] ?? '')
+        );
 
-        $prompt = tbm_ai_build_article_prompt($targetDate, $article, null);
+        if (trim((string)($article['image_url'] ?? '')) !== '') {
+            tbm_ai_log_debug('[CSI 이미지] 원본 이미지 URL 확인: ' . $article['image_url']);
+        }
+
+        $prompt = tbm_ai_build_csi_prompt($targetDate, $article);
         $result = tbm_ai_generate_via_gemini(
             $prompt,
             $targetDate,
             trim((string)($article['article_url'] ?? '')),
-            trim((string)($article['image_url'] ?? '')),
-            trim((string)($article['article_title'] ?? ''))
+            trim((string)($article['image_url'] ?? '')) !== '' ? trim((string)($article['image_url'] ?? '')) : null,
+            null,
+            false
         );
 
-        if (empty($result['image_file']) || !is_file(__DIR__ . '/' . $result['image_file'])) {
-            tbm_ai_log_debug('[이미지 없음] 기사 유지, fallback 이미지 사용 예정');
+        // CSI 사고사례는 "중대재해 전파" 대신 "사고사례"로 표기
+        $accidentTitle = trim((string)($result['accident_title'] ?? ''));
+        $result['edu_title'] = '사고사례' . ($accidentTitle !== '' ? '(' . $accidentTitle . ')' : '');
+
+        if (trim((string)($result['image_file'] ?? '')) === '') {
+            $result['image_file'] = '__NO_IMAGE__';
+            tbm_ai_log_debug('[CSI 이미지] 원본 이미지 없음, 외부 fallback 이미지 사용 안 함');
         }
 
         if (!$forceNew) {

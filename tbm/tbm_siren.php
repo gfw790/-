@@ -64,6 +64,9 @@ if (!defined('TBM_SIREN_LEGACY_LIST_URL')) {
 if (!defined('TBM_SIREN_HTTP_TIMEOUT')) {
     define('TBM_SIREN_HTTP_TIMEOUT', 20);
 }
+if (!defined('TBM_SIREN_CSI_LIST_URL')) {
+    define('TBM_SIREN_CSI_LIST_URL', 'https://www.csi.go.kr/acd/acdCaseList.do');
+}
 
 // ── KOSHA API 엔드포인트 (DevTools 직접 확인값) ───────────────────
 if (!defined('TBM_SIREN_API_LIST_URL')) {
@@ -779,6 +782,366 @@ function tbm_siren_save_data_uri_image(string $dataUri, string $prefix = 'siren'
 }
 
 // ─────────────────────────────────────────────────────────────────
+// CSI 사고사례 폴백 (KOSHA 전체 실패 시)
+// https://www.csi.go.kr/acd/acdCaseList.do
+// ─────────────────────────────────────────────────────────────────
+
+function tbm_siren_csi_fetch(string $url): string
+{
+    $url = trim($url);
+    if ($url === '') {
+        return '';
+    }
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS      => 3,
+        CURLOPT_TIMEOUT        => TBM_SIREN_HTTP_TIMEOUT,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+        CURLOPT_HTTPHEADER     => [
+            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language: ko-KR,ko;q=0.9,en-US;q=0.8',
+            'Referer: https://www.csi.go.kr/',
+            'Cache-Control: no-cache',
+        ],
+    ]);
+
+    $response = curl_exec($ch);
+    $code     = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $err      = curl_error($ch);
+    curl_close($ch);
+
+    if ($response === false || $err !== '' || $code >= 400 || !is_string($response)) {
+        return '';
+    }
+
+    return $response;
+}
+
+/**
+ * CSI 사고사례 목록 페이지 HTML을 파싱해 case_no, title, location, occurred_at 목록을 반환한다.
+ */
+function tbm_siren_csi_parse_list(string $html, int $limit = 10): array
+{
+    if ($html === '' || !extension_loaded('dom') || !class_exists('DOMDocument')) {
+        return [];
+    }
+
+    $items = [];
+    $seen  = [];
+
+    // 1순위: caption 기반 정규식 (구조 고정적일 때 빠름)
+    if (preg_match('/<caption>[^<]*사고사례[^<]*<\/caption>.*?<tbody>(.*?)<\/tbody>/isu', $html, $tm)) {
+        preg_match_all(
+            '/javascript\s*:\s*goDetail\s*\(\s*[\'"]?(\d+)[\'"]?\s*\)/iu',
+            $tm[1],
+            $caseMatches,
+            PREG_OFFSET_CAPTURE
+        );
+
+        foreach ($caseMatches[1] as [$caseNo, $offset]) {
+            if (isset($seen[$caseNo])) {
+                continue;
+            }
+            // 해당 offset 전후 ~300자에서 셀 텍스트 추출
+            $snippet = substr($tm[1], max(0, $offset - 50), 500);
+            preg_match_all('/<td[^>]*>(.*?)<\/td>/isu', $snippet, $cells);
+            $cellTexts = array_map(
+                static fn($c) => trim(strip_tags(html_entity_decode((string)$c, ENT_QUOTES | ENT_HTML5, 'UTF-8'))),
+                $cells[1] ?? []
+            );
+
+            // 빈 셀 제거
+            $cellTexts = array_values(array_filter($cellTexts, static fn($t) => $t !== ''));
+
+            $title      = $cellTexts[1] ?? ($cellTexts[0] ?? '');
+            $location   = $cellTexts[2] ?? '';
+            $occurredAt = $cellTexts[3] ?? '';
+
+            if ($title === '' || $title === $caseNo) {
+                $title = $cellTexts[0] ?? '';
+            }
+
+            if ($title === '') {
+                continue;
+            }
+
+            $seen[$caseNo] = true;
+            $items[] = [
+                'case_no'     => $caseNo,
+                'title'       => tbm_siren_clean_text($title),
+                'location'    => tbm_siren_clean_text($location),
+                'occurred_at' => tbm_siren_clean_text($occurredAt),
+                'detail_url'  => 'https://www.csi.go.kr/acd/acdCaseView.do?case_no=' . rawurlencode($caseNo),
+            ];
+
+            if (count($items) >= $limit) {
+                return $items;
+            }
+        }
+    }
+
+    if (!empty($items)) {
+        return $items;
+    }
+
+    // 2순위: DOM 파싱 폴백
+    libxml_use_internal_errors(true);
+    $dom = new DOMDocument();
+    $dom->loadHTML('<?xml encoding="UTF-8">' . mb_substr($html, 0, 600000, 'UTF-8'));
+    libxml_clear_errors();
+
+    $xpath   = new DOMXPath($dom);
+    $trNodes = $xpath->query('//tr[.//a[contains(@href,"goDetail")]]');
+    if (!$trNodes) {
+        return $items;
+    }
+
+    foreach ($trNodes as $tr) {
+        $caseNo = '';
+
+        $anchors = $xpath->query('.//a[@href]', $tr);
+        if ($anchors) {
+            foreach ($anchors as $a) {
+                if (!$a instanceof DOMElement) {
+                    continue;
+                }
+                $href = trim((string)$a->getAttribute('href'));
+                if (preg_match('/goDetail\s*\(\s*[\'"]?(\d+)[\'"]?\s*\)/i', $href, $m)) {
+                    $caseNo = $m[1];
+                    break;
+                }
+            }
+        }
+
+        if ($caseNo === '' || isset($seen[$caseNo])) {
+            continue;
+        }
+
+        $tdNodes = $xpath->query('./td', $tr);
+        if (!$tdNodes) {
+            continue;
+        }
+
+        $cells = [];
+        foreach ($tdNodes as $td) {
+            $cells[] = trim(preg_replace('/\s+/u', ' ', (string)$td->textContent));
+        }
+
+        $title      = $cells[1] ?? ($cells[0] ?? '');
+        $location   = $cells[2] ?? '';
+        $occurredAt = $cells[3] ?? '';
+
+        if ($title === '') {
+            continue;
+        }
+
+        $seen[$caseNo] = true;
+        $items[] = [
+            'case_no'     => $caseNo,
+            'title'       => tbm_siren_clean_text($title),
+            'location'    => tbm_siren_clean_text($location),
+            'occurred_at' => tbm_siren_clean_text($occurredAt),
+            'detail_url'  => 'https://www.csi.go.kr/acd/acdCaseView.do?case_no=' . rawurlencode($caseNo),
+        ];
+
+        if (count($items) >= $limit) {
+            break;
+        }
+    }
+
+    return $items;
+}
+
+/**
+ * CSI 사고사례 상세 페이지 HTML에서 핵심 필드를 추출한다.
+ *
+ * @return array ['title','accident_date','incident_overview','incident_cause','prevention']
+ */
+function tbm_siren_csi_parse_detail(string $html): array
+{
+    $result = [
+        'title'             => '',
+        'accident_date'     => '',
+        'incident_overview' => '',
+        'incident_cause'    => '',
+        'prevention'        => '',
+    ];
+
+    if ($html === '') {
+        return $result;
+    }
+
+    // 정규식으로 th-td 쌍 추출
+    $labelMap = [
+        '사고명'       => 'title',
+        '발생일시'     => 'accident_date',
+        '사고경위'     => 'incident_overview',
+        '사고원인'     => 'incident_cause',
+        '구체적 사고원인' => 'incident_cause',
+        '재발방지대책' => 'prevention',
+    ];
+
+    // <th>레이블</th>\n?<td>값</td> 패턴
+    if (preg_match_all(
+        '/<(?:th|td)[^>]*class=["\'][^"\']*td-head[^"\']*["\'][^>]*>\s*(.*?)\s*<\/(?:th|td)>\s*<(?:th|td)[^>]*>(.*?)<\/(?:th|td)>/isu',
+        $html,
+        $matches,
+        PREG_SET_ORDER
+    )) {
+        foreach ($matches as $match) {
+            $label = tbm_siren_clean_text((string)$match[1]);
+            $raw   = (string)$match[2];
+            $raw   = preg_replace('/<br\s*\/?>/iu', ' ', $raw) ?? $raw;
+            $value = tbm_siren_clean_text($raw);
+
+            foreach ($labelMap as $key => $field) {
+                if ($result[$field] === '' && str_contains($label, $key)) {
+                    $result[$field] = $value;
+                }
+            }
+        }
+    }
+
+    // DOM 폴백 (정규식으로 못 잡은 경우)
+    $needsMore = array_filter($result, static fn($v) => $v === '');
+    if (!empty($needsMore) && extension_loaded('dom') && class_exists('DOMDocument')) {
+        libxml_use_internal_errors(true);
+        $dom = new DOMDocument();
+        $dom->loadHTML('<?xml encoding="UTF-8">' . mb_substr($html, 0, 700000, 'UTF-8'));
+        libxml_clear_errors();
+
+        $xpath    = new DOMXPath($dom);
+        $rowNodes = $xpath->query(
+            '//section[@id="content"]//table//tr | //table[contains(@class,"table-bordered")]//tr'
+        );
+
+        if ($rowNodes) {
+            foreach ($rowNodes as $row) {
+                $thNodes = $xpath->query('./th|./td[contains(@class,"td-head")]', $row);
+                $tdNodes = $xpath->query('./td[not(contains(@class,"td-head"))]', $row);
+
+                if (!$thNodes || !$tdNodes || $thNodes->length === 0 || $tdNodes->length === 0) {
+                    continue;
+                }
+
+                $label = tbm_siren_clean_text((string)$thNodes->item(0)->textContent);
+
+                // 값 추출 (br → 공백)
+                $td      = $tdNodes->item(0);
+                $inner   = '';
+                if ($td instanceof DOMElement) {
+                    foreach ($td->childNodes as $child) {
+                        $inner .= $dom->saveHTML($child);
+                    }
+                }
+                $inner = preg_replace('/<br\s*\/?>/iu', ' ', $inner) ?? '';
+                $value = tbm_siren_clean_text($inner);
+
+                foreach ($labelMap as $key => $field) {
+                    if ($result[$field] === '' && str_contains($label, $key)) {
+                        $result[$field] = $value;
+                    }
+                }
+            }
+        }
+    }
+
+    return $result;
+}
+
+/**
+ * CSI 목록 아이템 + 상세 데이터를 siren 표준 형식으로 변환한다.
+ */
+function tbm_siren_csi_build_item(array $listItem, array $detail): array
+{
+    $title = trim((string)($detail['title'] ?? $listItem['title'] ?? ''));
+    $rawDate = trim((string)($detail['accident_date'] ?? $listItem['occurred_at'] ?? ''));
+    $date  = tbm_siren_extract_date($rawDate);
+    if ($date === '') {
+        $date = $rawDate;
+    }
+
+    $summaryParts = [];
+    foreach (['incident_overview', 'incident_cause'] as $key) {
+        $v = trim((string)($detail[$key] ?? ''));
+        if ($v !== '' && $v !== '-') {
+            $summaryParts[] = $v;
+        }
+    }
+    $summary    = implode(' ', $summaryParts);
+    $prevention = trim((string)($detail['prevention'] ?? ''));
+    $detailUrl  = trim((string)($listItem['detail_url'] ?? ''));
+
+    return [
+        'title'           => $title,
+        'posted_date'     => $date,
+        'detail_url'      => $detailUrl,
+        'image_url'       => '',
+        'image_base64'    => '',
+        'summary'         => tbm_siren_clean_text($summary),
+        'prevention'      => tbm_siren_clean_text($prevention),
+        'search_keywords' => tbm_siren_build_queries_from_title($title),
+        '_source'         => 'csi',
+    ];
+}
+
+/**
+ * CSI 사고사례 목록을 가져와 siren 아이템 형식으로 반환한다.
+ * KOSHA 전체 실패 시 폴백 소스로 사용된다.
+ *
+ * @param  int $limit  최대 아이템 수
+ * @return array       siren 표준 형식 아이템 배열
+ */
+function tbm_siren_fetch_csi_items(int $limit = 10): array
+{
+    $limit = max(1, min(20, $limit));
+
+    $listHtml = tbm_siren_csi_fetch(TBM_SIREN_CSI_LIST_URL);
+    if (trim($listHtml) === '') {
+        error_log('[TBM SIREN] CSI 목록 페이지 로드 실패');
+        return [];
+    }
+
+    $listItems = tbm_siren_csi_parse_list($listHtml, max($limit + 2, 8));
+    if (empty($listItems)) {
+        error_log('[TBM SIREN] CSI 목록 파싱 결과 없음');
+        return [];
+    }
+
+    $items = [];
+    foreach ($listItems as $listItem) {
+        if (count($items) >= $limit) {
+            break;
+        }
+
+        $detailUrl = trim((string)($listItem['detail_url'] ?? ''));
+        if ($detailUrl === '') {
+            continue;
+        }
+
+        $detailHtml = tbm_siren_csi_fetch($detailUrl);
+        if (trim($detailHtml) === '') {
+            continue;
+        }
+
+        $detail = tbm_siren_csi_parse_detail($detailHtml);
+        $item   = tbm_siren_csi_build_item($listItem, $detail);
+
+        if ($item['title'] !== '') {
+            $items[] = $item;
+        }
+    }
+
+    error_log('[TBM SIREN] CSI 폴백 결과: ' . count($items) . '건');
+    return $items;
+}
+
+// ─────────────────────────────────────────────────────────────────
 // 메인 진입점
 // ─────────────────────────────────────────────────────────────────
 
@@ -791,16 +1154,23 @@ function tbm_siren_get_recent_items(int $limit = 10, bool $withDetail = false, a
     if (!empty($apiRows)) {
         $items = tbm_siren_parse_recent_items_from_api($apiRows, $limit);
     } else {
-        // 2순위 폴백: HTML 스크래핑
+        // 2순위 폴백: KOSHA HTML 스크래핑
         error_log('[TBM SIREN] API 실패 — HTML 스크래핑 폴백 사용');
         $html = tbm_siren_fetch_url(TBM_SIREN_LIST_URL);
         if (trim($html) === '') {
             $html = tbm_siren_fetch_url(TBM_SIREN_LEGACY_LIST_URL);
         }
-        if (trim($html) === '') {
+        $items = trim($html) !== '' ? tbm_siren_parse_recent_items($html, $limit) : [];
+
+        // 3순위 폴백: CSI 사고사례 (https://www.csi.go.kr/acd/acdCaseList.do)
+        if (empty($items)) {
+            error_log('[TBM SIREN] KOSHA 전체 실패 — CSI 사고사례 폴백 사용');
+            $items = tbm_siren_fetch_csi_items($limit);
+        }
+
+        if (empty($items)) {
             return [];
         }
-        $items = tbm_siren_parse_recent_items($html, $limit);
     }
 
     if (empty($items) || !$withDetail) {
