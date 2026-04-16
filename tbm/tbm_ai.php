@@ -694,6 +694,282 @@ function tbm_ai_validate_parsed_response(array $parsed): array
     return ['valid' => empty($errors), 'errors' => $errors];
 }
 
+function tbm_ai_trim_text_to_limit(string $text, int $maxLen, int $minSentenceCut = 80): string
+{
+    $text = trim(preg_replace('/\s+/u', ' ', $text));
+    if ($text === '') {
+        return '';
+    }
+
+    if (mb_strlen($text, 'UTF-8') <= $maxLen) {
+        return $text;
+    }
+
+    $searchStart = min($maxLen, mb_strlen($text, 'UTF-8'));
+    for ($i = $searchStart; $i >= max(1, $minSentenceCut); $i--) {
+        $twoChar = mb_substr($text, $i - 1, 2, 'UTF-8');
+        $oneChar = mb_substr($text, $i - 1, 1, 'UTF-8');
+
+        if (in_array($twoChar, ['다.', '요.', '됨.', '함.'], true) || in_array($oneChar, ['.', '!', '?'], true)) {
+            $candidate = trim(mb_substr($text, 0, $i, 'UTF-8'));
+            if ($candidate !== '' && mb_strlen($candidate, 'UTF-8') <= $maxLen) {
+                return $candidate;
+            }
+        }
+    }
+
+    $trimmed = trim(mb_substr($text, 0, $maxLen, 'UTF-8'));
+    $trimmed = rtrim($trimmed, " ,;:\t\n\r\0\x0B");
+
+    return $trimmed;
+}
+
+function tbm_ai_normalize_plain_style(string $text): string
+{
+    $text = trim((string)$text);
+    if ($text === '') {
+        return '';
+    }
+
+    $replacements = [
+        '해야 합니다.' => '해야 한다.',
+        '해야 합니다' => '해야 한다',
+        '할 수 있습니다.' => '할 수 있다.',
+        '할 수 있습니다' => '할 수 있다',
+        '수 있습니다.' => '수 있다.',
+        '수 있습니다' => '수 있다',
+        '필요합니다.' => '필요하다.',
+        '필요합니다' => '필요하다',
+        '중요합니다.' => '중요하다.',
+        '중요합니다' => '중요하다',
+        '가능합니다.' => '가능하다.',
+        '가능합니다' => '가능하다',
+        '금지됩니다.' => '금지된다.',
+        '금지됩니다' => '금지된다',
+        '요구됩니다.' => '요구된다.',
+        '요구됩니다' => '요구된다',
+        '강조됩니다.' => '강조된다.',
+        '강조됩니다' => '강조된다',
+        '평가됩니다.' => '평가된다.',
+        '평가됩니다' => '평가된다',
+        '확인됩니다.' => '확인된다.',
+        '확인됩니다' => '확인된다',
+        '판단됩니다.' => '판단된다.',
+        '판단됩니다' => '판단된다',
+        '보입니다.' => '보인다.',
+        '보입니다' => '보인다',
+        '있습니다.' => '있다.',
+        '있습니다' => '있다',
+        '없습니다.' => '없다.',
+        '없습니다' => '없다',
+        '됩니다.' => '된다.',
+        '됩니다' => '된다',
+        '입니다.' => '이다.',
+        '입니다' => '이다',
+        '합니다.' => '한다.',
+        '합니다' => '한다',
+    ];
+
+    $text = strtr($text, $replacements);
+    $text = preg_replace('/([가-힣])였습니다\./u', '$1였다.', $text);
+    $text = preg_replace('/([가-힣])였습니다/u', '$1였다', $text);
+    $text = preg_replace('/([가-힣])했습니다\./u', '$1했다.', $text);
+    $text = preg_replace('/([가-힣])했습니다/u', '$1했다', $text);
+
+    return trim($text);
+}
+
+function tbm_ai_fill_text_to_min(string $text, int $minLen, int $maxLen, array $fallbackSentences): string
+{
+    $text = trim((string)$text);
+    if ($text === '') {
+        $text = trim((string)($fallbackSentences[0] ?? ''));
+    }
+
+    foreach ($fallbackSentences as $sentence) {
+        if (mb_strlen($text, 'UTF-8') >= $minLen) {
+            break;
+        }
+
+        $sentence = trim((string)$sentence);
+        if ($sentence === '') {
+            continue;
+        }
+
+        $candidate = trim($text === '' ? $sentence : ($text . ' ' . $sentence));
+        if (mb_strlen($candidate, 'UTF-8') > $maxLen) {
+            $remaining = $maxLen - mb_strlen($text, 'UTF-8') - ($text === '' ? 0 : 1);
+            if ($remaining <= 0) {
+                break;
+            }
+
+            $sentence = tbm_ai_trim_text_to_limit($sentence, $remaining, 10);
+            $candidate = trim($text === '' ? $sentence : ($text . ' ' . $sentence));
+        }
+
+        if ($candidate !== '') {
+            $text = $candidate;
+        }
+    }
+
+    return trim($text);
+}
+
+function tbm_ai_quiz_normalize_lines(string $quiz): array
+{
+    $quiz = str_replace(["\r\n", "\r"], "\n", trim($quiz));
+    if ($quiz === '') {
+        return [];
+    }
+
+    $lines = preg_split('/\n+/u', $quiz) ?: [];
+    $normalized = [];
+    foreach ($lines as $line) {
+        $line = trim((string)$line);
+        $line = preg_replace('/[ \t]+/u', ' ', $line);
+        if ($line !== '') {
+            $normalized[] = $line;
+        }
+    }
+
+    return $normalized;
+}
+
+function tbm_ai_quiz_join_lines(array $lines): string
+{
+    $lines = array_values(array_filter(array_map(static fn($line) => trim((string)$line), $lines), static fn($line) => $line !== ''));
+    return implode("\n", $lines);
+}
+
+function tbm_ai_autofit_single_quiz(string $quiz, int $targetMin = 183, int $targetMax = 198): string
+{
+    $lines = tbm_ai_quiz_normalize_lines($quiz);
+    if ($lines === []) {
+        return '';
+    }
+
+    $lineMaxMap = [84, 28, 28, 28, 28];
+    foreach ($lines as $index => $line) {
+        $limit = $lineMaxMap[$index] ?? 28;
+        if (mb_strlen($line, 'UTF-8') > $limit) {
+            $lines[$index] = tbm_ai_trim_text_to_limit($line, $limit, 12);
+        }
+    }
+
+    $quiz = tbm_ai_quiz_join_lines($lines);
+
+    if (mb_strlen($quiz, 'UTF-8') > $targetMax) {
+        $tightMap = [74, 25, 25, 25, 25];
+        foreach ($lines as $index => $line) {
+            $limit = $tightMap[$index] ?? 25;
+            if (mb_strlen($line, 'UTF-8') > $limit) {
+                $lines[$index] = tbm_ai_trim_text_to_limit($line, $limit, 10);
+            }
+        }
+        $quiz = tbm_ai_quiz_join_lines($lines);
+    }
+
+    if (mb_strlen($quiz, 'UTF-8') < $targetMin) {
+        $pads = [
+            ' 현장 안전기준으로 판단한다.',
+            ' 재발 방지 원칙을 함께 고려한다.',
+            ' 작업 전 점검 기준을 반영한다.',
+        ];
+
+        $question = $lines[0] ?? '';
+        foreach ($pads as $pad) {
+            if (mb_strlen($quiz, 'UTF-8') >= $targetMin) {
+                break;
+            }
+
+            $candidateQuestion = trim($question . $pad);
+            if (mb_strlen($candidateQuestion, 'UTF-8') <= 96) {
+                $question = $candidateQuestion;
+                $lines[0] = $question;
+                $quiz = tbm_ai_quiz_join_lines($lines);
+            }
+        }
+    }
+
+    return tbm_ai_quiz_join_lines($lines);
+}
+
+function tbm_ai_autofit_quiz_fields(array $parsed): array
+{
+    $quizKeys = ['quiz_1', 'quiz_2', 'quiz_3'];
+    foreach ($quizKeys as $key) {
+        $parsed[$key] = tbm_ai_autofit_single_quiz(trim((string)($parsed[$key] ?? '')));
+    }
+
+    $quizTotal = 0;
+    foreach ($quizKeys as $key) {
+        $quizTotal += mb_strlen((string)$parsed[$key], 'UTF-8');
+    }
+
+    if ($quizTotal > 600) {
+        foreach ($quizKeys as $key) {
+            $parsed[$key] = tbm_ai_autofit_single_quiz((string)$parsed[$key], 175, 190);
+        }
+    }
+
+    $quizTotal = 0;
+    foreach ($quizKeys as $key) {
+        $quizTotal += mb_strlen((string)$parsed[$key], 'UTF-8');
+    }
+
+    if ($quizTotal < 550) {
+        foreach ($quizKeys as $key) {
+            $parsed[$key] = tbm_ai_autofit_single_quiz((string)$parsed[$key], 188, 200);
+        }
+    }
+
+    return $parsed;
+}
+
+function tbm_ai_autofit_body_text(string $bodyText): string
+{
+    $bodyText = trim((string)$bodyText);
+    $firstLabel = '[사고내용 및 원인]';
+    $secondLabel = '[예방대책]';
+    $firstPos = mb_strpos($bodyText, $firstLabel);
+    $secondPos = mb_strpos($bodyText, $secondLabel);
+
+    if ($bodyText === '' || $firstPos === false || $secondPos === false || $secondPos <= $firstPos) {
+        return $bodyText;
+    }
+
+    $firstBlock = trim(mb_substr($bodyText, $firstPos + mb_strlen($firstLabel, 'UTF-8'), $secondPos - ($firstPos + mb_strlen($firstLabel, 'UTF-8')), 'UTF-8'));
+    $secondBlock = trim(mb_substr($bodyText, $secondPos + mb_strlen($secondLabel, 'UTF-8'), null, 'UTF-8'));
+
+    $firstBlock = tbm_ai_normalize_plain_style($firstBlock);
+    $secondBlock = tbm_ai_normalize_plain_style($secondBlock);
+
+    $firstBlock = tbm_ai_trim_text_to_limit($firstBlock, 250, 180);
+    $secondBlock = tbm_ai_trim_text_to_limit($secondBlock, 160, 100);
+
+    $firstBlock = tbm_ai_fill_text_to_min($firstBlock, 220, 250, [
+        '작업 전에는 공정별 위험요인을 다시 확인하고 관리 책임을 명확히 해야 한다.',
+        '현장에서는 기본 안전수칙 미준수와 관리 공백이 겹치면 중대재해로 이어질 수 있다.',
+    ]);
+    $secondBlock = tbm_ai_fill_text_to_min($secondBlock, 140, 160, [
+        '관리자는 작업 전 위험요인을 다시 점검하고 비상 대응 절차를 즉시 실행할 수 있어야 한다.',
+        '작업자는 이상 징후 발견 시 즉시 보고하고 보호구와 감시 체계를 유지해야 한다.',
+    ]);
+
+    return $firstLabel . "\n" . $firstBlock . "\n\n" . $secondLabel . "\n" . $secondBlock;
+}
+
+function tbm_ai_autofit_parsed_response(array $parsed): array
+{
+    if (isset($parsed['body_text']) && is_string($parsed['body_text'])) {
+        $parsed['body_text'] = tbm_ai_autofit_body_text($parsed['body_text']);
+    }
+
+    $parsed = tbm_ai_autofit_quiz_fields($parsed);
+
+    return $parsed;
+}
+
 
 // (주석 처리된 tbm_ai_download_image_to_local 제거됨 — tbm_ai_download_and_validate_image로 대체)
 
@@ -764,9 +1040,13 @@ function tbm_ai_get_validation_retry_prompt(bool $shorten = false): string
 {
     $text = "\n\n중요: 아래 규칙을 정확히 지키세요.\n"
         . "- 사고내용 및 원인은 220~250자, 예방대책은 140~160자.\n"
+        . "- 가장 안전한 목표는 사고내용 및 원인 235~245자, 예방대책 145~155자입니다.\n"
         . "- body_text는 두 문단으로만 구성하고, [사고내용 및 원인]과 [예방대책] 레이블을 정확히 포함하세요.\n"
+        . "- body_text 본문은 경어체가 아닌 평어체로 작성하세요. 예: '점검해야 합니다' 대신 '점검해야 한다'.\n"
+        . "- '-습니다', '-입니다', '-해야 합니다' 같은 경어체 어미는 쓰지 마세요.\n"
         . "- 사고내용+예방대책 합계는 420자를 넘지 않아야 합니다.\n"
         . "- 퀴즈 3개 총 글자 수는 550~600자여야 합니다.\n"
+        . "- 퀴즈는 각 문항을 대체로 180~195자 정도로 맞추면 합계 범위를 맞추기 쉽습니다.\n"
         . "- JSON 키 이름과 형식을 정확히 유지하세요.\n"
         . "- 순수 JSON 객체만 반환하세요.";
 
@@ -777,6 +1057,78 @@ function tbm_ai_get_validation_retry_prompt(bool $shorten = false): string
     }
 
     return $text;
+}
+
+function tbm_ai_measure_parsed_response(array $parsed): array
+{
+    $bodyText = trim((string)($parsed['body_text'] ?? ''));
+    $firstLabel = '[사고내용 및 원인]';
+    $secondLabel = '[예방대책]';
+    $firstPos = mb_strpos($bodyText, $firstLabel);
+    $secondPos = mb_strpos($bodyText, $secondLabel);
+
+    $firstBlock = '';
+    $secondBlock = '';
+
+    if ($firstPos !== false && $secondPos !== false && $secondPos > $firstPos) {
+        $firstBlock = trim(mb_substr($bodyText, $firstPos + mb_strlen($firstLabel, 'UTF-8'), $secondPos - ($firstPos + mb_strlen($firstLabel, 'UTF-8')), 'UTF-8'));
+        $secondBlock = trim(mb_substr($bodyText, $secondPos + mb_strlen($secondLabel, 'UTF-8'), null, 'UTF-8'));
+    }
+
+    $quiz1 = trim((string)($parsed['quiz_1'] ?? ''));
+    $quiz2 = trim((string)($parsed['quiz_2'] ?? ''));
+    $quiz3 = trim((string)($parsed['quiz_3'] ?? ''));
+
+    return [
+        'accident_len' => mb_strlen($firstBlock, 'UTF-8'),
+        'prevention_len' => mb_strlen($secondBlock, 'UTF-8'),
+        'body_total_len' => mb_strlen($firstBlock, 'UTF-8') + mb_strlen($secondBlock, 'UTF-8'),
+        'quiz_1_len' => mb_strlen($quiz1, 'UTF-8'),
+        'quiz_2_len' => mb_strlen($quiz2, 'UTF-8'),
+        'quiz_3_len' => mb_strlen($quiz3, 'UTF-8'),
+        'quiz_total_len' => mb_strlen($quiz1, 'UTF-8') + mb_strlen($quiz2, 'UTF-8') + mb_strlen($quiz3, 'UTF-8'),
+    ];
+}
+
+function tbm_ai_build_revision_prompt(string $basePrompt, array $parsed, array $validationErrors): string
+{
+    $metrics = tbm_ai_measure_parsed_response($parsed);
+    $json = json_encode($parsed, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+    if (!is_string($json) || trim($json) === '') {
+        $json = '{}';
+    }
+
+    $errorLines = [];
+    foreach ($validationErrors as $error) {
+        $errorLines[] = '- ' . $error;
+    }
+
+    return $basePrompt
+        . "\n\n이전 출력은 JSON 파싱에는 성공했지만 검증에 실패했습니다. 아래 이전 JSON을 버리지 말고, 사실관계와 키 이름은 유지한 채 길이만 조정해서 다시 작성하세요.\n"
+        . "수정 목표:\n"
+        . "- 사고내용 및 원인: 235~245자 목표, 허용 범위 220~250자\n"
+        . "- 예방대책: 145~155자 목표, 허용 범위 140~160자\n"
+        . "- 사고내용+예방대책 합계: 380~400자 목표, 절대 420자 초과 금지\n"
+        . "- 퀴즈 3개 총 글자 수: 565~585자 목표, 허용 범위 550~600자\n"
+        . "- 퀴즈는 각 문항을 대체로 185~195자 정도로 균형 있게 맞추세요\n"
+        . "- body_text 본문은 반드시 평어체로 유지하세요. '-습니다', '-입니다'는 쓰지 말고 '-다', '-이다', '-해야 한다' 형태로 고치세요\n"
+        . "- source_url, accident_date가 이미 들어 있으면 그대로 유지하세요\n"
+        . "- 새로운 설명문을 붙이지 말고, 최종 JSON 객체만 다시 출력하세요\n"
+        . "\n현재 길이 측정값:\n"
+        . sprintf(
+            "- 사고내용 및 원인: %d자\n- 예방대책: %d자\n- 본문 합계: %d자\n- quiz_1: %d자\n- quiz_2: %d자\n- quiz_3: %d자\n- 퀴즈 합계: %d자\n",
+            $metrics['accident_len'],
+            $metrics['prevention_len'],
+            $metrics['body_total_len'],
+            $metrics['quiz_1_len'],
+            $metrics['quiz_2_len'],
+            $metrics['quiz_3_len'],
+            $metrics['quiz_total_len']
+        )
+        . "\n검증 오류:\n"
+        . implode("\n", $errorLines)
+        . "\n\n이전 JSON:\n"
+        . $json;
 }
 
 function tbm_ai_generate_via_gemini(string $prompt, string $targetDate, ?string $sourceUrl = null, ?string $imageUrl = null, ?string $imageKeyword = null): array
@@ -810,12 +1162,14 @@ function tbm_ai_generate_via_gemini(string $prompt, string $targetDate, ?string 
 
     $maxAttempts = GEMINI_MAX_RETRIES + 1;
     for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+        $parsed = null;
         try {
             $decoded = tbm_call_gemini_api($payload);
             $text = tbm_extract_gemini_text($decoded);
             file_put_contents(__DIR__ . '/gemini_raw.txt', $text);
 
             $parsed = tbm_parse_ai_json($text);
+            $parsed = tbm_ai_autofit_parsed_response($parsed);
             $validation = tbm_ai_validate_parsed_response($parsed);
             if (!$validation['valid']) {
                 throw new RuntimeException('AI 출력 검증 실패: ' . implode('; ', $validation['errors']));
@@ -854,11 +1208,21 @@ function tbm_ai_generate_via_gemini(string $prompt, string $targetDate, ?string 
             }
 
             $shorten = false;
+            $retryPrompt = $basePrompt . tbm_ai_get_validation_retry_prompt(false);
             if (str_contains($e->getMessage(), 'AI 출력 검증 실패')) {
                 $shorten = tbm_ai_is_length_validation_error($e->getMessage());
+                if (is_array($parsed)) {
+                    $validation = tbm_ai_validate_parsed_response($parsed);
+                    $retryPrompt = tbm_ai_build_revision_prompt($basePrompt, $parsed, $validation['errors']);
+                }
             }
 
-            $payload['contents'][0]['parts'][0]['text'] = $basePrompt . tbm_ai_get_validation_retry_prompt($shorten);
+            if ($retryPrompt === $basePrompt . tbm_ai_get_validation_retry_prompt(false) && $shorten) {
+                $retryPrompt = $basePrompt . tbm_ai_get_validation_retry_prompt(true);
+            }
+
+            $payload['contents'][0]['parts'][0]['text'] = $retryPrompt;
+            $payload['generationConfig']['temperature'] = $shorten ? 0.2 : 0.3;
             @file_put_contents(__DIR__ . '/gemini_error.txt', '[' . date('c') . '] [retrying] prompt updated for attempt ' . ($attempt + 1) . "\n", FILE_APPEND);
             usleep(700000);
         }
@@ -1306,6 +1670,372 @@ function tbm_ai_collect_article_candidates_from_siren(array $sirenItems, int $li
     return $candidates;
 }
 
+function tbm_ai_fetch_csi_list_html(int $page = 1): string
+{
+    $page = max(1, $page);
+
+    $urls = $page === 1
+        ? [
+            'https://www.csi.go.kr/acd/acdCaseList.do',
+            'https://www.csi.go.kr/acd/acdCaseList.do?pageIndex=1',
+        ]
+        : [
+            'https://www.csi.go.kr/acd/acdCaseList.do?pageIndex=' . $page,
+        ];
+
+    foreach ($urls as $url) {
+        $html = function_exists('tbm_news_fetch_url') ? tbm_news_fetch_url($url) : '';
+        if ($html !== '') {
+            return $html;
+        }
+    }
+
+    return '';
+}
+
+function tbm_ai_extract_csi_case_no(string $text): string
+{
+    if (preg_match('/\b(\d{4,})\b/', $text, $matches) === 1) {
+        return trim((string)$matches[1]);
+    }
+
+    return '';
+}
+
+function tbm_ai_extract_csi_detail_case_no(string $href): string
+{
+    $href = trim($href);
+    if ($href === '') {
+        return '';
+    }
+
+    if (preg_match('/case_no\s*=\s*(\d+)/i', $href, $matches) === 1) {
+        return trim((string)$matches[1]);
+    }
+
+    if (preg_match('/goDetail\(\s*[\'"]?(\d+)[\'"]?\s*\)/i', $href, $matches) === 1) {
+        return trim((string)$matches[1]);
+    }
+
+    if (preg_match('/\((?:\s*[\'"])?(\d+)(?:[\'"]?\s*)\)/', $href, $matches) === 1) {
+        return trim((string)$matches[1]);
+    }
+
+    return '';
+}
+
+function tbm_ai_csi_clean_text(string $text): string
+{
+    if ($text === '') {
+        return '';
+    }
+
+    $text = preg_replace('/<br\s*\/?>/iu', "\n", $text);
+    $text = html_entity_decode((string)$text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $text = strip_tags((string)$text);
+    $text = preg_replace('/[ \t]+/u', ' ', (string)$text);
+    $text = preg_replace('/\s*\n\s*/u', "\n", (string)$text);
+    $text = preg_replace('/\n{2,}/u', "\n", (string)$text);
+
+    return trim((string)$text);
+}
+
+function tbm_ai_parse_csi_case_list(string $html, int $limit = 10): array
+{
+    $rows = [];
+    $seen = [];
+
+    if ($html === '' || !extension_loaded('dom') || !class_exists('DOMDocument')) {
+        return $rows;
+    }
+
+    libxml_use_internal_errors(true);
+    $dom = new DOMDocument();
+    $dom->loadHTML('<?xml encoding="UTF-8">' . mb_substr($html, 0, 600000, 'UTF-8'));
+    libxml_clear_errors();
+
+    $xpath = new DOMXPath($dom);
+    $trNodes = $xpath->query('//tr[td]');
+
+    if (!$trNodes) {
+        return $rows;
+    }
+
+    foreach ($trNodes as $trNode) {
+        $tdNodes = $xpath->query('./td', $trNode);
+        if (!$tdNodes || $tdNodes->length < 4) {
+            continue;
+        }
+
+        $cells = [];
+        foreach ($tdNodes as $tdNode) {
+            $cells[] = trim(preg_replace('/\s+/u', ' ', (string)$tdNode->textContent));
+        }
+
+        $accidentNo = tbm_ai_extract_csi_case_no((string)($cells[0] ?? ''));
+        $caseNo = '';
+        $title = trim((string)($cells[1] ?? ''));
+        $location = trim((string)($cells[2] ?? ''));
+        $occurredAt = trim((string)($cells[3] ?? ''));
+
+        $anchorNodes = $xpath->query('.//a[@href]', $trNode);
+        if ($anchorNodes && $anchorNodes->length > 0) {
+            foreach ($anchorNodes as $anchorNode) {
+                if (!$anchorNode instanceof DOMElement) {
+                    continue;
+                }
+
+                $href = trim((string)$anchorNode->getAttribute('href'));
+                $caseNo = tbm_ai_extract_csi_detail_case_no($href);
+                if ($caseNo !== '') {
+                    break;
+                }
+            }
+        }
+
+        if ($caseNo === '') {
+            $caseNo = $accidentNo;
+        }
+
+        if ($caseNo === '' || $title === '') {
+            continue;
+        }
+
+        if (isset($seen[$caseNo])) {
+            continue;
+        }
+        $seen[$caseNo] = true;
+
+        $rows[] = [
+            'case_no' => $caseNo,
+            'accd_no' => $accidentNo,
+            'title' => $title,
+            'location' => $location,
+            'occurred_at' => $occurredAt,
+            'detail_url' => 'https://www.csi.go.kr/acd/acdCaseView.do?case_no=' . rawurlencode($caseNo),
+        ];
+
+        if (count($rows) >= $limit) {
+            break;
+        }
+    }
+
+    return $rows;
+}
+
+function tbm_ai_extract_csi_fields_from_dom(string $html): array
+{
+    $fields = [];
+
+    if ($html === '' || !extension_loaded('dom') || !class_exists('DOMDocument')) {
+        return $fields;
+    }
+
+    libxml_use_internal_errors(true);
+    $dom = new DOMDocument();
+    $dom->loadHTML('<?xml encoding="UTF-8">' . mb_substr($html, 0, 700000, 'UTF-8'));
+    libxml_clear_errors();
+
+    $xpath = new DOMXPath($dom);
+    $rowNodes = $xpath->query('//tr[th and td]');
+
+    if ($rowNodes) {
+        foreach ($rowNodes as $rowNode) {
+            $thNodes = $xpath->query('./th', $rowNode);
+            $tdNodes = $xpath->query('./td', $rowNode);
+            if (!$thNodes || !$tdNodes || $thNodes->length === 0 || $tdNodes->length === 0) {
+                continue;
+            }
+
+            $pairCount = min($thNodes->length, $tdNodes->length);
+            for ($index = 0; $index < $pairCount; $index++) {
+                $label = trim(preg_replace('/\s+/u', ' ', (string)$thNodes->item($index)->textContent));
+                $value = trim(preg_replace('/\s+/u', ' ', (string)$tdNodes->item($index)->textContent));
+                if ($label !== '' && $value !== '' && !isset($fields[$label])) {
+                    $fields[$label] = $value;
+                }
+            }
+        }
+    }
+
+    return $fields;
+}
+
+function tbm_ai_extract_csi_field_by_regex(string $html, string $label): string
+{
+    $pattern = '/<th[^>]*>\s*' . preg_quote($label, '/') . '\s*<\/th>\s*<td[^>]*>(.*?)<\/td>/isu';
+    if (preg_match($pattern, $html, $matches) === 1) {
+        return function_exists('tbm_news_strip_html')
+            ? tbm_news_strip_html((string)$matches[1])
+            : trim(strip_tags((string)$matches[1]));
+    }
+
+    return '';
+}
+
+function tbm_ai_fetch_csi_case_detail(string $caseNo): array
+{
+    $caseNo = trim($caseNo);
+    if ($caseNo === '') {
+        return [];
+    }
+
+    $url = 'https://www.csi.go.kr/acd/acdCaseView.do?case_no=' . rawurlencode($caseNo);
+    $html = function_exists('tbm_news_fetch_url') ? tbm_news_fetch_url($url) : '';
+    if ($html === '') {
+        return [];
+    }
+
+    $fields = tbm_ai_extract_csi_fields_from_dom($html);
+    foreach (['사고명', '발생일시', '사고위치', '사고경위', '사고원인', '구체적 사고원인', '피해상황', '재발방지대책', '향후조치계획'] as $label) {
+        if (!isset($fields[$label]) || trim((string)$fields[$label]) === '') {
+            $value = tbm_ai_extract_csi_field_by_regex($html, $label);
+            if ($value !== '') {
+                $fields[$label] = $value;
+            }
+        }
+    }
+
+    if (!empty($fields)) {
+        $fields['detail_url'] = $url;
+        $fields['case_no'] = $caseNo;
+    }
+
+    return $fields;
+}
+
+function tbm_ai_build_csi_article(array $listItem, array $detail): array
+{
+    $title = trim((string)($detail['사고명'] ?? $listItem['title'] ?? ''));
+    $accidentDate = trim((string)($detail['발생일시'] ?? $listItem['occurred_at'] ?? ''));
+
+    $bodyParts = [];
+    $fieldOrder = [
+        '사고위치',
+        '피해상황',
+        '사고경위',
+        '사고원인',
+        '구체적 사고원인',
+        '재발방지대책',
+        '향후조치계획',
+    ];
+
+    foreach ($fieldOrder as $label) {
+        $value = trim((string)($detail[$label] ?? ''));
+        if ($value !== '') {
+            $bodyParts[] = $label . ': ' . $value;
+        }
+    }
+
+    if (empty($bodyParts) && trim((string)($listItem['location'] ?? '')) !== '') {
+        $bodyParts[] = '사고위치: ' . trim((string)$listItem['location']);
+    }
+
+    $body = trim(implode("\n", $bodyParts));
+
+    return [
+        'article_title' => $title,
+        'article_body' => $body,
+        'article_url' => trim((string)($detail['detail_url'] ?? $listItem['detail_url'] ?? '')),
+        'accident_date' => $accidentDate,
+        'published_at' => $accidentDate,
+        'image_url' => '',
+        'has_context' => $body !== '' ? 1 : 0,
+        'incident_score' => 8,
+        'source_name' => 'CSI',
+    ];
+}
+
+function tbm_ai_collect_csi_candidates(string $targetDate, int $limit = 8): array
+{
+    $candidates = [];
+    $seen = [];
+    $seenTitles = [];
+    $usedUrls = array_fill_keys(tbm_ai_get_recent_used_source_urls(), true);
+    $usedTitles = tbm_ai_get_recent_used_title_map();
+
+    $listPages = [1, 2];
+    $detailFetchLimit = max(3, min($limit, 6));
+
+    foreach ($listPages as $page) {
+        $listHtml = tbm_ai_fetch_csi_list_html($page);
+        if ($listHtml === '') {
+            continue;
+        }
+
+        $listItems = tbm_ai_parse_csi_case_list($listHtml, $detailFetchLimit);
+
+        foreach ($listItems as $listItem) {
+            $detail = tbm_ai_fetch_csi_case_detail((string)($listItem['case_no'] ?? ''));
+            if (empty($detail)) {
+                continue;
+            }
+
+            $article = tbm_ai_build_csi_article($listItem, $detail);
+            $url = trim((string)($article['article_url'] ?? ''));
+            $body = trim((string)($article['article_body'] ?? ''));
+            $title = trim((string)($article['article_title'] ?? ''));
+            $normalizedTitle = tbm_ai_normalize_title($title);
+
+            if ($url === '' || $title === '' || $body === '') {
+                continue;
+            }
+
+            if (isset($usedUrls[$url])) {
+                continue;
+            }
+
+            $isUsedSimilar = false;
+            foreach ($usedTitles as $usedTitle => $_) {
+                similar_text($normalizedTitle, $usedTitle, $percent);
+                if ($percent > 80) {
+                    $isUsedSimilar = true;
+                    break;
+                }
+            }
+
+            if ($isUsedSimilar) {
+                continue;
+            }
+
+            $isSimilar = false;
+            foreach ($seenTitles as $existingTitle) {
+                similar_text($normalizedTitle, $existingTitle, $percent);
+                if ($percent > 80) {
+                    $isSimilar = true;
+                    break;
+                }
+            }
+
+            if ($isSimilar) {
+                continue;
+            }
+
+            $seenTitles[] = $normalizedTitle;
+
+            $key = md5(mb_strtolower($url . '|' . $normalizedTitle, 'UTF-8'));
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+
+            $candidates[] = [
+                'query' => 'CSI 사고사례',
+                'article' => $article,
+                'siren' => null,
+                'csi_case' => $detail,
+                'target_date' => $targetDate,
+            ];
+
+            if (count($candidates) >= $limit) {
+                return $candidates;
+            }
+        }
+    }
+
+    return $candidates;
+}
+
 function tbm_ai_collect_article_candidates_legacy(string $targetDate, int $limit = 15): array
 {
     $candidates = [];
@@ -1607,14 +2337,14 @@ function tbm_ai_build_article_prompt(string $targetDate, array $article, ?array 
 1. 출력은 순수 JSON 객체 1개만 반환하세요.
 2. 설명문, 마크다운, 코드블록, 백틱(```), 머리말, 꼬리말을 절대 넣지 마세요.
 3. 기사와 참고 정보에 없는 내용을 추측해서 쓰지 마세요.
-4. 본문은 한국어 문어체로 작성하세요.
+4. 본문은 한국어 평어체로 작성하세요. 경어체('-습니다', '-입니다')는 사용하지 마세요.
 5. body_text는 반드시 아래 2개 단락으로 구성하세요.
    - [사고내용 및 원인]
    - [예방대책]
-6. 사고내용 및 원인은 정확히 220~250자 범위로 작성하세요. 반드시 250자를 초과하지 마세요.
-7. 예방대책은 정확히 140~160자 범위로 작성하세요. 반드시 160자를 초과하지 마세요.
+6. 사고내용 및 원인은 정확히 220~250자 범위로 작성하세요. 가장 좋은 목표는 235~245자입니다. 반드시 250자를 초과하지 마세요.
+7. 예방대책은 정확히 140~160자 범위로 작성하세요. 가장 좋은 목표는 145~155자입니다. 반드시 160자를 초과하지 마세요.
    (사고내용 + 예방대책 합계가 절대 420자를 넘지 않도록 하세요. 이는 인쇄 양식의 고정 영역 제한입니다.)
-8. 퀴즈는 보기 4개가 있는 객관식 문제 3개를 작성하되, 퀴즈 3개의 총 글자 수 합계가 정확히 550~600자 범위가 되도록 각 문제의 질문과 보기를 구체적이고 상세하게 작성하세요.
+8. 퀴즈는 보기 4개가 있는 객관식 문제 3개를 작성하되, 퀴즈 3개의 총 글자 수 합계가 정확히 550~600자 범위가 되도록 각 문제를 대체로 185~195자 정도로 맞춰 질문과 보기를 구체적으로 작성하세요.
 9. source_url에는 아래 실제 기사 URL을 그대로 넣으세요.
    {$articleUrl}
 10. accident_title은 기사 내용을 바탕으로 20자 내외로 간결하게 작성하세요.
@@ -1666,14 +2396,14 @@ function tbm_ai_build_siren_prompt(string $targetDate, array $siren): string
 1. 출력은 순수 JSON 객체 1개만 반환하세요.
 2. 설명문, 마크다운, 코드블록, 백틱(```), 머리말, 꼬리말을 절대 넣지 마세요.
 3. 제공된 정보에 없는 내용을 과도하게 추측해서 쓰지 마세요.
-4. 본문은 한국어 문어체로 작성하세요.
+4. 본문은 한국어 평어체로 작성하세요. 경어체('-습니다', '-입니다')는 사용하지 마세요.
 5. body_text는 반드시 아래 2개 단락으로 구성하세요.
    - [사고내용 및 원인]
    - [예방대책]
-6. 사고내용 및 원인은 정확히 220~250자 범위로 작성하세요. 반드시 250자를 초과하지 마세요.
-7. 예방대책은 정확히 140~160자 범위로 작성하세요. 반드시 160자를 초과하지 마세요.
+6. 사고내용 및 원인은 정확히 220~250자 범위로 작성하세요. 가장 좋은 목표는 235~245자입니다. 반드시 250자를 초과하지 마세요.
+7. 예방대책은 정확히 140~160자 범위로 작성하세요. 가장 좋은 목표는 145~155자입니다. 반드시 160자를 초과하지 마세요.
    (사고내용 + 예방대책 합계가 절대 420자를 넘지 않도록 하세요. 이는 인쇄 양식의 고정 영역 제한입니다.)
-8. 퀴즈는 보기 4개가 있는 객관식 문제 3개를 작성하되, 퀴즈 3개의 총 글자 수 합계가 정확히 550~600자 범위가 되도록 각 문제의 질문과 보기를 구체적이고 상세하게 작성하세요.
+8. 퀴즈는 보기 4개가 있는 객관식 문제 3개를 작성하되, 퀴즈 3개의 총 글자 수 합계가 정확히 550~600자 범위가 되도록 각 문제를 대체로 185~195자 정도로 맞춰 질문과 보기를 구체적으로 작성하세요.
 9. source_url에는 아래 상세 URL을 그대로 넣으세요.
    {$detailUrl}
 10. accident_title은 20자 내외로 간결하게 작성하세요.
@@ -1808,22 +2538,50 @@ function tbm_ai_generate_content(string $targetDate, bool $forceNew = false): ar
         tbm_ai_cleanup_unused_images($enrichedSirens, '');
     }
 
-    tbm_ai_log_debug('[1순위 실패] KOSHA 사용 가능 항목 없음 → 최근 7일 뉴스로 전환');
+    tbm_ai_log_debug('[1순위 실패] KOSHA 사용 가능 항목 없음 → CSI 사고사례로 전환');
 
-    // ── 2순위: 최근 7일 뉴스 ────────────────────────────────────
+    // ── 2순위: CSI 사고사례 ─────────────────────────────────────
+    $csiCandidates = tbm_ai_collect_csi_candidates($targetDate, 6);
+    $pickedCsi = tbm_ai_pick_best_candidate($csiCandidates);
+
+    if (is_array($pickedCsi)) {
+        $article = $pickedCsi['article'];
+        $article['article_body'] = mb_substr(trim((string)($article['article_body'] ?? '')), 0, 900, 'UTF-8');
+
+        $prompt = tbm_ai_build_article_prompt($targetDate, $article, null);
+        $result = tbm_ai_generate_via_gemini(
+            $prompt,
+            $targetDate,
+            trim((string)($article['article_url'] ?? '')),
+            trim((string)($article['image_url'] ?? '')),
+            trim((string)($article['article_title'] ?? ''))
+        );
+
+        if (empty($result['image_file']) || !is_file(__DIR__ . '/' . $result['image_file'])) {
+            tbm_ai_log_debug('[이미지 없음] 기사 유지, fallback 이미지 사용 예정');
+        }
+
+        if (!$forceNew) {
+            tbm_ai_save_cache($targetDate, $result);
+        }
+        if (ob_get_level() > 0) { @ob_clean(); }
+        return $result;
+    }
+
+    tbm_ai_log_debug('[2순위 실패] CSI 사고사례 후보 없음 → 최근 7일 뉴스로 전환');
+
+    // ── 3순위: 최근 7일 뉴스 ────────────────────────────────────
     $recentNewsCandidates = tbm_ai_collect_recent_week_news_candidates($targetDate, $forceNew ? 24 : 20);
     $pickedRecent = tbm_ai_pick_best_candidate($recentNewsCandidates);
 
-    // ── 뉴스 후보 품질 최소 기준 검증 ────────────────────────────
     if (is_array($pickedRecent)) {
         $score = (int)($pickedRecent['_score'] ?? 0);
         $title = trim((string)($pickedRecent['article']['article_title'] ?? ''));
         $body  = trim((string)($pickedRecent['article']['article_body'] ?? ''));
 
-        // 최소 품질 기준: 점수 6 미만이면 일반 fallback으로 넘김
         if ($score < 6) {
             tbm_ai_log_debug(sprintf(
-                '[2순위] 뉴스 후보 품질 미달(score=%d), 일반 fallback 전환: %s',
+                '[3순위] 뉴스 후보 품질 미달(score=%d), 일반 fallback 전환: %s',
                 $score,
                 mb_substr($title, 0, 50, 'UTF-8')
             ));
@@ -1838,7 +2596,7 @@ function tbm_ai_generate_content(string $targetDate, bool $forceNew = false): ar
 
             if ($accidentDate === '' && !$hasNarrative) {
                 tbm_ai_log_debug(sprintf(
-                    '[2순위] 사고일자+서술 모두 없음, 일반 fallback 전환: %s',
+                    '[3순위] 사고일자+서술 모두 없음, 일반 fallback 전환: %s',
                     mb_substr($title, 0, 50, 'UTF-8')
                 ));
                 $pickedRecent = null;
@@ -1870,8 +2628,8 @@ function tbm_ai_generate_content(string $targetDate, bool $forceNew = false): ar
         return $result;
     }
 
-    // ── 3순위: 일반 검색 fallback ───────────────────────────────
-    tbm_ai_log_debug('[3순위] 일반 검색 fallback 시도');
+    // ── 4순위: 일반 검색 fallback ───────────────────────────────
+    tbm_ai_log_debug('[4순위] 일반 검색 fallback 시도');
     $legacyCandidates = tbm_ai_collect_article_candidates_legacy($targetDate, 12);
     $pickedLegacy = tbm_ai_pick_best_candidate($legacyCandidates);
 
@@ -1896,7 +2654,7 @@ function tbm_ai_generate_content(string $targetDate, bool $forceNew = false): ar
     }
 
     if (ob_get_level() > 0) { @ob_clean(); }
-    throw new RuntimeException('KOSHA 자료, 최근 7일 뉴스, 일반 검색 후보를 모두 찾지 못했습니다.');
+    throw new RuntimeException('KOSHA 자료, CSI 사고사례, 최근 7일 뉴스, 일반 검색 후보를 모두 찾지 못했습니다.');
 }
 
 /**
@@ -2054,63 +2812,98 @@ function tbm_ai_fetch_fallback_image(string $keyword): ?string
         return null;
     }
 
-    // 네이버 이미지 검색 API 호출
-    if (!function_exists('tbm_news_load_env')) {
-        return null;
-    }
-    tbm_news_load_env();
-
-    $clientId     = trim((string)(getenv('NAVER_CLIENT_ID') ?: ''));
-    $clientSecret = trim((string)(getenv('NAVER_CLIENT_SECRET') ?: ''));
-    if ($clientId === '' || $clientSecret === '') {
-        return null;
-    }
-
     $searchQuery = $keyword . ' 사고 현장';
-    $url = 'https://openapi.naver.com/v1/search/image?display=5&sort=sim&query=' . rawurlencode($searchQuery);
 
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT        => 10,
-        CURLOPT_HTTPHEADER     => [
-            'X-Naver-Client-Id: ' . $clientId,
-            'X-Naver-Client-Secret: ' . $clientSecret,
-        ],
-    ]);
+    // 1순위: 네이버 이미지 검색 API
+    if (function_exists('tbm_news_load_env')) {
+        tbm_news_load_env();
 
-    $response = curl_exec($ch);
-    $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
+        $clientId     = trim((string)(getenv('NAVER_CLIENT_ID') ?: ''));
+        $clientSecret = trim((string)(getenv('NAVER_CLIENT_SECRET') ?: ''));
 
-    if ($response === false || $httpCode !== 200) {
-        tbm_ai_log_debug('[fallback 이미지] 네이버 이미지 검색 실패: HTTP ' . $httpCode);
-        return null;
+        if ($clientId !== '' && $clientSecret !== '') {
+            $url = 'https://openapi.naver.com/v1/search/image?display=5&sort=sim&query=' . rawurlencode($searchQuery);
+
+            $ch = curl_init($url);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT        => 10,
+                CURLOPT_HTTPHEADER     => [
+                    'X-Naver-Client-Id: ' . $clientId,
+                    'X-Naver-Client-Secret: ' . $clientSecret,
+                ],
+            ]);
+
+            $response = curl_exec($ch);
+            $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($response !== false && $httpCode === 200) {
+                $data = json_decode($response, true);
+                $items = $data['items'] ?? [];
+
+                foreach ($items as $item) {
+                    $imageUrl = trim((string)($item['link'] ?? ''));
+                    if ($imageUrl === '') {
+                        continue;
+                    }
+
+                    if (function_exists('tbm_news_is_usable_image_url') && !tbm_news_is_usable_image_url($imageUrl)) {
+                        continue;
+                    }
+
+                    $downloaded = tbm_ai_download_and_validate_image($imageUrl);
+                    if ($downloaded !== null) {
+                        tbm_ai_log_debug('[fallback 이미지] 네이버 성공: ' . $imageUrl);
+                        return $downloaded;
+                    }
+                }
+
+                tbm_ai_log_debug('[fallback 이미지] 네이버 유효 이미지 없음: ' . $searchQuery);
+            } else {
+                tbm_ai_log_debug('[fallback 이미지] 네이버 이미지 검색 실패: HTTP ' . $httpCode);
+            }
+        } else {
+            tbm_ai_log_debug('[fallback 이미지] 네이버 API 키 없음 → 뉴스 이미지 fallback 진행');
+        }
     }
 
-    $data = json_decode($response, true);
-    $items = $data['items'] ?? [];
+    // 2순위: 뉴스 기사 대표 이미지 fallback
+    if (function_exists('tbm_news_fetch_recent_week_article_candidates')) {
+        $newsQueries = [
+            $keyword . ' 사고',
+            $keyword,
+        ];
 
-    // 각 이미지를 시도하여 유효한 것을 다운로드
-    foreach ($items as $item) {
-        $imageUrl = trim((string)($item['link'] ?? ''));
-        if ($imageUrl === '') {
-            continue;
-        }
+        foreach ($newsQueries as $newsQuery) {
+            try {
+                $articles = tbm_news_fetch_recent_week_article_candidates($newsQuery, 12, [1, 11], ['date', 'sim'], 6);
+                if ($articles === []) {
+                    $articles = tbm_news_fetch_article_candidates($newsQuery, 12, [1, 11], ['date', 'sim'], 6);
+                }
 
-        // 로고, 배너 등 제외
-        if (function_exists('tbm_news_is_usable_image_url') && !tbm_news_is_usable_image_url($imageUrl)) {
-            continue;
-        }
+                foreach ($articles as $article) {
+                    $imageUrl = trim((string)($article['image_url'] ?? ''));
+                    if ($imageUrl === '') {
+                        continue;
+                    }
 
-        $downloaded = tbm_ai_download_and_validate_image($imageUrl);
-        if ($downloaded !== null) {
-            tbm_ai_log_debug('[fallback 이미지] 성공: ' . $imageUrl);
-            return $downloaded;
+                    if (function_exists('tbm_news_is_usable_image_url') && !tbm_news_is_usable_image_url($imageUrl)) {
+                        continue;
+                    }
+
+                    $downloaded = tbm_ai_download_and_validate_image($imageUrl);
+                    if ($downloaded !== null) {
+                        tbm_ai_log_debug('[fallback 이미지] 뉴스/구글/Bing fallback 성공: ' . $imageUrl);
+                        return $downloaded;
+                    }
+                }
+            } catch (Throwable $e) {
+                tbm_ai_log_debug('[fallback 이미지] 뉴스/구글/Bing fallback 실패: ' . $e->getMessage());
+            }
         }
     }
 
-    tbm_ai_log_debug('[fallback 이미지] 유효 이미지 없음: ' . $searchQuery);
+    tbm_ai_log_debug('[fallback 이미지] 최종 실패: ' . $searchQuery);
     return null;
 }
-

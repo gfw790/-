@@ -437,7 +437,7 @@ function tbm_news_is_within_days(?string $date, int $days, ?string $baseDate = n
     return $diffDays <= max(0, $days);
 }
 
-function tbm_news_search_raw(string $query, int $display = 20, int $start = 1, string $sort = 'date'): array
+function tbm_news_search_raw_naver(string $query, int $display = 20, int $start = 1, string $sort = 'date'): array
 {
     tbm_news_load_env();
 
@@ -487,6 +487,164 @@ function tbm_news_search_raw(string $query, int $display = 20, int $start = 1, s
     }
 
     return $data['items'];
+}
+
+function tbm_news_search_raw_google(string $query, int $display = 20, int $start = 1, string $sort = 'date'): array
+{
+    $display = max(1, min(100, $display));
+    $start   = max(1, $start);
+    $page    = (int)floor(($start - 1) / max(1, $display)) + 1;
+    $offset  = max(0, $start - 1);
+
+    $googleQuery = trim($query);
+    if ($sort === 'date') {
+        $googleQuery .= ' when:30d';
+    }
+
+    $url = 'https://news.google.com/rss/search?q=' . rawurlencode($googleQuery)
+         . '&hl=ko&gl=KR&ceid=KR:ko';
+
+    if ($page > 1) {
+        $url .= '&start=' . rawurlencode((string)$offset);
+    }
+
+    $response = tbm_news_fetch_url($url);
+    if ($response === '') {
+        throw new RuntimeException('구글 뉴스 RSS 호출 실패');
+    }
+
+    if (!extension_loaded('simplexml')) {
+        throw new RuntimeException('구글 뉴스 RSS 파싱 실패: SimpleXML 확장을 사용할 수 없습니다.');
+    }
+
+    libxml_use_internal_errors(true);
+    $xml = simplexml_load_string($response);
+    libxml_clear_errors();
+
+    if (!$xml || !isset($xml->channel->item)) {
+        throw new RuntimeException('구글 뉴스 RSS 응답 파싱 실패');
+    }
+
+    $items = [];
+    foreach ($xml->channel->item as $item) {
+        $title = tbm_news_normalize_title((string)($item->title ?? ''));
+        $link = tbm_news_clean_url((string)($item->link ?? ''));
+        $description = tbm_news_normalize_title((string)($item->description ?? ''));
+        $pubDate = trim((string)($item->pubDate ?? ''));
+
+        if ($title === '' || $link === '') {
+            continue;
+        }
+
+        $items[] = [
+            'title' => $title,
+            'description' => $description,
+            'originallink' => $link,
+            'link' => $link,
+            'pubDate' => $pubDate,
+        ];
+    }
+
+    if ($offset > 0) {
+        $items = array_slice($items, $offset);
+    }
+
+    return array_slice($items, 0, $display);
+}
+
+function tbm_news_search_raw_bing(string $query, int $display = 20, int $start = 1, string $sort = 'date'): array
+{
+    $display = max(1, min(100, $display));
+    $start   = max(1, $start);
+    $offset  = max(0, $start - 1);
+
+    $bingQuery = trim($query);
+    $url = 'https://www.bing.com/news/search?q=' . rawurlencode($bingQuery)
+         . '&format=RSS&mkt=ko-KR';
+
+    if ($sort === 'date') {
+        $url .= '&qft=sortbydate%3D%221%22';
+    }
+
+    $response = tbm_news_fetch_url($url);
+    if ($response === '') {
+        throw new RuntimeException('Bing 뉴스 RSS 호출 실패');
+    }
+
+    if (!extension_loaded('simplexml')) {
+        throw new RuntimeException('Bing 뉴스 RSS 파싱 실패: SimpleXML 확장을 사용할 수 없습니다.');
+    }
+
+    libxml_use_internal_errors(true);
+    $xml = simplexml_load_string($response);
+    libxml_clear_errors();
+
+    if (!$xml || !isset($xml->channel->item)) {
+        throw new RuntimeException('Bing 뉴스 RSS 응답 파싱 실패');
+    }
+
+    $items = [];
+    foreach ($xml->channel->item as $item) {
+        $title = tbm_news_normalize_title((string)($item->title ?? ''));
+        $link = tbm_news_clean_url((string)($item->link ?? ''));
+        $description = tbm_news_normalize_title((string)($item->description ?? ''));
+        $pubDate = trim((string)($item->pubDate ?? ''));
+
+        if ($title === '' || $link === '') {
+            continue;
+        }
+
+        $items[] = [
+            'title' => $title,
+            'description' => $description,
+            'originallink' => $link,
+            'link' => $link,
+            'pubDate' => $pubDate,
+        ];
+    }
+
+    if ($offset > 0) {
+        $items = array_slice($items, $offset);
+    }
+
+    return array_slice($items, 0, $display);
+}
+
+function tbm_news_search_raw(string $query, int $display = 20, int $start = 1, string $sort = 'date'): array
+{
+    $errors = [];
+
+    try {
+        $items = tbm_news_search_raw_naver($query, $display, $start, $sort);
+        if ($items !== []) {
+            return $items;
+        }
+        $errors[] = '네이버 뉴스 검색 결과 없음';
+    } catch (Throwable $e) {
+        $errors[] = $e->getMessage();
+    }
+
+    try {
+        $items = tbm_news_search_raw_google($query, $display, $start, $sort);
+        if ($items !== []) {
+            return $items;
+        }
+        $errors[] = '구글 뉴스 검색 결과 없음';
+    } catch (Throwable $e) {
+        $errors[] = $e->getMessage();
+    }
+
+    try {
+        $items = tbm_news_search_raw_bing($query, $display, $start, $sort);
+        if ($items !== []) {
+            return $items;
+        }
+        $errors[] = 'Bing 뉴스 검색 결과 없음';
+    } catch (Throwable $e) {
+        $errors[] = $e->getMessage();
+    }
+
+    throw new RuntimeException('뉴스 검색 실패: ' . implode(' | ', array_unique(array_filter($errors))));
 }
 
 function tbm_news_score_search_item(array $item): int
