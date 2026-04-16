@@ -21,7 +21,7 @@
         "phone": "010-2876-1117"
     },
     "admin01": {
-        "password": "1234",
+        "password": "123456789",
         "name": "운영자",
         "role": "admin",
         "team": "",
@@ -63,7 +63,7 @@
         "phone": "010-6370-2559"
     },
     "9247": {
-        "password": "1015",
+        "password": "0616",
         "name": "김도담",
         "role": "manager",
         "team": "가스팀",
@@ -140,7 +140,7 @@
         "phone": "010-7550-1280"
     },
     "5878": {
-        "password": "1234",
+        "password": "5878",
         "name": "김남균",
         "role": "safety_manager",
         "team": "안전관리",
@@ -180,5 +180,12 @@
         "role": "leader",
         "team": "공사팀-전기2",
         "phone": "010-5574-2213"
+    },
+    "1111": {
+        "password": "1111",
+        "name": "권영철",
+        "role": "worker",
+        "team": "공사팀-전기2",
+        "phone": "1111"
     }
 }

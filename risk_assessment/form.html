@@ -415,6 +415,25 @@ function syncWorkTypeAdder(process = document.getElementById('process_category')
   }
 }
 
+function toggleWorkTypeAdder() {
+  const panel = document.getElementById('work_type_adder');
+  const toggle = document.getElementById('toggle-work-type-adder');
+  if (!panel || !toggle || toggle.disabled) return;
+  if (panel.classList.contains('hidden')) {
+    panel.classList.remove('hidden');
+    document.getElementById('new_work_type').focus();
+  } else {
+    closeWorkTypeAdder();
+  }
+}
+
+function closeWorkTypeAdder() {
+  const panel = document.getElementById('work_type_adder');
+  const input = document.getElementById('new_work_type');
+  if (panel) panel.classList.add('hidden');
+  if (input) input.value = '';
+}
+
 function resetToolAdder() {
   const toggle = document.getElementById('toggle-tool-adder');
   const panel = document.getElementById('tool_adder');
