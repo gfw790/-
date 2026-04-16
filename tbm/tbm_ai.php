@@ -1745,7 +1745,49 @@ function tbm_ai_parse_csi_case_list(string $html, int $limit = 10): array
     $rows = [];
     $seen = [];
 
-    if ($html === '' || !extension_loaded('dom') || !class_exists('DOMDocument')) {
+    if ($html === '') {
+        return $rows;
+    }
+
+    if (preg_match('/<caption>\s*사고사례 목록 테이블입니다\.\s*<\/caption>(.*?)<\/tbody>/isu', $html, $tableMatches) === 1) {
+        $tbodyHtml = (string)$tableMatches[1];
+        if (preg_match_all(
+            '/<tr[^>]*>.*?<a[^>]+href=["\']javascript:goDetail\([\'"]?(\d+)[\'"]?\)["\'][^>]*>\s*(\d+)\s*<\/a>.*?'
+            . '<td[^>]*class=["\'][^"\']*t-left[^"\']*["\'][^>]*>\s*<a[^>]*>(.*?)<\/a>\s*<\/td>.*?'
+            . '<td[^>]*>(.*?)<\/td>.*?<td[^>]*>(.*?)<\/td>/isu',
+            $tbodyHtml,
+            $rowMatches,
+            PREG_SET_ORDER
+        )) {
+            foreach ($rowMatches as $match) {
+                $caseNo = trim((string)($match[1] ?? ''));
+                $accidentNo = trim((string)($match[2] ?? ''));
+                $title = tbm_ai_csi_clean_text((string)($match[3] ?? ''));
+                $location = tbm_ai_csi_clean_text((string)($match[4] ?? ''));
+                $occurredAt = tbm_ai_csi_clean_text((string)($match[5] ?? ''));
+
+                if ($caseNo === '' || $title === '' || isset($seen[$caseNo])) {
+                    continue;
+                }
+
+                $seen[$caseNo] = true;
+                $rows[] = [
+                    'case_no' => $caseNo,
+                    'accd_no' => $accidentNo,
+                    'title' => $title,
+                    'location' => $location,
+                    'occurred_at' => $occurredAt,
+                    'detail_url' => 'https://www.csi.go.kr/acd/acdCaseView.do?case_no=' . rawurlencode($caseNo),
+                ];
+
+                if (count($rows) >= $limit) {
+                    return $rows;
+                }
+            }
+        }
+    }
+
+    if (!extension_loaded('dom') || !class_exists('DOMDocument')) {
         return $rows;
     }
 
@@ -1837,23 +1879,101 @@ function tbm_ai_extract_csi_fields_from_dom(string $html): array
     libxml_clear_errors();
 
     $xpath = new DOMXPath($dom);
-    $rowNodes = $xpath->query('//tr[th and td]');
+    $rowNodes = $xpath->query('//section[@id="content"]//table//tr');
+    if (!$rowNodes || $rowNodes->length === 0) {
+        $rowNodes = $xpath->query('//table[contains(@class, "table-bordered")]//tr');
+    }
 
-    if ($rowNodes) {
-        foreach ($rowNodes as $rowNode) {
-            $thNodes = $xpath->query('./th', $rowNode);
-            $tdNodes = $xpath->query('./td', $rowNode);
-            if (!$thNodes || !$tdNodes || $thNodes->length === 0 || $tdNodes->length === 0) {
+    if (!$rowNodes) {
+        return $fields;
+    }
+
+    $activeGroup = '';
+    $activeGroupRows = 0;
+
+    foreach ($rowNodes as $rowNode) {
+        $cellNodes = $xpath->query('./th|./td', $rowNode);
+        if (!$cellNodes || $cellNodes->length === 0) {
+            continue;
+        }
+
+        $cells = [];
+        foreach ($cellNodes as $cellNode) {
+            if (!$cellNode instanceof DOMElement) {
                 continue;
             }
 
-            $pairCount = min($thNodes->length, $tdNodes->length);
-            for ($index = 0; $index < $pairCount; $index++) {
-                $label = trim(preg_replace('/\s+/u', ' ', (string)$thNodes->item($index)->textContent));
-                $value = trim(preg_replace('/\s+/u', ' ', (string)$tdNodes->item($index)->textContent));
-                if ($label !== '' && $value !== '' && !isset($fields[$label])) {
-                    $fields[$label] = $value;
+            $innerHtml = '';
+            foreach ($cellNode->childNodes as $childNode) {
+                $innerHtml .= $dom->saveHTML($childNode);
+            }
+
+            $text = tbm_ai_csi_clean_text($innerHtml !== '' ? $innerHtml : (string)$cellNode->textContent);
+            if ($text === '') {
+                continue;
+            }
+
+            $className = ' ' . trim((string)$cellNode->getAttribute('class')) . ' ';
+            $cells[] = [
+                'text' => $text,
+                'is_header' => str_contains($className, ' td-head ') || strcasecmp($cellNode->tagName, 'th') === 0,
+                'rowspan' => max(1, (int)$cellNode->getAttribute('rowspan')),
+            ];
+        }
+
+        if ($cells === []) {
+            continue;
+        }
+
+        $groupLabel = '';
+        $startIndex = 0;
+        if (($cells[0]['is_header'] ?? false) && (($cells[0]['rowspan'] ?? 1) > 1) && count($cells) >= 3) {
+            $groupLabel = trim((string)$cells[0]['text']);
+            $activeGroup = $groupLabel;
+            $activeGroupRows = (int)$cells[0]['rowspan'] - 1;
+            $startIndex = 1;
+        } elseif ($activeGroupRows > 0) {
+            $groupLabel = $activeGroup;
+        }
+
+        $pendingLabels = [];
+        for ($index = $startIndex; $index < count($cells); $index++) {
+            $cell = $cells[$index];
+            if (!empty($cell['is_header'])) {
+                $pendingLabels[] = trim((string)$cell['text']);
+                continue;
+            }
+
+            if ($pendingLabels === []) {
+                continue;
+            }
+
+            $label = trim((string)array_pop($pendingLabels));
+            $value = trim((string)$cell['text']);
+            if ($label === '' || $value === '') {
+                $pendingLabels = [];
+                continue;
+            }
+
+            if (!isset($fields[$label])) {
+                $fields[$label] = $value;
+            }
+
+            if ($groupLabel !== '') {
+                $groupKey = $groupLabel . ':' . $label;
+                if (!isset($fields[$groupKey])) {
+                    $fields[$groupKey] = $value;
                 }
+            }
+
+            $pendingLabels = [];
+        }
+
+        if ($startIndex !== 1 && $activeGroupRows > 0) {
+            $activeGroupRows--;
+            if ($activeGroupRows <= 0) {
+                $activeGroup = '';
+                $activeGroupRows = 0;
             }
         }
     }
@@ -1863,11 +1983,16 @@ function tbm_ai_extract_csi_fields_from_dom(string $html): array
 
 function tbm_ai_extract_csi_field_by_regex(string $html, string $label): string
 {
-    $pattern = '/<th[^>]*>\s*' . preg_quote($label, '/') . '\s*<\/th>\s*<td[^>]*>(.*?)<\/td>/isu';
-    if (preg_match($pattern, $html, $matches) === 1) {
-        return function_exists('tbm_news_strip_html')
-            ? tbm_news_strip_html((string)$matches[1])
-            : trim(strip_tags((string)$matches[1]));
+    $labelPattern = preg_quote($label, '/');
+    $patterns = [
+        '/<(?:th|td)[^>]*>\s*' . $labelPattern . '\s*<\/(?:th|td)>\s*<(?:th|td)[^>]*>(.*?)<\/(?:th|td)>/isu',
+        '/<(?:th|td)[^>]*class=["\'][^"\']*(?:td-head|th)[^"\']*["\'][^>]*>\s*' . $labelPattern . '\s*<\/(?:th|td)>\s*<(?:th|td)[^>]*>(.*?)<\/(?:th|td)>/isu',
+    ];
+
+    foreach ($patterns as $pattern) {
+        if (preg_match($pattern, $html, $matches) === 1) {
+            return tbm_ai_csi_clean_text((string)$matches[1]);
+        }
     }
 
     return '';
@@ -1887,48 +2012,103 @@ function tbm_ai_fetch_csi_case_detail(string $caseNo): array
     }
 
     $fields = tbm_ai_extract_csi_fields_from_dom($html);
-    foreach (['사고명', '발생일시', '사고위치', '사고경위', '사고원인', '구체적 사고원인', '피해상황', '재발방지대책', '향후조치계획'] as $label) {
-        if (!isset($fields[$label]) || trim((string)$fields[$label]) === '') {
-            $value = tbm_ai_extract_csi_field_by_regex($html, $label);
+    $detail = [
+        'case_no' => $caseNo,
+        'detail_url' => $url,
+    ];
+
+    if (preg_match('/name=["\']accd_no["\'][^>]*value=["\']([^"\']+)["\']/i', $html, $matches) === 1) {
+        $detail['accd_no'] = trim((string)$matches[1]);
+    }
+
+    $labelMap = [
+        'title' => ['사고명'],
+        'accident_date' => ['발생일시'],
+        'district' => ['시군구 정보'],
+        'location_place' => ['사고위치:장소', '장소'],
+        'location_part' => ['사고위치:부위', '부위'],
+        'incident_overview' => ['사고경위'],
+        'incident_cause' => ['사고원인'],
+        'incident_cause_detail' => ['구체적 사고원인'],
+        'damage_death' => ['피해상황:사망자수(명)', '사망자수(명)'],
+        'damage_injury' => ['피해상황:부상자수(명)', '부상자수(명)'],
+        'damage_content' => ['피해내용'],
+        'after_action' => ['사고발생후 조치사항'],
+        'prevention' => ['재발방지대책'],
+        'future_plan' => ['향후조치계획'],
+    ];
+
+    foreach ($labelMap as $key => $labels) {
+        foreach ($labels as $label) {
+            $value = trim((string)($fields[$label] ?? ''));
+            if ($value === '') {
+                $fallbackLabel = str_contains($label, ':')
+                    ? (string)substr($label, (int)strrpos($label, ':') + 1)
+                    : $label;
+                $value = tbm_ai_extract_csi_field_by_regex($html, $fallbackLabel);
+            }
+
             if ($value !== '') {
-                $fields[$label] = $value;
+                $detail[$key] = $value;
+                break;
             }
         }
     }
 
-    if (!empty($fields)) {
-        $fields['detail_url'] = $url;
-        $fields['case_no'] = $caseNo;
-    }
-
-    return $fields;
+    return $detail;
 }
 
 function tbm_ai_build_csi_article(array $listItem, array $detail): array
 {
-    $title = trim((string)($detail['사고명'] ?? $listItem['title'] ?? ''));
-    $accidentDate = trim((string)($detail['발생일시'] ?? $listItem['occurred_at'] ?? ''));
+    $title = trim((string)($detail['title'] ?? $listItem['title'] ?? ''));
+    $accidentDate = trim((string)($detail['accident_date'] ?? $listItem['occurred_at'] ?? ''));
 
-    $bodyParts = [];
-    $fieldOrder = [
-        '사고위치',
-        '피해상황',
-        '사고경위',
-        '사고원인',
-        '구체적 사고원인',
-        '재발방지대책',
-        '향후조치계획',
-    ];
-
-    foreach ($fieldOrder as $label) {
-        $value = trim((string)($detail[$label] ?? ''));
-        if ($value !== '') {
-            $bodyParts[] = $label . ': ' . $value;
+    $locationParts = [];
+    foreach ([
+        trim((string)($detail['district'] ?? $listItem['location'] ?? '')),
+        trim((string)($detail['location_place'] ?? '')),
+        trim((string)($detail['location_part'] ?? '')),
+    ] as $value) {
+        if ($value !== '' && $value !== '-') {
+            $locationParts[] = $value;
         }
     }
+    $locationText = implode(' / ', array_values(array_unique($locationParts)));
 
-    if (empty($bodyParts) && trim((string)($listItem['location'] ?? '')) !== '') {
-        $bodyParts[] = '사고위치: ' . trim((string)$listItem['location']);
+    $damageParts = [];
+    foreach ([
+        trim((string)($detail['damage_death'] ?? '')),
+        trim((string)($detail['damage_injury'] ?? '')),
+        trim((string)($detail['damage_content'] ?? '')),
+    ] as $value) {
+        if ($value !== '' && $value !== '-') {
+            $damageParts[] = $value;
+        }
+    }
+    $damageText = implode(' / ', array_values(array_unique($damageParts)));
+
+    $bodyParts = [];
+    if ($locationText !== '') {
+        $bodyParts[] = '사고위치: ' . $locationText;
+    }
+    if ($damageText !== '') {
+        $bodyParts[] = '피해상황: ' . $damageText;
+    }
+
+    $detailFields = [
+        'incident_overview' => '사고경위',
+        'incident_cause' => '사고원인',
+        'incident_cause_detail' => '구체적 사고원인',
+        'after_action' => '사고발생후 조치사항',
+        'prevention' => '재발방지대책',
+        'future_plan' => '향후조치계획',
+    ];
+
+    foreach ($detailFields as $key => $label) {
+        $value = trim((string)($detail[$key] ?? ''));
+        if ($value !== '' && $value !== '-') {
+            $bodyParts[] = $label . ': ' . $value;
+        }
     }
 
     $body = trim(implode("\n", $bodyParts));
@@ -1941,8 +2121,9 @@ function tbm_ai_build_csi_article(array $listItem, array $detail): array
         'published_at' => $accidentDate,
         'image_url' => '',
         'has_context' => $body !== '' ? 1 : 0,
-        'incident_score' => 8,
+        'incident_score' => 9,
         'source_name' => 'CSI',
+        'source_id' => trim((string)($detail['accd_no'] ?? $listItem['accd_no'] ?? '')),
     ];
 }
 
