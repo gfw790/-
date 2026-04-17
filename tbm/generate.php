@@ -104,21 +104,24 @@ try {
 
 $renderError = null;
 $fileName    = '';
+$outputRelativePath = '';
 $outputUrl   = '';
 
 try {
     $htmlContent = tbm_render_template($data);
     $fileName    = 'tbm_' . date('Ymd_His') . '.html';
-    $outputPath  = TBM_OUTPUT_DIR . '/' . $fileName;
+    [, $outputDir] = tbm_prepare_output_directory($documentTeam);
+    $outputRelativePath = tbm_build_output_relative_path($fileName, $documentTeam);
+    $outputPath  = $outputDir . '/' . $fileName;
 
     if (file_put_contents($outputPath, $htmlContent) === false) {
         throw new RuntimeException('파일 저장 실패: ' . $outputPath);
     }
-    $outputUrl = 'view_output.php?file=' . rawurlencode($fileName);
+    $outputUrl = 'view_output.php?file=' . rawurlencode($outputRelativePath);
 
     if ($docId > 0) {
-        tbm_update_document_result($docId, $fileName, 'success');
-        tbm_log($docId, 'manual', 'success', "수동 생성: {$fileName}");
+        tbm_update_document_result($docId, $outputRelativePath, 'success');
+        tbm_log($docId, 'manual', 'success', "수동 생성: {$outputRelativePath}");
     }
 } catch (Throwable $e) {
     $renderError = $e->getMessage();
@@ -157,7 +160,7 @@ a{color:#0b57d0;text-decoration:none;}a:hover{text-decoration:underline;}
         <p class="ok">✅ HTML 생성 완료</p>
         <p><strong>작업일자:</strong> <?= h($data['doc_date']) ?></p>
         <p><strong>교육내용:</strong> <?= h($data['edu_title']) ?></p>
-        <p><strong>생성파일:</strong> <?= h($fileName) ?></p>
+        <p><strong>생성파일:</strong> <?= h($outputRelativePath !== '' ? $outputRelativePath : $fileName) ?></p>
         <p><a href="<?= h($outputUrl) ?>" target="_blank">📄 생성된 문서 열기</a></p>
     <?php endif; ?>
     <?php if ($dbError): ?>

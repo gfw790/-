@@ -252,12 +252,17 @@ function tbm_auto_write_document(string $targetDate, array $content): array
     try {
         $pdo = tbm_db();
         $defaultTeam = tbm_normalize_display_team_name('공사팀');
+        $documentTeam = tbm_normalize_display_team_name(trim((string)($existingDoc['team'] ?? $defaultTeam)));
+        if ($documentTeam === '') {
+            $documentTeam = $defaultTeam;
+        }
 
         if ($existingDoc) {
             $docId = (int)$existingDoc['id'];
             $stmt = $pdo->prepare(
                 'UPDATE tbm_documents
-                    SET instructor_id = :iid,
+                    SET team = :team,
+                        instructor_id = :iid,
                         content_id = :cid,
                         today_work_1 = :tw1,
                         today_work_2 = :tw2,
@@ -269,6 +274,7 @@ function tbm_auto_write_document(string $targetDate, array $content): array
                   WHERE id = :id'
             );
             $stmt->execute([
+                ':team' => $documentTeam,
                 ':iid' => $instructorId,
                 ':cid' => $contentId,
                 ':tw1' => $data['today_work_1'],
@@ -279,7 +285,7 @@ function tbm_auto_write_document(string $targetDate, array $content): array
                 ':id' => $docId,
             ]);
         } else {
-            $docId = tbm_create_document($targetDate, $instructorId, $contentId, $defaultTeam);
+            $docId = tbm_create_document($targetDate, $instructorId, $contentId, $documentTeam);
             $stmt = $pdo->prepare(
                 'UPDATE tbm_documents
                     SET today_work_1 = :tw1,
@@ -313,18 +319,20 @@ function tbm_auto_write_document(string $targetDate, array $content): array
 
         $htmlContent = tbm_render_template($data);
         $fileName = 'tbm_' . date('Ymd_His') . '.html';
-        $outputPath = TBM_AUTO_OUTPUT_DIR . '/' . $fileName;
+        [, $outputDir] = tbm_prepare_output_directory($documentTeam);
+        $outputRelativePath = tbm_build_output_relative_path($fileName, $documentTeam);
+        $outputPath = $outputDir . '/' . $fileName;
 
         if (file_put_contents($outputPath, $htmlContent) === false) {
             throw new RuntimeException('failed to write output file: ' . $outputPath);
         }
 
-        tbm_update_document_result($docId, $fileName, 'success');
-        tbm_log($docId, 'cron', 'success', '자동 생성: ' . $fileName);
+        tbm_update_document_result($docId, $outputRelativePath, 'success');
+        tbm_log($docId, 'cron', 'success', '자동 생성: ' . $outputRelativePath);
 
         return [
             'doc_id' => $docId,
-            'file_name' => $fileName,
+            'file_name' => $outputRelativePath,
             'output_path' => $outputPath,
             'title' => $data['edu_title'],
             'image_file' => $data['image_file'],

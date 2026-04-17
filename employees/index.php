@@ -17,22 +17,46 @@ $pdo->exec("PRAGMA journal_mode=WAL");
 
 $pdo->exec("
 CREATE TABLE IF NOT EXISTS employees (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    employee_no  TEXT,
-    name         TEXT NOT NULL,
-    team         TEXT,
-    position     TEXT,
-    phone        TEXT,
-    email        TEXT,
-    join_date    TEXT,
-    birth_date   TEXT,
-    address      TEXT,
-    emergency_contact TEXT,
-    memo         TEXT,
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    employee_no           TEXT,
+    name                  TEXT NOT NULL,
+    team                  TEXT,
+    position              TEXT,
+    job_title             TEXT,
+    phone                 TEXT,
+    email                 TEXT,
+    join_date             TEXT,
+    birth_date            TEXT,
+    address               TEXT,
+    emergency_contact          TEXT,
+    emergency_contact_relation TEXT,
+    memo                       TEXT,
+    height                TEXT,
+    weight                TEXT,
+    shoe_size             TEXT,
+    blood_type            TEXT,
+    uniform_winter_top    TEXT,
+    uniform_winter_bottom TEXT,
+    uniform_spring_top    TEXT,
+    uniform_spring_bottom TEXT,
+    uniform_summer_top    TEXT,
+    uniform_summer_bottom TEXT,
+    uniform_shortsleeve   TEXT,
     created_at   TEXT DEFAULT (datetime('now','localtime')),
     updated_at   TEXT DEFAULT (datetime('now','localtime'))
 )
 ");
+// 기존 DB 마이그레이션
+foreach ([
+    'job_title', 'height', 'weight', 'shoe_size', 'blood_type',
+    'uniform_winter_top', 'uniform_winter_bottom',
+    'uniform_spring_top', 'uniform_spring_bottom',
+    'uniform_summer_top', 'uniform_summer_bottom', 'uniform_shortsleeve',
+    'uniform_heat_top', 'uniform_heat_bottom',
+    'emergency_contact_relation',
+] as $col) {
+    try { $pdo->exec("ALTER TABLE employees ADD COLUMN {$col} TEXT"); } catch (PDOException) {}
+}
 
 $teams = auth_read_teams();
 
@@ -78,22 +102,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $stmt = $pdo->prepare("
                 INSERT INTO employees
-                    (employee_no, name, team, position, phone, email, join_date, birth_date, address, emergency_contact, memo)
+                    (employee_no, name, team, position, job_title, phone, email, join_date, birth_date, address, emergency_contact, emergency_contact_relation, memo,
+                     height, weight, shoe_size, blood_type,
+                     uniform_winter_top, uniform_winter_bottom, uniform_spring_top, uniform_spring_bottom, uniform_summer_top, uniform_summer_bottom, uniform_shortsleeve,
+                     uniform_heat_top, uniform_heat_bottom)
                 VALUES
-                    (:no, :name, :team, :pos, :phone, :email, :join, :birth, :addr, :emgc, :memo)
+                    (:no, :name, :team, :pos, :jt, :phone, :email, :join, :birth, :addr, :emgc, :emgcrel, :memo,
+                     :height, :weight, :shoe, :blood,
+                     :uwt, :uwb, :ust, :usb, :uht, :uhb, :uss, :uhtop, :uhbot)
             ");
             $stmt->execute([
                 ':no'    => trim((string)($_POST['employee_no'] ?? '')),
                 ':name'  => $name,
                 ':team'  => trim((string)($_POST['team'] ?? '')),
                 ':pos'   => trim((string)($_POST['position'] ?? '')),
+                ':jt'    => trim((string)($_POST['job_title'] ?? '')),
                 ':phone' => trim((string)($_POST['phone'] ?? '')),
                 ':email' => trim((string)($_POST['email'] ?? '')),
                 ':join'  => trim((string)($_POST['join_date'] ?? '')),
                 ':birth' => trim((string)($_POST['birth_date'] ?? '')),
                 ':addr'  => trim((string)($_POST['address'] ?? '')),
-                ':emgc'  => trim((string)($_POST['emergency_contact'] ?? '')),
-                ':memo'  => trim((string)($_POST['memo'] ?? '')),
+                ':emgc'   => trim((string)($_POST['emergency_contact'] ?? '')),
+                ':emgcrel'=> trim((string)($_POST['emergency_contact_relation'] ?? '')),
+                ':memo'   => trim((string)($_POST['memo'] ?? '')),
+                ':height' => trim((string)($_POST['height'] ?? '')),
+                ':weight' => trim((string)($_POST['weight'] ?? '')),
+                ':shoe'   => trim((string)($_POST['shoe_size'] ?? '')),
+                ':blood'  => trim((string)($_POST['blood_type'] ?? '')),
+                ':uwt'    => trim((string)($_POST['uniform_winter_top'] ?? '')),
+                ':uwb'    => trim((string)($_POST['uniform_winter_bottom'] ?? '')),
+                ':ust'    => trim((string)($_POST['uniform_spring_top'] ?? '')),
+                ':usb'    => trim((string)($_POST['uniform_spring_bottom'] ?? '')),
+                ':uht'    => trim((string)($_POST['uniform_summer_top'] ?? '')),
+                ':uhb'    => trim((string)($_POST['uniform_summer_bottom'] ?? '')),
+                ':uss'    => trim((string)($_POST['uniform_shortsleeve'] ?? '')),
+                ':uhtop'  => trim((string)($_POST['uniform_heat_top']    ?? '')),
+                ':uhbot'  => trim((string)($_POST['uniform_heat_bottom'] ?? '')),
             ]);
             $success = '직원 정보가 등록되었습니다.';
         }
@@ -106,9 +150,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $stmt = $pdo->prepare("
                 UPDATE employees SET
-                    employee_no=:no, name=:name, team=:team, position=:pos,
+                    employee_no=:no, name=:name, team=:team, position=:pos, job_title=:jt,
                     phone=:phone, email=:email, join_date=:join, birth_date=:birth,
-                    address=:addr, emergency_contact=:emgc, memo=:memo,
+                    address=:addr, emergency_contact=:emgc, emergency_contact_relation=:emgcrel, memo=:memo,
+                    height=:height, weight=:weight, shoe_size=:shoe, blood_type=:blood,
+                    uniform_winter_top=:uwt, uniform_winter_bottom=:uwb,
+                    uniform_spring_top=:ust, uniform_spring_bottom=:usb,
+                    uniform_summer_top=:uht, uniform_summer_bottom=:uhb, uniform_shortsleeve=:uss,
+                    uniform_heat_top=:uhtop, uniform_heat_bottom=:uhbot,
                     updated_at=datetime('now','localtime')
                 WHERE id=:id
             ");
@@ -118,13 +167,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':name'  => $name,
                 ':team'  => trim((string)($_POST['team'] ?? '')),
                 ':pos'   => trim((string)($_POST['position'] ?? '')),
+                ':jt'    => trim((string)($_POST['job_title'] ?? '')),
                 ':phone' => trim((string)($_POST['phone'] ?? '')),
                 ':email' => trim((string)($_POST['email'] ?? '')),
                 ':join'  => trim((string)($_POST['join_date'] ?? '')),
                 ':birth' => trim((string)($_POST['birth_date'] ?? '')),
                 ':addr'  => trim((string)($_POST['address'] ?? '')),
-                ':emgc'  => trim((string)($_POST['emergency_contact'] ?? '')),
-                ':memo'  => trim((string)($_POST['memo'] ?? '')),
+                ':emgc'   => trim((string)($_POST['emergency_contact'] ?? '')),
+                ':emgcrel'=> trim((string)($_POST['emergency_contact_relation'] ?? '')),
+                ':memo'   => trim((string)($_POST['memo'] ?? '')),
+                ':height' => trim((string)($_POST['height'] ?? '')),
+                ':weight' => trim((string)($_POST['weight'] ?? '')),
+                ':shoe'   => trim((string)($_POST['shoe_size'] ?? '')),
+                ':blood'  => trim((string)($_POST['blood_type'] ?? '')),
+                ':uwt'    => trim((string)($_POST['uniform_winter_top'] ?? '')),
+                ':uwb'    => trim((string)($_POST['uniform_winter_bottom'] ?? '')),
+                ':ust'    => trim((string)($_POST['uniform_spring_top'] ?? '')),
+                ':usb'    => trim((string)($_POST['uniform_spring_bottom'] ?? '')),
+                ':uht'    => trim((string)($_POST['uniform_summer_top'] ?? '')),
+                ':uhb'    => trim((string)($_POST['uniform_summer_bottom'] ?? '')),
+                ':uss'    => trim((string)($_POST['uniform_shortsleeve'] ?? '')),
+                ':uhtop'  => trim((string)($_POST['uniform_heat_top']    ?? '')),
+                ':uhbot'  => trim((string)($_POST['uniform_heat_bottom'] ?? '')),
             ]);
             $success = '직원 정보가 수정되었습니다.';
         }
@@ -153,7 +217,41 @@ if ($filterTeam !== '') {
     $params[':team']     = $filterTeam;
 }
 
-$sql = "SELECT * FROM employees" . (!empty($where) ? ' WHERE ' . implode(' AND ', $where) : '') . " ORDER BY team, name";
+$teamOrder = "CASE
+    WHEN team='대표이사' OR position LIKE '대표이사%' THEN 1
+    WHEN team='공사팀-전기'  THEN 2
+    WHEN team='공사팀-모터'  THEN 3
+    WHEN team='가스팀'       THEN 4
+    WHEN team='제조팀'       THEN 5
+    WHEN team='안전관리'     THEN 6
+    WHEN team='공사팀-전기2' THEN 7
+    WHEN team='공사2팀'      THEN 8
+    ELSE 99 END";
+$memberOrder = "CASE
+    WHEN team='공사팀-전기' AND name LIKE '진종철%' THEN 1
+    WHEN team='공사팀-전기' AND name LIKE '윤택천%' THEN 2
+    WHEN team='공사팀-전기' AND name LIKE '엄기준%' THEN 3
+    WHEN team='공사팀-전기' AND name LIKE '윤순형%' THEN 4
+    WHEN team='공사팀-전기' AND name LIKE '이정민%' THEN 5
+    WHEN team='공사팀-전기' AND name LIKE '한지민%' THEN 6
+    WHEN team='공사팀-전기' AND name LIKE '이돈희%' THEN 7
+    WHEN team='공사팀-모터' AND name LIKE '김종훈%' THEN 1
+    WHEN team='공사팀-모터' AND name LIKE '조한봉%' THEN 2
+    WHEN team='가스팀' AND name LIKE '김도담%'  THEN 1
+    WHEN team='가스팀' AND name LIKE '김동훈%'  THEN 2
+    WHEN team='가스팀' AND name LIKE '장진혁%'  THEN 3
+    WHEN team='가스팀' AND name LIKE '정재호%'  THEN 4
+    WHEN team='가스팀' AND name LIKE '이윤성%'  THEN 5
+    WHEN team='가스팀' AND name LIKE '박재민%'  THEN 6
+    WHEN team='가스팀' AND name LIKE '최정섭%'  THEN 7
+    WHEN team='제조팀' AND name LIKE '우홍기%'  THEN 1
+    WHEN team='제조팀' AND name LIKE '정민교%'  THEN 2
+    WHEN team='제조팀' AND name LIKE '정주랑%'  THEN 3
+    WHEN team='제조팀' AND name LIKE '정영교%'  THEN 4
+    WHEN team='제조팀' AND name LIKE '김성용%'  THEN 5
+    WHEN team='제조팀' AND name LIKE '김진환%'  THEN 6
+    ELSE 99 END";
+$sql = "SELECT * FROM employees" . (!empty($where) ? ' WHERE ' . implode(' AND ', $where) : '') . " ORDER BY $teamOrder, $memberOrder, name";
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -168,6 +266,24 @@ if (isset($_GET['edit'])) {
 }
 
 function h(string $v): string { return htmlspecialchars($v, ENT_QUOTES, 'UTF-8'); }
+function display_name(string $name): string { return h(preg_replace('/\s*\(.*?\)\s*$/', '', $name)); }
+
+function team_badge(string $team): string {
+    $map = [
+        '대표이사'      => ['#7c3aed','#ede9fe'],
+        '공사팀-전기'   => ['#1d4ed8','#dbeafe'],
+        '공사팀-전기2'  => ['#2563eb','#eff6ff'],
+        '공사팀-모터'   => ['#0369a1','#e0f2fe'],
+        '가스팀'        => ['#b45309','#fef3c7'],
+        '제조팀'        => ['#047857','#d1fae5'],
+        '안전관리'      => ['#be123c','#ffe4e6'],
+        '공사2팀'       => ['#0f766e','#ccfbf1'],
+    ];
+    if ($team === '') return '';
+    [$fg, $bg] = $map[$team] ?? ['#486581','#e8f0f8'];
+    $t = h($team);
+    return "<span style=\"display:inline-block;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:600;color:{$fg};background:{$bg};white-space:nowrap\">{$t}</span>";
+}
 ?>
 <!DOCTYPE html>
 <html lang="ko">
@@ -324,7 +440,10 @@ function h(string $v): string { return htmlspecialchars($v, ENT_QUOTES, 'UTF-8')
           <h1>직원명부</h1>
           <p>직원 기본 정보를 등록·관리합니다. 총 <?= count($employees) ?>명이 조회됩니다.</p>
         </div>
-        <a class="btn btn-secondary" href="../risk_assessment/register_worker.php">계정 관리로 돌아가기</a>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-primary" onclick="toggleAddPanel()">+ 직원 등록</button>
+          <a class="btn btn-secondary" href="../risk_assessment/register_worker.php">계정 관리로 돌아가기</a>
+        </div>
       </div>
     </div>
   </div>
@@ -337,7 +456,7 @@ function h(string $v): string { return htmlspecialchars($v, ENT_QUOTES, 'UTF-8')
   <?php endif; ?>
 
   <!-- 등록/수정 폼 -->
-  <div class="panel">
+  <div class="panel" id="add-panel" style="<?= ($editTarget || $error !== '') ? '' : 'display:none' ?>">
     <div class="panel-body">
       <div class="section-title"><?= $editTarget ? '직원 정보 수정' : '직원 등록' ?></div>
       <form method="post">
@@ -364,8 +483,12 @@ function h(string $v): string { return htmlspecialchars($v, ENT_QUOTES, 'UTF-8')
             </select>
           </div>
           <div class="field">
+            <label>역할</label>
+            <input type="text" name="position" value="<?= h((string)($editTarget['position'] ?? '')) ?>" placeholder="예: 작업지휘자">
+          </div>
+          <div class="field">
             <label>직책</label>
-            <input type="text" name="position" value="<?= h((string)($editTarget['position'] ?? '')) ?>" placeholder="예: 과장">
+            <input type="text" name="job_title" value="<?= h((string)($editTarget['job_title'] ?? '')) ?>" placeholder="예: 과장">
           </div>
           <div class="field">
             <label>연락처</label>
@@ -387,6 +510,10 @@ function h(string $v): string { return htmlspecialchars($v, ENT_QUOTES, 'UTF-8')
             <label>비상연락처</label>
             <input type="tel" name="emergency_contact" value="<?= h((string)($editTarget['emergency_contact'] ?? '')) ?>" placeholder="010-0000-0000">
           </div>
+          <div class="field">
+            <label>비상연락처 관계</label>
+            <input type="text" name="emergency_contact_relation" value="<?= h((string)($editTarget['emergency_contact_relation'] ?? '')) ?>" placeholder="예: 배우자">
+          </div>
           <div class="field field-full">
             <label>주소</label>
             <input type="text" name="address" value="<?= h((string)($editTarget['address'] ?? '')) ?>" placeholder="주소를 입력하세요">
@@ -394,6 +521,66 @@ function h(string $v): string { return htmlspecialchars($v, ENT_QUOTES, 'UTF-8')
           <div class="field field-full">
             <label>메모</label>
             <textarea name="memo" placeholder="특이사항 등 자유롭게 입력"><?= h((string)($editTarget['memo'] ?? '')) ?></textarea>
+          </div>
+        </div>
+        <div style="font-size:13px;font-weight:700;color:#486581;margin:4px 0 10px;padding-top:10px;border-top:1px solid #e8f0f8;">신체 정보</div>
+        <div class="form-grid">
+          <div class="field">
+            <label>키 (cm)</label>
+            <input type="text" name="height" value="<?= h((string)($editTarget['height'] ?? '')) ?>" placeholder="예: 175">
+          </div>
+          <div class="field">
+            <label>몸무게 (kg)</label>
+            <input type="text" name="weight" value="<?= h((string)($editTarget['weight'] ?? '')) ?>" placeholder="예: 70">
+          </div>
+          <div class="field">
+            <label>신발 사이즈 (mm)</label>
+            <input type="text" name="shoe_size" value="<?= h((string)($editTarget['shoe_size'] ?? '')) ?>" placeholder="예: 270">
+          </div>
+          <div class="field">
+            <label>혈액형</label>
+            <select name="blood_type">
+              <option value="">선택</option>
+              <?php foreach (['A','B','O','AB'] as $bt): ?>
+                <option value="<?= $bt ?>" <?= ((string)($editTarget['blood_type'] ?? '')) === $bt ? 'selected' : '' ?>><?= $bt ?>형</option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="field">
+            <label>동복 상의</label>
+            <input type="text" name="uniform_winter_top" value="<?= h((string)($editTarget['uniform_winter_top'] ?? '')) ?>" placeholder="예: 105">
+          </div>
+          <div class="field">
+            <label>동복 하의</label>
+            <input type="text" name="uniform_winter_bottom" value="<?= h((string)($editTarget['uniform_winter_bottom'] ?? '')) ?>" placeholder="예: 32">
+          </div>
+          <div class="field">
+            <label>춘추복 상의</label>
+            <input type="text" name="uniform_spring_top" value="<?= h((string)($editTarget['uniform_spring_top'] ?? '')) ?>" placeholder="예: 105">
+          </div>
+          <div class="field">
+            <label>춘추복 하의</label>
+            <input type="text" name="uniform_spring_bottom" value="<?= h((string)($editTarget['uniform_spring_bottom'] ?? '')) ?>" placeholder="예: 32">
+          </div>
+          <div class="field">
+            <label>하복 상의</label>
+            <input type="text" name="uniform_summer_top" value="<?= h((string)($editTarget['uniform_summer_top'] ?? '')) ?>" placeholder="예: 105">
+          </div>
+          <div class="field">
+            <label>하복 하의</label>
+            <input type="text" name="uniform_summer_bottom" value="<?= h((string)($editTarget['uniform_summer_bottom'] ?? '')) ?>" placeholder="예: 32">
+          </div>
+          <div class="field">
+            <label>반팔티 사이즈</label>
+            <input type="text" name="uniform_shortsleeve" value="<?= h((string)($editTarget['uniform_shortsleeve'] ?? '')) ?>" placeholder="예: XL">
+          </div>
+          <div class="field heat-field" style="display:none">
+            <label>방열복 상의</label>
+            <input type="text" name="uniform_heat_top" value="<?= h((string)($editTarget['uniform_heat_top'] ?? '')) ?>" placeholder="예: 105">
+          </div>
+          <div class="field heat-field" style="display:none">
+            <label>방열복 하의</label>
+            <input type="text" name="uniform_heat_bottom" value="<?= h((string)($editTarget['uniform_heat_bottom'] ?? '')) ?>" placeholder="예: 32">
           </div>
         </div>
         <div class="form-actions">
@@ -431,6 +618,7 @@ function h(string $v): string { return htmlspecialchars($v, ENT_QUOTES, 'UTF-8')
               <th>사원번호</th>
               <th>이름</th>
               <th>소속팀</th>
+              <th>역할</th>
               <th>직책</th>
               <th>연락처</th>
               <th>이메일</th>
@@ -442,14 +630,15 @@ function h(string $v): string { return htmlspecialchars($v, ENT_QUOTES, 'UTF-8')
           </thead>
           <tbody>
             <?php if (empty($employees)): ?>
-              <tr class="empty-row"><td colspan="10">등록된 직원이 없습니다.</td></tr>
+              <tr class="empty-row"><td colspan="11">등록된 직원이 없습니다.</td></tr>
             <?php else: ?>
               <?php foreach ($employees as $emp): ?>
                 <tr>
                   <td><?= h((string)($emp['employee_no'] ?? '')) ?></td>
-                  <td><a href="view.php?id=<?= (int)$emp['id'] ?>" class="name-link"><?= h((string)$emp['name']) ?></a></td>
-                  <td><?= h((string)($emp['team'] ?? '')) ?></td>
+                  <td><a href="view.php?id=<?= (int)$emp['id'] ?>" class="name-link"><?= display_name((string)$emp['name']) ?></a></td>
+                  <td><?= team_badge((string)($emp['team'] ?? '')) ?></td>
                   <td><?= h((string)($emp['position'] ?? '')) ?></td>
+                  <td><?= h((string)($emp['job_title'] ?? '')) ?></td>
                   <td><?= h((string)($emp['phone'] ?? '')) ?></td>
                   <td><?= h((string)($emp['email'] ?? '')) ?></td>
                   <td><?= h((string)($emp['join_date'] ?? '')) ?></td>
@@ -475,5 +664,23 @@ function h(string $v): string { return htmlspecialchars($v, ENT_QUOTES, 'UTF-8')
   </div>
 
 </div>
+<script>
+function toggleHeatFields() {
+  const team = document.querySelector('select[name="team"]')?.value ?? '';
+  document.querySelectorAll('.heat-field').forEach(el => {
+    el.style.display = team === '가스팀' ? '' : 'none';
+  });
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const sel = document.querySelector('select[name="team"]');
+  if (sel) { sel.addEventListener('change', toggleHeatFields); toggleHeatFields(); }
+});
+function toggleAddPanel() {
+  const p = document.getElementById('add-panel');
+  const show = p.style.display === 'none';
+  p.style.display = show ? '' : 'none';
+  if (show) { p.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+}
+</script>
 </body>
 </html>

@@ -39,7 +39,7 @@ $teamDisplayMap = [
 ];
 
 // 현재 사용자 표시 레이블
-$userDisplayTeam = $teamDisplayMap[$userTeam] ?? $userTeam;
+$userDisplayTeam = tbm_normalize_display_team_name($userTeam);
 $userLabel = $isOperator ? '운영자' : ($userDisplayTeam ?: auth_role_label($userRole));
 
 // TBM 참석 인명부에서 제외할 이름 (괄호 표기 제거 후 기준)
@@ -55,7 +55,7 @@ $teamMembers = [];
 $allTeams = auth_read_teams(); // ['공사팀-전기','공사팀-모터','가스팀','제조팀','안전관리', ...]
 
 foreach ($allTeams as $raTeam) {
-    $displayName = $teamDisplayMap[$raTeam] ?? $raTeam;
+    $displayName = tbm_normalize_display_team_name($raTeam);
 
     // 비운영자: 본인 표시팀(통합명 기준)만 표시
     if (!$isOperator && $displayName !== $userDisplayTeam) {
@@ -65,6 +65,10 @@ foreach ($allTeams as $raTeam) {
     // 운영자(안전관리) 팀은 인명부 선택에서 제외 (TBM 참석자 아님)
     if (auth_team_key($raTeam) === auth_team_key('안전관리')) {
         continue;
+    }
+
+    if (!isset($teamMembers[$displayName])) {
+        $teamMembers[$displayName] = [];
     }
 
     $names = auth_team_member_names($raTeam, ['worker', 'leader', 'manager']);
@@ -154,20 +158,39 @@ try {
     $pdo  = tbm_db();
     $stmt = $pdo->query(
         'SELECT d.doc_date, d.team, d.generation_status, d.output_filename,
-                d.generated_at, c.edu_title
+                d.generated_at, d.updated_at,
+                COALESCE(d.generated_at, d.updated_at) AS recent_at,
+                c.edu_title
            FROM tbm_documents d
       LEFT JOIN tbm_accident_content c ON d.content_id = c.id
-          ORDER BY d.doc_date DESC
-          LIMIT 20'
+          ORDER BY COALESCE(d.generated_at, d.updated_at) DESC, d.id DESC
+          LIMIT 200'
     );
     $recentDocs = $stmt->fetchAll();
     foreach ($recentDocs as $doc) {
-        $teamName = trim((string)($doc['team'] ?? ''));
+        $rawTeamName = trim((string)($doc['team'] ?? ''));
+        if ($rawTeamName === '') {
+            if (count($fallbackRecentDocs) < 10) {
+                $fallbackRecentDocs[] = $doc;
+            }
+            continue;
+        }
+
+        $teamName = tbm_normalize_display_team_name(auth_normalize_team_name($rawTeamName));
         if ($teamName === '') {
             $fallbackRecentDocs[] = $doc;
             continue;
         }
+
+        if ($isOperator && !isset($teamRecentDocs[$teamName])) {
+            $teamRecentDocs[$teamName] = [];
+        }
+
         if (isset($teamRecentDocs[$teamName])) {
+            if (count($teamRecentDocs[$teamName]) >= 10) {
+                continue;
+            }
+            $doc['team'] = $teamName;
             $teamRecentDocs[$teamName][] = $doc;
         }
     }
@@ -224,12 +247,17 @@ body { font-family: "Malgun Gothic", sans-serif; margin: 0; background: #f5f6f7;
 .badge-pending { background: #fef9c3; color: #854d0e; }
 .badge-failed { background: #fee2e2; color: #991b1b; }
 .notice-existing { background: #eff6ff; border: 1px solid #93c5fd; border-radius: 4px; padding: 10px 14px; font-size: 0.88rem; color: #1d4ed8; margin-bottom: 16px; }
+.recent-groups { display: flex; flex-direction: column; gap: 12px; }
+.recent-group { border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px 12px; background: #f8fafc; }
+.recent-group.is-selected { border-color: #93c5fd; background: #eff6ff; }
+.recent-group-title { font-size: 0.86rem; font-weight: 700; color: #1f2937; margin: 0 0 8px; }
 .recent-list { list-style: none; margin: 0; padding: 0; }
 .recent-list li { padding: 7px 0; border-bottom: 1px solid #f3f4f6; font-size: 0.84rem; }
 .recent-list li:last-child { border-bottom: none; }
 .recent-list a { color: #1a56db; text-decoration: none; }
 .recent-list a:hover { text-decoration: underline; }
 .recent-date { font-weight: 600; }
+.recent-meta { margin-top: 3px; font-size: .76rem; color: #6b7280; }
 #ai-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 999; align-items: center; justify-content: center; flex-direction: column; color: #fff; font-size: 1.1rem; gap: 14px; }
 #ai-overlay.active { display: flex; }
 .spinner { width: 40px; height: 40px; border: 4px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; }
@@ -376,7 +404,7 @@ body { font-family: "Malgun Gothic", sans-serif; margin: 0; background: #f5f6f7;
 
         <div class="side-box">
             <h3>📁 최근 생성 일지</h3>
-            <p style="font-size:.85rem; color:#475569; margin:0 0 10px;">왼쪽 팀 선택 버튼을 눌러 해당 팀의 최근 생성 일지를 확인하세요.</p>
+            <p style="font-size:.85rem; color:#475569; margin:0 0 10px;">팀별 최근 생성 일지를 구분해서 표시합니다. 현재 선택한 팀은 맨 위에 강조됩니다.</p>
             <div id="recent-list-container"></div>
         </div>
     </div>
@@ -426,8 +454,81 @@ function renderRecentDocs(teamName) {
     container.innerHTML = '<ul class="recent-list" style="margin:0;">' + items + '</ul>';
 }
 
+renderRecentDocs = function(teamName) {
+    selectedRecentTeam = teamName || '';
+    const container = document.getElementById('recent-list-container');
+
+    if (!container) {
+        return;
+    }
+
+    const teamNames = Object.keys(recentDocsByTeam).filter(name => Array.isArray(recentDocsByTeam[name]) && recentDocsByTeam[name].length > 0);
+    const orderedTeams = [];
+
+    if (selectedRecentTeam && teamNames.includes(selectedRecentTeam)) {
+        orderedTeams.push(selectedRecentTeam);
+    }
+
+    teamNames.forEach(name => {
+        if (!orderedTeams.includes(name)) {
+            orderedTeams.push(name);
+        }
+    });
+
+    const renderDocItems = (docs, teamNameForLink) => docs.map(doc => {
+        const statusLabel = doc.generation_status === 'success' ? '완료' : (doc.generation_status === 'pending' ? '대기' : '실패');
+        const titleText = doc.edu_title ? doc.edu_title : '(제목 없음)';
+        const hasTeam = teamNameForLink !== '';
+        const dateLink = 'index.php?date=' + encodeURIComponent(doc.doc_date)
+            + (hasTeam ? '&team=' + encodeURIComponent(teamNameForLink) : '');
+        const fileLink = doc.output_filename && doc.generation_status === 'success'
+            ? '<br><a href="view_output.php?file=' + encodeURIComponent(doc.output_filename) + '" target="_blank" style="font-size:.78rem;">열기</a>'
+            : '';
+        const recentAt = doc.recent_at
+            ? '<div class="recent-meta">생성시각: ' + escapeHtml(doc.recent_at) + '</div>'
+            : '';
+
+        return '<li style="padding:10px 0; border-bottom:1px solid #f3f4f6;">'
+            + '<div><a href="' + dateLink + '" class="recent-date">' + escapeHtml(doc.doc_date) + '</a>'
+            + ' <span class="badge badge-' + escapeHtml(doc.generation_status) + '" style="margin-left:4px;">' + escapeHtml(statusLabel) + '</span></div>'
+            + '<div style="margin-top:4px; font-size:.85rem; color:#475569;">' + escapeHtml(titleText) + '</div>'
+            + recentAt
+            + fileLink
+            + '</li>';
+    }).join('');
+
+    const sections = orderedTeams.map(name => {
+        const docs = recentDocsByTeam[name] ?? [];
+        if (docs.length === 0) {
+            return '';
+        }
+
+        const groupClass = name === selectedRecentTeam ? 'recent-group is-selected' : 'recent-group';
+        return '<div class="' + groupClass + '">'
+            + '<div class="recent-group-title">' + escapeHtml(name) + '</div>'
+            + '<ul class="recent-list">' + renderDocItems(docs, name) + '</ul>'
+            + '</div>';
+    }).filter(Boolean);
+
+    if (Array.isArray(fallbackRecentDocs) && fallbackRecentDocs.length > 0) {
+        sections.push(
+            '<div class="recent-group">'
+            + '<div class="recent-group-title">공통 / 팀 미지정</div>'
+            + '<ul class="recent-list">' + renderDocItems(fallbackRecentDocs, '') + '</ul>'
+            + '</div>'
+        );
+    }
+
+    if (sections.length === 0) {
+        container.innerHTML = '<p style="font-size:.88rem;color:#6b7280;">최근 생성된 일지가 없습니다.</p>';
+        return;
+    }
+
+    container.innerHTML = '<div class="recent-groups">' + sections.join('') + '</div>';
+};
+
 function escapeHtml(text) {
-    return text
+    return String(text ?? '')
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
@@ -570,6 +671,7 @@ window.addEventListener('DOMContentLoaded', () => {
         applyTeam(chooseTeam);
     } else {
         while(currentSlotCount < 8) addInputSlot('');
+        renderRecentDocs('');
     }
     updateBodyCounter();
 });

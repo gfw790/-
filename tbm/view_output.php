@@ -3,20 +3,20 @@ declare(strict_types=1);
 date_default_timezone_set('Asia/Seoul');
 
 require_once __DIR__ . '/../risk_assessment/auth.php';
+require_once __DIR__ . '/tbm_functions.php';
 
 if (auth_current_user() === null) {
     header('Location: ../risk_assessment/task_select.php');
     exit;
 }
 
-$file = trim((string)($_GET['file'] ?? ''));
-$file = basename($file);
+$file = tbm_normalize_output_relative_path((string)($_GET['file'] ?? ''));
 if ($file === '') {
     http_response_code(400);
     exit('파일명이 없습니다.');
 }
 
-$fullPath = __DIR__ . '/output/' . $file;
+$fullPath = tbm_resolve_output_full_path($file);
 if (!is_file($fullPath)) {
     http_response_code(404);
     exit('파일을 찾을 수 없습니다.');

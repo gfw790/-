@@ -18,7 +18,53 @@ if (!is_file($dbPath)) {
 $pdo = new PDO('sqlite:' . $dbPath);
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
+// 컬럼 마이그레이션
+foreach ([
+    'job_title', 'height', 'weight', 'shoe_size', 'blood_type',
+    'uniform_winter_top', 'uniform_winter_bottom',
+    'uniform_spring_top', 'uniform_spring_bottom',
+    'uniform_summer_top', 'uniform_summer_bottom', 'uniform_shortsleeve',
+    'uniform_heat_top', 'uniform_heat_bottom',
+    'emergency_contact_relation',
+] as $col) {
+    try { $pdo->exec("ALTER TABLE employees ADD COLUMN {$col} TEXT"); } catch (PDOException) {}
+}
+
+$pdo->exec("
+CREATE TABLE IF NOT EXISTS employee_documents (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    employee_id   INTEGER NOT NULL,
+    doc_type      TEXT NOT NULL,
+    filename      TEXT NOT NULL,
+    original_name TEXT,
+    uploaded_at   TEXT DEFAULT (datetime('now','localtime'))
+)
+");
+
+$uploadDir = __DIR__ . '/uploads/';
+if (!is_dir($uploadDir)) { mkdir($uploadDir, 0755, true); }
+
 $id = (int)($_GET['id'] ?? 0);
+
+// ── GET: 파일 다운로드 ────────────────────────────────────────
+if (isset($_GET['download']) && $id > 0) {
+    $docId = (int)$_GET['download'];
+    $doc   = $pdo->prepare("SELECT * FROM employee_documents WHERE id=:did AND employee_id=:eid");
+    $doc->execute([':did' => $docId, ':eid' => $id]);
+    $docRow = $doc->fetch(PDO::FETCH_ASSOC);
+    if ($docRow) {
+        $filePath = $uploadDir . $docRow['filename'];
+        if (is_file($filePath)) {
+            header('Content-Type: application/octet-stream');
+            header('Content-Disposition: attachment; filename="' . rawurlencode((string)$docRow['original_name']) . '"');
+            header('Content-Length: ' . filesize($filePath));
+            readfile($filePath);
+            exit;
+        }
+    }
+    header('Location: view.php?id=' . $id);
+    exit;
+}
 
 // ── POST: 수정 저장 ──────────────────────────────────────────
 $error   = '';
@@ -31,9 +77,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
     } else {
         $pdo->prepare("
             UPDATE employees SET
-                employee_no=:no, name=:name, team=:team, position=:pos,
+                employee_no=:no, name=:name, team=:team, position=:pos, job_title=:jt,
                 phone=:phone, email=:email, join_date=:join, birth_date=:birth,
-                address=:addr, emergency_contact=:emgc, memo=:memo,
+                address=:addr, emergency_contact=:emgc, emergency_contact_relation=:emgcrel, memo=:memo,
+                height=:height, weight=:weight, shoe_size=:shoe, blood_type=:blood,
+                uniform_winter_top=:uwt, uniform_winter_bottom=:uwb,
+                uniform_spring_top=:ust, uniform_spring_bottom=:usb,
+                uniform_summer_top=:uht, uniform_summer_bottom=:uhb, uniform_shortsleeve=:uss,
+                uniform_heat_top=:uhtop, uniform_heat_bottom=:uhbot,
                 updated_at=datetime('now','localtime')
             WHERE id=:id
         ")->execute([
@@ -42,13 +93,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
             ':name'  => $name,
             ':team'  => trim((string)($_POST['team']             ?? '')),
             ':pos'   => trim((string)($_POST['position']         ?? '')),
+            ':jt'    => trim((string)($_POST['job_title']        ?? '')),
             ':phone' => trim((string)($_POST['phone']            ?? '')),
             ':email' => trim((string)($_POST['email']            ?? '')),
             ':join'  => trim((string)($_POST['join_date']        ?? '')),
             ':birth' => trim((string)($_POST['birth_date']       ?? '')),
             ':addr'  => trim((string)($_POST['address']          ?? '')),
-            ':emgc'  => trim((string)($_POST['emergency_contact'] ?? '')),
-            ':memo'  => trim((string)($_POST['memo']             ?? '')),
+            ':emgc'   => trim((string)($_POST['emergency_contact']          ?? '')),
+            ':emgcrel'=> trim((string)($_POST['emergency_contact_relation'] ?? '')),
+            ':memo'   => trim((string)($_POST['memo']                       ?? '')),
+            ':height'=> trim((string)($_POST['height']           ?? '')),
+            ':weight'=> trim((string)($_POST['weight']           ?? '')),
+            ':shoe'  => trim((string)($_POST['shoe_size']        ?? '')),
+            ':blood' => trim((string)($_POST['blood_type']       ?? '')),
+            ':uwt'   => trim((string)($_POST['uniform_winter_top']    ?? '')),
+            ':uwb'   => trim((string)($_POST['uniform_winter_bottom'] ?? '')),
+            ':ust'   => trim((string)($_POST['uniform_spring_top']    ?? '')),
+            ':usb'   => trim((string)($_POST['uniform_spring_bottom'] ?? '')),
+            ':uht'   => trim((string)($_POST['uniform_summer_top']    ?? '')),
+            ':uhb'   => trim((string)($_POST['uniform_summer_bottom'] ?? '')),
+            ':uss'   => trim((string)($_POST['uniform_shortsleeve']   ?? '')),
+            ':uhtop' => trim((string)($_POST['uniform_heat_top']      ?? '')),
+            ':uhbot' => trim((string)($_POST['uniform_heat_bottom']   ?? '')),
         ]);
         $success = '직원 정보가 저장되었습니다.';
     }
@@ -59,6 +125,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
     $pdo->prepare("DELETE FROM employees WHERE id=:id")->execute([':id' => $id]);
     header('Location: index.php');
     exit;
+}
+
+// ── POST: 서류 업로드 ────────────────────────────────────────
+$allowedDocTypes = ['resident_cert','medical_exam','drivers_license','safety_edu','bank_copy','resume','labor_contract'];
+$allowedExts     = ['pdf','jpg','jpeg','png','gif','doc','docx','xls','xlsx'];
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') === 'upload_doc') {
+    $docType = trim((string)($_POST['doc_type'] ?? ''));
+    $file    = $_FILES['doc_file'] ?? null;
+    if (in_array($docType, $allowedDocTypes, true) && $file && $file['error'] === UPLOAD_ERR_OK) {
+        $origName = basename((string)$file['name']);
+        $ext      = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
+        if (in_array($ext, $allowedExts, true)) {
+            // 기존 파일 삭제
+            $old = $pdo->prepare("SELECT filename FROM employee_documents WHERE employee_id=:eid AND doc_type=:dt");
+            $old->execute([':eid' => $id, ':dt' => $docType]);
+            if ($oldRow = $old->fetch(PDO::FETCH_ASSOC)) {
+                @unlink($uploadDir . $oldRow['filename']);
+                $pdo->prepare("DELETE FROM employee_documents WHERE employee_id=:eid AND doc_type=:dt")
+                    ->execute([':eid' => $id, ':dt' => $docType]);
+            }
+            $storedName = $id . '_' . $docType . '_' . time() . '.' . $ext;
+            move_uploaded_file($file['tmp_name'], $uploadDir . $storedName);
+            $pdo->prepare("INSERT INTO employee_documents (employee_id, doc_type, filename, original_name) VALUES (:eid,:dt,:fn,:on)")
+                ->execute([':eid' => $id, ':dt' => $docType, ':fn' => $storedName, ':on' => $origName]);
+            $success = '서류가 등록되었습니다.';
+        } else {
+            $error = '허용되지 않는 파일 형식입니다.';
+        }
+    }
+}
+
+// ── POST: 서류 삭제 ──────────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') === 'delete_doc') {
+    $docId = (int)($_POST['doc_id'] ?? 0);
+    $row   = $pdo->prepare("SELECT filename FROM employee_documents WHERE id=:did AND employee_id=:eid");
+    $row->execute([':did' => $docId, ':eid' => $id]);
+    if ($r = $row->fetch(PDO::FETCH_ASSOC)) {
+        @unlink($uploadDir . $r['filename']);
+        $pdo->prepare("DELETE FROM employee_documents WHERE id=:did")->execute([':did' => $docId]);
+        $success = '서류가 삭제되었습니다.';
+    }
 }
 
 // ── 직원 데이터 로드 ─────────────────────────────────────────
@@ -72,10 +180,42 @@ if (!$emp) {
 }
 
 $teams      = auth_read_teams();
-$showEdit   = isset($_GET['edit']) || $error !== '';  // 수정 폼 표시 여부
+$showEdit   = isset($_GET['edit']) || $error !== '';
+
+// 서류 목록 로드
+$docStmt = $pdo->prepare("SELECT * FROM employee_documents WHERE employee_id=:eid");
+$docStmt->execute([':eid' => $id]);
+$docRows  = $docStmt->fetchAll(PDO::FETCH_ASSOC);
+$docMap   = [];
+foreach ($docRows as $dr) { $docMap[$dr['doc_type']] = $dr; }
+
+$docTypeLabels = [
+    'resident_cert'    => '주민등록등본',
+    'medical_exam'     => '채용전신체검사',
+    'drivers_license'  => '운전면허증',
+    'safety_edu'       => '기초건설안전보건교육이수증',
+    'bank_copy'        => '통장사본',
+    'resume'           => '이력서',
+    'labor_contract'   => '근로계약서',
+];
 
 function h(string $v): string { return htmlspecialchars($v, ENT_QUOTES, 'UTF-8'); }
 function val(mixed $v): string { return h(trim((string)($v ?? ''))); }
+function display_name(string $name): string { return h(preg_replace('/\s*\(.*?\)\s*$/', '', $name)); }
+
+function team_badge_colors(string $team): array {
+    $map = [
+        '대표이사'      => ['#7c3aed','rgba(255,255,255,0.25)'],
+        '공사팀-전기'   => ['#1d4ed8','rgba(255,255,255,0.25)'],
+        '공사팀-전기2'  => ['#2563eb','rgba(255,255,255,0.25)'],
+        '공사팀-모터'   => ['#0369a1','rgba(255,255,255,0.25)'],
+        '가스팀'        => ['#b45309','rgba(255,255,255,0.25)'],
+        '제조팀'        => ['#047857','rgba(255,255,255,0.25)'],
+        '안전관리'      => ['#be123c','rgba(255,255,255,0.25)'],
+        '공사2팀'       => ['#0f766e','rgba(255,255,255,0.25)'],
+    ];
+    return $map[$team] ?? ['#1e5f8e','rgba(255,255,255,0.22)'];
+}
 ?>
 <!DOCTYPE html>
 <html lang="ko">
@@ -123,6 +263,23 @@ function val(mixed $v): string { return h(trim((string)($v ?? ''))); }
   .btn-danger:hover { background: #fdf2f2; }
   .btn-cancel    { background: #fff; color: #6b7c93; border: 1px solid #c8d8e8; }
   .btn-cancel:hover { background: #f8fbfe; }
+  .btn-sm { padding: 4px 10px; font-size: 12px; border-radius: 7px; }
+  .btn-upload { background:#f0f7fd; color:#1a5f8e; border:1px solid #b3d4ee; }
+  .btn-upload:hover { background:#deeef9; }
+  .btn-download { background:#edfaf4; color:#1a7a4a; border:1px solid #a8e6c3; }
+  .btn-download:hover { background:#d5f5e3; }
+
+  /* 서류 테이블 */
+  .doc-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .doc-table th { background:#f0f6fb; color:#486581; font-weight:600; padding:8px 10px; text-align:left; border-bottom:1px solid #d7e3ef; }
+  .doc-table td { padding:8px 10px; border-bottom:1px solid #eef3f8; vertical-align:middle; }
+  .doc-table tr:last-child td { border-bottom:none; }
+  .doc-status-ok  { display:inline-block; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:700; background:#edfaf4; color:#1a7a4a; }
+  .doc-status-no  { display:inline-block; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:700; background:#f3f4f6; color:#9ca3af; }
+  .doc-actions { display:flex; gap:5px; align-items:center; flex-wrap:wrap; }
+  .doc-upload-label { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:7px; font-size:12px; font-weight:600; cursor:pointer; background:#f0f7fd; color:#1a5f8e; border:1px solid #b3d4ee; }
+  .doc-upload-label:hover { background:#deeef9; }
+  .doc-upload-input { display:none; }
 
   /* 카드 */
   .card {
@@ -254,19 +411,22 @@ function val(mixed $v): string { return h(trim((string)($v ?? ''))); }
 
   <!-- 상세 카드 -->
   <div class="card" id="detail-card">
-    <div class="profile-header">
-      <div class="avatar"><?= mb_substr(val($emp['name']), 0, 1, 'UTF-8') ?></div>
+    <?php
+      [$hdrColor, $bdgBg] = team_badge_colors(trim((string)($emp['team'] ?? '')));
+    ?>
+    <div class="profile-header" style="background:linear-gradient(135deg,<?= $hdrColor ?> 0%,<?= $hdrColor ?>cc 100%)">
+      <div class="avatar"><?= mb_substr(display_name((string)$emp['name']), 0, 1, 'UTF-8') ?></div>
       <div class="profile-info">
-        <h1><?= val($emp['name']) ?></h1>
+        <h1><?= display_name((string)$emp['name']) ?></h1>
         <div class="sub">
           <?php if (val($emp['employee_no']) !== ''): ?>
             <span>사원번호: <?= val($emp['employee_no']) ?></span>
           <?php endif; ?>
           <?php if (val($emp['team']) !== ''): ?>
-            <span class="badge"><?= val($emp['team']) ?></span>
+            <span class="badge" style="background:<?= $bdgBg ?>"><?= val($emp['team']) ?></span>
           <?php endif; ?>
           <?php if (val($emp['position']) !== ''): ?>
-            <span class="badge"><?= val($emp['position']) ?></span>
+            <span class="badge" style="background:<?= $bdgBg ?>"><?= val($emp['position']) ?></span>
           <?php endif; ?>
         </div>
       </div>
@@ -277,11 +437,14 @@ function val(mixed $v): string { return h(trim((string)($v ?? ''))); }
       <div class="info-grid">
         <?php
         $fields = [
+            '역할'       => $emp['position'],
+            '직책'       => $emp['job_title'],
             '연락처'     => $emp['phone'],
             '이메일'     => $emp['email'],
             '입사일'     => $emp['join_date'],
             '생년월일'   => $emp['birth_date'],
             '비상연락처' => $emp['emergency_contact'],
+            '비상연락처 관계' => $emp['emergency_contact_relation'],
             '주소'       => $emp['address'],
         ];
         foreach ($fields as $label => $value):
@@ -293,6 +456,80 @@ function val(mixed $v): string { return h(trim((string)($v ?? ''))); }
           </div>
         <?php endforeach; ?>
       </div>
+    </div>
+
+    <div class="info-section" style="padding-top:0">
+      <div class="info-section-title">신체 정보</div>
+      <div class="info-grid">
+        <?php
+        $bodyFields = [
+            '키'         => ($emp['height']  ?? '') !== '' ? val($emp['height'])  . ' cm' : '',
+            '몸무게'     => ($emp['weight']  ?? '') !== '' ? val($emp['weight'])  . ' kg' : '',
+            '신발 사이즈'=> ($emp['shoe_size'] ?? '') !== '' ? val($emp['shoe_size']) . ' mm' : '',
+            '혈액형'     => ($emp['blood_type'] ?? '') !== '' ? val($emp['blood_type']) . '형' : '',
+            '동복 상의'  => $emp['uniform_winter_top']    ?? '',
+            '동복 하의'  => $emp['uniform_winter_bottom'] ?? '',
+            '춘추복 상의'=> $emp['uniform_spring_top']    ?? '',
+            '춘추복 하의'=> $emp['uniform_spring_bottom'] ?? '',
+            '하복 상의'  => $emp['uniform_summer_top']    ?? '',
+            '하복 하의'  => $emp['uniform_summer_bottom'] ?? '',
+            '반팔티'     => $emp['uniform_shortsleeve']   ?? '',
+        ];
+        if (($emp['team'] ?? '') === '가스팀') $bodyFields += [
+            '방열복 상의' => $emp['uniform_heat_top']    ?? '',
+            '방열복 하의' => $emp['uniform_heat_bottom'] ?? '',
+        ];
+        foreach ($bodyFields as $label => $value):
+            $v = is_string($value) ? h($value) : val($value);
+        ?>
+          <div class="info-row">
+            <div class="info-label"><?= h($label) ?></div>
+            <div class="info-value <?= $v === '' ? 'empty' : '' ?>"><?= $v !== '' ? $v : '—' ?></div>
+          </div>
+        <?php endforeach; ?>
+      </div>
+    </div>
+
+    <div class="info-section" style="padding-top:0">
+      <div class="info-section-title">입사 서류</div>
+      <table class="doc-table">
+        <thead>
+          <tr><th style="width:36%">서류명</th><th style="width:14%">상태</th><th>파일명</th><th style="width:180px">관리</th></tr>
+        </thead>
+        <tbody>
+          <?php foreach ($docTypeLabels as $dtype => $dlabel):
+            $doc = $docMap[$dtype] ?? null;
+          ?>
+          <tr>
+            <td><?= h($dlabel) ?></td>
+            <td><?= $doc ? '<span class="doc-status-ok">등록됨</span>' : '<span class="doc-status-no">미등록</span>' ?></td>
+            <td style="color:#486581;font-size:12px"><?= $doc ? h((string)$doc['original_name']) : '—' ?></td>
+            <td>
+              <div class="doc-actions">
+                <?php if ($doc): ?>
+                  <a href="?id=<?= $id ?>&download=<?= (int)$doc['id'] ?>" class="btn btn-sm btn-download">↓ 다운로드</a>
+                  <form method="post" style="display:inline" onsubmit="return confirm('서류를 삭제하시겠습니까?')">
+                    <input type="hidden" name="action" value="delete_doc">
+                    <input type="hidden" name="doc_id" value="<?= (int)$doc['id'] ?>">
+                    <button type="submit" class="btn btn-sm btn-danger">삭제</button>
+                  </form>
+                <?php endif; ?>
+                <form method="post" enctype="multipart/form-data" style="display:inline">
+                  <input type="hidden" name="action" value="upload_doc">
+                  <input type="hidden" name="doc_type" value="<?= h($dtype) ?>">
+                  <label class="doc-upload-label">
+                    📎 <?= $doc ? '재업로드' : '업로드' ?>
+                    <input type="file" name="doc_file" class="doc-upload-input"
+                           accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx"
+                           onchange="this.form.submit()">
+                  </label>
+                </form>
+              </div>
+            </td>
+          </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
     </div>
 
     <div class="info-section" style="padding-top:0">
@@ -344,8 +581,12 @@ function val(mixed $v): string { return h(trim((string)($v ?? ''))); }
             </select>
           </div>
           <div class="field">
+            <label>역할</label>
+            <input type="text" name="position" value="<?= val($emp['position']) ?>" placeholder="예: 작업지휘자">
+          </div>
+          <div class="field">
             <label>직책</label>
-            <input type="text" name="position" value="<?= val($emp['position']) ?>" placeholder="예: 과장">
+            <input type="text" name="job_title" value="<?= val($emp['job_title'] ?? '') ?>" placeholder="예: 과장">
           </div>
           <div class="field">
             <label>연락처</label>
@@ -367,6 +608,10 @@ function val(mixed $v): string { return h(trim((string)($v ?? ''))); }
             <label>비상연락처</label>
             <input type="tel" name="emergency_contact" value="<?= val($emp['emergency_contact']) ?>" placeholder="010-0000-0000">
           </div>
+          <div class="field">
+            <label>비상연락처 관계</label>
+            <input type="text" name="emergency_contact_relation" value="<?= val($emp['emergency_contact_relation'] ?? '') ?>" placeholder="예: 배우자">
+          </div>
           <div class="field field-full">
             <label>주소</label>
             <input type="text" name="address" value="<?= val($emp['address']) ?>">
@@ -375,6 +620,68 @@ function val(mixed $v): string { return h(trim((string)($v ?? ''))); }
             <label>메모</label>
             <textarea name="memo"><?= val($emp['memo']) ?></textarea>
           </div>
+        </div>
+        <div style="font-size:13px;font-weight:700;color:#486581;margin:4px 0 10px;padding-top:10px;border-top:1px solid #e8f0f8;">신체 정보</div>
+        <div class="form-grid">
+          <div class="field">
+            <label>키 (cm)</label>
+            <input type="text" name="height" value="<?= val($emp['height'] ?? '') ?>" placeholder="예: 175">
+          </div>
+          <div class="field">
+            <label>몸무게 (kg)</label>
+            <input type="text" name="weight" value="<?= val($emp['weight'] ?? '') ?>" placeholder="예: 70">
+          </div>
+          <div class="field">
+            <label>신발 사이즈 (mm)</label>
+            <input type="text" name="shoe_size" value="<?= val($emp['shoe_size'] ?? '') ?>" placeholder="예: 270">
+          </div>
+          <div class="field">
+            <label>혈액형</label>
+            <select name="blood_type">
+              <option value="">선택</option>
+              <?php foreach (['A','B','O','AB'] as $bt): ?>
+                <option value="<?= $bt ?>" <?= val($emp['blood_type'] ?? '') === $bt ? 'selected' : '' ?>><?= $bt ?>형</option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="field">
+            <label>동복 상의</label>
+            <input type="text" name="uniform_winter_top" value="<?= val($emp['uniform_winter_top'] ?? '') ?>" placeholder="예: 105">
+          </div>
+          <div class="field">
+            <label>동복 하의</label>
+            <input type="text" name="uniform_winter_bottom" value="<?= val($emp['uniform_winter_bottom'] ?? '') ?>" placeholder="예: 32">
+          </div>
+          <div class="field">
+            <label>춘추복 상의</label>
+            <input type="text" name="uniform_spring_top" value="<?= val($emp['uniform_spring_top'] ?? '') ?>" placeholder="예: 105">
+          </div>
+          <div class="field">
+            <label>춘추복 하의</label>
+            <input type="text" name="uniform_spring_bottom" value="<?= val($emp['uniform_spring_bottom'] ?? '') ?>" placeholder="예: 32">
+          </div>
+          <div class="field">
+            <label>하복 상의</label>
+            <input type="text" name="uniform_summer_top" value="<?= val($emp['uniform_summer_top'] ?? '') ?>" placeholder="예: 105">
+          </div>
+          <div class="field">
+            <label>하복 하의</label>
+            <input type="text" name="uniform_summer_bottom" value="<?= val($emp['uniform_summer_bottom'] ?? '') ?>" placeholder="예: 32">
+          </div>
+          <div class="field">
+            <label>반팔티 사이즈</label>
+            <input type="text" name="uniform_shortsleeve" value="<?= val($emp['uniform_shortsleeve'] ?? '') ?>" placeholder="예: XL">
+          </div>
+          <?php if (($emp['team'] ?? '') === '가스팀'): ?>
+          <div class="field">
+            <label>방열복 상의</label>
+            <input type="text" name="uniform_heat_top" value="<?= val($emp['uniform_heat_top'] ?? '') ?>" placeholder="예: 105">
+          </div>
+          <div class="field">
+            <label>방열복 하의</label>
+            <input type="text" name="uniform_heat_bottom" value="<?= val($emp['uniform_heat_bottom'] ?? '') ?>" placeholder="예: 32">
+          </div>
+          <?php endif; ?>
         </div>
         <div class="form-actions">
           <button type="submit" class="btn btn-primary">저장</button>

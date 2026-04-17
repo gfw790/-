@@ -47,7 +47,91 @@ function tbm_normalize_display_team_name(string $team): string
     ];
 
     $team = trim($team);
+    if ($team === '공사팀-전기2') {
+        return '공사팀';
+    }
+
     return $map[$team] ?? $team;
+}
+
+function tbm_output_root_dir(): string
+{
+    return __DIR__ . '/output';
+}
+
+function tbm_output_team_folder_name(?string $team): string
+{
+    $folder = trim((string)$team);
+    if ($folder !== '') {
+        $folder = tbm_normalize_display_team_name($folder);
+    }
+
+    if ($folder === '') {
+        $folder = '공통';
+    }
+
+    $folder = preg_replace('/[\\\\\\/:*?"<>|]+/u', '_', $folder);
+    $folder = trim((string)$folder, ". \t\n\r\0\x0B");
+
+    return $folder !== '' ? $folder : '공통';
+}
+
+function tbm_prepare_output_directory(?string $team): array
+{
+    $rootDir = tbm_output_root_dir();
+    if (!is_dir($rootDir) && !mkdir($rootDir, 0777, true) && !is_dir($rootDir)) {
+        throw new RuntimeException('TBM output root directory could not be created: ' . $rootDir);
+    }
+
+    $folderName = tbm_output_team_folder_name($team);
+    $directory = $rootDir . '/' . $folderName;
+    if (!is_dir($directory) && !mkdir($directory, 0777, true) && !is_dir($directory)) {
+        throw new RuntimeException('TBM team output directory could not be created: ' . $directory);
+    }
+
+    return [$folderName, $directory];
+}
+
+function tbm_normalize_output_relative_path(string $path): string
+{
+    $path = trim(str_replace('\\', '/', $path));
+    if ($path === '') {
+        return '';
+    }
+
+    $path = preg_replace('~/+~', '/', $path);
+    $path = ltrim((string)$path, '/');
+
+    $segments = [];
+    foreach (explode('/', $path) as $segment) {
+        $segment = trim($segment);
+        if ($segment === '' || $segment === '.' || $segment === '..') {
+            return '';
+        }
+        $segments[] = $segment;
+    }
+
+    return implode('/', $segments);
+}
+
+function tbm_build_output_relative_path(string $fileName, ?string $team): string
+{
+    $safeFileName = trim(basename(str_replace('\\', '/', $fileName)));
+    if ($safeFileName === '') {
+        throw new InvalidArgumentException('TBM output filename is required.');
+    }
+
+    return tbm_output_team_folder_name($team) . '/' . $safeFileName;
+}
+
+function tbm_resolve_output_full_path(string $relativePath): string
+{
+    $normalizedPath = tbm_normalize_output_relative_path($relativePath);
+    if ($normalizedPath === '') {
+        return tbm_output_root_dir();
+    }
+
+    return tbm_output_root_dir() . '/' . $normalizedPath;
 }
 
 function tbm_request_data(): array
