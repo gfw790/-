@@ -175,9 +175,14 @@ function tbm_auto_resolve_instructor_id(string $preferredName): int
     return 1;
 }
 
+function tbm_auto_default_team(): string
+{
+    return tbm_normalize_display_team_name('공사팀');
+}
+
 function tbm_auto_get_completed_document(string $targetDate): ?array
 {
-    $doc = tbm_get_document($targetDate);
+    $doc = tbm_get_document_for_team($targetDate, tbm_auto_default_team());
     if (!$doc) {
         return null;
     }
@@ -194,7 +199,7 @@ function tbm_auto_get_completed_document(string $targetDate): ?array
 
 function tbm_auto_build_document_data(string $targetDate, array $content): array
 {
-    $existingDoc = tbm_get_document($targetDate);
+    $existingDoc = tbm_get_document_for_team($targetDate, tbm_auto_default_team());
     $activeInstructor = tbm_get_active_instructor();
     $blankRiskRows = tbm_auto_blank_risk_rows();
 
@@ -246,12 +251,12 @@ function tbm_auto_write_document(string $targetDate, array $content): array
     ];
 
     $contentId = tbm_insert_content($contentPayload);
-    $existingDoc = tbm_get_document($targetDate);
+    $defaultTeam = tbm_auto_default_team();
+    $existingDoc = tbm_get_document_for_team($targetDate, $defaultTeam);
     $instructorId = tbm_auto_resolve_instructor_id($data['instructor_name']);
 
     try {
         $pdo = tbm_db();
-        $defaultTeam = tbm_normalize_display_team_name('공사팀');
         $documentTeam = tbm_normalize_display_team_name(trim((string)($existingDoc['team'] ?? $defaultTeam)));
         if ($documentTeam === '') {
             $documentTeam = $defaultTeam;
@@ -288,14 +293,22 @@ function tbm_auto_write_document(string $targetDate, array $content): array
             $docId = tbm_create_document($targetDate, $instructorId, $contentId, $documentTeam);
             $stmt = $pdo->prepare(
                 'UPDATE tbm_documents
-                    SET today_work_1 = :tw1,
+                    SET team = :team,
+                        instructor_id = :iid,
+                        content_id = :cid,
+                        today_work_1 = :tw1,
                         today_work_2 = :tw2,
                         risk_checks = :checks,
                         risk_rows = :rows,
-                        remarks = :remarks
+                        remarks = :remarks,
+                        generation_status = "pending",
+                        updated_at = NOW()
                   WHERE id = :id'
             );
             $stmt->execute([
+                ':team' => $documentTeam,
+                ':iid' => $instructorId,
+                ':cid' => $contentId,
                 ':tw1' => $data['today_work_1'],
                 ':tw2' => $data['today_work_2'],
                 ':checks' => json_encode($data['risk_checks'], JSON_UNESCAPED_UNICODE),

@@ -1325,3 +1325,22 @@
 [2026-04-17 04:13:48] [점수 3위] score=12  incident_score=9  title=단관비계 하역 작업 중 근로자와 부딪힘 사고
 [2026-04-17 04:13:48] [최종 선택] score=26  title=자재 작업 중 넘어짐
 [2026-04-17 04:13:48] [CSI 이미지] 원본 이미지 URL 확인: https://www.csi.go.kr/com/imageViewProc.do?file_no=HIjkg7eA7nWjd4bkhLAzEw%3D%3D
+[2026-04-18 00:00:02] [1순위] KOSHA 사이렌 수집 시작
+[2026-04-18 00:00:04] [KOSHA enrich 시작] title=(260417)중대재해 발생 알림(1)
+[2026-04-18 00:00:04] [KOSHA enrich 상태] has_image_file=N / has_image_base64=Y
+[2026-04-18 00:00:04] [KOSHA 이미지 저장 성공] output/images/siren_d6590f08909d815b.jpg
+[2026-04-18 00:00:04] [KOSHA 이미지 crop 성공] output/images/crop_3bf3ce9bd2ab1f082a58.jpg
+[2026-04-18 00:00:04] [KOSHA crop 시도 완료]
+[2026-04-18 00:00:04] [KOSHA OCR 시작] image_file=output/images/crop_3bf3ce9bd2ab1f082a58.jpg
+[2026-04-18 00:00:04] [KOSHA OCR 대상] poster_image=output/images/siren_d6590f08909d815b.jpg
+[2026-04-18 00:00:17] [KOSHA 후보] title=(260417)중대재해 발생 알림(1) / summary_len=87 / prevention_len=119 / image=Y / ocr_ok=Y / vision=N
+[2026-04-18 00:00:17] [KOSHA enrich 시작] title=(260417)중대재해 발생 알림(1)
+[2026-04-18 00:00:17] [KOSHA enrich 상태] has_image_file=Y / has_image_base64=Y
+[2026-04-18 00:00:17] [KOSHA 저장 스킵] image_file 이미 있거나 image_base64 없음
+[2026-04-18 00:00:17] [KOSHA OCR 시작] image_file=output/images/crop_3bf3ce9bd2ab1f082a58.jpg
+[2026-04-18 00:00:17] [KOSHA OCR 대상] poster_image=output/images/siren_d6590f08909d815b.jpg
+[2026-04-18 00:00:17] [1순위 선택] KOSHA siren_score=0 / title=(260417)중대재해 발생 알림(1) / summary_len=87 / prevention_len=119
+[2026-04-18 00:00:18] [fallback 이미지] 네이버 성공: https://t1.daumcdn.net/cafeattach/Uzlo/977abf46a8b70b0ef0f0f083b4a1bba74c6f1aac
+[2026-04-18 00:00:30] [이미지 정리] 미사용 fallback 삭제: output/images/article_7ea12862d8654496bb594c68bcb86bcc.jpg
+[2026-04-18 00:00:30] [이미지 정리] 삭제: output/images/siren_d6590f08909d815b.jpg
+[2026-04-18 00:00:30] [이미지 정리] 총 1개 미사용 파일 삭제

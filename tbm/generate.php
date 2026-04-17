@@ -41,6 +41,14 @@ try {
     
     $sourceUrl = trim($_POST['source_url'] ?? '');
     $existingDoc = tbm_get_document_for_team($data['doc_date'], $documentTeam);
+    if ($existingDoc) {
+        $savedTeam = tbm_normalize_display_team_name(
+            auth_normalize_team_name((string)($existingDoc['team'] ?? ''))
+        );
+        if ($savedTeam !== '') {
+            $documentTeam = $savedTeam;
+        }
+    }
 
     if ($sourceUrl === '') {
         $fallbackDoc = tbm_get_document($data['doc_date']);
@@ -85,10 +93,17 @@ try {
     } else {
         $docId = tbm_create_document($docDate, $instructorId, $contentId, $documentTeam);
         $stmt = $pdo->prepare(
-            'UPDATE tbm_documents SET today_work_1=:tw1, today_work_2=:tw2,
-             risk_checks=:checks, risk_rows=:rows, remarks=:remarks WHERE id=:id'
+            'UPDATE tbm_documents
+                SET team=:team, instructor_id=:iid, content_id=:cid,
+                    today_work_1=:tw1, today_work_2=:tw2,
+                    risk_checks=:checks, risk_rows=:rows,
+                    remarks=:remarks, generation_status="pending", updated_at=NOW()
+              WHERE id=:id'
         );
         $stmt->execute([
+            ':team' => $documentTeam,
+            ':iid' => $instructorId,
+            ':cid' => $contentId,
             ':tw1'=>$data['today_work_1'], ':tw2'=>$data['today_work_2'],
             ':checks'=>json_encode($data['risk_checks'], JSON_UNESCAPED_UNICODE),
             ':rows'=>json_encode($data['risk_rows'], JSON_UNESCAPED_UNICODE),

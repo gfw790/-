@@ -23,8 +23,8 @@ function tbm_auth_users(): array
         'samcheok' => [
             'username' => 'samcheok',
             'password' => getenv('TBM_AUTH_SAMCHEOK_PASS') ?: 'samcheok1234',
-            'team'     => '삼척팀',
-            'label'    => '삼척팀',
+            'team'     => '제조팀',
+            'label'    => '제조팀',
         ],
     ];
 }

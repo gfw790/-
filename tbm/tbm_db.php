@@ -67,6 +67,7 @@ function tbm_db(): PDO
     try {
         $pdo = new PDO($dsn, TBM_DB_USER, TBM_DB_PASS, $options);
         tbm_db_ensure_document_team_column($pdo);
+        tbm_db_ensure_document_team_unique_key($pdo);
     } catch (PDOException $e) {
         // 운영 환경에서는 로그만 남기고 사용자에게 상세 오류를 노출하지 않는다.
         error_log('[TBM DB] 연결 실패: ' . $e->getMessage());
@@ -92,6 +93,61 @@ function tbm_db_ensure_document_team_column(PDO $pdo): void
         }
     } catch (Throwable $e) {
         // team 컬럼 추가 권한이 없거나 테이블이 없는 경우에도 기존 동작 유지
+    }
+}
+
+function tbm_db_ensure_document_team_unique_key(PDO $pdo): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+
+    try {
+        $pdo->exec("UPDATE tbm_documents SET team = '' WHERE team IS NULL");
+        $pdo->exec("ALTER TABLE tbm_documents MODIFY COLUMN team VARCHAR(50) NOT NULL DEFAULT ''");
+
+        $indexStmt = $pdo->query('SHOW INDEX FROM tbm_documents');
+        $indexes = $indexStmt ? $indexStmt->fetchAll() : [];
+
+        $hasDateOnlyUnique = false;
+        $hasDateTeamUnique = false;
+        $dateTeamColumns = [];
+
+        foreach ($indexes as $index) {
+            $keyName = (string)($index['Key_name'] ?? '');
+            $nonUnique = (int)($index['Non_unique'] ?? 1);
+            $columnName = (string)($index['Column_name'] ?? '');
+            $seq = (int)($index['Seq_in_index'] ?? 0);
+
+            if ($nonUnique !== 0) {
+                continue;
+            }
+
+            if ($keyName === 'uq_doc_date' && $columnName === 'doc_date') {
+                $hasDateOnlyUnique = true;
+            }
+
+            if ($keyName === 'uq_doc_date_team') {
+                $dateTeamColumns[$seq] = $columnName;
+            }
+        }
+
+        if ($dateTeamColumns !== []) {
+            ksort($dateTeamColumns);
+            $hasDateTeamUnique = array_values($dateTeamColumns) === ['doc_date', 'team'];
+        }
+
+        if (!$hasDateTeamUnique) {
+            $pdo->exec('ALTER TABLE tbm_documents ADD UNIQUE KEY uq_doc_date_team (doc_date, team)');
+        }
+
+        if ($hasDateOnlyUnique) {
+            $pdo->exec('ALTER TABLE tbm_documents DROP INDEX uq_doc_date');
+        }
+    } catch (Throwable $e) {
+        error_log('[TBM DB] 팀별 문서 유니크 키 보정 실패: ' . $e->getMessage());
     }
 }
 
@@ -292,13 +348,14 @@ function tbm_document_exists(string $date): bool
 function tbm_document_exists_for_team(string $date, ?string $team): bool
 {
     $pdo = tbm_db();
+    $normalizedTeam = trim((string)$team);
 
-    if (trim((string)$team) === '') {
-        $stmt = $pdo->prepare('SELECT 1 FROM tbm_documents WHERE doc_date = ? AND (team IS NULL OR team = "") LIMIT 1');
+    if ($normalizedTeam === '') {
+        $stmt = $pdo->prepare('SELECT 1 FROM tbm_documents WHERE doc_date = ? AND team = "" LIMIT 1');
         $stmt->execute([$date]);
     } else {
         $stmt = $pdo->prepare('SELECT 1 FROM tbm_documents WHERE doc_date = ? AND team = ? LIMIT 1');
-        $stmt->execute([$date, $team]);
+        $stmt->execute([$date, $normalizedTeam]);
     }
 
     return $stmt->fetchColumn() !== false;
@@ -307,7 +364,9 @@ function tbm_document_exists_for_team(string $date, ?string $team): bool
 function tbm_get_document_for_team(string $date, ?string $team): ?array
 {
     $pdo = tbm_db();
-    if (trim((string)$team) === '') {
+    $normalizedTeam = trim((string)$team);
+
+    if ($normalizedTeam === '') {
         $stmt = $pdo->prepare(
             'SELECT d.*, c.edu_title, c.body_text, c.source_url, c.image_file,
                     c.quiz_1, c.quiz_2, c.quiz_3,
@@ -316,7 +375,7 @@ function tbm_get_document_for_team(string $date, ?string $team): ?array
           LEFT JOIN tbm_accident_content c ON d.content_id = c.id
           LEFT JOIN tbm_instructors      i ON d.instructor_id = i.id
               WHERE d.doc_date = ?
-                AND (d.team IS NULL OR d.team = "")
+                AND d.team = ""
               LIMIT 1'
         );
         $stmt->execute([$date]);
@@ -332,7 +391,7 @@ function tbm_get_document_for_team(string $date, ?string $team): ?array
                 AND d.team = ?
               LIMIT 1'
         );
-        $stmt->execute([$date, $team]);
+                $stmt->execute([$date, $normalizedTeam]);
     }
 
     $row = $stmt->fetch();
@@ -444,13 +503,18 @@ function tbm_get_document(string $date): ?array
 function tbm_create_document(string $date, int $instructorId, ?int $contentId, ?string $team = null): int
 {
     $pdo  = tbm_db();
+    $normalizedTeam = trim((string)$team);
     $stmt = $pdo->prepare(
         'INSERT INTO tbm_documents
             (doc_date, team, is_business_day, instructor_id, content_id,
              risk_checks, risk_rows, generation_status)
          VALUES
             (:doc_date, :team, :is_biz, :instructor_id, :content_id,
-             :risk_checks, :risk_rows, "pending")'
+             :risk_checks, :risk_rows, "pending")
+         ON DUPLICATE KEY UPDATE
+            id = LAST_INSERT_ID(id),
+            generation_status = VALUES(generation_status),
+            updated_at = NOW()'
     );
 
     $emptyRiskRows = array_fill(0, 10, [
@@ -460,7 +524,7 @@ function tbm_create_document(string $date, int $instructorId, ?int $contentId, ?
 
     $stmt->execute([
         ':doc_date'      => $date,
-        ':team'          => $team,
+        ':team'          => $normalizedTeam,
         ':is_biz'        => 1,
         ':instructor_id' => $instructorId,
         ':content_id'    => $contentId,
