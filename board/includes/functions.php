@@ -518,6 +518,87 @@ function sanitizeRichtextInline(string $html): string {
 }
 
 /**
+ * 리치텍스트 HTML 조각 안의 일반 URL을 링크로 변환
+ */
+function autoLinkHtmlFragment(string $html): string {
+    if ($html === '') {
+        return '';
+    }
+
+    $doc = new DOMDocument();
+    libxml_use_internal_errors(true);
+    $doc->loadHTML(
+        '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>' . $html . '</body></html>'
+    );
+    libxml_clear_errors();
+
+    $body = $doc->getElementsByTagName('body')->item(0);
+    if (!$body) {
+        return $html;
+    }
+
+    $pattern = '#https?://[^\s<]+#iu';
+
+    $walk = static function (DOMNode $parent) use (&$walk, $doc, $pattern): void {
+        $children = [];
+        foreach ($parent->childNodes as $child) {
+            $children[] = $child;
+        }
+
+        foreach ($children as $child) {
+            if ($child->nodeType === XML_TEXT_NODE) {
+                $text = $child->nodeValue ?? '';
+                if ($text === '' || !preg_match($pattern, $text)) {
+                    continue;
+                }
+
+                $fragment = $doc->createDocumentFragment();
+                $offset = 0;
+                preg_match_all($pattern, $text, $matches, PREG_OFFSET_CAPTURE);
+
+                foreach ($matches[0] as [$url, $position]) {
+                    $position = (int)$position;
+                    $before = substr($text, $offset, $position - $offset);
+                    if ($before !== '') {
+                        $fragment->appendChild($doc->createTextNode($before));
+                    }
+
+                    $anchor = $doc->createElement('a');
+                    $anchor->setAttribute('href', $url);
+                    $anchor->setAttribute('target', '_blank');
+                    $anchor->setAttribute('rel', 'noopener noreferrer');
+                    $anchor->appendChild($doc->createTextNode($url));
+                    $fragment->appendChild($anchor);
+
+                    $offset = $position + strlen($url);
+                }
+
+                $tail = substr($text, $offset);
+                if ($tail !== '') {
+                    $fragment->appendChild($doc->createTextNode($tail));
+                }
+
+                $parent->replaceChild($fragment, $child);
+                continue;
+            }
+
+            if ($child->nodeType === XML_ELEMENT_NODE && strtolower($child->nodeName) !== 'a') {
+                $walk($child);
+            }
+        }
+    };
+
+    $walk($body);
+
+    $result = '';
+    foreach ($body->childNodes as $child) {
+        $result .= $doc->saveHTML($child);
+    }
+
+    return $result;
+}
+
+/**
  * 본문 일반 텍스트 렌더링 (이스케이프 + URL 링크 + 줄바꿈)
  */
 function renderPlainTextContent(string $text): string {
@@ -658,7 +739,9 @@ function renderContent($text, array $attachments = []) {
     $hasTokens = preg_match_all($pattern, $text, $matches, PREG_OFFSET_CAPTURE) && !empty($matches[0]);
 
     if (!$hasTokens) {
-        return $isRichtext ? sanitizeRichtextInline($text) : renderPlainTextContent($text);
+        return $isRichtext
+            ? autoLinkHtmlFragment(sanitizeRichtextInline($text))
+            : renderPlainTextContent($text);
     }
 
     $result = '';
@@ -671,7 +754,9 @@ function renderContent($text, array $attachments = []) {
 
         $before = substr($text, $cursor, $fullPos - $cursor);
         if ($before !== '') {
-            $result .= $isRichtext ? sanitizeRichtextInline($before) : renderPlainTextContent($before);
+            $result .= $isRichtext
+                ? autoLinkHtmlFragment(sanitizeRichtextInline($before))
+                : renderPlainTextContent($before);
         }
 
         $renderedImage = renderAttachmentToken($tokenValue, $attachments);
@@ -687,7 +772,9 @@ function renderContent($text, array $attachments = []) {
 
     $tail = substr($text, $cursor);
     if ($tail !== '') {
-        $result .= $isRichtext ? sanitizeRichtextInline($tail) : renderPlainTextContent($tail);
+        $result .= $isRichtext
+            ? autoLinkHtmlFragment(sanitizeRichtextInline($tail))
+            : renderPlainTextContent($tail);
     }
 
     return $result;
