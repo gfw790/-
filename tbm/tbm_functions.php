@@ -38,6 +38,8 @@ function tbm_normalize_display_team_name(string $team): string
 {
     $map = [
         '공사팀-전기' => '공사팀',
+        '공사팀-전기2' => '공사팀',
+        '공사팀-전기3' => '공사팀',
         '공사팀-모터' => '공사팀',
         '공사팀'      => '공사팀',
         '가스팀'      => '가스팀',
@@ -47,10 +49,6 @@ function tbm_normalize_display_team_name(string $team): string
     ];
 
     $team = trim($team);
-    if ($team === '공사팀-전기2') {
-        return '공사팀';
-    }
-
     return $map[$team] ?? $team;
 }
 

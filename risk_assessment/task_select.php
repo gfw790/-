@@ -3774,6 +3774,31 @@ function type_label(string $type): string
     return [...new Set(list)].filter(Boolean);
   }
 
+  function normalizeCategoryKey(value) {
+    return String(value || '').trim().replace(/\s+/g, '');
+  }
+
+  function isSameCategoryValue(left, right) {
+    const leftKey = normalizeCategoryKey(left);
+    const rightKey = normalizeCategoryKey(right);
+    return leftKey !== '' && leftKey === rightKey;
+  }
+
+  function uniqueCategoryValues(list) {
+    const seen = new Set();
+    const result = [];
+    list.forEach((value) => {
+      const displayValue = String(value || '').trim();
+      const key = normalizeCategoryKey(displayValue);
+      if (!key || seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      result.push(displayValue);
+    });
+    return result;
+  }
+
   function compareNaturalValues(left, right) {
     return String(left || '').localeCompare(String(right || ''), 'ko', {
       numeric: true,
@@ -3889,15 +3914,17 @@ function type_label(string $type): string
 
   function getManagerMajorOptions(processCategory) {
     const majorMap = new Map();
+    const normalizedProcessCategory = normalizeCategoryKey(processCategory);
 
     targetOptions
-      .filter((item) => item.process_category === processCategory)
+      .filter((item) => normalizeCategoryKey(item.process_category) === normalizedProcessCategory)
       .forEach((item) => {
         const majorCategory = String(item.major_category || '').trim();
+        const majorCategoryKey = normalizeCategoryKey(majorCategory);
         const unitCode = String(item.unit_code || '').trim();
-        if (!majorCategory) return;
+        if (!majorCategoryKey) return;
 
-        const current = majorMap.get(majorCategory) || {
+        const current = majorMap.get(majorCategoryKey) || {
           majorCategory,
           unitCode: '',
         };
@@ -3906,7 +3933,7 @@ function type_label(string $type): string
           current.unitCode = unitCode;
         }
 
-        majorMap.set(majorCategory, current);
+        majorMap.set(majorCategoryKey, current);
       });
 
     return Array.from(majorMap.values())
@@ -3956,9 +3983,14 @@ function type_label(string $type): string
     if (!firstValue || !groupValue) return;
 
     if (currentRole === 'manager') {
-      const targetTypeOptions = uniqueValues(
+      const normalizedFirstValue = normalizeCategoryKey(firstValue);
+      const normalizedGroupValue = normalizeCategoryKey(groupValue);
+      const targetTypeOptions = uniqueCategoryValues(
         targetOptions
-          .filter((item) => item.process_category === firstValue && item.major_category === groupValue)
+          .filter((item) =>
+            normalizeCategoryKey(item.process_category) === normalizedFirstValue
+            && normalizeCategoryKey(item.major_category) === normalizedGroupValue
+          )
           .map((item) => item.work_type)
       );
 
@@ -4006,8 +4038,8 @@ function type_label(string $type): string
       const unitTitle = majorCategory && workType ? `${majorCategory} - ${workType}` : '';
       task = tasks.find((item) =>
         item.unit_type === 'target' &&
-        item.process_name === processName &&
-        item.unit_title === unitTitle
+        isSameCategoryValue(item.process_name, processName) &&
+        normalizeCategoryKey(item.unit_title) === normalizeCategoryKey(unitTitle)
       ) || null;
 
       if (!task && unitTitle) {
@@ -6860,7 +6892,7 @@ function type_label(string $type): string
 
   if (group1 && group1.options.length <= 1) {
     if (currentRole === 'manager') {
-      const options = uniqueValues(targetOptions.map((item) => item.process_category));
+      const options = uniqueCategoryValues(targetOptions.map((item) => item.process_category));
       options.forEach((option) => {
         group1.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(option)}">${escapeHtml(displayProcessName(option))}</option>`);
       });

@@ -123,6 +123,15 @@ try {
     $existingDoc = null;
 }
 
+$sharedContentDoc = $existingDoc;
+if ($sharedContentDoc === null) {
+    try {
+        $sharedContentDoc = tbm_get_document($selectedDate);
+    } catch (Throwable $e) {
+        $sharedContentDoc = null;
+    }
+}
+
 $cachedAiDoc = null;
 $cachePath = __DIR__ . '/cache/tbm_ai_' . preg_replace('/[^0-9\-]/', '', $selectedDate) . '.json';
 if (is_file($cachePath)) {
@@ -138,16 +147,16 @@ if (is_file($cachePath)) {
 // 폼 기본값: 기존 일지가 있으면 해당 값, 없으면 기본값
 $defaults = tbm_default_data();
 
-$formEduTitle    = $existingDoc['edu_title']  ?? $cachedAiDoc['edu_title']  ?? $defaults['edu_title'];
-$formLeftContent = $existingDoc['body_text']  ?? $cachedAiDoc['body_text']  ?? '';
-$formQuiz1       = $existingDoc['quiz_1']     ?? $cachedAiDoc['quiz_1']     ?? '';
-$formQuiz2       = $existingDoc['quiz_2']     ?? $cachedAiDoc['quiz_2']     ?? '';
-$formQuiz3       = $existingDoc['quiz_3']     ?? $cachedAiDoc['quiz_3']     ?? '';
+$formEduTitle    = $sharedContentDoc['edu_title']  ?? $cachedAiDoc['edu_title']  ?? $defaults['edu_title'];
+$formLeftContent = $sharedContentDoc['body_text']  ?? $cachedAiDoc['body_text']  ?? '';
+$formQuiz1       = $sharedContentDoc['quiz_1']     ?? $cachedAiDoc['quiz_1']     ?? '';
+$formQuiz2       = $sharedContentDoc['quiz_2']     ?? $cachedAiDoc['quiz_2']     ?? '';
+$formQuiz3       = $sharedContentDoc['quiz_3']     ?? $cachedAiDoc['quiz_3']     ?? '';
 $formWork1       = $existingDoc['today_work_1'] ?? '';
 $formWork2       = $existingDoc['today_work_2'] ?? '';
 $formRemarks     = $existingDoc['remarks']    ?? '';
-$formSourceUrl   = $existingDoc['source_url'] ?? $cachedAiDoc['source_url'] ?? '';
-$formImageFile   = $existingDoc['image_file'] ?? $cachedAiDoc['image_file'] ?? '';
+$formSourceUrl   = $sharedContentDoc['source_url'] ?? $cachedAiDoc['source_url'] ?? '';
+$formImageFile   = $sharedContentDoc['image_file'] ?? $cachedAiDoc['image_file'] ?? '';
 
 // ── 최근 생성 목록 (최근 10건) ────────────────────────────────
 

@@ -841,9 +841,45 @@ function tbm_ai_quiz_join_lines(array $lines): string
     return implode("\n", $lines);
 }
 
-function tbm_ai_autofit_single_quiz(string $quiz, int $targetMin = 183, int $targetMax = 198): string
+function tbm_ai_sanitize_quiz_line(string $line): string
+{
+    $line = trim((string)$line);
+    if ($line === '') {
+        return '';
+    }
+
+    $junkPhrases = [
+        '현장 안전기준으로 판단한다.',
+        '재발 방지 원칙을 함께 고려한다.',
+        '작업 전 점검 기준을 반영한다.',
+    ];
+
+    foreach ($junkPhrases as $phrase) {
+        $line = preg_replace('/\s*' . preg_quote($phrase, '/') . '/u', '', $line);
+    }
+
+    $line = preg_replace('/\s{2,}/u', ' ', $line);
+
+    return trim((string)$line);
+}
+
+function tbm_ai_sanitize_quiz_text(string $quiz): string
 {
     $lines = tbm_ai_quiz_normalize_lines($quiz);
+    if ($lines === []) {
+        return '';
+    }
+
+    if (isset($lines[0])) {
+        $lines[0] = tbm_ai_sanitize_quiz_line($lines[0]);
+    }
+
+    return tbm_ai_quiz_join_lines($lines);
+}
+
+function tbm_ai_autofit_single_quiz(string $quiz, int $targetMin = 183, int $targetMax = 198): string
+{
+    $lines = tbm_ai_quiz_normalize_lines(tbm_ai_sanitize_quiz_text($quiz));
     if ($lines === []) {
         return '';
     }
@@ -869,29 +905,7 @@ function tbm_ai_autofit_single_quiz(string $quiz, int $targetMin = 183, int $tar
         $quiz = tbm_ai_quiz_join_lines($lines);
     }
 
-    if (mb_strlen($quiz, 'UTF-8') < $targetMin) {
-        $pads = [
-            ' 현장 안전기준으로 판단한다.',
-            ' 재발 방지 원칙을 함께 고려한다.',
-            ' 작업 전 점검 기준을 반영한다.',
-        ];
-
-        $question = $lines[0] ?? '';
-        foreach ($pads as $pad) {
-            if (mb_strlen($quiz, 'UTF-8') >= $targetMin) {
-                break;
-            }
-
-            $candidateQuestion = trim($question . $pad);
-            if (mb_strlen($candidateQuestion, 'UTF-8') <= 96) {
-                $question = $candidateQuestion;
-                $lines[0] = $question;
-                $quiz = tbm_ai_quiz_join_lines($lines);
-            }
-        }
-    }
-
-    return tbm_ai_quiz_join_lines($lines);
+    return tbm_ai_sanitize_quiz_text(tbm_ai_quiz_join_lines($lines));
 }
 
 function tbm_ai_autofit_quiz_fields(array $parsed): array

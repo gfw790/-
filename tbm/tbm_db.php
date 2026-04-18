@@ -450,6 +450,9 @@ function tbm_get_document(string $date): ?array
       LEFT JOIN tbm_accident_content c ON d.content_id = c.id
       LEFT JOIN tbm_instructors      i ON d.instructor_id = i.id
           WHERE d.doc_date = ?
+          ORDER BY CASE WHEN d.team = "" THEN 0 ELSE 1 END,
+                   COALESCE(d.generated_at, d.updated_at) DESC,
+                   d.id DESC
           LIMIT 1'
     );
     $stmt->execute([$date]);

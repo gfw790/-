@@ -177,7 +177,7 @@ function tbm_auto_resolve_instructor_id(string $preferredName): int
 
 function tbm_auto_default_team(): string
 {
-    return tbm_normalize_display_team_name('공사팀');
+    return '';
 }
 
 function tbm_auto_get_completed_document(string $targetDate): ?array

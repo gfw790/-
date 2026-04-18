@@ -86,6 +86,180 @@ function ensure_unit_ra_header_safe_work_standard_no(PDO $pdo): void
     }
 }
 
+function text_length(string $value): int
+{
+    return function_exists('mb_strlen')
+        ? mb_strlen($value, 'UTF-8')
+        : strlen($value);
+}
+
+function validate_process_category_name(string $processCategory, string $emptyMessage): ?string
+{
+    if ($processCategory === '') {
+        return $emptyMessage;
+    }
+
+    if (text_length($processCategory) > 100) {
+        return '공정명은 100자 이내로 입력해주세요.';
+    }
+
+    return null;
+}
+
+function process_category_exists(PDO $pdo, string $processCategory): bool
+{
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM work_target_master
+        WHERE process_category = :process_category
+    ");
+    $stmt->execute([
+        ':process_category' => $processCategory,
+    ]);
+
+    return (int)$stmt->fetchColumn() > 0;
+}
+
+function count_process_category_unit_ra_usage(PDO $pdo, string $processCategory): int
+{
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM unit_ra_header
+        WHERE unit_type = 'target'
+          AND process_name = :process_name
+    ");
+    $stmt->execute([
+        ':process_name' => $processCategory,
+    ]);
+
+    return (int)$stmt->fetchColumn();
+}
+
+function validate_major_category_name(string $majorCategory, string $emptyMessage): ?string
+{
+    if ($majorCategory === '') {
+        return $emptyMessage;
+    }
+
+    if (text_length($majorCategory) > 100) {
+        return '대분류명은 100자 이내로 입력해주세요.';
+        return '?遺꾨쪟紐낆? 100???대궡濡??낅젰?댁＜?몄슂.';
+    }
+
+    return null;
+}
+
+function validate_work_type_name(string $workType, string $emptyMessage): ?string
+{
+    if ($workType === '') {
+        return $emptyMessage;
+    }
+
+    if (text_length($workType) > 255) {
+        return '작업유형명은 255자 이내로 입력해주세요.';
+        return '?묒뾽?좏삎紐낆? 255???대궡濡??낅젰?댁＜?몄슂.';
+    }
+
+    return null;
+}
+
+function build_target_unit_title(string $majorCategory, string $workType): string
+{
+    return $majorCategory . ' - ' . $workType;
+}
+
+function major_category_exists(PDO $pdo, string $processCategory, string $majorCategory): bool
+{
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM work_target_master
+        WHERE process_category = :process_category
+          AND major_category = :major_category
+    ");
+    $stmt->execute([
+        ':process_category' => $processCategory,
+        ':major_category' => $majorCategory,
+    ]);
+
+    return (int)$stmt->fetchColumn() > 0;
+}
+
+function work_type_exists(PDO $pdo, string $processCategory, string $majorCategory, string $workType): bool
+{
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM work_target_master
+        WHERE process_category = :process_category
+          AND major_category = :major_category
+          AND work_type = :work_type
+    ");
+    $stmt->execute([
+        ':process_category' => $processCategory,
+        ':major_category' => $majorCategory,
+        ':work_type' => $workType,
+    ]);
+
+    return (int)$stmt->fetchColumn() > 0;
+}
+
+function count_major_category_unit_ra_usage(PDO $pdo, string $processCategory, string $majorCategory): int
+{
+    $majorPrefix = $majorCategory . ' - ';
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM unit_ra_header
+        WHERE unit_type = 'target'
+          AND process_name = :process_name
+          AND LEFT(unit_title, CHAR_LENGTH(:major_prefix)) = :major_prefix
+    ");
+    $stmt->execute([
+        ':process_name' => $processCategory,
+        ':major_prefix' => $majorPrefix,
+    ]);
+
+    return (int)$stmt->fetchColumn();
+}
+
+function count_work_type_unit_ra_usage(PDO $pdo, string $processCategory, string $majorCategory, string $workType): int
+{
+    $unitTitle = build_target_unit_title($majorCategory, $workType);
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM unit_ra_header
+        WHERE unit_type = 'target'
+          AND process_name = :process_name
+          AND unit_title = :unit_title
+    ");
+    $stmt->execute([
+        ':process_name' => $processCategory,
+        ':unit_title' => $unitTitle,
+    ]);
+
+    return (int)$stmt->fetchColumn();
+}
+
+function count_non_placeholder_work_types(PDO $pdo, string $processCategory, string $majorCategory): int
+{
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM work_target_master
+        WHERE process_category = :process_category
+          AND major_category = :major_category
+          AND work_type IS NOT NULL
+    ");
+    $stmt->execute([
+        ':process_category' => $processCategory,
+        ':major_category' => $majorCategory,
+    ]);
+
+    return (int)$stmt->fetchColumn();
+}
+
+function is_reserved_process_category(string $processCategory): bool
+{
+    return in_array($processCategory, ['결선', '시운전'], true);
+}
+
 // ── work_target_master 목록 조회 ─────────────────────────────────
 if ($action === 'work_target') {
     try {
@@ -486,6 +660,204 @@ if ($action === 'add_process_category' && $_SERVER['REQUEST_METHOD'] === 'POST')
     exit;
 }
 
+if ($action === 'rename_process_category' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $body = decode_json_body();
+    if (!$body) {
+        echo json_encode(['success'=>false,'message'=>'요청 데이터가 없습니다.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $oldProcessCategory = trim((string)($body['old_process_category'] ?? ''));
+    $newProcessCategory = trim((string)($body['new_process_category'] ?? ''));
+
+    if ($oldProcessCategory === '') {
+        echo json_encode(['success'=>false,'message'=>'변경할 기존 공정명이 없습니다.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    if (is_reserved_process_category($oldProcessCategory)) {
+        echo json_encode([
+            'success' => false,
+            'message' => '이 공정명은 현재 작업유형 규칙에 사용되고 있어 변경할 수 없습니다.',
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $validationMessage = validate_process_category_name($newProcessCategory, '변경할 새 공정명을 입력해주세요.');
+    if ($validationMessage !== null) {
+        echo json_encode(['success'=>false,'message'=>$validationMessage], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    if ($oldProcessCategory === $newProcessCategory) {
+        echo json_encode(['success'=>false,'message'=>'기존 공정명과 다른 이름을 입력해주세요.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    try {
+        $pdo = getDB();
+        ensure_work_type_sub_master($pdo);
+
+        if (!process_category_exists($pdo, $oldProcessCategory)) {
+            echo json_encode(['success'=>false,'message'=>'변경할 공정명을 찾을 수 없습니다.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        if (process_category_exists($pdo, $newProcessCategory)) {
+            echo json_encode(['success'=>false,'message'=>'이미 등록된 공정명입니다.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $subExistsStmt = $pdo->prepare("
+            SELECT COUNT(*)
+            FROM work_type_sub_master
+            WHERE process_category = :process_category
+        ");
+        $subExistsStmt->execute([
+            ':process_category' => $newProcessCategory,
+        ]);
+        if ((int)$subExistsStmt->fetchColumn() > 0) {
+            echo json_encode(['success'=>false,'message'=>'이미 등록된 공정명입니다.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $pdo->beginTransaction();
+
+        $updateTargetStmt = $pdo->prepare("
+            UPDATE work_target_master
+            SET process_category = :new_process_category
+            WHERE process_category = :old_process_category
+        ");
+        $updateTargetStmt->execute([
+            ':new_process_category' => $newProcessCategory,
+            ':old_process_category' => $oldProcessCategory,
+        ]);
+
+        $updateSubStmt = $pdo->prepare("
+            UPDATE work_type_sub_master
+            SET process_category = :new_process_category
+            WHERE process_category = :old_process_category
+        ");
+        $updateSubStmt->execute([
+            ':new_process_category' => $newProcessCategory,
+            ':old_process_category' => $oldProcessCategory,
+        ]);
+
+        $updateHeaderStmt = $pdo->prepare("
+            UPDATE unit_ra_header
+            SET process_name = :new_process_category
+            WHERE unit_type = 'target'
+              AND process_name = :old_process_category
+        ");
+        $updateHeaderStmt->execute([
+            ':new_process_category' => $newProcessCategory,
+            ':old_process_category' => $oldProcessCategory,
+        ]);
+
+        $pdo->commit();
+
+        echo json_encode([
+            'success' => true,
+            'message' => '공정명이 변경되었습니다.',
+            'data' => [
+                'old_process_category' => $oldProcessCategory,
+                'new_process_category' => $newProcessCategory,
+                'updated_target_count' => $updateTargetStmt->rowCount(),
+                'updated_unit_ra_count' => $updateHeaderStmt->rowCount(),
+                'updated_sub_count' => $updateSubStmt->rowCount(),
+            ],
+        ], JSON_UNESCAPED_UNICODE);
+    } catch (\PDOException $e) {
+        if (isset($pdo) && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        echo json_encode([
+            'success' => false,
+            'message' => 'DB 오류: ' . $e->getMessage(),
+        ], JSON_UNESCAPED_UNICODE);
+    }
+    exit;
+}
+
+if ($action === 'delete_process_category' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $body = decode_json_body();
+    if (!$body) {
+        echo json_encode(['success'=>false,'message'=>'요청 데이터가 없습니다.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $processCategory = trim((string)($body['process_category'] ?? ''));
+    $validationMessage = validate_process_category_name($processCategory, '삭제할 공정명을 선택해주세요.');
+    if ($validationMessage !== null) {
+        echo json_encode(['success'=>false,'message'=>$validationMessage], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    if (is_reserved_process_category($processCategory)) {
+        echo json_encode([
+            'success' => false,
+            'message' => '이 공정명은 현재 작업유형 규칙에 사용되고 있어 삭제할 수 없습니다.',
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    try {
+        $pdo = getDB();
+        ensure_work_type_sub_master($pdo);
+
+        if (!process_category_exists($pdo, $processCategory)) {
+            echo json_encode(['success'=>false,'message'=>'삭제할 공정명을 찾을 수 없습니다.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $usageCount = count_process_category_unit_ra_usage($pdo, $processCategory);
+        if ($usageCount > 0) {
+            echo json_encode([
+                'success' => false,
+                'message' => "이 공정명을 사용하는 단위평가서 {$usageCount}건이 있어 삭제할 수 없습니다. 먼저 해당 평가서의 공정명을 변경해주세요.",
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $pdo->beginTransaction();
+
+        $deleteSubStmt = $pdo->prepare("
+            DELETE FROM work_type_sub_master
+            WHERE process_category = :process_category
+        ");
+        $deleteSubStmt->execute([
+            ':process_category' => $processCategory,
+        ]);
+
+        $deleteTargetStmt = $pdo->prepare("
+            DELETE FROM work_target_master
+            WHERE process_category = :process_category
+        ");
+        $deleteTargetStmt->execute([
+            ':process_category' => $processCategory,
+        ]);
+
+        $pdo->commit();
+
+        echo json_encode([
+            'success' => true,
+            'message' => '공정명이 삭제되었습니다.',
+            'data' => [
+                'process_category' => $processCategory,
+                'deleted_target_count' => $deleteTargetStmt->rowCount(),
+                'deleted_sub_count' => $deleteSubStmt->rowCount(),
+            ],
+        ], JSON_UNESCAPED_UNICODE);
+    } catch (\PDOException $e) {
+        if (isset($pdo) && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        echo json_encode([
+            'success' => false,
+            'message' => 'DB 오류: ' . $e->getMessage(),
+        ], JSON_UNESCAPED_UNICODE);
+    }
+    exit;
+}
+
 if ($action === 'add_major_category' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $body = decode_json_body();
     if (!$body) {
@@ -833,6 +1205,462 @@ if ($action === 'add_work_type' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         echo json_encode([
             'success' => false,
             'message' => 'DB 오류: ' . $e->getMessage(),
+        ], JSON_UNESCAPED_UNICODE);
+    }
+    exit;
+}
+
+if ($action === 'rename_major_category' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $body = decode_json_body();
+    if (!$body) {
+        echo json_encode(['success'=>false,'message'=>'?붿껌 ?곗씠?곌? ?놁뒿?덈떎.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $processCategory = trim((string)($body['process_category'] ?? ''));
+    $oldMajorCategory = trim((string)($body['old_major_category'] ?? ''));
+    $newMajorCategory = trim((string)($body['new_major_category'] ?? ''));
+
+    if ($processCategory === '') {
+        echo json_encode(['success'=>false,'message'=>'怨듭젙紐낆쓣 癒쇱? ?좏깮?댁＜?몄슂.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    if ($oldMajorCategory === '') {
+        echo json_encode(['success'=>false,'message'=>'蹂寃쏀븷 湲곗〈 ?遺꾨쪟紐낆씠 ?놁뒿?덈떎.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $validationMessage = validate_major_category_name($newMajorCategory, '蹂寃쏀븷 ??遺꾨쪟紐낆쓣 ?낅젰?댁＜?몄슂.');
+    if ($validationMessage !== null) {
+        echo json_encode(['success'=>false,'message'=>$validationMessage], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    if ($oldMajorCategory === $newMajorCategory) {
+        echo json_encode(['success'=>false,'message'=>'湲곗〈 ?遺꾨쪟紐낃낵 ?ㅻⅨ ?대쫫???낅젰?댁＜?몄슂.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    try {
+        $pdo = getDB();
+
+        if (!major_category_exists($pdo, $processCategory, $oldMajorCategory)) {
+            echo json_encode(['success'=>false,'message'=>'蹂寃쏀븷 ?遺꾨쪟瑜?李얠쓣 ???놁뒿?덈떎.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        if (major_category_exists($pdo, $processCategory, $newMajorCategory)) {
+            echo json_encode(['success'=>false,'message'=>'?대? ?깅줉???遺꾨쪟?낅땲??'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $oldMajorPrefix = $oldMajorCategory . ' - ';
+        $newMajorPrefix = $newMajorCategory . ' - ';
+
+        $pdo->beginTransaction();
+
+        $updateTargetStmt = $pdo->prepare("
+            UPDATE work_target_master
+            SET major_category = :new_major_category
+            WHERE process_category = :process_category
+              AND major_category = :old_major_category
+        ");
+        $updateTargetStmt->execute([
+            ':new_major_category' => $newMajorCategory,
+            ':process_category' => $processCategory,
+            ':old_major_category' => $oldMajorCategory,
+        ]);
+
+        $updateHeaderStmt = $pdo->prepare("
+            UPDATE unit_ra_header
+            SET unit_title = CONCAT(:new_major_prefix, SUBSTRING(unit_title, CHAR_LENGTH(:old_major_prefix) + 1))
+            WHERE unit_type = 'target'
+              AND process_name = :process_name
+              AND LEFT(unit_title, CHAR_LENGTH(:old_major_prefix)) = :old_major_prefix
+        ");
+        $updateHeaderStmt->execute([
+            ':new_major_prefix' => $newMajorPrefix,
+            ':old_major_prefix' => $oldMajorPrefix,
+            ':process_name' => $processCategory,
+        ]);
+
+        $pdo->commit();
+
+        echo json_encode([
+            'success' => true,
+            'message' => '?遺꾨쪟媛 蹂寃쎈릺?덉뒿?덈떎.',
+            'data' => [
+                'process_category' => $processCategory,
+                'old_major_category' => $oldMajorCategory,
+                'new_major_category' => $newMajorCategory,
+                'updated_target_count' => $updateTargetStmt->rowCount(),
+                'updated_unit_ra_count' => $updateHeaderStmt->rowCount(),
+            ],
+        ], JSON_UNESCAPED_UNICODE);
+    } catch (\PDOException $e) {
+        if (isset($pdo) && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        echo json_encode([
+            'success' => false,
+            'message' => 'DB ?ㅻ쪟: ' . $e->getMessage(),
+        ], JSON_UNESCAPED_UNICODE);
+    }
+    exit;
+}
+
+if ($action === 'delete_major_category' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $body = decode_json_body();
+    if (!$body) {
+        echo json_encode(['success'=>false,'message'=>'?붿껌 ?곗씠?곌? ?놁뒿?덈떎.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $processCategory = trim((string)($body['process_category'] ?? ''));
+    $majorCategory = trim((string)($body['major_category'] ?? ''));
+
+    if ($processCategory === '') {
+        echo json_encode(['success'=>false,'message'=>'怨듭젙紐낆쓣 癒쇱? ?좏깮?댁＜?몄슂.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $validationMessage = validate_major_category_name($majorCategory, '??젣???遺꾨쪟瑜??좏깮?댁＜?몄슂.');
+    if ($validationMessage !== null) {
+        echo json_encode(['success'=>false,'message'=>$validationMessage], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    try {
+        $pdo = getDB();
+
+        if (!major_category_exists($pdo, $processCategory, $majorCategory)) {
+            echo json_encode(['success'=>false,'message'=>'??젣???遺꾨쪟瑜?李얠쓣 ???놁뒿?덈떎.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $usageCount = count_major_category_unit_ra_usage($pdo, $processCategory, $majorCategory);
+        if ($usageCount > 0) {
+            echo json_encode([
+                'success' => false,
+                'message' => "???遺꾨쪟瑜? ?ъ슜?섎뒗 ?⑥쐞?됯???{$usageCount}嫄댁씠 ?덉뼱 ??젣?????놁뒿?덈떎. 癒쇱? ?대떦 ?됯??쒖쓽 ?遺꾨쪟瑜?蹂寃쏀빐二쇱꽭??",
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $pdo->beginTransaction();
+
+        $deleteTargetStmt = $pdo->prepare("
+            DELETE FROM work_target_master
+            WHERE process_category = :process_category
+              AND major_category = :major_category
+        ");
+        $deleteTargetStmt->execute([
+            ':process_category' => $processCategory,
+            ':major_category' => $majorCategory,
+        ]);
+
+        $pdo->commit();
+
+        echo json_encode([
+            'success' => true,
+            'message' => '?遺꾨쪟媛 ??젣?섏뿀?듬땲??',
+            'data' => [
+                'process_category' => $processCategory,
+                'major_category' => $majorCategory,
+                'deleted_target_count' => $deleteTargetStmt->rowCount(),
+            ],
+        ], JSON_UNESCAPED_UNICODE);
+    } catch (\PDOException $e) {
+        if (isset($pdo) && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        echo json_encode([
+            'success' => false,
+            'message' => 'DB ?ㅻ쪟: ' . $e->getMessage(),
+        ], JSON_UNESCAPED_UNICODE);
+    }
+    exit;
+}
+
+if ($action === 'rename_work_type' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $body = decode_json_body();
+    if (!$body) {
+        echo json_encode(['success'=>false,'message'=>'?붿껌 ?곗씠?곌? ?놁뒿?덈떎.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $processCategory = trim((string)($body['process_category'] ?? ''));
+    $majorCategory = trim((string)($body['major_category'] ?? ''));
+    $oldWorkType = trim((string)($body['old_work_type'] ?? ''));
+    $newWorkType = trim((string)($body['new_work_type'] ?? ''));
+
+    if ($processCategory === '') {
+        echo json_encode(['success'=>false,'message'=>'怨듭젙紐낆쓣 癒쇱? ?좏깮?댁＜?몄슂.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    if ($majorCategory === '') {
+        echo json_encode(['success'=>false,'message'=>'?遺꾨쪟瑜?癒쇱? ?좏깮?댁＜?몄슂.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    if ($oldWorkType === '') {
+        echo json_encode(['success'=>false,'message'=>'蹂寃쏀븷 湲곗〈 ?묒뾽?좏삎紐낆씠 ?놁뒿?덈떎.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $validationMessage = validate_work_type_name($newWorkType, '蹂寃쏀븷 ??묒뾽?좏삎紐낆쓣 ?낅젰?댁＜?몄슂.');
+    if ($validationMessage !== null) {
+        echo json_encode(['success'=>false,'message'=>$validationMessage], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    if ($oldWorkType === $newWorkType) {
+        echo json_encode(['success'=>false,'message'=>'湲곗〈 ?묒뾽?좏삎紐낃낵 ?ㅻⅨ ?대쫫???낅젰?댁＜?몄슂.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    try {
+        $pdo = getDB();
+
+        if (!major_category_exists($pdo, $processCategory, $majorCategory)) {
+            echo json_encode(['success'=>false,'message'=>'?좏깮???遺꾨쪟瑜?李얠쓣 ???놁뒿?덈떎.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        if (!work_type_exists($pdo, $processCategory, $majorCategory, $oldWorkType)) {
+            echo json_encode(['success'=>false,'message'=>'蹂寃쏀븷 ?묒뾽?좏삎???李얠쓣 ???놁뒿?덈떎.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        if (work_type_exists($pdo, $processCategory, $majorCategory, $newWorkType)) {
+            echo json_encode(['success'=>false,'message'=>'?대? ?깅줉???묒뾽?좏삎?낅땲??'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $oldUnitTitle = build_target_unit_title($majorCategory, $oldWorkType);
+        $newUnitTitle = build_target_unit_title($majorCategory, $newWorkType);
+
+        $pdo->beginTransaction();
+
+        $updateTargetStmt = $pdo->prepare("
+            UPDATE work_target_master
+            SET work_type = :new_work_type
+            WHERE process_category = :process_category
+              AND major_category = :major_category
+              AND work_type = :old_work_type
+        ");
+        $updateTargetStmt->execute([
+            ':new_work_type' => $newWorkType,
+            ':process_category' => $processCategory,
+            ':major_category' => $majorCategory,
+            ':old_work_type' => $oldWorkType,
+        ]);
+
+        $updateHeaderStmt = $pdo->prepare("
+            UPDATE unit_ra_header
+            SET unit_title = :new_unit_title
+            WHERE unit_type = 'target'
+              AND process_name = :process_name
+              AND unit_title = :old_unit_title
+        ");
+        $updateHeaderStmt->execute([
+            ':new_unit_title' => $newUnitTitle,
+            ':process_name' => $processCategory,
+            ':old_unit_title' => $oldUnitTitle,
+        ]);
+
+        $pdo->commit();
+
+        echo json_encode([
+            'success' => true,
+            'message' => '?묒뾽?좏삎??蹂寃쎈릺?덉뒿?덈떎.',
+            'data' => [
+                'process_category' => $processCategory,
+                'major_category' => $majorCategory,
+                'old_work_type' => $oldWorkType,
+                'new_work_type' => $newWorkType,
+                'updated_target_count' => $updateTargetStmt->rowCount(),
+                'updated_unit_ra_count' => $updateHeaderStmt->rowCount(),
+            ],
+        ], JSON_UNESCAPED_UNICODE);
+    } catch (\PDOException $e) {
+        if (isset($pdo) && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        echo json_encode([
+            'success' => false,
+            'message' => 'DB ?ㅻ쪟: ' . $e->getMessage(),
+        ], JSON_UNESCAPED_UNICODE);
+    }
+    exit;
+}
+
+if ($action === 'delete_work_type' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $body = decode_json_body();
+    if (!$body) {
+        echo json_encode(['success'=>false,'message'=>'?붿껌 ?곗씠?곌? ?놁뒿?덈떎.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $processCategory = trim((string)($body['process_category'] ?? ''));
+    $majorCategory = trim((string)($body['major_category'] ?? ''));
+    $workType = trim((string)($body['work_type'] ?? ''));
+
+    if ($processCategory === '') {
+        echo json_encode(['success'=>false,'message'=>'怨듭젙紐낆쓣 癒쇱? ?좏깮?댁＜?몄슂.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    if ($majorCategory === '') {
+        echo json_encode(['success'=>false,'message'=>'?遺꾨쪟瑜?癒쇱? ?좏깮?댁＜?몄슂.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $validationMessage = validate_work_type_name($workType, '??젣???묒뾽?좏삎???좏깮?댁＜?몄슂.');
+    if ($validationMessage !== null) {
+        echo json_encode(['success'=>false,'message'=>$validationMessage], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    try {
+        $pdo = getDB();
+
+        if (!major_category_exists($pdo, $processCategory, $majorCategory)) {
+            echo json_encode(['success'=>false,'message'=>'?좏깮???遺꾨쪟瑜?李얠쓣 ???놁뒿?덈떎.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        if (!work_type_exists($pdo, $processCategory, $majorCategory, $workType)) {
+            echo json_encode(['success'=>false,'message'=>'??젣???묒뾽?좏삎???李얠쓣 ???놁뒿?덈떎.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $usageCount = count_work_type_unit_ra_usage($pdo, $processCategory, $majorCategory, $workType);
+        if ($usageCount > 0) {
+            echo json_encode([
+                'success' => false,
+                'message' => "???묒뾽?좏삎???ъ슜?섎뒗 ?⑥쐞?됯???{$usageCount}嫄댁씠 ?덉뼱 ??젣?????놁뒿?덈떎. 癒쇱? ?대떦 ?됯??쒖쓽 ?묒뾽?좏삎???蹂寃쏀빐二쇱꽭??",
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $nonPlaceholderCount = count_non_placeholder_work_types($pdo, $processCategory, $majorCategory);
+
+        $pdo->beginTransaction();
+
+        $deletedTargetCount = 0;
+        $placeholderPreserved = false;
+
+        if ($nonPlaceholderCount <= 1) {
+            $placeholderStmt = $pdo->prepare("
+                SELECT target_id
+                FROM work_target_master
+                WHERE process_category = :process_category
+                  AND major_category = :major_category
+                  AND work_type IS NULL
+                ORDER BY sort_no ASC, target_id ASC
+                LIMIT 1
+            ");
+            $placeholderStmt->execute([
+                ':process_category' => $processCategory,
+                ':major_category' => $majorCategory,
+            ]);
+            $placeholderId = (int)$placeholderStmt->fetchColumn();
+
+            if ($placeholderId > 0) {
+                $deleteTargetStmt = $pdo->prepare("
+                    DELETE FROM work_target_master
+                    WHERE process_category = :process_category
+                      AND major_category = :major_category
+                      AND work_type = :work_type
+                ");
+                $deleteTargetStmt->execute([
+                    ':process_category' => $processCategory,
+                    ':major_category' => $majorCategory,
+                    ':work_type' => $workType,
+                ]);
+                $deletedTargetCount = $deleteTargetStmt->rowCount();
+                $placeholderPreserved = true;
+            } else {
+                $targetStmt = $pdo->prepare("
+                    SELECT target_id
+                    FROM work_target_master
+                    WHERE process_category = :process_category
+                      AND major_category = :major_category
+                      AND work_type = :work_type
+                    ORDER BY sort_no ASC, target_id ASC
+                    LIMIT 1
+                ");
+                $targetStmt->execute([
+                    ':process_category' => $processCategory,
+                    ':major_category' => $majorCategory,
+                    ':work_type' => $workType,
+                ]);
+                $targetId = (int)$targetStmt->fetchColumn();
+
+                if ($targetId <= 0) {
+                    $pdo->rollBack();
+                    echo json_encode(['success'=>false,'message'=>'??젣???묒뾽?좏삎???李얠쓣 ???놁뒿?덈떎.'], JSON_UNESCAPED_UNICODE);
+                    exit;
+                }
+
+                $updatePlaceholderStmt = $pdo->prepare("
+                    UPDATE work_target_master
+                    SET work_type = NULL,
+                        description = NULL,
+                        use_yn = 'Y'
+                    WHERE target_id = :target_id
+                ");
+                $updatePlaceholderStmt->execute([
+                    ':target_id' => $targetId,
+                ]);
+
+                $deleteExtraStmt = $pdo->prepare("
+                    DELETE FROM work_target_master
+                    WHERE process_category = :process_category
+                      AND major_category = :major_category
+                      AND work_type = :work_type
+                ");
+                $deleteExtraStmt->execute([
+                    ':process_category' => $processCategory,
+                    ':major_category' => $majorCategory,
+                    ':work_type' => $workType,
+                ]);
+
+                $deletedTargetCount = $deleteExtraStmt->rowCount();
+                $placeholderPreserved = true;
+            }
+        } else {
+            $deleteTargetStmt = $pdo->prepare("
+                DELETE FROM work_target_master
+                WHERE process_category = :process_category
+                  AND major_category = :major_category
+                  AND work_type = :work_type
+            ");
+            $deleteTargetStmt->execute([
+                ':process_category' => $processCategory,
+                ':major_category' => $majorCategory,
+                ':work_type' => $workType,
+            ]);
+            $deletedTargetCount = $deleteTargetStmt->rowCount();
+        }
+
+        $pdo->commit();
+
+        echo json_encode([
+            'success' => true,
+            'message' => '?묒뾽?좏삎??젣?섏뿀?듬땲??',
+            'data' => [
+                'process_category' => $processCategory,
+                'major_category' => $majorCategory,
+                'work_type' => $workType,
+                'deleted_target_count' => $deletedTargetCount,
+                'preserved_major_category' => $placeholderPreserved,
+            ],
+        ], JSON_UNESCAPED_UNICODE);
+    } catch (\PDOException $e) {
+        if (isset($pdo) && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        echo json_encode([
+            'success' => false,
+            'message' => 'DB ?ㅻ쪟: ' . $e->getMessage(),
         ], JSON_UNESCAPED_UNICODE);
     }
     exit;

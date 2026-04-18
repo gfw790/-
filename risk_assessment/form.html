@@ -38,6 +38,8 @@ select:disabled { background: #f5f5f5; color: #aaa; cursor: not-allowed; }
 .btn-inline:hover:not(:disabled) { background: #eef6ff; }
 .btn-inline.primary { background: #2E75B6; color: #fff; border-color: #2E75B6; }
 .btn-inline.primary:hover:not(:disabled) { background: #1F4E79; border-color: #1F4E79; }
+.btn-inline.danger { color: #b42318; border-color: #f2b8b5; }
+.btn-inline.danger:hover:not(:disabled) { background: #fff1f0; }
 .btn-inline:disabled { background: #f5f5f5; color: #aaa; border-color: #d7e1eb; cursor: not-allowed; }
 .inline-add-panel { margin-top: 8px; padding: 12px; border: 1px solid #d6e4f2; border-radius: 8px; background: #f8fbff; display: flex; flex-direction: column; gap: 8px; }
 .helper-text { font-size: 12px; color: #55708d; line-height: 1.5; }
@@ -70,6 +72,8 @@ select:disabled { background: #f5f5f5; color: #aaa; cursor: not-allowed; }
         </select>
         <div class="inline-actions">
           <button type="button" class="btn-inline" id="toggle-work-type-adder" onclick="toggleWorkTypeAdder()" disabled>작업유형 추가</button>
+          <button type="button" class="btn-inline" id="toggle-work-type-editor" onclick="toggleWorkTypeEditor()" disabled>작업유형 변경</button>
+          <button type="button" class="btn-inline danger" id="btn-delete-work-type" onclick="deleteWorkType()" disabled>작업유형 삭제</button>
         </div>
         <div class="inline-add-panel hidden" id="work_type_adder">
           <div class="helper-text">현재 공정과 대분류에 작업유형 1개를 추가합니다.</div>
@@ -96,6 +100,8 @@ select:disabled { background: #f5f5f5; color: #aaa; cursor: not-allowed; }
         </select>
         <div class="inline-actions">
           <button type="button" class="btn-inline" id="toggle-process-adder" onclick="toggleProcessCategoryAdder()" disabled>공정명 추가</button>
+          <button type="button" class="btn-inline" id="toggle-process-editor" onclick="toggleProcessCategoryEditor()" disabled>공정명 변경</button>
+          <button type="button" class="btn-inline danger" id="btn-delete-process-category" onclick="deleteProcessCategory()" disabled>공정명 삭제</button>
         </div>
         <div class="inline-add-panel hidden" id="process_category_adder">
           <div class="helper-text">새 공정명 카테고리 1개만 추가합니다.</div>
@@ -103,6 +109,14 @@ select:disabled { background: #f5f5f5; color: #aaa; cursor: not-allowed; }
           <div class="inline-actions">
             <button type="button" class="btn-inline primary" id="btn-add-process-category" onclick="addProcessCategory()">추가</button>
             <button type="button" class="btn-inline" onclick="closeProcessCategoryAdder()">취소</button>
+          </div>
+        </div>
+        <div class="inline-add-panel hidden" id="process_category_editor">
+          <div class="helper-text">선택한 공정명을 새 이름으로 변경합니다. 관련 단위평가서의 공정명도 함께 반영됩니다.</div>
+          <input type="text" id="edit_process_category" placeholder="변경할 공정명 입력">
+          <div class="inline-actions">
+            <button type="button" class="btn-inline primary" id="btn-rename-process-category" onclick="renameProcessCategory()">변경</button>
+            <button type="button" class="btn-inline" onclick="closeProcessCategoryEditor()">취소</button>
           </div>
         </div>
       </div>
@@ -113,6 +127,8 @@ select:disabled { background: #f5f5f5; color: #aaa; cursor: not-allowed; }
         </select>
         <div class="inline-actions">
           <button type="button" class="btn-inline" id="toggle-major-adder" onclick="toggleMajorCategoryAdder()" disabled>대분류 추가</button>
+          <button type="button" class="btn-inline" id="toggle-major-editor" onclick="toggleMajorCategoryEditor()" disabled>대분류 변경</button>
+          <button type="button" class="btn-inline danger" id="btn-delete-major-category" onclick="deleteMajorCategory()" disabled>대분류 삭제</button>
         </div>
         <div class="inline-add-panel hidden" id="major_category_adder">
           <div class="helper-text">현재 공정의 기존 대분류 작업유형을 복사해서 새 대분류를 등록합니다.</div>
@@ -125,12 +141,28 @@ select:disabled { background: #f5f5f5; color: #aaa; cursor: not-allowed; }
             <button type="button" class="btn-inline" onclick="closeMajorCategoryAdder()">취소</button>
           </div>
         </div>
+        <div class="inline-add-panel hidden" id="major_category_editor">
+          <div class="helper-text">선택한 대분류명을 다른 이름으로 변경합니다. 관련 단위평가서의 대분류명도 즉시 반영됩니다.</div>
+          <input type="text" id="edit_major_category" placeholder="변경할 대분류명 입력">
+          <div class="inline-actions">
+            <button type="button" class="btn-inline primary" id="btn-rename-major-category" onclick="renameMajorCategory()">변경</button>
+            <button type="button" class="btn-inline" onclick="closeMajorCategoryEditor()">취소</button>
+          </div>
+        </div>
       </div>
       <div class="form-group hidden" id="area_work_type">
         <label>작업유형 <span class="req">*</span></label>
         <select id="work_type" onchange="onWorkTypeChange()" disabled>
           <option value="">— 대분류 먼저 선택 —</option>
         </select>
+        <div class="inline-add-panel hidden" id="work_type_editor">
+          <div class="helper-text">선택한 작업유형명을 다른 이름으로 변경합니다. 관련 단위평가서의 작업유형명도 즉시 반영됩니다.</div>
+          <input type="text" id="edit_work_type" placeholder="변경할 작업유형명 입력">
+          <div class="inline-actions">
+            <button type="button" class="btn-inline primary" id="btn-rename-work-type" onclick="renameWorkType()">변경</button>
+            <button type="button" class="btn-inline" onclick="closeWorkTypeEditor()">취소</button>
+          </div>
+        </div>
       </div>
 
       <!-- 중대위험작업(major_work) -->
@@ -224,6 +256,7 @@ select:disabled { background: #f5f5f5; color: #aaa; cursor: not-allowed; }
 
 <script>
 let targetData = [], majorWorkData = [], toolData = [], envData = [], subData = [], workTypeSubData = [];
+let majorChangeRequestId = 0;
 const pageParams = new URLSearchParams(window.location.search);
 const editingUnitRaId = Number(pageParams.get('unit_ra_id') || 0);
 const returnTo = pageParams.get('return_to') || '';
@@ -301,29 +334,127 @@ function displayProcessName(name) {
   return name === '결선' ? '결선작업' : name;
 }
 
+function normalizeCategoryKey(value) {
+  return String(value || '').trim().replace(/\s+/g, '');
+}
+
+function isSameCategoryValue(left, right) {
+  const leftKey = normalizeCategoryKey(left);
+  const rightKey = normalizeCategoryKey(right);
+  return leftKey !== '' && leftKey === rightKey;
+}
+
+function uniqueCategoryValues(values) {
+  const seen = new Set();
+  const result = [];
+  values.forEach(value => {
+    const displayValue = String(value || '').trim();
+    const key = normalizeCategoryKey(displayValue);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    result.push(displayValue);
+  });
+  return result;
+}
+
+function getFilteredTargetRows(process, major = '') {
+  const processKey = normalizeCategoryKey(process);
+  const majorKey = normalizeCategoryKey(major);
+  return targetData.filter(row => {
+    if (processKey === '' || normalizeCategoryKey(row.process_category) !== processKey) {
+      return false;
+    }
+    if (majorKey === '') {
+      return true;
+    }
+    return normalizeCategoryKey(row.major_category) === majorKey;
+  });
+}
+
+function hasEditableWorkType(process, major, workType) {
+  if (!process || !major || !workType) return false;
+  return getFilteredTargetRows(process, major).some(row => isSameCategoryValue(row.work_type, workType));
+}
+
 function getProcessCategories() {
-  return [...new Set(
-    targetData
-      .map(r => r.process_category)
-      .filter(Boolean)
-  )];
+  return uniqueCategoryValues(targetData.map(r => r.process_category));
+}
+
+function findOptionValue(selectEl, value) {
+  const targetKey = normalizeCategoryKey(value);
+  if (!targetKey) return '';
+  const matchedOption = Array.from(selectEl.options).find(option => normalizeCategoryKey(option.value) === targetKey);
+  return matchedOption ? matchedOption.value : '';
+}
+
+function hasOption(selectEl, value) {
+  return findOptionValue(selectEl, value) !== '';
+}
+
+function setSelectValue(selectEl, value) {
+  const matchedValue = findOptionValue(selectEl, value);
+  selectEl.value = matchedValue;
+  return matchedValue;
+}
+
+async function refreshTargetData(process = '', major = '', workType = '') {
+  targetData = await loadData('work_target');
+  buildProcessList();
+
+  const processSel = document.getElementById('process_category');
+  processSel.value = process ? findOptionValue(processSel, process) : '';
+  onProcessChange();
+
+  if (!processSel.value) return;
+
+  const majorSel = document.getElementById('major_category');
+  if (major && hasOption(majorSel, major)) {
+    majorSel.value = findOptionValue(majorSel, major);
+    await onMajorChange();
+  }
+
+  const workTypeSel = document.getElementById('work_type');
+  if (workType && hasOption(workTypeSel, workType)) {
+    workTypeSel.value = findOptionValue(workTypeSel, workType);
+    onWorkTypeChange();
+  }
 }
 
 function resetProcessCategoryAdder() {
   document.getElementById('toggle-process-adder').disabled = true;
+  document.getElementById('toggle-process-editor').disabled = true;
+  document.getElementById('btn-delete-process-category').disabled = true;
   document.getElementById('process_category_adder').classList.add('hidden');
   document.getElementById('new_process_category').value = '';
+  document.getElementById('process_category_editor').classList.add('hidden');
+  document.getElementById('edit_process_category').value = '';
 }
 
-function syncProcessCategoryAdder() {
-  const toggle = document.getElementById('toggle-process-adder');
-  toggle.disabled = false;
+function syncProcessCategoryAdder(selectedProcess = document.getElementById('process_category').value) {
+  const addToggle = document.getElementById('toggle-process-adder');
+  const editToggle = document.getElementById('toggle-process-editor');
+  const deleteButton = document.getElementById('btn-delete-process-category');
+  const hasSelection = !!selectedProcess;
+
+  addToggle.disabled = false;
+  editToggle.disabled = !hasSelection;
+  deleteButton.disabled = !hasSelection;
+
+  if (!hasSelection) {
+    closeProcessCategoryEditor();
+    return;
+  }
+
+  if (!document.getElementById('process_category_editor').classList.contains('hidden')) {
+    document.getElementById('edit_process_category').value = selectedProcess;
+  }
 }
 
 function toggleProcessCategoryAdder() {
   const panel = document.getElementById('process_category_adder');
   if (document.getElementById('toggle-process-adder').disabled) return;
   if (panel.classList.contains('hidden')) {
+    closeProcessCategoryEditor();
     syncProcessCategoryAdder();
     panel.classList.remove('hidden');
     document.getElementById('new_process_category').focus();
@@ -337,12 +468,33 @@ function closeProcessCategoryAdder() {
   document.getElementById('new_process_category').value = '';
 }
 
+function toggleProcessCategoryEditor() {
+  const panel = document.getElementById('process_category_editor');
+  const toggle = document.getElementById('toggle-process-editor');
+  const process = document.getElementById('process_category').value;
+  if (!panel || !toggle || toggle.disabled || !process) return;
+  if (panel.classList.contains('hidden')) {
+    closeProcessCategoryAdder();
+    document.getElementById('edit_process_category').value = process;
+    panel.classList.remove('hidden');
+    const input = document.getElementById('edit_process_category');
+    input.focus();
+    input.select();
+  } else {
+    closeProcessCategoryEditor();
+  }
+}
+
+function closeProcessCategoryEditor() {
+  document.getElementById('process_category_editor').classList.add('hidden');
+  document.getElementById('edit_process_category').value = '';
+}
+
 function getMajorCategories(process) {
-  return [...new Set(
-    targetData
-      .filter(r => r.process_category === process && r.major_category)
+  return uniqueCategoryValues(
+    getFilteredTargetRows(process)
       .map(r => r.major_category)
-  )];
+  );
 }
 
 function resetMajorCategoryAdder() {
@@ -434,6 +586,202 @@ function closeWorkTypeAdder() {
   if (input) input.value = '';
 }
 
+function resetMajorCategoryAdder() {
+  const addToggle = document.getElementById('toggle-major-adder');
+  const editToggle = document.getElementById('toggle-major-editor');
+  const deleteButton = document.getElementById('btn-delete-major-category');
+  const addPanel = document.getElementById('major_category_adder');
+  const addInput = document.getElementById('new_major_category');
+  const editPanel = document.getElementById('major_category_editor');
+  const editInput = document.getElementById('edit_major_category');
+
+  if (addToggle) addToggle.disabled = true;
+  if (editToggle) editToggle.disabled = true;
+  if (deleteButton) deleteButton.disabled = true;
+  if (addPanel) addPanel.classList.add('hidden');
+  if (addInput) addInput.value = '';
+  if (editPanel) editPanel.classList.add('hidden');
+  if (editInput) editInput.value = '';
+  resetSel('major_category_template', '기존 대분류 선택', true);
+}
+
+function syncMajorCategoryAdder(process = document.getElementById('process_category').value, selectedMajor = document.getElementById('major_category').value) {
+  const addToggle = document.getElementById('toggle-major-adder');
+  const editToggle = document.getElementById('toggle-major-editor');
+  const deleteButton = document.getElementById('btn-delete-major-category');
+  const templateSel = document.getElementById('major_category_template');
+  const majors = process ? getMajorCategories(process) : [];
+  const hasProcess = !!process;
+  const hasSelection = !!selectedMajor;
+
+  if (addToggle) addToggle.disabled = !hasProcess;
+  if (editToggle) editToggle.disabled = !(hasProcess && hasSelection);
+  if (deleteButton) deleteButton.disabled = !(hasProcess && hasSelection);
+
+  templateSel.innerHTML = '<option value="">기존 대분류 선택</option>';
+  majors.forEach(m => templateSel.appendChild(new Option(m, m)));
+  templateSel.disabled = !majors.length;
+
+  if (selectedMajor && majors.includes(selectedMajor)) templateSel.value = selectedMajor;
+  else if (majors.length === 1) templateSel.value = majors[0];
+
+  if (!hasSelection) {
+    closeMajorCategoryEditor();
+    return;
+  }
+
+  if (!document.getElementById('major_category_editor').classList.contains('hidden')) {
+    document.getElementById('edit_major_category').value = selectedMajor;
+  }
+}
+
+function toggleMajorCategoryAdder() {
+  const panel = document.getElementById('major_category_adder');
+  if (document.getElementById('toggle-major-adder').disabled) return;
+  if (panel.classList.contains('hidden')) {
+    closeMajorCategoryEditor();
+    syncMajorCategoryAdder();
+    panel.classList.remove('hidden');
+    document.getElementById('new_major_category').focus();
+  } else {
+    closeMajorCategoryAdder();
+  }
+}
+
+function closeMajorCategoryAdder() {
+  document.getElementById('major_category_adder').classList.add('hidden');
+  document.getElementById('new_major_category').value = '';
+}
+
+function toggleMajorCategoryEditor() {
+  const panel = document.getElementById('major_category_editor');
+  const toggle = document.getElementById('toggle-major-editor');
+  const major = document.getElementById('major_category').value;
+  if (!panel || !toggle || toggle.disabled || !major) return;
+  if (panel.classList.contains('hidden')) {
+    closeMajorCategoryAdder();
+    document.getElementById('edit_major_category').value = major;
+    panel.classList.remove('hidden');
+    const input = document.getElementById('edit_major_category');
+    input.focus();
+    input.select();
+  } else {
+    closeMajorCategoryEditor();
+  }
+}
+
+function closeMajorCategoryEditor() {
+  document.getElementById('major_category_editor').classList.add('hidden');
+  document.getElementById('edit_major_category').value = '';
+}
+
+function mountWorkTypeAdder() {
+  const area = document.getElementById('area_work_type');
+  const toggle = document.getElementById('toggle-work-type-adder');
+  const panel = document.getElementById('work_type_adder');
+  const editorPanel = document.getElementById('work_type_editor');
+  const toggleWrap = toggle ? toggle.parentElement : null;
+
+  if (!area || !toggle || !panel || !editorPanel || !toggleWrap) return;
+  area.appendChild(toggleWrap);
+  area.appendChild(panel);
+  area.appendChild(editorPanel);
+}
+
+function resetWorkTypeAdder() {
+  const addToggle = document.getElementById('toggle-work-type-adder');
+  const editToggle = document.getElementById('toggle-work-type-editor');
+  const deleteButton = document.getElementById('btn-delete-work-type');
+  const addPanel = document.getElementById('work_type_adder');
+  const addInput = document.getElementById('new_work_type');
+  const editPanel = document.getElementById('work_type_editor');
+  const editInput = document.getElementById('edit_work_type');
+
+  if (addToggle) addToggle.disabled = true;
+  if (editToggle) editToggle.disabled = true;
+  if (deleteButton) deleteButton.disabled = true;
+  if (addPanel) addPanel.classList.add('hidden');
+  if (addInput) addInput.value = '';
+  if (editPanel) editPanel.classList.add('hidden');
+  if (editInput) editInput.value = '';
+}
+
+function syncWorkTypeAdder(
+  process = document.getElementById('process_category').value,
+  major = document.getElementById('major_category').value,
+  selectedWorkType = document.getElementById('work_type').value
+) {
+  const addToggle = document.getElementById('toggle-work-type-adder');
+  const editToggle = document.getElementById('toggle-work-type-editor');
+  const deleteButton = document.getElementById('btn-delete-work-type');
+  const hasContext = !!(process && major);
+  const hasSelection = !!selectedWorkType;
+  const hasEditableSelection = hasContext && hasEditableWorkType(process, major, selectedWorkType);
+
+  if (addToggle) addToggle.disabled = !hasContext;
+  if (editToggle) editToggle.disabled = !hasEditableSelection;
+  if (deleteButton) deleteButton.disabled = !hasEditableSelection;
+
+  if (!hasContext) {
+    closeWorkTypeAdder();
+    closeWorkTypeEditor();
+    return;
+  }
+
+  if (!hasSelection || !hasEditableSelection) {
+    closeWorkTypeEditor();
+    return;
+  }
+
+  if (!document.getElementById('work_type_editor').classList.contains('hidden')) {
+    document.getElementById('edit_work_type').value = selectedWorkType;
+  }
+}
+
+function toggleWorkTypeAdder() {
+  const panel = document.getElementById('work_type_adder');
+  const toggle = document.getElementById('toggle-work-type-adder');
+  if (!panel || !toggle || toggle.disabled) return;
+  if (panel.classList.contains('hidden')) {
+    closeWorkTypeEditor();
+    panel.classList.remove('hidden');
+    document.getElementById('new_work_type').focus();
+  } else {
+    closeWorkTypeAdder();
+  }
+}
+
+function closeWorkTypeAdder() {
+  const panel = document.getElementById('work_type_adder');
+  const input = document.getElementById('new_work_type');
+  if (panel) panel.classList.add('hidden');
+  if (input) input.value = '';
+}
+
+function toggleWorkTypeEditor() {
+  const panel = document.getElementById('work_type_editor');
+  const toggle = document.getElementById('toggle-work-type-editor');
+  const workType = document.getElementById('work_type').value;
+  if (!panel || !toggle || toggle.disabled || !workType) return;
+  if (panel.classList.contains('hidden')) {
+    closeWorkTypeAdder();
+    document.getElementById('edit_work_type').value = workType;
+    panel.classList.remove('hidden');
+    const input = document.getElementById('edit_work_type');
+    input.focus();
+    input.select();
+  } else {
+    closeWorkTypeEditor();
+  }
+}
+
+function closeWorkTypeEditor() {
+  const panel = document.getElementById('work_type_editor');
+  const input = document.getElementById('edit_work_type');
+  if (panel) panel.classList.add('hidden');
+  if (input) input.value = '';
+}
+
 function resetToolAdder() {
   const toggle = document.getElementById('toggle-tool-adder');
   const panel = document.getElementById('tool_adder');
@@ -481,6 +829,7 @@ function buildProcessList() {
 }
 function onProcessChange() {
   const process = document.getElementById('process_category').value;
+  majorChangeRequestId += 1;
   resetSel('major_category', '— 선택하세요 —', !process);
   resetSel('work_type', '— 대분류 먼저 선택 —', true);
   resetTitle();
@@ -496,6 +845,7 @@ function onProcessChange() {
   syncMajorCategoryAdder(process);
 }
 async function onMajorChange() {
+  const requestId = ++majorChangeRequestId;
   const process = document.getElementById('process_category').value;
   const major   = document.getElementById('major_category').value;
   resetSel('work_type', '— 선택하세요 —', !major);
@@ -504,31 +854,42 @@ async function onMajorChange() {
   syncWorkTypeAdder(process, major);
   if (!major) return;
   const sel = document.getElementById('work_type');
-  const targetTypes = [...new Set(targetData.filter(r => r.process_category === process && r.major_category === major && r.work_type).map(r => r.work_type))];
+  const targetTypes = uniqueCategoryValues(
+    getFilteredTargetRows(process, major)
+      .map(r => r.work_type)
+  );
+  const isStaleRequest = () => requestId !== majorChangeRequestId
+    || !isSameCategoryValue(document.getElementById('process_category').value, process)
+    || !isSameCategoryValue(document.getElementById('major_category').value, major);
 
   if (process === '결선' && major === '판넬') {
     const rows = await loadData(`work_type_sub&process_category=${encodeURIComponent(process)}`);
+    if (isStaleRequest()) return;
     workTypeSubData = rows || [];
-    const types = [...new Set([
+    const types = uniqueCategoryValues([
       ...targetTypes,
       ...workTypeSubData.map(r => r.sub_name).filter(Boolean),
-    ])];
+    ]);
     types.forEach(t => sel.appendChild(new Option(t, t)));
     return;
   }
 
   if (process === '시운전' && major === '판넬') {
+    if (isStaleRequest()) return;
     sel.appendChild(new Option('판넬시운전', '판넬시운전'));
     targetTypes.forEach(t => sel.appendChild(new Option(t, t)));
     sel.disabled = false;
     return;
   }
 
+  if (isStaleRequest()) return;
   targetTypes.forEach(t => sel.appendChild(new Option(t, t)));
 }
 function onWorkTypeChange() {
+  const process  = document.getElementById('process_category').value;
   const major    = document.getElementById('major_category').value;
   const workType = document.getElementById('work_type').value;
+  syncWorkTypeAdder(process, major, workType);
   if (major && workType) setTitle(`${major} - ${workType}`);
   else resetTitle();
 }
@@ -573,14 +934,7 @@ async function addWorkType() {
       return;
     }
 
-    targetData = await loadData('work_target');
-    buildProcessList();
-    document.getElementById('process_category').value = process;
-    onProcessChange();
-    document.getElementById('major_category').value = major;
-    await onMajorChange();
-    document.getElementById('work_type').value = newWorkType;
-    onWorkTypeChange();
+    await refreshTargetData(process, major, newWorkType);
     closeWorkTypeAdder();
 
     showAlert('success', '작업유형이 추가되었습니다. 방금 등록한 항목을 자동 선택했습니다.');
@@ -627,12 +981,7 @@ async function addMajorCategory() {
         return;
       }
 
-      targetData = await loadData('work_target');
-      buildProcessList();
-      document.getElementById('process_category').value = process;
-      onProcessChange();
-      document.getElementById('major_category').value = newMajor;
-      onMajorChange();
+      await refreshTargetData(process, newMajor);
       closeMajorCategoryAdder();
 
       showAlert('success', '대분류가 추가되었습니다. 방금 등록한 항목이 자동 선택되었습니다.');
@@ -669,12 +1018,7 @@ async function addMajorCategory() {
       return;
     }
 
-    targetData = await loadData('work_target');
-    buildProcessList();
-    document.getElementById('process_category').value = process;
-    onProcessChange();
-    document.getElementById('major_category').value = newMajor;
-    onMajorChange();
+    await refreshTargetData(process, newMajor);
     closeMajorCategoryAdder();
 
     showAlert('success', '대분류가 추가되었습니다. 방금 등록한 항목이 자동 선택되었습니다.');
@@ -713,10 +1057,7 @@ async function addProcessCategory() {
       return;
     }
 
-    targetData = await loadData('work_target');
-    buildProcessList();
-    document.getElementById('process_category').value = newProcess;
-    onProcessChange();
+    await refreshTargetData(newProcess);
     closeProcessCategoryAdder();
 
     showAlert('success', '공정명이 추가되었습니다. 방금 등록한 공정이 자동 선택되었습니다.');
@@ -727,7 +1068,342 @@ async function addProcessCategory() {
   }
 }
 
+async function renameProcessCategory() {
+  const oldProcess = document.getElementById('process_category').value.trim();
+  const newProcess = document.getElementById('edit_process_category').value.trim();
+  const renameButton = document.getElementById('btn-rename-process-category');
+  const selectedMajor = document.getElementById('major_category').value;
+  const selectedWorkType = document.getElementById('work_type').value;
+
+  if (!oldProcess) {
+    showAlert('error', '변경할 공정명을 먼저 선택해주세요.');
+    return;
+  }
+  if (!newProcess) {
+    showAlert('error', '변경할 새 공정명을 입력해주세요.');
+    document.getElementById('edit_process_category').focus();
+    return;
+  }
+  if (oldProcess === newProcess) {
+    showAlert('error', '기존 공정명과 다른 이름을 입력해주세요.');
+    const input = document.getElementById('edit_process_category');
+    input.focus();
+    input.select();
+    return;
+  }
+
+  renameButton.disabled = true;
+  hideAlert();
+
+  try {
+    const res = await fetch('unit_ra_header_api.php?action=rename_process_category', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        old_process_category: oldProcess,
+        new_process_category: newProcess,
+      }),
+    });
+    const json = await res.json();
+
+    if (!json.success) {
+      showAlert('error', json.message || '공정명 변경에 실패했습니다.');
+      return;
+    }
+
+    await refreshTargetData(newProcess, selectedMajor, selectedWorkType);
+    closeProcessCategoryEditor();
+
+    showAlert('success', '공정명이 변경되었습니다. 관련 데이터베이스 항목도 함께 반영되었습니다.');
+  } catch (e) {
+    showAlert('error', '공정명 변경 중 오류가 발생했습니다: ' + e.message);
+  } finally {
+    renameButton.disabled = false;
+  }
+}
+
+async function deleteProcessCategory() {
+  const process = document.getElementById('process_category').value.trim();
+  const deleteButton = document.getElementById('btn-delete-process-category');
+
+  if (!process) {
+    showAlert('error', '삭제할 공정명을 먼저 선택해주세요.');
+    return;
+  }
+
+  if (!window.confirm(`"${displayProcessName(process)}" 공정명을 삭제할까요?\n사용 중인 단위평가서가 있으면 삭제되지 않습니다.`)) {
+    return;
+  }
+
+  deleteButton.disabled = true;
+  hideAlert();
+
+  try {
+    const res = await fetch('unit_ra_header_api.php?action=delete_process_category', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        process_category: process,
+      }),
+    });
+    const json = await res.json();
+
+    if (!json.success) {
+      showAlert('error', json.message || '공정명 삭제에 실패했습니다.');
+      return;
+    }
+
+    closeProcessCategoryEditor();
+    closeProcessCategoryAdder();
+    await refreshTargetData();
+
+    showAlert('success', '공정명이 삭제되었습니다.');
+  } catch (e) {
+    showAlert('error', '공정명 삭제 중 오류가 발생했습니다: ' + e.message);
+  } finally {
+    deleteButton.disabled = false;
+    syncProcessCategoryAdder();
+  }
+}
+
 // ── 중대위험작업(major_work) ──────────────────────────────────────
+async function renameMajorCategory() {
+  const process = document.getElementById('process_category').value.trim();
+  const oldMajor = document.getElementById('major_category').value.trim();
+  const newMajor = document.getElementById('edit_major_category').value.trim();
+  const renameButton = document.getElementById('btn-rename-major-category');
+  const selectedWorkType = document.getElementById('work_type').value;
+
+  if (!process) {
+    showAlert('error', '공정명을 먼저 선택해주세요.');
+    return;
+  }
+  if (!oldMajor) {
+    showAlert('error', '변경할 대분류를 먼저 선택해주세요.');
+    return;
+  }
+  if (!newMajor) {
+    showAlert('error', '변경할 새 대분류명을 입력해주세요.');
+    document.getElementById('edit_major_category').focus();
+    return;
+  }
+  if (oldMajor === newMajor) {
+    showAlert('error', '기존 대분류명과 다른 이름을 입력해주세요.');
+    const input = document.getElementById('edit_major_category');
+    input.focus();
+    input.select();
+    return;
+  }
+
+  renameButton.disabled = true;
+  hideAlert();
+
+  try {
+    const res = await fetch('unit_ra_header_api.php?action=rename_major_category', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        process_category: process,
+        old_major_category: oldMajor,
+        new_major_category: newMajor,
+      }),
+    });
+    const json = await res.json();
+
+    if (!json.success) {
+      showAlert('error', resolveApiMessage(json.message, '대분류 변경을 완료하지 못했습니다. 중복 항목 또는 사용 중 데이터 여부를 확인해주세요.'));
+      return;
+    }
+
+    await refreshTargetData(process, newMajor, selectedWorkType);
+    closeMajorCategoryEditor();
+
+    showAlert('success', '대분류가 변경되었습니다. 관련 데이터베이스 항목도 함께 반영되었습니다.');
+  } catch (e) {
+    showAlert('error', '대분류 변경 중 오류가 발생했습니다: ' + e.message);
+  } finally {
+    renameButton.disabled = false;
+  }
+}
+
+async function deleteMajorCategory() {
+  const process = document.getElementById('process_category').value.trim();
+  const major = document.getElementById('major_category').value.trim();
+  const deleteButton = document.getElementById('btn-delete-major-category');
+
+  if (!process) {
+    showAlert('error', '공정명을 먼저 선택해주세요.');
+    return;
+  }
+  if (!major) {
+    showAlert('error', '삭제할 대분류를 먼저 선택해주세요.');
+    return;
+  }
+
+  if (!window.confirm(`"${major}" 대분류를 삭제할까요?\n사용 중인 단위평가서가 있으면 삭제되지 않습니다.`)) {
+    return;
+  }
+
+  deleteButton.disabled = true;
+  hideAlert();
+
+  try {
+    const res = await fetch('unit_ra_header_api.php?action=delete_major_category', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        process_category: process,
+        major_category: major,
+      }),
+    });
+    const json = await res.json();
+
+    if (!json.success) {
+      showAlert('error', resolveApiMessage(json.message, '대분류 삭제를 완료하지 못했습니다. 사용 중인 단위평가서가 남아 있거나 삭제할 수 없는 상태입니다.'));
+      return;
+    }
+
+    closeMajorCategoryEditor();
+    closeMajorCategoryAdder();
+    await refreshTargetData(process);
+
+    showAlert('success', '대분류가 삭제되었습니다.');
+  } catch (e) {
+    showAlert('error', '대분류 삭제 중 오류가 발생했습니다: ' + e.message);
+  } finally {
+    deleteButton.disabled = false;
+    syncMajorCategoryAdder();
+  }
+}
+
+async function renameWorkType() {
+  const process = document.getElementById('process_category').value.trim();
+  const major = document.getElementById('major_category').value.trim();
+  const oldWorkType = document.getElementById('work_type').value.trim();
+  const newWorkType = document.getElementById('edit_work_type').value.trim();
+  const renameButton = document.getElementById('btn-rename-work-type');
+
+  if (!process) {
+    showAlert('error', '공정명을 먼저 선택해주세요.');
+    return;
+  }
+  if (!major) {
+    showAlert('error', '대분류를 먼저 선택해주세요.');
+    return;
+  }
+  if (!oldWorkType) {
+    showAlert('error', '변경할 작업유형을 먼저 선택해주세요.');
+    return;
+  }
+  if (!hasEditableWorkType(process, major, oldWorkType)) {
+    showAlert('error', '선택한 작업유형은 현재 화면에서 이름만 보여주는 항목이라 수정할 수 없습니다.');
+    return;
+  }
+  if (!newWorkType) {
+    showAlert('error', '변경할 새 작업유형명을 입력해주세요.');
+    document.getElementById('edit_work_type').focus();
+    return;
+  }
+  if (oldWorkType === newWorkType) {
+    showAlert('error', '기존 작업유형명과 다른 이름을 입력해주세요.');
+    const input = document.getElementById('edit_work_type');
+    input.focus();
+    input.select();
+    return;
+  }
+
+  renameButton.disabled = true;
+  hideAlert();
+
+  try {
+    const res = await fetch('unit_ra_header_api.php?action=rename_work_type', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        process_category: process,
+        major_category: major,
+        old_work_type: oldWorkType,
+        new_work_type: newWorkType,
+      }),
+    });
+    const json = await res.json();
+
+    if (!json.success) {
+      showAlert('error', resolveApiMessage(json.message, '작업유형 변경을 완료하지 못했습니다. 중복 항목 또는 사용 중 데이터 여부를 확인해주세요.'));
+      return;
+    }
+
+    await refreshTargetData(process, major, newWorkType);
+    closeWorkTypeEditor();
+
+    showAlert('success', '작업유형이 변경되었습니다. 관련 데이터베이스 항목도 함께 반영되었습니다.');
+  } catch (e) {
+    showAlert('error', '작업유형 변경 중 오류가 발생했습니다: ' + e.message);
+  } finally {
+    renameButton.disabled = false;
+  }
+}
+
+async function deleteWorkType() {
+  const process = document.getElementById('process_category').value.trim();
+  const major = document.getElementById('major_category').value.trim();
+  const workType = document.getElementById('work_type').value.trim();
+  const deleteButton = document.getElementById('btn-delete-work-type');
+
+  if (!process) {
+    showAlert('error', '공정명을 먼저 선택해주세요.');
+    return;
+  }
+  if (!major) {
+    showAlert('error', '대분류를 먼저 선택해주세요.');
+    return;
+  }
+  if (!workType) {
+    showAlert('error', '삭제할 작업유형을 먼저 선택해주세요.');
+    return;
+  }
+  if (!hasEditableWorkType(process, major, workType)) {
+    showAlert('error', '선택한 작업유형은 현재 화면에서 이름만 보여주는 항목이라 삭제할 수 없습니다.');
+    return;
+  }
+
+  if (!window.confirm(`"${workType}" 작업유형을 삭제할까요?\n사용 중인 단위평가서가 있으면 삭제되지 않습니다.`)) {
+    return;
+  }
+
+  deleteButton.disabled = true;
+  hideAlert();
+
+  try {
+    const res = await fetch('unit_ra_header_api.php?action=delete_work_type', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        process_category: process,
+        major_category: major,
+        work_type: workType,
+      }),
+    });
+    const json = await res.json();
+
+    if (!json.success) {
+      showAlert('error', resolveApiMessage(json.message, '작업유형 삭제를 완료하지 못했습니다. 사용 중인 단위평가서가 남아 있거나 삭제할 수 없는 상태입니다.'));
+      return;
+    }
+
+    closeWorkTypeEditor();
+    closeWorkTypeAdder();
+    await refreshTargetData(process, major);
+
+    showAlert('success', '작업유형이 삭제되었습니다.');
+  } catch (e) {
+    showAlert('error', '작업유형 삭제 중 오류가 발생했습니다: ' + e.message);
+  } finally {
+    deleteButton.disabled = false;
+    syncWorkTypeAdder();
+  }
+}
+
 function buildMajorWorkList() {
   buildList('major_work_id', majorWorkData, 'major_work_id', 'major_work_name');
   resetSel('major_work_sub_id', '— 작업종류 먼저 선택 —', true);
@@ -890,11 +1566,11 @@ async function applyEditRecord(record) {
     const processCategory = String(record.process_name || '').trim();
     const { majorCategory, workType } = splitTargetUnitTitle(record.unit_title || '');
 
-    document.getElementById('process_category').value = processCategory;
+    setSelectValue(document.getElementById('process_category'), processCategory);
     onProcessChange();
-    document.getElementById('major_category').value = majorCategory;
+    setSelectValue(document.getElementById('major_category'), majorCategory);
     await onMajorChange();
-    document.getElementById('work_type').value = workType;
+    setSelectValue(document.getElementById('work_type'), workType);
     onWorkTypeChange();
     return;
   }
@@ -1034,6 +1710,16 @@ async function resetForm() {
   document.getElementById('remark').value     = '';
   document.getElementById('evaluator_name').value = '';
   hideAllAreas(); resetTitle();
+}
+function resolveApiMessage(message, fallback) {
+  const value = String(message || '').trim();
+  if (!value) return fallback;
+  const questionMarks = (value.match(/\?/g) || []).length;
+  const replacementChars = (value.match(/�/g) || []).length;
+  if (replacementChars > 0 || questionMarks >= Math.max(3, Math.ceil(value.length / 4))) {
+    return fallback;
+  }
+  return value;
 }
 function showAlert(type, msg) {
   const el = document.getElementById('alert');
