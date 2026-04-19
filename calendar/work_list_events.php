@@ -56,6 +56,34 @@ function build_memo(string $workPlace, string $teamName, string $userName): stri
     return implode(' / ', $parts);
 }
 
+function can_view_all_calendar_task_teams(?array $user): bool
+{
+    if (!is_array($user)) {
+        return false;
+    }
+
+    return auth_is_admin($user) || (string)($user['role'] ?? '') === 'safety_manager';
+}
+
+function visible_team_keys_for_calendar(?array $user): array
+{
+    if (!is_array($user) || can_view_all_calendar_task_teams($user)) {
+        return [];
+    }
+
+    $teamName = auth_normalize_team_name((string)($user['team'] ?? ''));
+    if ($teamName === '') {
+        return [];
+    }
+
+    $visibleTeams = [$teamName];
+    if (auth_can_manage($user)) {
+        $visibleTeams = array_merge($visibleTeams, auth_supervised_teams($teamName));
+    }
+
+    return array_fill_keys(array_map('auth_team_key', auth_unique_team_list($visibleTeams)), true);
+}
+
 function should_include_report_for_user(array $row, ?array $user): bool
 {
     if (!is_array($user)) {
@@ -63,15 +91,15 @@ function should_include_report_for_user(array $row, ?array $user): bool
     }
 
     $reportTeam = resolve_report_team_name($row);
-    $userTeam = auth_normalize_team_name((string)($user['team'] ?? ''));
     $userLoginId = trim((string)($user['login_id'] ?? ''));
+    $visibleTeamKeys = visible_team_keys_for_calendar($user);
 
-    if ($userTeam !== '') {
-        return $reportTeam !== '' && auth_team_key($reportTeam) === auth_team_key($userTeam);
+    if (can_view_all_calendar_task_teams($user)) {
+        return true;
     }
 
-    if (auth_is_admin($user)) {
-        return true;
+    if (!empty($visibleTeamKeys)) {
+        return $reportTeam !== '' && isset($visibleTeamKeys[auth_team_key($reportTeam)]);
     }
 
     return $userLoginId !== '' && (string)($row['user_login_id'] ?? '') === $userLoginId;

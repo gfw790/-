@@ -516,6 +516,93 @@
       color: #4f6786;
     }
 
+    .category-manager {
+      margin-top: 8px;
+      display: grid;
+      gap: 10px;
+      padding: 10px;
+      border: 1px solid #dce7f4;
+      border-radius: 12px;
+      background: #f8fbff;
+    }
+
+    .category-create-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 58px 88px;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .category-color-input {
+      padding: 4px;
+      min-height: 40px;
+      cursor: pointer;
+    }
+
+    .category-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .category-chip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 10px;
+      border: 1px solid #d7e5f2;
+      border-radius: 12px;
+      background: #ffffff;
+    }
+
+    .category-chip-main {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .category-swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      flex-shrink: 0;
+      box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.75), 0 0 0 1px rgba(19, 39, 63, 0.08);
+    }
+
+    .category-chip-name {
+      min-width: 0;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #243852;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .category-chip-actions {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .chip-btn {
+      border: 1px solid #cfdded;
+      border-radius: 9px;
+      background: #ffffff;
+      color: #2f4867;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 5px 8px;
+      cursor: pointer;
+    }
+
+    .chip-btn.danger {
+      border-color: #f3c9d2;
+      background: #fff5f7;
+      color: #b4234b;
+    }
+
     @media (max-width: 1100px) {
       .layout {
         grid-template-columns: 1fr;
@@ -555,6 +642,23 @@
 
       .month-toolbar {
         align-items: stretch;
+      }
+
+      .category-create-row {
+        grid-template-columns: 1fr;
+      }
+
+      .category-chip {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .category-chip-actions {
+        width: 100%;
+      }
+
+      .category-chip-actions .chip-btn {
+        flex: 1;
       }
     }
 
@@ -675,6 +779,14 @@
                 <option value="work">업무</option>
                 <option value="meeting">회의</option>
               </select>
+              <div class="category-manager">
+                <div class="category-create-row">
+                  <input id="categoryNameInput" type="text" maxlength="24" placeholder="새 카테고리 이름">
+                  <input id="categoryColorInput" class="category-color-input" type="color" value="#2563eb" aria-label="카테고리 색상">
+                  <button type="button" class="btn" id="addCategoryBtn">카테고리 추가</button>
+                </div>
+                <div class="category-list" id="categoryList"></div>
+              </div>
             </div>
 
             <div class="field">
@@ -699,16 +811,128 @@
   <script>
     (function () {
       var STORAGE_KEY = "schedule_calendar_events_v1";
+      var CATEGORY_STORAGE_KEY = "schedule_calendar_categories_v1";
       var WORK_LIST_EVENTS_API = "work_list_events.php";
       var KR_PUBLIC_HOLIDAYS_BY_YEAR = (window.KR_PUBLIC_HOLIDAYS_BY_YEAR && typeof window.KR_PUBLIC_HOLIDAYS_BY_YEAR === "object")
         ? window.KR_PUBLIC_HOLIDAYS_BY_YEAR
         : {};
-      var CATEGORY_LABEL = {
-        work: "업무",
-        meeting: "회의",
-        personal: "개인"
+      var DEFAULT_CATEGORIES = {
+        work: { id: "work", label: "업무", color: "#0284c7", builtin: true },
+        meeting: { id: "meeting", label: "회의", color: "#ea580c", builtin: true },
+        personal: { id: "personal", label: "개인", color: "#16a34a", builtin: true },
+        holiday: { id: "holiday", label: "공휴일", color: "#be123c", builtin: true, readonly: true }
       };
-      CATEGORY_LABEL.holiday = "\uACF5\uD734\uC77C";
+
+      function sanitizeCategoryName(value) {
+        return String(value || "").replace(/\s+/g, " ").trim();
+      }
+
+      function normalizeHexColor(value, fallback) {
+        var raw = String(value || "").trim();
+        if (/^#?[0-9a-fA-F]{6}$/.test(raw)) {
+          return raw.charAt(0) === "#" ? raw.toLowerCase() : ("#" + raw.toLowerCase());
+        }
+        return fallback;
+      }
+
+      function buildCustomCategoryId(label) {
+        var slug = sanitizeCategoryName(label)
+          .toLowerCase()
+          .replace(/[^a-z0-9가-힣]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+        if (!slug) {
+          slug = "category";
+        }
+        return "custom-" + slug;
+      }
+
+      function loadCustomCategories() {
+        try {
+          var raw = localStorage.getItem(CATEGORY_STORAGE_KEY);
+          if (!raw) {
+            return [];
+          }
+
+          var parsed = JSON.parse(raw);
+          if (!Array.isArray(parsed)) {
+            return [];
+          }
+
+          var usedIds = {};
+          return parsed.map(function (item) {
+            if (!item || typeof item !== "object") {
+              return null;
+            }
+
+            var label = sanitizeCategoryName(item.label || item.name || "");
+            if (!label) {
+              return null;
+            }
+
+            var id = String(item.id || buildCustomCategoryId(label));
+            if (!/^custom-/.test(id)) {
+              id = buildCustomCategoryId(label);
+            }
+
+            var candidateId = id;
+            var suffix = 2;
+            while (DEFAULT_CATEGORIES[candidateId] || usedIds[candidateId]) {
+              candidateId = id + "-" + suffix;
+              suffix += 1;
+            }
+            usedIds[candidateId] = true;
+
+            return {
+              id: candidateId,
+              label: label,
+              color: normalizeHexColor(item.color, "#2563eb"),
+              custom: true
+            };
+          }).filter(Boolean);
+        } catch (error) {
+          return [];
+        }
+      }
+
+      function buildCategoryMap(customCategories) {
+        var map = {};
+
+        Object.keys(DEFAULT_CATEGORIES).forEach(function (key) {
+          var item = DEFAULT_CATEGORIES[key];
+          map[key] = {
+            id: item.id,
+            label: item.label,
+            color: item.color,
+            builtin: true,
+            readonly: !!item.readonly
+          };
+        });
+
+        (customCategories || []).forEach(function (item) {
+          if (!item || !item.id || !item.label) {
+            return;
+          }
+          map[item.id] = {
+            id: item.id,
+            label: item.label,
+            color: normalizeHexColor(item.color, "#2563eb"),
+            custom: true
+          };
+        });
+
+        return map;
+      }
+
+      function resolveCategoryKey(value, customCategories, fallbackKey) {
+        var key = String(value || "").trim();
+        var map = buildCategoryMap(customCategories);
+        if (map[key]) {
+          return key;
+        }
+        return fallbackKey || "work";
+      }
+
+      var initialCustomCategories = loadCustomCategories();
 
       var WEATHER_SVG = {
         // 맑음 ─ 황금 태양
@@ -735,7 +959,8 @@
         selectedDate: toDateKey(now),
         editingId: null,
         holidayEvents: buildHolidayEvents(KR_PUBLIC_HOLIDAYS_BY_YEAR),
-        events: loadEvents(),
+        customCategories: initialCustomCategories,
+        events: loadEvents(initialCustomCategories),
         taskEvents: [],
         canManualSync: false,
         weatherData: {}
@@ -755,6 +980,10 @@
       var startTimeInputEl = document.getElementById("startTimeInput");
       var endTimeInputEl = document.getElementById("endTimeInput");
       var categoryInputEl = document.getElementById("categoryInput");
+      var categoryNameInputEl = document.getElementById("categoryNameInput");
+      var categoryColorInputEl = document.getElementById("categoryColorInput");
+      var addCategoryBtnEl = document.getElementById("addCategoryBtn");
+      var categoryListEl = document.getElementById("categoryList");
       var memoInputEl = document.getElementById("memoInput");
       var cancelEditBtnEl = document.getElementById("cancelEditBtn");
       var syncTasksBtnEl = document.getElementById("syncTasksBtn");
@@ -791,6 +1020,124 @@
         renderSelectedEvents();
       });
 
+      addCategoryBtnEl.addEventListener("click", function () {
+        var label = sanitizeCategoryName(categoryNameInputEl.value);
+        var color = normalizeHexColor(categoryColorInputEl.value, "#2563eb");
+
+        if (!label) {
+          alert("카테고리 이름을 입력해 주세요.");
+          categoryNameInputEl.focus();
+          return;
+        }
+
+        var duplicate = state.customCategories.find(function (item) {
+          return sanitizeCategoryName(item.label).toLowerCase() === label.toLowerCase();
+        });
+
+        if (duplicate) {
+          populateCategoryOptions(duplicate.id);
+          categoryInputEl.value = duplicate.id;
+          categoryNameInputEl.value = "";
+          renderCategoryList();
+          return;
+        }
+
+        var id = makeUniqueCustomCategoryId(label);
+        state.customCategories.push({
+          id: id,
+          label: label,
+          color: color,
+          custom: true
+        });
+
+        persistCategories();
+        populateCategoryOptions(id);
+        renderCategoryList();
+
+        categoryInputEl.value = id;
+        categoryNameInputEl.value = "";
+      });
+
+      categoryNameInputEl.addEventListener("keydown", function (event) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          addCategoryBtnEl.click();
+        }
+      });
+
+      categoryListEl.addEventListener("click", function (event) {
+        var target = event.target;
+        if (!(target instanceof HTMLElement)) {
+          return;
+        }
+
+        var action = target.getAttribute("data-action");
+        var categoryId = target.getAttribute("data-id");
+        if (!action || !categoryId) {
+          return;
+        }
+
+        if (action === "select-category") {
+          populateCategoryOptions(categoryId);
+          categoryInputEl.value = categoryId;
+          return;
+        }
+
+        if (action !== "delete-category") {
+          return;
+        }
+
+        var categoryMeta = buildCategoryMap(state.customCategories)[categoryId];
+        if (!categoryMeta || !categoryMeta.custom) {
+          return;
+        }
+
+        var affectedCount = state.events.filter(function (item) {
+          return item.category === categoryId;
+        }).length;
+
+        var message = affectedCount > 0
+          ? "카테고리를 삭제하면 해당 일정 " + affectedCount + "건은 '개인'으로 변경됩니다. 계속하시겠습니까?"
+          : "이 카테고리를 삭제하시겠습니까?";
+
+        if (!confirm(message)) {
+          return;
+        }
+
+        state.customCategories = state.customCategories.filter(function (item) {
+          return item.id !== categoryId;
+        });
+
+        if (affectedCount > 0) {
+          state.events = state.events.map(function (item) {
+            if (item.category !== categoryId) {
+              return item;
+            }
+            return {
+              id: item.id,
+              title: item.title,
+              date: item.date,
+              startTime: item.startTime,
+              endTime: item.endTime,
+              category: "personal",
+              memo: item.memo
+            };
+          });
+          persistEvents();
+        }
+
+        persistCategories();
+        populateCategoryOptions("personal");
+        renderCategoryList();
+        if (state.editingId) {
+          var editingItem = state.events.find(function (item) {
+            return item.id === state.editingId;
+          });
+          categoryInputEl.value = editingItem ? editingItem.category : "personal";
+        }
+        render();
+      });
+
       eventFormEl.addEventListener("submit", function (event) {
         event.preventDefault();
 
@@ -798,7 +1145,7 @@
         var date = eventDateInputEl.value;
         var startTime = startTimeInputEl.value;
         var endTime = endTimeInputEl.value;
-        var category = categoryInputEl.value;
+        var category = resolveCategoryKey(categoryInputEl.value, state.customCategories, "personal");
         var memo = memoInputEl.value.trim();
 
         if (!title || !date) {
@@ -900,7 +1247,156 @@
         }
       });
 
-      function loadEvents() {
+      function hexToRgb(hex) {
+        var value = normalizeHexColor(hex, "#64748b").slice(1);
+        return {
+          r: parseInt(value.slice(0, 2), 16),
+          g: parseInt(value.slice(2, 4), 16),
+          b: parseInt(value.slice(4, 6), 16)
+        };
+      }
+
+      function colorToRgba(hex, alpha) {
+        var rgb = hexToRgb(hex);
+        return "rgba(" + rgb.r + ", " + rgb.g + ", " + rgb.b + ", " + alpha + ")";
+      }
+
+      function mixColors(hexA, hexB, ratio) {
+        var a = hexToRgb(hexA);
+        var b = hexToRgb(hexB);
+        var weight = Math.max(0, Math.min(1, ratio));
+        var red = Math.round(a.r + (b.r - a.r) * weight);
+        var green = Math.round(a.g + (b.g - a.g) * weight);
+        var blue = Math.round(a.b + (b.b - a.b) * weight);
+        return "rgb(" + red + ", " + green + ", " + blue + ")";
+      }
+
+      function getCategoryMeta(categoryKey) {
+        var map = buildCategoryMap(state.customCategories);
+        return map[categoryKey] || map.work;
+      }
+
+      function getCategoryLabel(categoryKey) {
+        return getCategoryMeta(categoryKey).label;
+      }
+
+      function applyCategoryStyle(element, categoryKey, variant) {
+        var meta = getCategoryMeta(categoryKey);
+        var color = meta.color;
+
+        if (variant === "pill") {
+          element.style.backgroundColor = colorToRgba(color, 0.18);
+          element.style.borderLeft = "3px solid " + color;
+          element.style.color = mixColors(color, "#12263d", 0.78);
+          return;
+        }
+
+        if (variant === "badge") {
+          element.style.backgroundColor = colorToRgba(color, 0.15);
+          element.style.color = mixColors(color, "#111827", 0.45);
+          return;
+        }
+
+        if (variant === "swatch") {
+          element.style.backgroundColor = color;
+        }
+      }
+
+      function makeUniqueCustomCategoryId(label) {
+        var baseId = buildCustomCategoryId(label);
+        var map = buildCategoryMap(state.customCategories);
+        var candidate = baseId;
+        var suffix = 2;
+
+        while (map[candidate]) {
+          candidate = baseId + "-" + suffix;
+          suffix += 1;
+        }
+
+        return candidate;
+      }
+
+      function persistCategories() {
+        localStorage.setItem(CATEGORY_STORAGE_KEY, JSON.stringify(state.customCategories));
+      }
+
+      function populateCategoryOptions(selectedKey) {
+        var currentValue = selectedKey || categoryInputEl.value || "personal";
+        categoryInputEl.innerHTML = "";
+
+        ["personal", "work", "meeting"].forEach(function (key) {
+          var option = document.createElement("option");
+          option.value = key;
+          option.textContent = getCategoryLabel(key);
+          categoryInputEl.appendChild(option);
+        });
+
+        state.customCategories.forEach(function (item) {
+          var option = document.createElement("option");
+          option.value = item.id;
+          option.textContent = item.label;
+          categoryInputEl.appendChild(option);
+        });
+
+        categoryInputEl.value = resolveCategoryKey(currentValue, state.customCategories, "personal");
+      }
+
+      function renderCategoryList() {
+        categoryListEl.innerHTML = "";
+
+        if (!state.customCategories.length) {
+          var empty = document.createElement("div");
+          empty.className = "helper";
+          empty.textContent = "사용자 카테고리를 추가하면 여기에서 선택하거나 삭제할 수 있습니다.";
+          categoryListEl.appendChild(empty);
+          return;
+        }
+
+        state.customCategories.forEach(function (item) {
+          var row = document.createElement("div");
+          row.className = "category-chip";
+
+          var main = document.createElement("div");
+          main.className = "category-chip-main";
+
+          var swatch = document.createElement("span");
+          swatch.className = "category-swatch";
+          applyCategoryStyle(swatch, item.id, "swatch");
+
+          var name = document.createElement("span");
+          name.className = "category-chip-name";
+          name.textContent = item.label;
+
+          main.appendChild(swatch);
+          main.appendChild(name);
+
+          var actions = document.createElement("div");
+          actions.className = "category-chip-actions";
+
+          var selectBtn = document.createElement("button");
+          selectBtn.type = "button";
+          selectBtn.className = "chip-btn";
+          selectBtn.textContent = "선택";
+          selectBtn.setAttribute("data-action", "select-category");
+          selectBtn.setAttribute("data-id", item.id);
+
+          var deleteBtn = document.createElement("button");
+          deleteBtn.type = "button";
+          deleteBtn.className = "chip-btn danger";
+          deleteBtn.textContent = "삭제";
+          deleteBtn.setAttribute("data-action", "delete-category");
+          deleteBtn.setAttribute("data-id", item.id);
+
+          actions.appendChild(selectBtn);
+          actions.appendChild(deleteBtn);
+
+          row.appendChild(main);
+          row.appendChild(actions);
+          categoryListEl.appendChild(row);
+        });
+      }
+
+      function loadEvents(customCategories) {
         try {
           var raw = localStorage.getItem(STORAGE_KEY);
           if (!raw) {
@@ -921,7 +1417,7 @@
                 date: String(item.date),
                 startTime: item.startTime ? String(item.startTime) : "",
                 endTime: item.endTime ? String(item.endTime) : "",
-                category: CATEGORY_LABEL[item.category] ? item.category : "work",
+                category: resolveCategoryKey(item.category, customCategories, "work"),
                 memo: item.memo ? String(item.memo) : ""
               };
             });
@@ -941,7 +1437,7 @@
           date: String(item.date),
           startTime: item.startTime ? String(item.startTime) : "",
           endTime: item.endTime ? String(item.endTime) : "",
-          category: CATEGORY_LABEL[item.category] ? String(item.category) : "work",
+          category: resolveCategoryKey(item.category, state.customCategories, "work"),
           memo: item.memo ? String(item.memo) : "",
           source: "task",
           reportId: Number(item.reportId || 0)
@@ -1218,7 +1714,8 @@
 
           dayEvents.slice(0, 3).forEach(function (item) {
             var pill = document.createElement("div");
-            pill.className = "event-pill event-" + item.category;
+            pill.className = "event-pill";
+            applyCategoryStyle(pill, item.category, "pill");
             pill.title = buildEventTitle(item);
             pill.textContent = buildEventPillLabel(item);
             stackEl.appendChild(pill);
@@ -1276,8 +1773,9 @@
             title.textContent = item.title;
 
             var badge = document.createElement("span");
-            badge.className = "badge badge-" + item.category;
-            var badgeLabel = CATEGORY_LABEL[item.category] || "업무";
+            badge.className = "badge";
+            applyCategoryStyle(badge, item.category, "badge");
+            var badgeLabel = getCategoryLabel(item.category) || "업무";
             if (item.source === "task") {
               badgeLabel += " · 작업목록";
             }
@@ -1379,6 +1877,7 @@
         eventDateInputEl.value = target.date;
         startTimeInputEl.value = target.startTime || "";
         endTimeInputEl.value = target.endTime || "";
+        populateCategoryOptions(target.category);
         categoryInputEl.value = target.category;
         memoInputEl.value = target.memo || "";
         deleteEventBtnEl.style.display = "";
@@ -1391,7 +1890,7 @@
         eventIdInputEl.value = "";
         eventFormEl.reset();
         eventDateInputEl.value = state.selectedDate;
-        categoryInputEl.value = "personal";
+        populateCategoryOptions("personal");
         deleteEventBtnEl.style.display = "none";
       }
 
@@ -1467,6 +1966,7 @@
       }
 
       resetFormForCreate();
+  renderCategoryList();
       render();
       syncTaskEvents({ silent: true });
       fetchWeather();
