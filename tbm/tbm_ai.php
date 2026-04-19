@@ -687,8 +687,8 @@ function tbm_ai_validate_parsed_response(array $parsed): array
     if ($quiz1 === '' || $quiz2 === '' || $quiz3 === '') {
         $errors[] = '퀴즈 3개 모두가 입력되어야 합니다.';
     }
-    if ($quizTotal < 545 || $quizTotal > 600) {
-        $errors[] = "퀴즈 3개 총 글자 수가 {$quizTotal}자입니다. 545~600자여야 합니다.";
+    if ($quizTotal < 545 || $quizTotal > 820) {
+        $errors[] = "퀴즈 3개 총 글자 수가 {$quizTotal}자입니다. 545~820자여야 합니다.";
     }
 
     return ['valid' => empty($errors), 'errors' => $errors];
@@ -884,25 +884,68 @@ function tbm_ai_autofit_single_quiz(string $quiz, int $targetMin = 183, int $tar
         return '';
     }
 
-    $lineMaxMap = [84, 28, 28, 28, 28];
-    foreach ($lines as $index => $line) {
-        $limit = $lineMaxMap[$index] ?? 28;
-        if (mb_strlen($line, 'UTF-8') > $limit) {
-            $lines[$index] = tbm_ai_trim_text_to_limit($line, $limit, 12);
-        }
-    }
-
     $quiz = tbm_ai_quiz_join_lines($lines);
 
     if (mb_strlen($quiz, 'UTF-8') > $targetMax) {
-        $tightMap = [74, 25, 25, 25, 25];
-        foreach ($lines as $index => $line) {
-            $limit = $tightMap[$index] ?? 25;
-            if (mb_strlen($line, 'UTF-8') > $limit) {
-                $lines[$index] = tbm_ai_trim_text_to_limit($line, $limit, 10);
+        $guard = 0;
+        while (mb_strlen($quiz, 'UTF-8') > $targetMax && $guard < 6) {
+            $guard++;
+            $questionLine = trim((string)($lines[0] ?? ''));
+            if ($questionLine === '') {
+                break;
+            }
+
+            $excess = mb_strlen($quiz, 'UTF-8') - $targetMax;
+            $nextLimit = max(52, mb_strlen($questionLine, 'UTF-8') - $excess);
+            $trimmed = tbm_ai_trim_text_to_limit($questionLine, $nextLimit, 18);
+            if ($trimmed === '' || $trimmed === $questionLine) {
+                break;
+            }
+
+            $lines[0] = $trimmed;
+            $quiz = tbm_ai_quiz_join_lines($lines);
+        }
+    }
+
+    if (mb_strlen($quiz, 'UTF-8') < $targetMin) {
+        $questionFillers = [
+            ' 작업 기준으로 가장 적절한 것은?',
+            ' 현장 대응으로 옳은 것은?',
+            ' 재발 방지 관점에서 맞는 것은?',
+            ' 안전수칙 기준으로 적절한 것은?',
+        ];
+
+        $guard = 0;
+        while (mb_strlen($quiz, 'UTF-8') < $targetMin && $guard < 20) {
+            $guard++;
+            $changed = false;
+
+            $questionLine = trim((string)($lines[0] ?? ''));
+            foreach ($questionFillers as $suffix) {
+                if (mb_strlen($quiz, 'UTF-8') >= $targetMin) {
+                    break;
+                }
+
+                if (mb_strpos($questionLine, trim($suffix), 0, 'UTF-8') !== false) {
+                    continue;
+                }
+
+                $candidateLine = trim($questionLine . $suffix);
+                if (mb_strlen($candidateLine, 'UTF-8') > 110) {
+                    continue;
+                }
+
+                $lines[0] = $candidateLine;
+                $questionLine = $candidateLine;
+                $quiz = tbm_ai_quiz_join_lines($lines);
+                $changed = true;
+                break;
+            }
+
+            if (!$changed) {
+                break;
             }
         }
-        $quiz = tbm_ai_quiz_join_lines($lines);
     }
 
     return tbm_ai_sanitize_quiz_text(tbm_ai_quiz_join_lines($lines));
@@ -920,9 +963,9 @@ function tbm_ai_autofit_quiz_fields(array $parsed): array
         $quizTotal += mb_strlen((string)$parsed[$key], 'UTF-8');
     }
 
-    if ($quizTotal > 600) {
+    if ($quizTotal > 820) {
         foreach ($quizKeys as $key) {
-            $parsed[$key] = tbm_ai_autofit_single_quiz((string)$parsed[$key], 175, 190);
+            $parsed[$key] = tbm_ai_autofit_single_quiz((string)$parsed[$key], 175, 220);
         }
     }
 
@@ -931,9 +974,9 @@ function tbm_ai_autofit_quiz_fields(array $parsed): array
         $quizTotal += mb_strlen((string)$parsed[$key], 'UTF-8');
     }
 
-    if ($quizTotal < 550) {
+    if ($quizTotal < 545) {
         foreach ($quizKeys as $key) {
-            $parsed[$key] = tbm_ai_autofit_single_quiz((string)$parsed[$key], 188, 200);
+            $parsed[$key] = tbm_ai_autofit_single_quiz((string)$parsed[$key], 186, 200);
         }
     }
 
@@ -1059,10 +1102,10 @@ function tbm_ai_get_validation_retry_prompt(bool $shorten = false): string
         . "- body_text 본문은 경어체가 아닌 평어체로 작성하세요. 예: '점검해야 합니다' 대신 '점검해야 한다'.\n"
         . "- '-습니다', '-입니다', '-해야 합니다' 같은 경어체 어미는 쓰지 마세요.\n"
         . "- 사고내용+예방대책 합계는 420자를 넘지 않아야 합니다.\n"
-        . "- 퀴즈 3개 총 글자 수는 545~600자여야 합니다. 절대 545자 미만으로 내지 마세요.\n"
+        . "- 퀴즈 3개 총 글자 수는 545자 이상이어야 하며, 가장 권장되는 범위는 545~700자입니다. 절대 545자 미만으로 내지 마세요.\n"
         . "- 퀴즈는 각 문항을 대체로 180~195자 정도로 맞추면 합계 범위를 맞추기 쉽습니다. 가장 안전한 목표는 각 문항 185~190자입니다.\n"
         . "- 최종 JSON을 출력하기 직전에 반드시 스스로 글자 수를 다시 세고, 범위를 벗어나면 먼저 문장을 늘이거나 줄인 뒤에만 출력하세요.\n"
-        . "- 특히 퀴즈 합계가 545자 미만이면 질문 또는 보기 설명을 조금 더 구체화해서 길이를 채우고, 600자를 넘으면 군더더기를 삭제하세요.\n"
+        . "- 특히 퀴즈 합계가 545자 미만이면 질문 또는 보기 설명을 조금 더 구체화해서 길이를 채우고, 가능하면 700자 이하를 유지하세요. 다만 820자를 넘기면 반드시 줄이세요.\n"
         . "- JSON 키 이름과 형식을 정확히 유지하세요.\n"
         . "- 순수 JSON 객체만 반환하세요.";
 
@@ -1125,10 +1168,10 @@ function tbm_ai_build_revision_prompt(string $basePrompt, array $parsed, array $
         . "- 사고내용 및 원인: 235~245자 목표, 허용 범위 220~250자\n"
         . "- 예방대책: 145~155자 목표, 허용 범위 140~160자\n"
         . "- 사고내용+예방대책 합계: 380~400자 목표, 절대 420자 초과 금지\n"
-        . "- 퀴즈 3개 총 글자 수: 560~585자 목표, 허용 범위 545~600자\n"
+        . "- 퀴즈 3개 총 글자 수: 560~640자 목표, 권장 범위 545~700자, 절대 상한 820자\n"
         . "- 퀴즈는 각 문항을 대체로 185~190자 정도로 균형 있게 맞추고, 어느 한 문항만 짧아지지 않게 하세요\n"
         . "- 최종 JSON을 출력하기 직전에 사고내용, 예방대책, quiz_1, quiz_2, quiz_3, 퀴즈 합계를 다시 계산하고 범위에 맞을 때만 출력하세요\n"
-        . "- 퀴즈 합계가 545자 미만이면 각 보기 설명을 1~2어절씩 보강하여 길이를 채우고, 600자를 넘으면 중복 표현을 삭제하세요\n"
+        . "- 퀴즈 합계가 545자 미만이면 각 보기 설명을 1~2어절씩 보강하여 길이를 채우고, 가능하면 700자 이하를 유지하세요. 820자를 넘으면 반드시 줄이세요\n"
         . "- body_text 본문은 반드시 평어체로 유지하세요. '-습니다', '-입니다'는 쓰지 말고 '-다', '-이다', '-해야 한다' 형태로 고치세요\n"
         . "- source_url, accident_date가 이미 들어 있으면 그대로 유지하세요\n"
         . "- 새로운 설명문을 붙이지 말고, 최종 JSON 객체만 다시 출력하세요\n"
@@ -2701,9 +2744,9 @@ function tbm_ai_build_article_prompt(string $targetDate, array $article, ?array 
 6. 사고내용 및 원인은 정확히 220~250자 범위로 작성하세요. 가장 좋은 목표는 235~245자입니다. 반드시 250자를 초과하지 마세요.
 7. 예방대책은 정확히 140~160자 범위로 작성하세요. 가장 좋은 목표는 145~155자입니다. 반드시 160자를 초과하지 마세요.
    (사고내용 + 예방대책 합계가 절대 420자를 넘지 않도록 하세요. 이는 인쇄 양식의 고정 영역 제한입니다.)
-8. 퀴즈는 보기 4개가 있는 객관식 문제 3개를 작성하되, 퀴즈 3개의 총 글자 수 합계가 545~600자 범위가 되도록 각 문제를 대체로 185~190자 정도로 맞춰 질문과 보기를 구체적으로 작성하세요.
+8. 퀴즈는 보기 4개가 있는 객관식 문제 3개를 작성하되, 퀴즈 3개의 총 글자 수 합계는 545자 이상으로 작성하고 가능하면 700자 이하를 유지하세요. 가장 권장되는 길이는 각 문제 185~220자 정도입니다.
 9. 최종 JSON을 출력하기 직전에 반드시 스스로 다음 길이를 다시 세세요: 사고내용 및 원인, 예방대책, quiz_1, quiz_2, quiz_3, 퀴즈 3개 합계. 하나라도 범위를 벗어나면 먼저 수정한 뒤 출력하세요.
-10. 퀴즈 합계가 545자 미만이면 질문 또는 보기 설명을 조금 더 구체적으로 늘려 길이를 채우고, 600자를 넘으면 중복 표현을 삭제하세요.
+10. 퀴즈 합계가 545자 미만이면 질문 또는 보기 설명을 조금 더 구체적으로 늘려 길이를 채우고, 가능하면 700자 이하를 유지하세요. 다만 820자를 넘으면 중복 표현을 삭제해 반드시 줄이세요.
 11. source_url에는 아래 실제 기사 URL을 그대로 넣으세요.
    {$articleUrl}
 12. accident_title은 기사 내용을 바탕으로 20자 내외로 간결하게 작성하세요.
@@ -2761,9 +2804,9 @@ function tbm_ai_build_csi_prompt(string $targetDate, array $article): string
 8. [사고내용 및 원인]은 자료의 사고경위와 사고원인을 중심으로 220~250자 범위로 작성하세요. 가능하면 235~245자를 목표로 하세요.
 9. [예방대책]은 자료의 재발방지대책과 후속조치 내용을 중심으로 140~160자 범위로 작성하세요. 가능하면 145~155자를 목표로 하세요.
 10. 사고내용 및 원인 + 예방대책 합계는 420자를 넘기지 마세요.
-11. 퀴즈는 보기 4개가 있는 객관식 문제 3개를 작성하되, 퀴즈 3개의 총 글자 수 합계가 545~600자 범위가 되도록 각 문항을 대체로 185~190자 정도로 맞추세요.
+11. 퀴즈는 보기 4개가 있는 객관식 문제 3개를 작성하되, 퀴즈 3개의 총 글자 수 합계는 545자 이상으로 작성하고 가능하면 700자 이하를 유지하세요. 가장 권장되는 길이는 각 문제 185~220자 정도입니다.
 12. 최종 JSON을 출력하기 직전에 반드시 스스로 다음 길이를 다시 세세요: 사고내용 및 원인, 예방대책, quiz_1, quiz_2, quiz_3, 퀴즈 3개 합계. 하나라도 범위를 벗어나면 먼저 수정한 뒤 출력하세요.
-13. 퀴즈 합계가 545자 미만이면 질문 또는 보기 설명을 조금 더 구체적으로 늘려 길이를 채우고, 600자를 넘으면 중복 표현을 삭제하세요.
+13. 퀴즈 합계가 545자 미만이면 질문 또는 보기 설명을 조금 더 구체적으로 늘려 길이를 채우고, 가능하면 700자 이하를 유지하세요. 다만 820자를 넘으면 중복 표현을 삭제해 반드시 줄이세요.
 14. source_url에는 아래 실제 상세 URL을 그대로 넣으세요.
    {$articleUrl}
 15. accident_title은 사고사례 핵심 내용을 20자 이내로 간결하게 작성하세요.
@@ -2821,9 +2864,9 @@ function tbm_ai_build_siren_prompt(string $targetDate, array $siren): string
 6. 사고내용 및 원인은 정확히 220~250자 범위로 작성하세요. 가장 좋은 목표는 235~245자입니다. 반드시 250자를 초과하지 마세요.
 7. 예방대책은 정확히 140~160자 범위로 작성하세요. 가장 좋은 목표는 145~155자입니다. 반드시 160자를 초과하지 마세요.
    (사고내용 + 예방대책 합계가 절대 420자를 넘지 않도록 하세요. 이는 인쇄 양식의 고정 영역 제한입니다.)
-8. 퀴즈는 보기 4개가 있는 객관식 문제 3개를 작성하되, 퀴즈 3개의 총 글자 수 합계가 545~600자 범위가 되도록 각 문제를 대체로 185~190자 정도로 맞춰 질문과 보기를 구체적으로 작성하세요.
+8. 퀴즈는 보기 4개가 있는 객관식 문제 3개를 작성하되, 퀴즈 3개의 총 글자 수 합계는 545자 이상으로 작성하고 가능하면 700자 이하를 유지하세요. 가장 권장되는 길이는 각 문제 185~220자 정도입니다.
 9. 최종 JSON을 출력하기 직전에 반드시 스스로 다음 길이를 다시 세세요: 사고내용 및 원인, 예방대책, quiz_1, quiz_2, quiz_3, 퀴즈 3개 합계. 하나라도 범위를 벗어나면 먼저 수정한 뒤 출력하세요.
-10. 퀴즈 합계가 545자 미만이면 질문 또는 보기 설명을 조금 더 구체적으로 늘려 길이를 채우고, 600자를 넘으면 중복 표현을 삭제하세요.
+10. 퀴즈 합계가 545자 미만이면 질문 또는 보기 설명을 조금 더 구체적으로 늘려 길이를 채우고, 가능하면 700자 이하를 유지하세요. 다만 820자를 넘으면 중복 표현을 삭제해 반드시 줄이세요.
 11. source_url에는 아래 상세 URL을 그대로 넣으세요.
    {$detailUrl}
 12. accident_title은 20자 내외로 간결하게 작성하세요.

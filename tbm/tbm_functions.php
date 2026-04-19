@@ -644,6 +644,24 @@ function tbm_build_quiz_block(string $quiz1, string $quiz2, string $quiz3): stri
 {
     $quizzes = [$quiz1, $quiz2, $quiz3];
     $html = '';
+    $quizTotalLength = mb_strlen(trim($quiz1), 'UTF-8') + mb_strlen(trim($quiz2), 'UTF-8') + mb_strlen(trim($quiz3), 'UTF-8');
+
+    $fontSizePt = 9.0;
+    $lineHeight = 1.28;
+    $blockGapMm = 4.0;
+    $lineGapMm = 1.8;
+
+    if ($quizTotalLength > 760) {
+        $fontSizePt = 8.1;
+        $lineHeight = 1.17;
+        $blockGapMm = 2.8;
+        $lineGapMm = 1.1;
+    } elseif ($quizTotalLength > 700) {
+        $fontSizePt = 8.5;
+        $lineHeight = 1.22;
+        $blockGapMm = 3.2;
+        $lineGapMm = 1.3;
+    }
 
     $html .= '<div style="position:absolute; left:90.51mm; top:0mm; width:82.51mm;">';
     $html .= '<div style="margin:0 0 2.5mm 0;">'
@@ -659,14 +677,14 @@ function tbm_build_quiz_block(string $quiz1, string $quiz2, string $quiz3): stri
         }
 
         $lines = preg_split("/\n+/", $quiz);
-        $html .= '<div style="margin:0 0 4mm 0;">';
+        $html .= '<div style="margin:0 0 ' . number_format($blockGapMm, 1, '.', '') . 'mm 0;">';
 
         foreach ($lines as $line) {
             $line = trim($line);
             if ($line === '') {
                 continue;
             }
-            $html .= '<div style="margin:0 0 1.8mm 0; font-size:9pt; line-height:1.28; color:#000000; font-family:\'맑은 고딕\'; letter-spacing:-0.02em; white-space:normal; word-break:keep-all; overflow-wrap:break-word;">'
+            $html .= '<div style="margin:0 0 ' . number_format($lineGapMm, 1, '.', '') . 'mm 0; font-size:' . number_format($fontSizePt, 1, '.', '') . 'pt; line-height:' . number_format($lineHeight, 2, '.', '') . '; color:#000000; font-family:\'맑은 고딕\'; letter-spacing:-0.02em; white-space:normal; word-break:keep-all; overflow-wrap:break-word;">'
                   . e($line)
                   . '</div>';
         }

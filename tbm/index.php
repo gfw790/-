@@ -374,7 +374,7 @@ body { font-family: "Malgun Gothic", sans-serif; margin: 0; background: #f5f6f7;
 
             <div class="btn-row">
                 <button type="submit" class="btn btn-primary">📄 문서 생성</button>
-                <button type="button" class="btn btn-secondary" onclick="if(confirm('폼을 초기화하시겠습니까?')) location.href='index.php?date=<?= h($selectedDate) ?>'">🔄 전체 폼 초기화</button>
+                <button type="button" class="btn btn-secondary" onclick="resetDraftAndReload()">🔄 전체 폼 초기화</button>
             </div>
         </form>
     </div><div class="side-panel">
@@ -427,6 +427,144 @@ const fallbackRecentDocs = <?= $fallbackRecentDocsJson ?>;
 const initialTeam = <?= $initialTeamJson ?>;
 let currentSlotCount = 0;
 let selectedRecentTeam = '';
+const formDraftVersion = 'v1';
+let draftAutosaveEnabled = false;
+
+function getDraftDateValue() {
+    return document.getElementById('doc_date')?.value || 'unknown-date';
+}
+
+function getDraftStorageKey(dateValue = getDraftDateValue()) {
+    return 'tbm-form-draft:' + formDraftVersion + ':' + String(dateValue || 'unknown-date');
+}
+
+function collectNameSlotValues() {
+    return Array.from(document.querySelectorAll('#names-grid .name-wrapper input')).map(input => input.value || '');
+}
+
+function collectDraftPayload() {
+    return {
+        doc_date: document.getElementById('doc_date')?.value || '',
+        instructor_name: document.getElementById('instructor_name')?.value || '',
+        instructor_position: document.getElementById('instructor_position')?.value || '',
+        today_work_1: document.getElementById('today_work_1')?.value || '',
+        today_work_2: document.getElementById('today_work_2')?.value || '',
+        edu_title: document.getElementById('edu_title')?.value || '',
+        left_content: document.getElementById('left_content')?.value || '',
+        quiz1: document.getElementById('quiz1')?.value || '',
+        quiz2: document.getElementById('quiz2')?.value || '',
+        quiz3: document.getElementById('quiz3')?.value || '',
+        remarks: document.querySelector('textarea[name="remarks"]')?.value || '',
+        selected_team: document.getElementById('selected_team')?.value || '',
+        source_url: document.getElementById('source_url')?.value || '',
+        image_file: document.getElementById('image_file')?.value || '',
+        names: collectNameSlotValues(),
+        saved_at: new Date().toISOString(),
+    };
+}
+
+function saveFormDraft() {
+    if (!draftAutosaveEnabled) {
+        return;
+    }
+    try {
+        const payload = collectDraftPayload();
+        localStorage.setItem(getDraftStorageKey(payload.doc_date), JSON.stringify(payload));
+    } catch (error) {
+        console.warn('TBM draft save failed:', error);
+    }
+}
+
+function loadFormDraft(dateValue = getDraftDateValue()) {
+    try {
+        const raw = localStorage.getItem(getDraftStorageKey(dateValue));
+        if (!raw) {
+            return null;
+        }
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch (error) {
+        console.warn('TBM draft load failed:', error);
+        return null;
+    }
+}
+
+function applyDraftToForm(draft) {
+    if (!draft || typeof draft !== 'object') {
+        return;
+    }
+
+    const assignValue = (id, value) => {
+        const element = document.getElementById(id);
+        if (element && typeof value === 'string') {
+            element.value = value;
+        }
+    };
+
+    assignValue('instructor_name', draft.instructor_name || '');
+    assignValue('instructor_position', draft.instructor_position || '');
+    assignValue('today_work_1', draft.today_work_1 || '');
+    assignValue('today_work_2', draft.today_work_2 || '');
+    assignValue('edu_title', draft.edu_title || '');
+    assignValue('left_content', draft.left_content || '');
+    assignValue('quiz1', draft.quiz1 || '');
+    assignValue('quiz2', draft.quiz2 || '');
+    assignValue('quiz3', draft.quiz3 || '');
+    assignValue('source_url', draft.source_url || '');
+    assignValue('image_file', draft.image_file || '');
+
+    const remarks = document.querySelector('textarea[name="remarks"]');
+    if (remarks && typeof draft.remarks === 'string') {
+        remarks.value = draft.remarks;
+    }
+
+    const draftTeam = typeof draft.selected_team === 'string' ? draft.selected_team : '';
+    if (draftTeam && teamData[draftTeam]) {
+        applyTeam(draftTeam);
+    }
+
+    if (Array.isArray(draft.names)) {
+        const grid = document.getElementById('names-grid');
+        if (grid) {
+            grid.innerHTML = '';
+            currentSlotCount = 0;
+            const names = draft.names.length > 0 ? draft.names : [''];
+            names.forEach(name => addInputSlot(String(name || '')));
+            while (currentSlotCount < 8) {
+                addInputSlot('');
+            }
+        }
+    }
+
+    updateBodyCounter();
+}
+
+function clearFormDraft(dateValue = getDraftDateValue()) {
+    try {
+        localStorage.removeItem(getDraftStorageKey(dateValue));
+    } catch (error) {
+        console.warn('TBM draft clear failed:', error);
+    }
+}
+
+function resetDraftAndReload() {
+    if (!confirm('폼을 초기화하시겠습니까?')) {
+        return;
+    }
+    clearFormDraft();
+    location.href = 'index.php?date=' + encodeURIComponent(getDraftDateValue());
+}
+
+function bindDraftAutosave() {
+    const form = document.getElementById('tbm-form');
+    if (!form) {
+        return;
+    }
+
+    form.addEventListener('input', saveFormDraft);
+    form.addEventListener('change', saveFormDraft);
+    form.addEventListener('submit', saveFormDraft);
+}
 
 function renderRecentDocs(teamName) {
     selectedRecentTeam = teamName;
@@ -580,6 +718,7 @@ function applyTeam(teamName) {
     }
 
     renderRecentDocs(teamName);
+    saveFormDraft();
 }
 
 // 📌 칸 생성 로직 (개별 X 버튼 포함)
@@ -611,6 +750,7 @@ function addInputSlot(val) {
     wrapper.appendChild(input);
     wrapper.appendChild(delBtn);
     grid.appendChild(wrapper);
+    saveFormDraft();
 }
 
 // 📌 중간에 지워졌을 때 1번부터 번호를 다시 깔끔하게 매겨주는 함수
@@ -624,6 +764,7 @@ function reindexSlots() {
         input.name = 'name' + currentSlotCount;
         input.placeholder = currentSlotCount + '번';
     }
+    saveFormDraft();
 }
 
 // 📌 맨 끝 칸 하나 삭제
@@ -682,6 +823,13 @@ window.addEventListener('DOMContentLoaded', () => {
         while(currentSlotCount < 8) addInputSlot('');
         renderRecentDocs('');
     }
+    bindDraftAutosave();
+    const draft = loadFormDraft();
+    if (draft) {
+        applyDraftToForm(draft);
+    }
+    draftAutosaveEnabled = true;
+    saveFormDraft();
     updateBodyCounter();
 });
 
@@ -785,6 +933,7 @@ async function aiGenerate(forceNew = false) {
         document.getElementById('quiz3').value = data.quiz_3 || '';
         document.getElementById('source_url').value = data.source_url || '';
         document.getElementById('image_file').value = data.image_file || '';
+        saveFormDraft();
 
         overlay.classList.remove('active');
         alert('AI 생성 완료');

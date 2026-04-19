@@ -6,6 +6,7 @@ date_default_timezone_set('Asia/Seoul');
 require_once __DIR__ . '/tbm_db.php';
 require_once __DIR__ . '/tbm_ai.php';
 require_once __DIR__ . '/tbm_functions.php';
+require_once __DIR__ . '/tbm_kakao.php';
 
 define('TBM_AUTO_OUTPUT_DIR', __DIR__ . '/output');
 define('TBM_AUTO_LOG_FILE', __DIR__ . '/cache/auto_ai_generate.log');
@@ -32,6 +33,18 @@ function tbm_auto_out(string $message, bool $stderr = false): void
     $stream = $stderr ? STDERR : STDOUT;
     fwrite($stream, $message . PHP_EOL);
     tbm_auto_log($message);
+}
+
+function tbm_auto_send_kakao_report(string $status, array $context = []): void
+{
+    try {
+        tbm_kakao_send_auto_report($status, $context);
+        if (tbm_kakao_is_enabled()) {
+            tbm_auto_log('[TBM KAKAO] ' . $status . ' report sent');
+        }
+    } catch (Throwable $e) {
+        tbm_auto_log('[TBM KAKAO] failed: ' . $e->getMessage());
+    }
 }
 
 function tbm_auto_blank_risk_rows(): array
@@ -120,7 +133,7 @@ function tbm_auto_get_existing_member_names(int $docId): array
            FROM tbm_document_members dm
            JOIN tbm_members m ON m.id = dm.member_id
           WHERE dm.doc_id = ?
-          ORDER BY dm.slot_order ASC, dm.id ASC
+            ORDER BY dm.slot_order ASC, dm.member_id ASC
           LIMIT 8'
     );
     $stmt->execute([$docId]);
@@ -393,8 +406,18 @@ try {
     tbm_auto_out('image_file=' . trim((string)($result['image_file'] ?? '')));
     tbm_auto_out('output_file=' . trim((string)($result['file_name'] ?? '')));
     tbm_auto_out('doc_id=' . (int)($result['doc_id'] ?? 0));
+    tbm_auto_send_kakao_report('success', [
+        'date' => $targetDate,
+        'title' => trim((string)($result['title'] ?? '')),
+        'output_file' => trim((string)($result['file_name'] ?? '')),
+        'doc_id' => (int)($result['doc_id'] ?? 0),
+    ]);
     exit(0);
 } catch (Throwable $e) {
+    tbm_auto_send_kakao_report('failed', [
+        'date' => $targetDate,
+        'error' => $e->getMessage(),
+    ]);
     tbm_auto_out('[TBM AUTO] failed: ' . $e->getMessage(), true);
     exit(1);
 }
