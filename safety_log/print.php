@@ -13,9 +13,27 @@ function h($value)
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
 
+function safetyLogHasColumn(PDO $pdo, string $tableName, string $columnName): bool
+{
+    $stmt = $pdo->prepare(
+        'SELECT COUNT(*)
+         FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = :table_name
+           AND COLUMN_NAME = :column_name'
+    );
+    $stmt->execute([
+        ':table_name' => $tableName,
+        ':column_name' => $columnName,
+    ]);
+
+    return (int)$stmt->fetchColumn() > 0;
+}
+
 try {
     $pdo = getDB();
     $id = getValidLogId($pdo);
+    $hasPhoto3Column = safetyLogHasColumn($pdo, 'safety_manager_log_detail', 'photo_3');
 
     // safety_manager_log에서 단일 항목을 조회합니다.
     $stmt = $pdo->prepare(
@@ -28,7 +46,8 @@ try {
 
     // safety_manager_log_detail 목록을 조회합니다.
     $detailStmt = $pdo->prepare(
-        'SELECT item_no, work_time, activity, description, status, photo_1, photo_2
+        'SELECT item_no, work_time, activity, description, photo_1, photo_2, '
+        . ($hasPhoto3Column ? 'photo_3' : 'NULL AS photo_3') . '
          FROM safety_manager_log_detail
          WHERE log_id = :log_id
          ORDER BY item_no ASC'
@@ -188,13 +207,12 @@ try {
                             <th style="width: 120px;">시간</th>
                             <th>업무구분</th>
                             <th>내용</th>
-                            <th style="width: 120px;">상태</th>
                         </tr>
                         </thead>
                         <tbody>
                         <?php if (empty($details)): ?>
                             <tr>
-                                <td colspan="5" class="text-center text-muted py-4">등록된 세부 기록이 없습니다.</td>
+                                <td colspan="4" class="text-center text-muted py-4">등록된 세부 기록이 없습니다.</td>
                             </tr>
                         <?php else: ?>
                             <?php foreach ($details as $detail): ?>
@@ -203,7 +221,6 @@ try {
                                     <td><?= h($detail['work_time']) ?></td>
                                     <td><?= h($detail['activity']) ?></td>
                                     <td><?= h($detail['description']) ?></td>
-                                    <td><?= h($detail['status']) ?></td>
                                 </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>
@@ -220,6 +237,9 @@ try {
                 }
                 if (!empty($detail['photo_2'])) {
                     $images[] = $detail['photo_2'];
+                }
+                if (!empty($detail['photo_3'])) {
+                    $images[] = $detail['photo_3'];
                 }
             }
             ?>

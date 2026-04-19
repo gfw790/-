@@ -602,6 +602,18 @@ if ($unitRaId <= 0) {
   td {
     font-size: 12px;
   }
+  .col-sort {
+    width: 72px;
+    min-width: 72px;
+  }
+  .col-wide-text {
+    width: 220px;
+    min-width: 220px;
+  }
+  .col-sort input[type="number"] {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
   input[type="text"],
   input[type="date"],
   input[type="number"],
@@ -719,21 +731,21 @@ if ($unitRaId <= 0) {
               <thead>
                 <tr>
                   <th>ID</th>
-                  <th>정렬</th>
+                  <th class="col-sort">정렬</th>
                   <th>작업코드</th>
                   <th>작업명</th>
                   <th>주요 위험요소</th>
                   <th>사고유형</th>
                   <th>상해결과</th>
-                  <th>원인</th>
-                  <th>현재 조치사항</th>
-                  <th>추가 조치사항</th>
+                  <th class="col-wide-text">원인</th>
                   <th>개선 전 L</th>
                   <th>개선 전 S</th>
                   <th>개선 전 점수</th>
+                  <th class="col-wide-text">현재 조치사항</th>
                   <th>현재 L</th>
                   <th>현재 S</th>
                   <th>현재 점수</th>
+                  <th>추가 조치사항</th>
                   <th>개선 후 L</th>
                   <th>개선 후 S</th>
                   <th>개선 후 점수</th>
@@ -749,21 +761,21 @@ if ($unitRaId <= 0) {
                       <?= (int)($item['item_id'] ?? 0) > 0 ? (int)$item['item_id'] : '신규' ?>
                       <input type="hidden" name="item_id[]" value="<?= h((string)($item['item_id'] ?? '')) ?>">
                     </td>
-                    <td><input type="number" name="sort_no[]" value="<?= h($item['sort_no'] ?? '') ?>" placeholder="정렬순서"></td>
+                    <td class="col-sort"><input type="number" name="sort_no[]" value="<?= h($item['sort_no'] ?? '') ?>" placeholder="정렬순서"></td>
                     <td><input type="text" name="task_code[]" value="<?= h($item['task_code'] ?? '') ?>" placeholder="안전작업표준서 번호"></td>
                     <td><input type="text" name="task_name[]" value="<?= h($item['task_name'] ?? '') ?>"></td>
                     <td><textarea name="hazard_name[]"><?= h($item['hazard_name'] ?? '') ?></textarea></td>
                     <td><input type="text" name="accident_type[]" value="<?= h($item['accident_type'] ?? '') ?>"></td>
                     <td><input type="text" name="injury_result[]" value="<?= h($item['injury_result'] ?? '') ?>"></td>
-                    <td><textarea name="cause_text[]"><?= h($item['cause_text'] ?? '') ?></textarea></td>
-                    <td><textarea name="current_control_text[]"><?= h($item['current_control_text'] ?? '') ?></textarea></td>
-                    <td><textarea name="additional_control_text[]"><?= h($item['additional_control_text'] ?? '') ?></textarea></td>
+                    <td class="col-wide-text"><textarea name="cause_text[]"><?= h($item['cause_text'] ?? '') ?></textarea></td>
                     <td><input type="number" min="1" max="5" name="likelihood_before[]" value="<?= h($item['likelihood_before'] ?? '') ?>" data-score-group="before" data-row-index="<?= $index ?>"></td>
                     <td><input type="number" min="1" max="5" name="severity_before[]" value="<?= h($item['severity_before'] ?? '') ?>" data-score-group="before" data-row-index="<?= $index ?>"></td>
                     <td><span class="score-box" id="score-before-<?= $index ?>"><?= h($item['risk_score_before'] ?? '-') ?></span></td>
+                    <td class="col-wide-text"><textarea name="current_control_text[]"><?= h($item['current_control_text'] ?? '') ?></textarea></td>
                     <td><input type="number" min="1" max="5" name="likelihood_current[]" value="<?= h($item['likelihood_current'] ?? '') ?>" data-score-group="current" data-row-index="<?= $index ?>"></td>
                     <td><input type="number" min="1" max="5" name="severity_current[]" value="<?= h($item['severity_before'] ?? $item['severity_current'] ?? '') ?>" data-score-group="current" data-row-index="<?= $index ?>" readonly></td>
                     <td><span class="score-box" id="score-current-<?= $index ?>"><?= h($item['risk_score_current'] ?? '-') ?></span></td>
+                    <td><textarea name="additional_control_text[]"><?= h($item['additional_control_text'] ?? '') ?></textarea></td>
                     <td><input type="number" min="1" max="5" name="likelihood_after[]" value="<?= h($item['likelihood_after'] ?? '') ?>" data-score-group="after" data-row-index="<?= $index ?>"></td>
                     <td><input type="number" min="1" max="5" name="severity_after[]" value="<?= h($item['severity_after'] ?? '') ?>" data-score-group="after" data-row-index="<?= $index ?>"></td>
                     <td><span class="score-box" id="score-after-<?= $index ?>"><?= h($item['risk_score_after'] ?? '-') ?></span></td>
@@ -843,21 +855,21 @@ if ($unitRaId <= 0) {
             신규
             <input type="hidden" name="item_id[]" value="">
           </td>
-          <td><input type="number" name="sort_no[]" value="${sortNo}" placeholder="정렬순서"></td>
+          <td class="col-sort"><input type="number" name="sort_no[]" value="${sortNo}" placeholder="정렬순서"></td>
           <td><input type="text" name="task_code[]" value="" placeholder="안전작업표준서 번호"></td>
           <td><input type="text" name="task_name[]" value=""></td>
           <td><textarea name="hazard_name[]"></textarea></td>
           <td><input type="text" name="accident_type[]" value=""></td>
           <td><input type="text" name="injury_result[]" value=""></td>
-          <td><textarea name="cause_text[]"></textarea></td>
-          <td><textarea name="current_control_text[]"></textarea></td>
-          <td><textarea name="additional_control_text[]"></textarea></td>
+          <td class="col-wide-text"><textarea name="cause_text[]"></textarea></td>
           <td><input type="number" min="1" max="5" name="likelihood_before[]" value="" data-score-group="before" data-row-index="${rowIndex}"></td>
           <td><input type="number" min="1" max="5" name="severity_before[]" value="" data-score-group="before" data-row-index="${rowIndex}"></td>
           <td><span class="score-box" id="score-before-${rowIndex}">-</span></td>
+          <td class="col-wide-text"><textarea name="current_control_text[]"></textarea></td>
           <td><input type="number" min="1" max="5" name="likelihood_current[]" value="" data-score-group="current" data-row-index="${rowIndex}"></td>
           <td><input type="number" min="1" max="5" name="severity_current[]" value="" data-score-group="current" data-row-index="${rowIndex}" readonly></td>
           <td><span class="score-box" id="score-current-${rowIndex}">-</span></td>
+          <td><textarea name="additional_control_text[]"></textarea></td>
           <td><input type="number" min="1" max="5" name="likelihood_after[]" value="" data-score-group="after" data-row-index="${rowIndex}"></td>
           <td><input type="number" min="1" max="5" name="severity_after[]" value="" data-score-group="after" data-row-index="${rowIndex}"></td>
           <td><span class="score-box" id="score-after-${rowIndex}">-</span></td>

@@ -162,6 +162,49 @@ function safetyLogHasColumn(PDO $pdo, string $tableName, string $columnName): bo
     return (int)$stmt->fetchColumn() > 0;
 }
 
+function normalizePreventionData($rawValue): string
+{
+    if (!is_string($rawValue) || trim($rawValue) === '') {
+        return '';
+    }
+
+    $decoded = json_decode($rawValue, true);
+    if (!is_array($decoded)) {
+        return '';
+    }
+
+    $activity = trim((string)($decoded['activity'] ?? ''));
+    $process = trim((string)($decoded['process'] ?? ''));
+    $items = [];
+
+    foreach (($decoded['items'] ?? []) as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+
+        $measure = trim((string)($item['measure'] ?? ''));
+        $status = trim((string)($item['status'] ?? ''));
+        if ($measure === '') {
+            continue;
+        }
+
+        $items[] = [
+            'measure' => $measure,
+            'status' => $status,
+        ];
+    }
+
+    if ($activity === '' && $process === '' && empty($items)) {
+        return '';
+    }
+
+    return json_encode([
+        'activity' => $activity,
+        'process' => $process,
+        'items' => $items,
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+}
+
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Location: index.php');
     exit;
@@ -206,9 +249,11 @@ try {
             work_time VARCHAR(100),
             activity VARCHAR(255),
             description TEXT,
+            prevention_data LONGTEXT NULL,
             status VARCHAR(50),
             photo_1 VARCHAR(500),
             photo_2 VARCHAR(500),
+            photo_3 VARCHAR(500),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             INDEX (log_id),
             FOREIGN KEY (log_id) REFERENCES safety_manager_log(id) ON DELETE CASCADE
@@ -217,6 +262,12 @@ try {
 
     if (!safetyLogHasColumn($pdo, 'safety_manager_log', 'site_visit_data')) {
         $pdo->exec('ALTER TABLE safety_manager_log ADD COLUMN site_visit_data LONGTEXT NULL AFTER work_location');
+    }
+    if (!safetyLogHasColumn($pdo, 'safety_manager_log_detail', 'prevention_data')) {
+        $pdo->exec('ALTER TABLE safety_manager_log_detail ADD COLUMN prevention_data LONGTEXT NULL AFTER description');
+    }
+    if (!safetyLogHasColumn($pdo, 'safety_manager_log_detail', 'photo_3')) {
+        $pdo->exec('ALTER TABLE safety_manager_log_detail ADD COLUMN photo_3 VARCHAR(500) NULL AFTER photo_2');
     }
 
     $pdo->beginTransaction();
@@ -239,8 +290,8 @@ try {
 
     $logId = (int)$pdo->lastInsertId();
     $insertDetail = $pdo->prepare(
-        'INSERT INTO safety_manager_log_detail (log_id, item_no, work_time, activity, description, status, photo_1, photo_2)
-         VALUES (:log_id, :item_no, :work_time, :activity, :description, :status, :photo_1, :photo_2)'
+           'INSERT INTO safety_manager_log_detail (log_id, item_no, work_time, activity, description, prevention_data, status, photo_1, photo_2, photo_3)
+            VALUES (:log_id, :item_no, :work_time, :activity, :description, :prevention_data, :status, :photo_1, :photo_2, :photo_3)'
     );
 
     $uploadRoot = 'A:\\risk_server\\uploads\\safety_log';
@@ -256,12 +307,13 @@ try {
         $workTime = trim($detail['work_time'] ?? '');
         $activity = trim($detail['activity'] ?? '');
         $description = trim($detail['description'] ?? '');
-        $status = trim($detail['status'] ?? '');
+        $preventionData = normalizePreventionData($detail['prevention_data'] ?? '');
 
         $photo1 = saveDetailFile($files[$index]['photo_1'] ?? [], $uploadRoot, $relativeDir);
         $photo2 = saveDetailFile($files[$index]['photo_2'] ?? [], $uploadRoot, $relativeDir);
+        $photo3 = saveDetailFile($files[$index]['photo_3'] ?? [], $uploadRoot, $relativeDir);
 
-        if ($workTime === '' && $activity === '' && $description === '' && $status === '' && $photo1 === '' && $photo2 === '') {
+        if ($workTime === '' && $activity === '' && $description === '' && $preventionData === '' && $photo1 === '' && $photo2 === '' && $photo3 === '') {
             continue;
         }
 
@@ -271,9 +323,11 @@ try {
             ':work_time' => $workTime,
             ':activity' => $activity,
             ':description' => $description,
-            ':status' => $status,
+            ':prevention_data' => $preventionData,
+            ':status' => '',
             ':photo_1' => $photo1,
             ':photo_2' => $photo2,
+            ':photo_3' => $photo3,
         ]);
     }
 

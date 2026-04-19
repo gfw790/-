@@ -91,6 +91,66 @@ function saveDetailFile(array $file, string $uploadRoot, string $relativeDir): s
     return $relativeDir . '/' . $filename;
 }
 
+function safetyLogHasColumn(PDO $pdo, string $tableName, string $columnName): bool
+{
+    $stmt = $pdo->prepare(
+        'SELECT COUNT(*)
+         FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = :table_name
+           AND COLUMN_NAME = :column_name'
+    );
+    $stmt->execute([
+        ':table_name' => $tableName,
+        ':column_name' => $columnName,
+    ]);
+
+    return (int)$stmt->fetchColumn() > 0;
+}
+
+function normalizePreventionData($rawValue): string
+{
+    if (!is_string($rawValue) || trim($rawValue) === '') {
+        return '';
+    }
+
+    $decoded = json_decode($rawValue, true);
+    if (!is_array($decoded)) {
+        return '';
+    }
+
+    $activity = trim((string)($decoded['activity'] ?? ''));
+    $process = trim((string)($decoded['process'] ?? ''));
+    $items = [];
+
+    foreach (($decoded['items'] ?? []) as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+
+        $measure = trim((string)($item['measure'] ?? ''));
+        $status = trim((string)($item['status'] ?? ''));
+        if ($measure === '') {
+            continue;
+        }
+
+        $items[] = [
+            'measure' => $measure,
+            'status' => $status,
+        ];
+    }
+
+    if ($activity === '' && $process === '' && empty($items)) {
+        return '';
+    }
+
+    return json_encode([
+        'activity' => $activity,
+        'process' => $process,
+        'items' => $items,
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+}
+
 $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
 $logDate = trim($_POST['log_date'] ?? '');
 $managerName = trim($_POST['manager_name'] ?? '');
@@ -112,12 +172,18 @@ if ($id === false || $id === null) {
 
 try {
     $pdo = getDB();
+    if (!safetyLogHasColumn($pdo, 'safety_manager_log_detail', 'prevention_data')) {
+        $pdo->exec('ALTER TABLE safety_manager_log_detail ADD COLUMN prevention_data LONGTEXT NULL AFTER description');
+    }
+    if (!safetyLogHasColumn($pdo, 'safety_manager_log_detail', 'photo_3')) {
+        $pdo->exec('ALTER TABLE safety_manager_log_detail ADD COLUMN photo_3 VARCHAR(500) NULL AFTER photo_2');
+    }
     $pdo->beginTransaction();
 
     // 기존 detail 파일 경로를 보존하기 위해 현재 데이터를 먼저 조회합니다.
     $oldPhotos = [];
     $oldStmt = $pdo->prepare(
-        'SELECT item_no, photo_1, photo_2
+        'SELECT item_no, photo_1, photo_2, photo_3, prevention_data
          FROM safety_manager_log_detail
          WHERE log_id = :log_id'
     );
@@ -126,6 +192,8 @@ try {
         $oldPhotos[(int)$oldRow['item_no']] = [
             'photo_1' => $oldRow['photo_1'],
             'photo_2' => $oldRow['photo_2'],
+            'photo_3' => $oldRow['photo_3'],
+            'prevention_data' => $oldRow['prevention_data'] ?? '',
         ];
     }
 
@@ -160,8 +228,8 @@ try {
 
     // 새로운 detail 다시 삽입
     $insertDetail = $pdo->prepare(
-        'INSERT INTO safety_manager_log_detail (log_id, item_no, work_time, activity, description, status, photo_1, photo_2)
-         VALUES (:log_id, :item_no, :work_time, :activity, :description, :status, :photo_1, :photo_2)'
+           'INSERT INTO safety_manager_log_detail (log_id, item_no, work_time, activity, description, prevention_data, status, photo_1, photo_2, photo_3)
+            VALUES (:log_id, :item_no, :work_time, :activity, :description, :prevention_data, :status, :photo_1, :photo_2, :photo_3)'
     );
 
     $uploadRoot = 'A:\\risk_server\\uploads\\safety_log';
@@ -175,15 +243,20 @@ try {
         $workTime = trim($detail['work_time'] ?? '');
         $activity = trim($detail['activity'] ?? '');
         $description = trim($detail['description'] ?? '');
-        $status = trim($detail['status'] ?? '');
+        $preventionData = normalizePreventionData($detail['prevention_data'] ?? '');
 
         $photo1Upload = saveDetailFile($files[$index]['photo_1'] ?? [], $uploadRoot, $relativeDir);
         $photo2Upload = saveDetailFile($files[$index]['photo_2'] ?? [], $uploadRoot, $relativeDir);
+        $photo3Upload = saveDetailFile($files[$index]['photo_3'] ?? [], $uploadRoot, $relativeDir);
 
         $photo1 = $photo1Upload !== '' ? $photo1Upload : ($oldPhotos[$itemNo]['photo_1'] ?? '');
         $photo2 = $photo2Upload !== '' ? $photo2Upload : ($oldPhotos[$itemNo]['photo_2'] ?? '');
+        $photo3 = $photo3Upload !== '' ? $photo3Upload : ($oldPhotos[$itemNo]['photo_3'] ?? '');
+        if ($preventionData === '') {
+            $preventionData = (string)($oldPhotos[$itemNo]['prevention_data'] ?? '');
+        }
 
-        if ($workTime === '' && $activity === '' && $description === '' && $status === '' && $photo1 === '' && $photo2 === '') {
+        if ($workTime === '' && $activity === '' && $description === '' && $preventionData === '' && $photo1 === '' && $photo2 === '' && $photo3 === '') {
             continue;
         }
 
@@ -193,9 +266,11 @@ try {
             ':work_time' => $workTime,
             ':activity' => $activity,
             ':description' => $description,
-            ':status' => $status,
+            ':prevention_data' => $preventionData,
+            ':status' => '',
             ':photo_1' => $photo1,
             ':photo_2' => $photo2,
+            ':photo_3' => $photo3,
         ]);
     }
 

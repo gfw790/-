@@ -40,6 +40,38 @@ function safetyLogHasColumn(PDO $pdo, string $tableName, string $columnName): bo
     return (int)$stmt->fetchColumn() > 0;
 }
 
+function parsePreventionData($rawValue): array
+{
+    if (!is_string($rawValue) || trim($rawValue) === '') {
+        return [];
+    }
+
+    $decoded = json_decode($rawValue, true);
+    if (!is_array($decoded) || !isset($decoded['items']) || !is_array($decoded['items'])) {
+        return [];
+    }
+
+    $items = [];
+    foreach ($decoded['items'] as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+
+        $measure = trim((string)($item['measure'] ?? ''));
+        $status = trim((string)($item['status'] ?? ''));
+        if ($measure === '') {
+            continue;
+        }
+
+        $items[] = [
+            'measure' => $measure,
+            'status' => $status,
+        ];
+    }
+
+    return $items;
+}
+
 $alertType = $_GET['type'] ?? '';
 $alertMessage = trim($_GET['message'] ?? '');
 $alertClass = '';
@@ -55,6 +87,8 @@ try {
     $pdo = getDB();
     $id = getValidLogId($pdo);
     $hasSiteVisitDataColumn = safetyLogHasColumn($pdo, 'safety_manager_log', 'site_visit_data');
+    $hasPreventionDataColumn = safetyLogHasColumn($pdo, 'safety_manager_log_detail', 'prevention_data');
+    $hasPhoto3Column = safetyLogHasColumn($pdo, 'safety_manager_log_detail', 'photo_3');
 
     // safety_manager_log에서 단일 항목을 조회합니다.
     $logStmt = $pdo->prepare(
@@ -68,7 +102,9 @@ try {
 
     // safety_manager_log_detail에서 해당 log_id의 detail 목록을 조회합니다.
     $detailStmt = $pdo->prepare(
-        'SELECT item_no, work_time, activity, description, status, photo_1, photo_2
+        'SELECT item_no, work_time, activity, description, '
+        . ($hasPreventionDataColumn ? 'prevention_data' : 'NULL AS prevention_data') . ', status, photo_1, photo_2, '
+        . ($hasPhoto3Column ? 'photo_3' : 'NULL AS photo_3') . '
          FROM safety_manager_log_detail
          WHERE log_id = :log_id
          ORDER BY item_no ASC'
@@ -199,11 +235,11 @@ include __DIR__ . '/includes/header.php';
                         <tr>
                             <th style="width: 70px;">No.</th>
                             <th style="width: 120px;">시간</th>
-                            <th>업무구분</th>
-                            <th>내용</th>
-                            <th style="width: 120px;">상태</th>
+                            <th>관찰 업무</th>
+                            <th>공정 / 예방대책</th>
                             <th style="width: 200px;">사진1</th>
                             <th style="width: 200px;">사진2</th>
+                            <th style="width: 200px;">사진3</th>
                         </tr>
                         </thead>
                         <tbody>
@@ -217,8 +253,32 @@ include __DIR__ . '/includes/header.php';
                                     <td><?= h($detail['item_no']) ?></td>
                                     <td><?= h($detail['work_time']) ?></td>
                                     <td><?= h($detail['activity']) ?></td>
-                                    <td><?= h($detail['description']) ?></td>
-                                    <td><?= h($detail['status']) ?></td>
+                                    <td>
+                                        <div class="fw-semibold mb-2"><?= h($detail['description']) ?></div>
+                                        <?php $preventionItems = parsePreventionData($detail['prevention_data'] ?? ''); ?>
+                                        <?php if (!empty($preventionItems)): ?>
+                                            <div class="table-responsive">
+                                                <table class="table table-sm table-bordered mb-0">
+                                                    <thead class="table-light">
+                                                    <tr>
+                                                        <th style="width: 70px;">No.</th>
+                                                        <th>예방대책</th>
+                                                        <th style="width: 140px;">상태</th>
+                                                    </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                    <?php foreach ($preventionItems as $preventionIndex => $preventionItem): ?>
+                                                        <tr>
+                                                            <td><?= h($preventionIndex + 1) ?></td>
+                                                            <td><?= h($preventionItem['measure']) ?></td>
+                                                            <td><?= h($preventionItem['status']) ?></td>
+                                                        </tr>
+                                                    <?php endforeach; ?>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        <?php endif; ?>
+                                    </td>
                                     <td>
                                         <?php if (!empty($detail['photo_1'])): ?>
                                             <a href="show_image.php?file=<?= h(rawurlencode($detail['photo_1'])) ?>" target="_blank">
@@ -232,6 +292,15 @@ include __DIR__ . '/includes/header.php';
                                         <?php if (!empty($detail['photo_2'])): ?>
                                             <a href="show_image.php?file=<?= h(rawurlencode($detail['photo_2'])) ?>" target="_blank">
                                                 <img src="show_image.php?file=<?= h(rawurlencode($detail['photo_2'])) ?>" alt="사진2" class="img-fluid img-thumbnail" style="max-height: 120px;">
+                                            </a>
+                                        <?php else: ?>
+                                            <span class="text-muted">없음</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?php if (!empty($detail['photo_3'])): ?>
+                                            <a href="show_image.php?file=<?= h(rawurlencode($detail['photo_3'])) ?>" target="_blank">
+                                                <img src="show_image.php?file=<?= h(rawurlencode($detail['photo_3'])) ?>" alt="사진3" class="img-fluid img-thumbnail" style="max-height: 120px;">
                                             </a>
                                         <?php else: ?>
                                             <span class="text-muted">없음</span>

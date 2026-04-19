@@ -13,6 +13,23 @@ function h($value)
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
 
+function safetyLogHasColumn(PDO $pdo, string $tableName, string $columnName): bool
+{
+    $stmt = $pdo->prepare(
+        'SELECT COUNT(*)
+         FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = :table_name
+           AND COLUMN_NAME = :column_name'
+    );
+    $stmt->execute([
+        ':table_name' => $tableName,
+        ':column_name' => $columnName,
+    ]);
+
+    return (int)$stmt->fetchColumn() > 0;
+}
+
 $log = null;
 $details = [];
 $errorMessage = '';
@@ -30,6 +47,7 @@ $values = [
 try {
         $pdo = getDB();
         $id = getValidLogId($pdo);
+    $hasPhoto3Column = safetyLogHasColumn($pdo, 'safety_manager_log_detail', 'photo_3');
 
         // safety_manager_log에서 단일 항목을 조회합니다.
         $stmt = $pdo->prepare(
@@ -57,7 +75,8 @@ try {
 
             // safety_manager_log_detail 목록을 조회합니다.
             $detailStmt = $pdo->prepare(
-                'SELECT id, item_no, work_time, activity, description, status, photo_1, photo_2
+                'SELECT id, item_no, work_time, activity, description, photo_1, photo_2, '
+                . ($hasPhoto3Column ? 'photo_3' : 'NULL AS photo_3') . '
                  FROM safety_manager_log_detail
                  WHERE log_id = :log_id
                  ORDER BY item_no ASC'
@@ -82,21 +101,16 @@ function renderDetailRow(array $detail, int $index): string
             <td><input type="text" name="details[%1$d][activity]" class="form-control" value="%4$s"></td>
             <td><textarea name="details[%1$d][description]" class="form-control" rows="2">%5$s</textarea></td>
             <td>
-                <select name="details[%1$d][status]" class="form-select">
-                    <option value="">선택</option>
-                    <option value="양호"%6$s>양호</option>
-                    <option value="불량"%7$s>불량</option>
-                    <option value="조치완료"%8$s>조치완료</option>
-                    <option value="후속조치필요"%9$s>후속조치필요</option>
-                </select>
-            </td>
-            <td>
                 <input type="file" name="details[%1$d][photo_1]" class="form-control">
-                %10$s
+                %6$s
             </td>
             <td>
                 <input type="file" name="details[%1$d][photo_2]" class="form-control">
-                %11$s
+                %7$s
+            </td>
+            <td>
+                <input type="file" name="details[%1$d][photo_3]" class="form-control">
+                %8$s
             </td>
             <td><button type="button" class="btn btn-danger btn-sm delete-row">삭제</button></td>
         </tr>',
@@ -105,12 +119,9 @@ function renderDetailRow(array $detail, int $index): string
         h($detail['work_time'] ?? ''),
         h($detail['activity'] ?? ''),
         h($detail['description'] ?? ''),
-        ($detail['status'] ?? '') === '양호' ? ' selected' : '',
-        ($detail['status'] ?? '') === '불량' ? ' selected' : '',
-        ($detail['status'] ?? '') === '조치완료' ? ' selected' : '',
-        ($detail['status'] ?? '') === '후속조치필요' ? ' selected' : '',
         !empty($detail['photo_1']) ? '<div class="form-text">현재: ' . h($detail['photo_1']) . '</div>' : '',
-        !empty($detail['photo_2']) ? '<div class="form-text">현재: ' . h($detail['photo_2']) . '</div>' : ''
+        !empty($detail['photo_2']) ? '<div class="form-text">현재: ' . h($detail['photo_2']) . '</div>' : '',
+        !empty($detail['photo_3']) ? '<div class="form-text">현재: ' . h($detail['photo_3']) . '</div>' : ''
     );
 }
 ?>
@@ -187,9 +198,9 @@ include __DIR__ . '/includes/header.php';
                             <th style="width: 120px;">시간</th>
                             <th style="width: 120px;">업무구분</th>
                             <th>내용</th>
-                            <th style="width: 140px;">상태</th>
                             <th style="width: 140px;">사진1</th>
                             <th style="width: 140px;">사진2</th>
+                            <th style="width: 140px;">사진3</th>
                             <th style="width: 90px;">삭제</th>
                         </tr>
                         </thead>
@@ -226,9 +237,9 @@ include __DIR__ . '/includes/header.php';
         const workTime = data.work_time ?? '';
         const activity = data.activity ?? '';
         const description = data.description ?? '';
-        const status = data.status ?? '';
         const currentPhoto1 = data.photo_1 ? `<div class="form-text">현재: ${data.photo_1}</div>` : '';
         const currentPhoto2 = data.photo_2 ? `<div class="form-text">현재: ${data.photo_2}</div>` : '';
+        const currentPhoto3 = data.photo_3 ? `<div class="form-text">현재: ${data.photo_3}</div>` : '';
 
         return `
             <tr class="detail-row">
@@ -240,21 +251,16 @@ include __DIR__ . '/includes/header.php';
                 <td><input type="text" name="details[${index}][activity]" class="form-control" value="${activity}"></td>
                 <td><textarea name="details[${index}][description]" class="form-control" rows="2">${description}</textarea></td>
                 <td>
-                    <select name="details[${index}][status]" class="form-select">
-                        <option value="">선택</option>
-                        <option value="양호" ${status === '양호' ? 'selected' : ''}>양호</option>
-                        <option value="불량" ${status === '불량' ? 'selected' : ''}>불량</option>
-                        <option value="조치완료" ${status === '조치완료' ? 'selected' : ''}>조치완료</option>
-                        <option value="후속조치필요" ${status === '후속조치필요' ? 'selected' : ''}>후속조치필요</option>
-                    </select>
-                </td>
-                <td>
                     <input type="file" name="details[${index}][photo_1]" class="form-control">
                     ${currentPhoto1}
                 </td>
                 <td>
                     <input type="file" name="details[${index}][photo_2]" class="form-control">
                     ${currentPhoto2}
+                </td>
+                <td>
+                    <input type="file" name="details[${index}][photo_3]" class="form-control">
+                    ${currentPhoto3}
                 </td>
                 <td><button type="button" class="btn btn-danger btn-sm delete-row">삭제</button></td>
             </tr>`;
