@@ -351,7 +351,7 @@ function normalize_matrix_cell_shift(string $value): ?string
     };
 }
 
-function parse_matrix_schedule_upload(array $rows, array $validWorkerNames): array
+function parse_matrix_schedule_upload(array $rows, array $validWorkerNames, string $monthStart = ''): array
 {
     if (count($rows) < 2) {
         return [];
@@ -968,6 +968,7 @@ $prevMonth = date('Y-m-d', strtotime('-1 month', strtotime($monthStart)));
   .upload-panel { border: 1px solid var(--border); padding: 18px; border-radius: 12px; margin-bottom: 28px; background: var(--bg3); }
   .upload-panel legend { font-weight: 700; margin-bottom: 12px; color: var(--text-hi); font-size: 13px; }
   .upload-panel input[type="file"] { color: var(--text); font: inherit; }
+    .upload-panel label { display: grid; gap: 8px; }
 
   @media (max-width: 1200px) {
     .calendar-header,
@@ -977,6 +978,45 @@ $prevMonth = date('Y-m-d', strtotime('-1 month', strtotime($monthStart)));
     .calendar-header,
     .calendar-week { grid-template-columns: repeat(7, minmax(90px, 1fr)); }
   }
+    @media (max-width: 768px) {
+        body { padding: 16px 12px 28px; }
+        .topbar { align-items: stretch; }
+        .identity { width: 100%; }
+        .identity:last-child { gap: 8px; }
+        .identity:last-child .btn-secondary { flex: 1 1 calc(50% - 4px); min-width: 0; }
+        .panel-head { padding: 18px 16px 12px; }
+        .panel-head h1 { font-size: 20px; }
+        .panel-head p { line-height: 1.5; }
+        .error,
+        .success { margin: 12px 16px; }
+        .schedule-nav { justify-content: space-between; gap: 8px; }
+        .schedule-nav strong { width: 100%; order: -1; font-size: 18px; }
+        .schedule-nav .btn-secondary { flex: 1 1 calc(50% - 4px); }
+        .schedule-grid { gap: 12px; }
+        .calendar-header { display: none; }
+        .calendar-week { grid-template-columns: 1fr; gap: 10px; }
+        .calendar-day { padding: 12px; }
+        .calendar-day-empty { display: none; }
+        .calendar-day-title { margin-bottom: 6px; }
+        .calendar-day-weekday { font-size: 12px; }
+        .calendar-entry { padding: 8px 10px; }
+        .calendar-entry-label { font-size: 11px; }
+        .calendar-entry-text { font-size: 13px; }
+        .upload-panel { padding: 14px; margin-bottom: 20px; }
+        .schedule-actions { flex-direction: column; }
+        .schedule-actions .btn-secondary,
+        form[onsubmit] .btn-secondary { width: 100%; }
+        .calendar-worker-popup {
+            position: fixed;
+            left: 12px !important;
+            right: 12px;
+            top: auto;
+            bottom: 12px;
+            min-width: 0 !important;
+            max-height: min(60vh, 420px);
+        }
+        .calendar-worker-list { max-height: calc(min(60vh, 420px) - 64px); }
+    }
 </style>
 </head>
 <body<?= $isReadOnly ? ' class="readonly"' : '' ?>>
@@ -1175,9 +1215,18 @@ $prevMonth = date('Y-m-d', strtotime('-1 month', strtotime($monthStart)));
       activeWorkerNames = parseWorkerNames(textNode.textContent);
       updateCalendarWorkerSelection();
       var rect = entry.getBoundingClientRect();
-      calendarWorkerPopup.style.minWidth = rect.width + 'px';
-      calendarWorkerPopup.style.left = window.scrollX + rect.left + 'px';
-      calendarWorkerPopup.style.top = window.scrollY + rect.bottom + 'px';
+            if (window.matchMedia('(max-width: 768px)').matches) {
+                calendarWorkerPopup.style.minWidth = '';
+                calendarWorkerPopup.style.left = '12px';
+                calendarWorkerPopup.style.top = '';
+            } else {
+                var popupWidth = Math.max(rect.width, 260);
+                var maxLeft = window.scrollX + window.innerWidth - popupWidth - 16;
+                var left = Math.min(window.scrollX + rect.left, Math.max(window.scrollX + 16, maxLeft));
+                calendarWorkerPopup.style.minWidth = rect.width + 'px';
+                calendarWorkerPopup.style.left = left + 'px';
+                calendarWorkerPopup.style.top = window.scrollY + rect.bottom + 'px';
+            }
       calendarWorkerPopup.classList.add('open');
     }
 
@@ -1250,6 +1299,16 @@ $prevMonth = date('Y-m-d', strtotime('-1 month', strtotime($monthStart)));
           var shift = this.getAttribute('data-shift');
           showCalendarWorkerPopup(this, textNode, date, shift);
         });
+
+                entry.addEventListener('click', function(event) {
+                    if (!window.matchMedia('(max-width: 768px)').matches) {
+                        return;
+                    }
+                    event.stopPropagation();
+                    var date = this.getAttribute('data-date');
+                    var shift = this.getAttribute('data-shift');
+                    showCalendarWorkerPopup(this, textNode, date, shift);
+                });
       });
     }
   </script>
