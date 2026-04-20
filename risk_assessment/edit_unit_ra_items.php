@@ -63,6 +63,7 @@ function ensure_history_table(PDO $pdo): void
     history_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     unit_ra_id BIGINT UNSIGNED NOT NULL,
     item_id BIGINT UNSIGNED NULL,
+    source_item_id BIGINT UNSIGNED NULL,
     action_type VARCHAR(20) NOT NULL,
     changed_fields JSON NULL,
     before_data JSON NULL,
@@ -73,13 +74,16 @@ function ensure_history_table(PDO $pdo): void
     PRIMARY KEY (history_id),
     KEY idx_unit_ra_item_history_unit_changed (unit_ra_id, changed_at),
     KEY idx_unit_ra_item_history_item (item_id),
-    CONSTRAINT fk_unit_ra_item_history_header
-      FOREIGN KEY (unit_ra_id) REFERENCES unit_ra_header (unit_ra_id)
-      ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT fk_unit_ra_item_history_item
-      FOREIGN KEY (item_id) REFERENCES unit_ra_item (item_id)
-      ON DELETE SET NULL ON UPDATE CASCADE
+    KEY idx_unit_ra_item_history_source_item (source_item_id)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+  $columnStmt = $pdo->query("SHOW COLUMNS FROM unit_ra_item_history LIKE 'source_item_id'");
+  $hasSourceItemId = $columnStmt !== false && $columnStmt->fetch() !== false;
+  if (!$hasSourceItemId) {
+    $pdo->exec("ALTER TABLE unit_ra_item_history ADD COLUMN source_item_id BIGINT UNSIGNED NULL AFTER item_id");
+  }
+
+  $pdo->exec("UPDATE unit_ra_item_history SET source_item_id = item_id WHERE source_item_id IS NULL AND item_id IS NOT NULL");
 }
 
 function item_history_snapshot(array $item): array
@@ -128,6 +132,7 @@ function save_item_history(PDO $pdo, int $unitRaId, ?int $itemId, string $action
     (
       unit_ra_id,
       item_id,
+      source_item_id,
       action_type,
       changed_fields,
       before_data,
@@ -140,6 +145,7 @@ function save_item_history(PDO $pdo, int $unitRaId, ?int $itemId, string $action
     (
       :unit_ra_id,
       :item_id,
+      :source_item_id,
       :action_type,
       :changed_fields,
       :before_data,
@@ -151,6 +157,7 @@ function save_item_history(PDO $pdo, int $unitRaId, ?int $itemId, string $action
   $stmt->execute([
     ':unit_ra_id' => $unitRaId,
     ':item_id' => $itemId,
+    ':source_item_id' => $itemId,
     ':action_type' => $actionType,
     ':changed_fields' => !empty($changedFields) ? json_encode(array_values($changedFields), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
     ':before_data' => !empty($beforeData) ? json_encode($beforeData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
@@ -197,6 +204,56 @@ function history_field_labels(): array
   ];
 }
 
+function history_format_value($value): string
+{
+  if ($value === null || $value === '') {
+    return '-';
+  }
+
+  return trim((string)$value) === '' ? '-' : (string)$value;
+}
+
+function build_history_summary_lines(array $history, array $fieldLabels): array
+{
+  $actionType = (string)($history['action_type'] ?? 'update');
+  $beforeData = decode_history_json($history['before_data'] ?? null);
+  $afterData = decode_history_json($history['after_data'] ?? null);
+  $changedFields = decode_history_json($history['changed_fields'] ?? null);
+  $lines = [];
+
+  foreach ($changedFields as $fieldName) {
+    $label = $fieldLabels[$fieldName] ?? $fieldName;
+    $beforeValue = history_format_value($beforeData[$fieldName] ?? null);
+    $afterValue = history_format_value($afterData[$fieldName] ?? null);
+
+    if ($actionType === 'insert') {
+      $lines[] = sprintf('%s: 신규값 %s', $label, $afterValue);
+      continue;
+    }
+
+    if ($actionType === 'delete') {
+      $lines[] = sprintf('%s: 삭제 전 %s', $label, $beforeValue);
+      continue;
+    }
+
+    $lines[] = sprintf('%s: 수정 전 %s / 수정 후 %s', $label, $beforeValue, $afterValue);
+  }
+
+  return $lines;
+}
+
+function history_action_label(string $actionType): string
+{
+  if ($actionType === 'insert') {
+    return '신규';
+  }
+  if ($actionType === 'delete') {
+    return '삭제';
+  }
+
+  return '수정';
+}
+
 function score_from_pair(?int $likelihood, ?int $severity): ?int
 {
     if ($likelihood === null || $severity === null) {
@@ -231,6 +288,7 @@ function blank_item(array $defaults = []): array
         'improvement_due_date' => '',
         'remark' => '',
         'use_yn' => 'Y',
+        'delete_yn' => '0',
     ], $defaults);
 }
 
@@ -262,6 +320,7 @@ function post_row_count(array $source): int
         'improvement_due_date',
         'remark',
         'use_yn',
+        'delete_yn',
     ];
 
     $count = 0;
@@ -310,6 +369,7 @@ function build_posted_items(array $source): array
             'improvement_due_date' => (string)(post_array_value($source, 'improvement_due_date', $index) ?? ''),
             'remark' => (string)(post_array_value($source, 'remark', $index) ?? ''),
             'use_yn' => ((string)(post_array_value($source, 'use_yn', $index) ?? 'Y')) === 'N' ? 'N' : 'Y',
+            'delete_yn' => ((string)(post_array_value($source, 'delete_yn', $index) ?? '0')) === '1' ? '1' : '0',
         ]);
     }
 
@@ -436,8 +496,11 @@ if ($unitRaId <= 0) {
                         )
                 ");
 
+                      $deleteStmt = $pdo->prepare("DELETE FROM unit_ra_item WHERE item_id = :item_id AND unit_ra_id = :unit_ra_id");
+
                 $updatedCount = 0;
                 $insertedCount = 0;
+                      $deletedCount = 0;
         $historyCount = 0;
 
                 foreach ($itemIds as $index => $rawItemId) {
@@ -461,6 +524,7 @@ if ($unitRaId <= 0) {
                     $remark = nullable_text($_POST['remark'][$index] ?? null);
                     $sortNo = nullable_int($_POST['sort_no'][$index] ?? null) ?? ($index + 1);
                     $useYn = (($_POST['use_yn'][$index] ?? 'Y') === 'N') ? 'N' : 'Y';
+                    $deleteYn = (string)(post_array_value($_POST, 'delete_yn', $index) ?? '0') === '1';
 
                     $hasContent = $taskCode !== null
                         || $taskName !== ''
@@ -478,6 +542,20 @@ if ($unitRaId <= 0) {
                         || $severityCurrent !== null
                         || $likelihoodAfter !== null
                         || $severityAfter !== null;
+
+                      if ($itemId > 0 && $deleteYn) {
+                        $beforeSnapshot = $existingItems[$itemId] ?? [];
+                        if (!empty($beforeSnapshot)) {
+                          save_item_history($pdo, $unitRaId, $itemId, 'delete', $beforeSnapshot, [], array_keys($beforeSnapshot), $user);
+                          $historyCount++;
+                          $deleteStmt->execute([
+                            ':item_id' => $itemId,
+                            ':unit_ra_id' => $unitRaId,
+                          ]);
+                          $deletedCount++;
+                        }
+                        continue;
+                      }
 
                     if (!$hasContent) {
                         continue;
@@ -557,12 +635,12 @@ if ($unitRaId <= 0) {
                     }
                 }
 
-                if ($updatedCount === 0 && $insertedCount === 0) {
+                if ($updatedCount === 0 && $insertedCount === 0 && $deletedCount === 0) {
                     throw new RuntimeException('내용이 입력된 행이 없어 저장할 수 없습니다.');
                 }
 
                 $pdo->commit();
-        $successMessage = sprintf('항목이 저장되었습니다. 수정 %d건, 신규 %d건, 이력 %d건입니다.', $updatedCount, $insertedCount, $historyCount);
+            $successMessage = sprintf('항목이 저장되었습니다. 수정 %d건, 신규 %d건, 삭제 %d건, 이력 %d건입니다.', $updatedCount, $insertedCount, $deletedCount, $historyCount);
             } catch (Throwable $e) {
                 if ($pdo->inTransaction()) {
                     $pdo->rollBack();
@@ -635,7 +713,7 @@ if ($unitRaId <= 0) {
     }
 
     if ($header) {
-      $historyStmt = $pdo->prepare("SELECT history_id, item_id, action_type, changed_fields, before_data, after_data, changed_by_name, changed_at
+      $historyStmt = $pdo->prepare("SELECT history_id, item_id, source_item_id, action_type, changed_fields, before_data, after_data, changed_by_name, changed_at
         FROM unit_ra_item_history
         WHERE unit_ra_id = :unit_ra_id
         ORDER BY changed_at DESC, history_id DESC
@@ -906,10 +984,29 @@ if ($unitRaId <= 0) {
     color: #1f4e79;
     font-weight: 700;
   }
+  .history-badge.is-insert {
+    background: #e7f6ec;
+    color: #19703a;
+  }
+  .history-badge.is-update {
+    background: #e0edf9;
+    color: #1f4e79;
+  }
+  .history-badge.is-delete {
+    background: #fdecea;
+    color: #a33a2a;
+  }
   .history-fields {
     font-size: 12px;
     color: #2d4b66;
     line-height: 1.6;
+  }
+  .history-fields ul {
+    margin: 6px 0 0;
+    padding-left: 18px;
+  }
+  .history-fields li + li {
+    margin-top: 4px;
   }
   .history-empty {
     padding: 16px;
@@ -936,6 +1033,7 @@ if ($unitRaId <= 0) {
         <a class="btn" href="list.html">목록으로</a>
         <?php if ($unitRaId > 0): ?>
           <a class="btn" href="form.html?unit_ra_id=<?= (int)$unitRaId ?>">기본정보 편집</a>
+          <a class="btn" href="unit_ra_item_history_print.php?unit_ra_id=<?= (int)$unitRaId ?>&return_to=<?= urlencode($returnTo) ?>" target="_blank" rel="noopener">이력 보고서 출력</a>
         <?php endif; ?>
       </div>
     </div>
@@ -987,19 +1085,30 @@ if ($unitRaId <= 0) {
                 <?php
                   $changedFields = decode_history_json($history['changed_fields'] ?? null);
                   $changedLabels = [];
+                  $actionType = (string)($history['action_type'] ?? 'update');
+                  $actionLabel = history_action_label($actionType);
+                  $historyItemId = (string)($history['source_item_id'] ?? $history['item_id'] ?? '-');
+                  $summaryLines = build_history_summary_lines($history, $fieldLabels);
                   foreach ($changedFields as $fieldName) {
                       $changedLabels[] = $fieldLabels[$fieldName] ?? $fieldName;
                   }
                 ?>
                 <div class="history-item">
                   <div class="history-meta">
-                    <span class="history-badge"><?= h(strtoupper((string)$history['action_type'])) ?></span>
-                    <span>항목 ID <?= h((string)($history['item_id'] ?? '-')) ?></span>
+                    <span class="history-badge <?= $actionType === 'insert' ? 'is-insert' : ($actionType === 'delete' ? 'is-delete' : 'is-update') ?>"><?= h($actionLabel) ?></span>
+                    <span>항목 ID <?= h($historyItemId) ?></span>
                     <span>작성자 <?= h((string)($history['changed_by_name'] ?? '알 수 없음')) ?></span>
                     <span><?= h((string)$history['changed_at']) ?></span>
                   </div>
                   <div class="history-fields">
                     <?= !empty($changedLabels) ? '변경 항목: ' . h(implode(', ', $changedLabels)) : '변경 항목 정보 없음' ?>
+                    <?php if (!empty($summaryLines)): ?>
+                      <ul>
+                        <?php foreach ($summaryLines as $summaryLine): ?>
+                          <li><?= h($summaryLine) ?></li>
+                        <?php endforeach; ?>
+                      </ul>
+                    <?php endif; ?>
                   </div>
                 </div>
               <?php endforeach; ?>
@@ -1042,6 +1151,7 @@ if ($unitRaId <= 0) {
                   <th>개선기한</th>
                   <th>비고</th>
                   <th>사용</th>
+                  <th>삭제</th>
                 </tr>
               </thead>
               <tbody id="items-body">
@@ -1076,6 +1186,9 @@ if ($unitRaId <= 0) {
                         <option value="Y" <?= ($item['use_yn'] ?? 'Y') === 'Y' ? 'selected' : '' ?>>Y</option>
                         <option value="N" <?= ($item['use_yn'] ?? 'Y') === 'N' ? 'selected' : '' ?>>N</option>
                       </select>
+                    </td>
+                    <td style="text-align:center; vertical-align:middle;">
+                      <input type="checkbox" name="delete_yn[<?= $index ?>]" value="1" <?= ($item['delete_yn'] ?? '0') === '1' ? 'checked' : '' ?> aria-label="행 삭제">
                     </td>
                   </tr>
                 <?php endforeach; ?>
@@ -1171,6 +1284,7 @@ if ($unitRaId <= 0) {
               <option value="N">N</option>
             </select>
           </td>
+          <td style="text-align:center; vertical-align:middle;"><input type="checkbox" name="delete_yn[${rowIndex}]" value="1" aria-label="행 삭제"></td>
         </tr>
       `;
     }

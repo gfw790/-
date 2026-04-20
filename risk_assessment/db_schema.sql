@@ -123,6 +123,7 @@ CREATE TABLE IF NOT EXISTS `unit_ra_item_history` (
   `history_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `unit_ra_id` BIGINT UNSIGNED NOT NULL,
   `item_id` BIGINT UNSIGNED NULL,
+  `source_item_id` BIGINT UNSIGNED NULL,
   `action_type` VARCHAR(20) NOT NULL,
   `changed_fields` JSON NULL,
   `before_data` JSON NULL,
@@ -133,14 +134,7 @@ CREATE TABLE IF NOT EXISTS `unit_ra_item_history` (
   PRIMARY KEY (`history_id`),
   KEY `idx_unit_ra_item_history_unit_changed` (`unit_ra_id`, `changed_at`),
   KEY `idx_unit_ra_item_history_item` (`item_id`),
-  CONSTRAINT `fk_unit_ra_item_history_header`
-    FOREIGN KEY (`unit_ra_id`) REFERENCES `unit_ra_header` (`unit_ra_id`)
-    ON DELETE CASCADE
-    ON UPDATE CASCADE,
-  CONSTRAINT `fk_unit_ra_item_history_item`
-    FOREIGN KEY (`item_id`) REFERENCES `unit_ra_item` (`item_id`)
-    ON DELETE SET NULL
-    ON UPDATE CASCADE
+  KEY `idx_unit_ra_item_history_source_item` (`source_item_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 ALTER TABLE `unit_ra_header`
