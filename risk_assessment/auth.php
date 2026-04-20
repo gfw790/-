@@ -942,6 +942,16 @@ function auth_is_worker(?array $user): bool
     return is_array($user) && (($user['role'] ?? '') === 'worker');
 }
 
+function auth_main_page_path(?array $user): string
+{
+    if (!is_array($user)) {
+        return 'task_select.php';
+    }
+
+    $role = (string)($user['original_role'] ?? $user['role'] ?? '');
+    return $role === 'safety_manager' ? 'work_list.php' : 'task_select.php';
+}
+
 function auth_current_user(): ?array
 {
     $sessionUser = $_SESSION['auth_user'] ?? null;

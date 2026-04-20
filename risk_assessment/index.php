@@ -22,7 +22,11 @@ if ($user !== null) {
     $statusTitle = auth_display_name($user) . '님이 로그인 중입니다.';
     $statusBody = h((string)($user['role_label'] ?? auth_role_label((string)($user['role'] ?? '')))) . ' 권한으로 사용할 수 있는 화면을 바로 열 수 있습니다.';
 
-    if ($canManage) {
+  if ((string)($user['role'] ?? '') === 'safety_manager') {
+    $primaryAction = ['label' => '작업 목록', 'href' => 'work_list.php'];
+    $secondaryAction = ['label' => '관리감독자 시작', 'href' => 'task_select.php'];
+    $logoutAction = ['label' => '로그아웃', 'href' => 'task_select.php?logout=1'];
+  } elseif ($canManage) {
         $primaryAction = ['label' => '관리감독자 시작', 'href' => 'task_select.php'];
         $secondaryAction = ['label' => '작업 목록', 'href' => 'work_list.php'];
         $logoutAction = ['label' => '로그아웃', 'href' => 'task_select.php?logout=1'];

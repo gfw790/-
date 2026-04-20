@@ -6,6 +6,7 @@ ensureNearMissSchema();
 $_currentUser = getCurrentUser();
 $_pageTitle   = $_pageTitle ?? BOARD_TITLE;
 $_boardCssVersion = (string)@filemtime(__DIR__ . '/../assets/css/style.css');
+$_mainPageHref = function_exists('auth_main_page_path') ? '../risk_assessment/' . auth_main_page_path($_currentUser) : '../risk_assessment/task_select.php';
 ?>
 <!DOCTYPE html>
 <html lang="ko">
@@ -37,7 +38,7 @@ $_boardCssVersion = (string)@filemtime(__DIR__ . '/../assets/css/style.css');
             <a href="admin.php" class="btn-link">관리</a>
           <?php endif; ?>
           <a href="../board/" class="btn-link">게시판</a>
-          <a href="../risk_assessment/task_select.php" class="btn-link">메인으로</a>
+          <a href="<?= h($_mainPageHref) ?>" class="btn-link">메인으로</a>
         <?php else: ?>
           <span class="user-info">비로그인</span>
         <?php endif; ?>
