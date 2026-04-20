@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/auth.php';
 
 function h($value): string
 {
@@ -54,6 +55,146 @@ function normalize_return_to($value): string
     }
 
     return $returnTo;
+}
+
+function ensure_history_table(PDO $pdo): void
+{
+  $pdo->exec("CREATE TABLE IF NOT EXISTS unit_ra_item_history (
+    history_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    unit_ra_id BIGINT UNSIGNED NOT NULL,
+    item_id BIGINT UNSIGNED NULL,
+    action_type VARCHAR(20) NOT NULL,
+    changed_fields JSON NULL,
+    before_data JSON NULL,
+    after_data JSON NULL,
+    changed_by_login_id VARCHAR(100) NULL,
+    changed_by_name VARCHAR(100) NULL,
+    changed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (history_id),
+    KEY idx_unit_ra_item_history_unit_changed (unit_ra_id, changed_at),
+    KEY idx_unit_ra_item_history_item (item_id),
+    CONSTRAINT fk_unit_ra_item_history_header
+      FOREIGN KEY (unit_ra_id) REFERENCES unit_ra_header (unit_ra_id)
+      ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_unit_ra_item_history_item
+      FOREIGN KEY (item_id) REFERENCES unit_ra_item (item_id)
+      ON DELETE SET NULL ON UPDATE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+}
+
+function item_history_snapshot(array $item): array
+{
+  return [
+    'sort_no' => isset($item['sort_no']) && $item['sort_no'] !== '' ? (int)$item['sort_no'] : null,
+    'task_code' => nullable_text($item['task_code'] ?? null),
+    'task_name' => trim((string)($item['task_name'] ?? '')),
+    'hazard_name' => trim((string)($item['hazard_name'] ?? '')),
+    'accident_type' => nullable_text($item['accident_type'] ?? null),
+    'injury_result' => nullable_text($item['injury_result'] ?? null),
+    'cause_text' => nullable_text($item['cause_text'] ?? null),
+    'current_control_text' => nullable_text($item['current_control_text'] ?? null),
+    'additional_control_text' => nullable_text($item['additional_control_text'] ?? null),
+    'likelihood_before' => nullable_int($item['likelihood_before'] ?? null, 1, 5),
+    'severity_before' => nullable_int($item['severity_before'] ?? null, 1, 5),
+    'risk_score_before' => nullable_int($item['risk_score_before'] ?? null, 1, 25),
+    'likelihood_current' => nullable_int($item['likelihood_current'] ?? null, 1, 5),
+    'severity_current' => nullable_int($item['severity_current'] ?? null, 1, 5),
+    'risk_score_current' => nullable_int($item['risk_score_current'] ?? null, 1, 25),
+    'likelihood_after' => nullable_int($item['likelihood_after'] ?? null, 1, 5),
+    'severity_after' => nullable_int($item['severity_after'] ?? null, 1, 5),
+    'risk_score_after' => nullable_int($item['risk_score_after'] ?? null, 1, 25),
+    'improvement_due_date' => nullable_text($item['improvement_due_date'] ?? null),
+    'remark' => nullable_text($item['remark'] ?? null),
+    'use_yn' => (($item['use_yn'] ?? 'Y') === 'N') ? 'N' : 'Y',
+  ];
+}
+
+function build_history_diff(array $before, array $after): array
+{
+  $changedFields = [];
+  foreach ($after as $field => $afterValue) {
+    $beforeValue = $before[$field] ?? null;
+    if ($beforeValue !== $afterValue) {
+      $changedFields[] = $field;
+    }
+  }
+
+  return $changedFields;
+}
+
+function save_item_history(PDO $pdo, int $unitRaId, ?int $itemId, string $actionType, array $beforeData, array $afterData, array $changedFields, array $user): void
+{
+  $stmt = $pdo->prepare("INSERT INTO unit_ra_item_history
+    (
+      unit_ra_id,
+      item_id,
+      action_type,
+      changed_fields,
+      before_data,
+      after_data,
+      changed_by_login_id,
+      changed_by_name,
+      changed_at
+    )
+    VALUES
+    (
+      :unit_ra_id,
+      :item_id,
+      :action_type,
+      :changed_fields,
+      :before_data,
+      :after_data,
+      :changed_by_login_id,
+      :changed_by_name,
+      NOW()
+    )");
+  $stmt->execute([
+    ':unit_ra_id' => $unitRaId,
+    ':item_id' => $itemId,
+    ':action_type' => $actionType,
+    ':changed_fields' => !empty($changedFields) ? json_encode(array_values($changedFields), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
+    ':before_data' => !empty($beforeData) ? json_encode($beforeData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
+    ':after_data' => !empty($afterData) ? json_encode($afterData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
+    ':changed_by_login_id' => nullable_text($user['login_id'] ?? null),
+    ':changed_by_name' => nullable_text($user['name'] ?? null) ?? auth_display_name($user),
+  ]);
+}
+
+function decode_history_json($value): array
+{
+  if (!is_string($value) || trim($value) === '') {
+    return [];
+  }
+
+  $decoded = json_decode($value, true);
+  return is_array($decoded) ? $decoded : [];
+}
+
+function history_field_labels(): array
+{
+  return [
+    'sort_no' => '정렬',
+    'task_code' => '작업코드',
+    'task_name' => '작업명',
+    'hazard_name' => '주요 위험요소',
+    'accident_type' => '사고유형',
+    'injury_result' => '상해결과',
+    'cause_text' => '원인',
+    'current_control_text' => '현재 조치사항',
+    'additional_control_text' => '추가 조치사항',
+    'likelihood_before' => '개선 전 L',
+    'severity_before' => '개선 전 S',
+    'risk_score_before' => '개선 전 점수',
+    'likelihood_current' => '현재 L',
+    'severity_current' => '현재 S',
+    'risk_score_current' => '현재 점수',
+    'likelihood_after' => '개선 후 L',
+    'severity_after' => '개선 후 S',
+    'risk_score_after' => '개선 후 점수',
+    'improvement_due_date' => '개선기한',
+    'remark' => '비고',
+    'use_yn' => '사용',
+  ];
 }
 
 function score_from_pair(?int $likelihood, ?int $severity): ?int
@@ -178,17 +319,20 @@ function build_posted_items(array $source): array
 $unitRaId = isset($_GET['unit_ra_id'])
     ? (int)$_GET['unit_ra_id']
     : (int)($_POST['unit_ra_id'] ?? 0);
+$user = auth_require_login();
 $returnTo = normalize_return_to($_GET['return_to'] ?? ($_POST['return_to'] ?? 'list.html'));
 $errorMessage = '';
 $successMessage = '';
 $header = null;
 $items = [];
+$historyRows = [];
 $renderPostedItems = false;
 
 if ($unitRaId <= 0) {
     $errorMessage = '편집할 평가서를 찾을 수 없습니다.';
 } else {
     $pdo = getDB();
+  ensure_history_table($pdo);
 
     if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && ($_POST['action'] ?? '') === 'save_items') {
         $postedItems = build_posted_items($_POST);
@@ -198,6 +342,13 @@ if ($unitRaId <= 0) {
         } else {
             try {
                 $pdo->beginTransaction();
+
+            $existingItemStmt = $pdo->prepare("SELECT * FROM unit_ra_item WHERE unit_ra_id = :unit_ra_id");
+            $existingItemStmt->execute([':unit_ra_id' => $unitRaId]);
+            $existingItems = [];
+            foreach ($existingItemStmt->fetchAll() ?: [] as $existingRow) {
+              $existingItems[(int)$existingRow['item_id']] = item_history_snapshot($existingRow);
+            }
 
                 $updateStmt = $pdo->prepare("
                     UPDATE unit_ra_item
@@ -287,6 +438,7 @@ if ($unitRaId <= 0) {
 
                 $updatedCount = 0;
                 $insertedCount = 0;
+        $historyCount = 0;
 
                 foreach ($itemIds as $index => $rawItemId) {
                     $itemId = (int)$rawItemId;
@@ -360,13 +512,48 @@ if ($unitRaId <= 0) {
                         ':unit_ra_id' => $unitRaId,
                     ];
 
+                      $afterSnapshot = item_history_snapshot([
+                        'sort_no' => $sortNo,
+                        'task_code' => $taskCode,
+                        'task_name' => $taskName,
+                        'hazard_name' => $hazardName,
+                        'accident_type' => $accidentType,
+                        'injury_result' => $injuryResult,
+                        'cause_text' => $causeText,
+                        'current_control_text' => $currentControlText,
+                        'additional_control_text' => $additionalControlText,
+                        'likelihood_before' => $likelihoodBefore,
+                        'severity_before' => $severityBefore,
+                        'risk_score_before' => score_from_pair($likelihoodBefore, $severityBefore),
+                        'likelihood_current' => $likelihoodCurrent,
+                        'severity_current' => $severityCurrent,
+                        'risk_score_current' => score_from_pair($likelihoodCurrent, $severityCurrent),
+                        'likelihood_after' => $likelihoodAfter,
+                        'severity_after' => $severityAfter,
+                        'risk_score_after' => score_from_pair($likelihoodAfter, $severityAfter),
+                        'improvement_due_date' => $improvementDueDate,
+                        'remark' => $remark,
+                        'use_yn' => $useYn,
+                      ]);
+
                     if ($itemId > 0) {
+                        $beforeSnapshot = $existingItems[$itemId] ?? [];
+                        $changedFields = build_history_diff($beforeSnapshot, $afterSnapshot);
+                        if (empty($changedFields)) {
+                          continue;
+                        }
+
                         $params[':item_id'] = $itemId;
                         $updateStmt->execute($params);
                         $updatedCount++;
+                        save_item_history($pdo, $unitRaId, $itemId, 'update', $beforeSnapshot, $afterSnapshot, $changedFields, $user);
+                        $historyCount++;
                     } else {
                         $insertStmt->execute($params);
+                        $newItemId = (int)$pdo->lastInsertId();
                         $insertedCount++;
+                        save_item_history($pdo, $unitRaId, $newItemId > 0 ? $newItemId : null, 'insert', [], $afterSnapshot, array_keys($afterSnapshot), $user);
+                        $historyCount++;
                     }
                 }
 
@@ -375,8 +562,7 @@ if ($unitRaId <= 0) {
                 }
 
                 $pdo->commit();
-                $successMessage = '항목이 저장되었습니다.';
-                $successMessage = sprintf('항목이 저장되었습니다. 수정 %d건, 신규 %d건입니다.', $updatedCount, $insertedCount);
+        $successMessage = sprintf('항목이 저장되었습니다. 수정 %d건, 신규 %d건, 이력 %d건입니다.', $updatedCount, $insertedCount, $historyCount);
             } catch (Throwable $e) {
                 if ($pdo->inTransaction()) {
                     $pdo->rollBack();
@@ -386,7 +572,6 @@ if ($unitRaId <= 0) {
                     $items = [blank_item(['sort_no' => '1'])];
                 }
                 $renderPostedItems = true;
-                $errorMessage = '저장 중 오류가 발생했습니다: ' . $e->getMessage();
                 $errorMessage = '저장 중 오류가 발생했습니다: ' . $e->getMessage();
             }
         }
@@ -447,6 +632,16 @@ if ($unitRaId <= 0) {
 
     if ($header && empty($items)) {
         $items = [blank_item(['sort_no' => '1'])];
+    }
+
+    if ($header) {
+      $historyStmt = $pdo->prepare("SELECT history_id, item_id, action_type, changed_fields, before_data, after_data, changed_by_name, changed_at
+        FROM unit_ra_item_history
+        WHERE unit_ra_id = :unit_ra_id
+        ORDER BY changed_at DESC, history_id DESC
+        LIMIT 20");
+      $historyStmt->execute([':unit_ra_id' => $unitRaId]);
+      $historyRows = $historyStmt->fetchAll() ?: [];
     }
 }
 ?>
@@ -662,6 +857,65 @@ if ($unitRaId <= 0) {
     padding: 0 22px 22px;
     flex-wrap: wrap;
   }
+  .history-panel {
+    margin: 0 22px 22px;
+    border: 1px solid #d8e4f0;
+    border-radius: 12px;
+    background: #f8fbff;
+    overflow: hidden;
+  }
+  .history-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    background: #edf4fb;
+    color: #294661;
+  }
+  .history-head h3 {
+    font-size: 14px;
+  }
+  .history-list {
+    display: grid;
+    gap: 10px;
+    padding: 14px 16px 16px;
+  }
+  .history-item {
+    border: 1px solid #dbe5ef;
+    border-radius: 10px;
+    background: #fff;
+    padding: 12px 14px;
+  }
+  .history-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+    font-size: 12px;
+    color: #55708d;
+  }
+  .history-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: #e0edf9;
+    color: #1f4e79;
+    font-weight: 700;
+  }
+  .history-fields {
+    font-size: 12px;
+    color: #2d4b66;
+    line-height: 1.6;
+  }
+  .history-empty {
+    padding: 16px;
+    color: #6a7d90;
+    font-size: 13px;
+  }
   @media (max-width: 768px) {
     body { padding: 18px 10px 28px; }
     .panel-head,
@@ -718,6 +972,42 @@ if ($unitRaId <= 0) {
       <?php endif; ?>
       <?php if ($errorMessage !== ''): ?>
         <div class="error"><?= h($errorMessage) ?></div>
+      <?php endif; ?>
+
+      <?php if ($header): ?>
+        <?php $fieldLabels = history_field_labels(); ?>
+        <div class="history-panel">
+          <div class="history-head">
+            <h3>최근 수정 이력</h3>
+            <span>최근 20건</span>
+          </div>
+          <?php if (!empty($historyRows)): ?>
+            <div class="history-list">
+              <?php foreach ($historyRows as $history): ?>
+                <?php
+                  $changedFields = decode_history_json($history['changed_fields'] ?? null);
+                  $changedLabels = [];
+                  foreach ($changedFields as $fieldName) {
+                      $changedLabels[] = $fieldLabels[$fieldName] ?? $fieldName;
+                  }
+                ?>
+                <div class="history-item">
+                  <div class="history-meta">
+                    <span class="history-badge"><?= h(strtoupper((string)$history['action_type'])) ?></span>
+                    <span>항목 ID <?= h((string)($history['item_id'] ?? '-')) ?></span>
+                    <span>작성자 <?= h((string)($history['changed_by_name'] ?? '알 수 없음')) ?></span>
+                    <span><?= h((string)$history['changed_at']) ?></span>
+                  </div>
+                  <div class="history-fields">
+                    <?= !empty($changedLabels) ? '변경 항목: ' . h(implode(', ', $changedLabels)) : '변경 항목 정보 없음' ?>
+                  </div>
+                </div>
+              <?php endforeach; ?>
+            </div>
+          <?php else: ?>
+            <div class="history-empty">아직 저장된 수정 이력이 없습니다.</div>
+          <?php endif; ?>
+        </div>
       <?php endif; ?>
 
       <?php if ($header): ?>
