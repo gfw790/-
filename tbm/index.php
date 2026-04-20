@@ -233,6 +233,12 @@ body { font-family: "Malgun Gothic", sans-serif; margin: 0; background: #f5f6f7;
 .field-group input[type="date"], .field-group input[type="text"], .field-group select, .field-group textarea { width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-family: inherit; font-size: 0.9rem; background: #fafafa; }
 .field-group textarea { resize: vertical; min-height: 110px; line-height: 1.6; }
 .field-group input:focus, .field-group textarea:focus, .field-group select:focus { outline: none; border-color: #1a56db; background: #fff; }
+.field-help { margin-top: 6px; font-size: 0.8rem; color: #6b7280; line-height: 1.5; }
+.image-source-preview { margin-top: 10px; width: 100%; max-width: 420px; aspect-ratio: 85 / 58; border: 1px dashed #cbd5e1; border-radius: 6px; background: #f8fafc; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.image-source-preview img { width: 100%; height: 100%; display: block; object-fit: cover; object-position: center; }
+.image-source-preview.is-empty { color: #94a3b8; font-size: 0.84rem; }
+.file-upload-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.file-upload-name { font-size: 0.82rem; color: #475569; }
 .section-title { font-size: 0.82rem; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin: 22px 0 10px; padding-bottom: 4px; border-bottom: 1px dashed #e5e7eb; }
 
 /* ── 인명부 그리드 & 삭제 버튼 스타일 ── */
@@ -302,7 +308,7 @@ body { font-family: "Malgun Gothic", sans-serif; margin: 0; background: #f5f6f7;
         </div>
         <?php endif; ?>
 
-        <form action="generate.php" method="post" id="tbm-form">
+        <form action="generate.php" method="post" id="tbm-form" enctype="multipart/form-data">
 
             <div class="field-group">
                 <label for="doc_date">작업일자</label>
@@ -359,6 +365,21 @@ body { font-family: "Malgun Gothic", sans-serif; margin: 0; background: #f5f6f7;
                 </div>
             </div>
 
+            <?php if ($isOperator): ?>
+            <div class="field-group">
+                <label for="image_file">사진 소스</label>
+                <div class="file-upload-row" style="margin-bottom:8px;">
+                    <input type="file" id="image_upload" name="image_upload" accept="image/jpeg,image/png,image/webp" onchange="handleImageUploadChange(event)">
+                    <span id="image-upload-name" class="file-upload-name">업로드 안 함</span>
+                </div>
+                <input type="text" id="image_file" name="image_file" value="<?= h($formImageFile) ?>" placeholder="예) output/images/article_xxx.jpg 또는 https://..." oninput="updateImageSourcePreview()">
+                <div class="field-help">사진 파일을 업로드하면 제출 시 중앙 크롭 후 `output/images`에 저장되고 업로드 파일이 우선 적용됩니다. 아래 미리보기는 실제 TBM 본문 사진칸과 같은 비율로 표시됩니다.</div>
+                <div id="image-source-preview" class="image-source-preview is-empty">사진 소스를 입력하면 미리보기가 표시됩니다.</div>
+            </div>
+            <?php else: ?>
+            <input type="hidden" id="image_file" name="image_file" value="<?= h($formImageFile) ?>">
+            <?php endif; ?>
+
             <div class="field-group"><label for="quiz1">안전퀴즈 1번</label><textarea id="quiz1" name="quiz1"><?= h($formQuiz1) ?></textarea></div>
             <div class="field-group"><label for="quiz2">안전퀴즈 2번</label><textarea id="quiz2" name="quiz2"><?= h($formQuiz2) ?></textarea></div>
             <div class="field-group"><label for="quiz3">안전퀴즈 3번</label><textarea id="quiz3" name="quiz3"><?= h($formQuiz3) ?></textarea></div>
@@ -370,7 +391,6 @@ body { font-family: "Malgun Gothic", sans-serif; margin: 0; background: #f5f6f7;
 
             <input type="hidden" id="selected_team" name="selected_team" value="<?= h($initialTeamValue) ?>">
             <input type="hidden" id="source_url" name="source_url" value="<?= h($formSourceUrl) ?>">
-            <input type="hidden" id="image_file" name="image_file" value="<?= h($formImageFile) ?>">
 
             <div class="btn-row">
                 <button type="submit" class="btn btn-primary">📄 문서 생성</button>
@@ -427,8 +447,127 @@ const fallbackRecentDocs = <?= $fallbackRecentDocsJson ?>;
 const initialTeam = <?= $initialTeamJson ?>;
 let currentSlotCount = 0;
 let selectedRecentTeam = '';
-const formDraftVersion = 'v1';
+const formDraftVersion = 'v2';
 let draftAutosaveEnabled = false;
+let imagePreviewObjectUrl = null;
+
+function resolveImagePreviewSource(rawValue) {
+    const value = String(rawValue || '').trim();
+    if (!value || value === '__NO_IMAGE__') {
+        return '';
+    }
+
+    if (/^(https?:)?\/\//i.test(value) || value.startsWith('data:') || value.startsWith('../')) {
+        return value;
+    }
+
+    if (value.startsWith('output/')) {
+        return value;
+    }
+
+    if (!value.includes('/')) {
+        return 'template/' + value;
+    }
+
+    return value;
+}
+
+function updateImageSourcePreview() {
+    const input = document.getElementById('image_file');
+    const uploadInput = document.getElementById('image_upload');
+    const preview = document.getElementById('image-source-preview');
+    if (!input || !preview) {
+        return;
+    }
+
+    const uploadedFile = uploadInput && uploadInput.files && uploadInput.files[0] ? uploadInput.files[0] : null;
+    if (uploadedFile) {
+        if (imagePreviewObjectUrl) {
+            URL.revokeObjectURL(imagePreviewObjectUrl);
+        }
+        imagePreviewObjectUrl = URL.createObjectURL(uploadedFile);
+        preview.classList.remove('is-empty');
+        preview.innerHTML = '<img src="' + imagePreviewObjectUrl + '" alt="업로드 사진 미리보기">';
+        return;
+    }
+
+    const source = resolveImagePreviewSource(input.value);
+    if (!source) {
+        preview.classList.add('is-empty');
+        preview.innerHTML = '사진 소스를 입력하면 미리보기가 표시됩니다.';
+        return;
+    }
+
+    preview.classList.remove('is-empty');
+    preview.innerHTML = '<img src="' + escapeHtml(source) + '" alt="사진 미리보기" onerror="this.parentElement.classList.add(\'is-empty\'); this.parentElement.innerHTML = \'이미지를 불러올 수 없습니다. 경로 또는 URL을 확인해 주세요.\';">';
+}
+
+async function handleImageUploadChange(event) {
+    const file = event?.target?.files?.[0] || null;
+    const fileNameEl = document.getElementById('image-upload-name');
+    const imageFileInput = document.getElementById('image_file');
+    if (fileNameEl) {
+        fileNameEl.textContent = file ? file.name : '업로드 안 함';
+    }
+    updateImageSourcePreview();
+
+    if (!file || !imageFileInput) {
+        return;
+    }
+
+    const previousImageFile = imageFileInput.value || '';
+    const formData = new FormData();
+    formData.append('image_upload', file);
+    formData.append('date', getDraftDateValue());
+
+    if (fileNameEl) {
+        fileNameEl.textContent = file.name + ' 업로드 중...';
+    }
+
+    try {
+        const response = await fetch('ajax_upload_image.php', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: formData,
+        });
+
+        const data = await response.json();
+        if (!response.ok || !data || data.error) {
+            throw new Error(data && data.error ? data.error : '이미지 업로드에 실패했습니다.');
+        }
+
+        imageFileInput.value = data.image_file || '';
+        if (event?.target) {
+            event.target.value = '';
+        }
+        if (imagePreviewObjectUrl) {
+            URL.revokeObjectURL(imagePreviewObjectUrl);
+            imagePreviewObjectUrl = null;
+        }
+        if (fileNameEl) {
+            fileNameEl.textContent = file.name + ' 저장 완료';
+        }
+        updateImageSourcePreview();
+        saveFormDraft();
+    } catch (error) {
+        imageFileInput.value = previousImageFile;
+        if (event?.target) {
+            event.target.value = '';
+        }
+        if (imagePreviewObjectUrl) {
+            URL.revokeObjectURL(imagePreviewObjectUrl);
+            imagePreviewObjectUrl = null;
+        }
+        if (fileNameEl) {
+            fileNameEl.textContent = '업로드 실패';
+        }
+        updateImageSourcePreview();
+        alert('이미지 업로드 오류: ' + (error instanceof Error ? error.message : String(error)));
+    }
+}
 
 function getDraftDateValue() {
     return document.getElementById('doc_date')?.value || 'unknown-date';
@@ -537,6 +676,7 @@ function applyDraftToForm(draft) {
     }
 
     updateBodyCounter();
+    updateImageSourcePreview();
 }
 
 function clearFormDraft(dateValue = getDraftDateValue()) {
@@ -831,6 +971,7 @@ window.addEventListener('DOMContentLoaded', () => {
     draftAutosaveEnabled = true;
     saveFormDraft();
     updateBodyCounter();
+    updateImageSourcePreview();
 });
 
 
@@ -933,6 +1074,7 @@ async function aiGenerate(forceNew = false) {
         document.getElementById('quiz3').value = data.quiz_3 || '';
         document.getElementById('source_url').value = data.source_url || '';
         document.getElementById('image_file').value = data.image_file || '';
+        updateImageSourcePreview();
         saveFormDraft();
 
         overlay.classList.remove('active');

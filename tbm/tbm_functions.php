@@ -1,6 +1,12 @@
 <?php
 declare(strict_types=1);
 
+const TBM_ARTICLE_IMAGE_SLOT_WIDTH_MM = 85.0;
+const TBM_ARTICLE_IMAGE_SLOT_HEIGHT_MM = 58.0;
+const TBM_ARTICLE_IMAGE_RENDER_DPI = 300;
+const TBM_ARTICLE_IMAGE_TARGET_WIDTH_PX = 1004;
+const TBM_ARTICLE_IMAGE_TARGET_HEIGHT_PX = 685;
+
 // ============================================================
 // tbm_functions.php  —  TBM 렌더링 공통 함수
 // ============================================================
@@ -189,6 +195,122 @@ function tbm_request_data(): array
     return $base;
 }
 
+function tbm_load_image_resource(string $imagePath)
+{
+    $info = @getimagesize($imagePath);
+    if (!is_array($info)) {
+        return null;
+    }
+
+    return match ((int)($info[2] ?? 0)) {
+        IMAGETYPE_JPEG => @imagecreatefromjpeg($imagePath),
+        IMAGETYPE_PNG => @imagecreatefrompng($imagePath),
+        IMAGETYPE_WEBP => function_exists('imagecreatefromwebp') ? @imagecreatefromwebp($imagePath) : null,
+        default => null,
+    };
+}
+
+function tbm_store_uploaded_manual_image(?array $file, string $docDate = ''): ?string
+{
+    if (!is_array($file) || $file === []) {
+        return null;
+    }
+
+    $errorCode = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($errorCode === UPLOAD_ERR_NO_FILE) {
+        return null;
+    }
+    if ($errorCode !== UPLOAD_ERR_OK) {
+        throw new RuntimeException('사진 업로드에 실패했습니다. 파일을 다시 선택해 주세요.');
+    }
+
+    $tmpPath = (string)($file['tmp_name'] ?? '');
+    if ($tmpPath === '' || !is_uploaded_file($tmpPath)) {
+        throw new RuntimeException('업로드된 사진 파일을 확인할 수 없습니다.');
+    }
+
+    $imageInfo = @getimagesize($tmpPath);
+    if (!is_array($imageInfo)) {
+        throw new RuntimeException('이미지 파일만 업로드할 수 있습니다.');
+    }
+
+    $src = tbm_load_image_resource($tmpPath);
+    if (!$src) {
+        throw new RuntimeException('지원하지 않는 이미지 형식입니다. JPG, PNG, WEBP만 가능합니다.');
+    }
+
+    $srcWidth = imagesx($src);
+    $srcHeight = imagesy($src);
+    if ($srcWidth < 20 || $srcHeight < 20) {
+        imagedestroy($src);
+        throw new RuntimeException('이미지 크기가 너무 작습니다.');
+    }
+
+    $targetRatio = TBM_ARTICLE_IMAGE_SLOT_WIDTH_MM / TBM_ARTICLE_IMAGE_SLOT_HEIGHT_MM;
+    $sourceRatio = $srcWidth / max(1, $srcHeight);
+
+    if ($sourceRatio > $targetRatio) {
+        $cropHeight = $srcHeight;
+        $cropWidth = (int)round($cropHeight * $targetRatio);
+        $cropX = (int)floor(($srcWidth - $cropWidth) / 2);
+        $cropY = 0;
+    } else {
+        $cropWidth = $srcWidth;
+        $cropHeight = (int)round($cropWidth / $targetRatio);
+        $cropX = 0;
+        $cropY = (int)floor(($srcHeight - $cropHeight) / 2);
+    }
+
+    $cropWidth = max(1, min($cropWidth, $srcWidth));
+    $cropHeight = max(1, min($cropHeight, $srcHeight));
+
+    $cropped = imagecrop($src, [
+        'x' => max(0, $cropX),
+        'y' => max(0, $cropY),
+        'width' => $cropWidth,
+        'height' => $cropHeight,
+    ]);
+    imagedestroy($src);
+
+    if (!$cropped) {
+        throw new RuntimeException('사진 크롭 처리에 실패했습니다.');
+    }
+
+    $outputWidth = TBM_ARTICLE_IMAGE_TARGET_WIDTH_PX;
+    $outputHeight = TBM_ARTICLE_IMAGE_TARGET_HEIGHT_PX;
+    $canvas = imagecreatetruecolor($outputWidth, $outputHeight);
+    if (!$canvas) {
+        imagedestroy($cropped);
+        throw new RuntimeException('사진 저장용 캔버스를 만들 수 없습니다.');
+    }
+
+    imagecopyresampled($canvas, $cropped, 0, 0, 0, 0, $outputWidth, $outputHeight, imagesx($cropped), imagesy($cropped));
+    imagedestroy($cropped);
+
+    $imageDir = __DIR__ . '/output/images';
+    if (!is_dir($imageDir) && !mkdir($imageDir, 0777, true) && !is_dir($imageDir)) {
+        imagedestroy($canvas);
+        throw new RuntimeException('사진 저장 폴더를 만들 수 없습니다.');
+    }
+
+    $safeDate = preg_replace('/[^0-9]/', '', $docDate);
+    if ($safeDate === '') {
+        $safeDate = date('Ymd');
+    }
+    $hash = substr(sha1_file($tmpPath) ?: sha1(uniqid('tbm_manual_', true)), 0, 12);
+    $fileName = 'manual_' . $safeDate . '_' . $hash . '.jpg';
+    $savePath = $imageDir . '/' . $fileName;
+
+    $saved = imagejpeg($canvas, $savePath, 92);
+    imagedestroy($canvas);
+
+    if (!$saved || !is_file($savePath)) {
+        throw new RuntimeException('크롭한 사진 저장에 실패했습니다.');
+    }
+
+    return 'output/images/' . $fileName;
+}
+
 // ── 날짜 포맷 ────────────────────────────────────────────────
 
 function tbm_date_line(string $date): string
@@ -366,7 +488,7 @@ function tbm_build_article_image_url(?string $imageUrl): string
     $url = trim((string)$imageUrl);
 
     if ($url === '' || $url === '__NO_IMAGE__') {
-        return 'data:image/gif;base64,R0lGODlhAQABAAAAACwAAAAAAQABAAA=';
+        return '../template/TBM일지%2026-03-24_hd1.png';
     }
 
     $url = preg_replace('~^output/~', '', $url);
@@ -374,9 +496,19 @@ function tbm_build_article_image_url(?string $imageUrl): string
     if (!is_file($fullPath)) {
         $fullPath = __DIR__ . '/' . ltrim($url, '/');
     }
+    if (!is_file($fullPath) && !str_contains($url, '/')) {
+        $templatePath = __DIR__ . '/template/' . $url;
+        if (is_file($templatePath)) {
+            return e('../template/' . rawurlencode($url));
+        }
+    }
 
     if (is_file($fullPath) && extension_loaded('gd')) {
-        $resized = tbm_resize_image_for_display($fullPath, 945, 331);
+        $resized = tbm_resize_image_for_display(
+            $fullPath,
+            TBM_ARTICLE_IMAGE_TARGET_WIDTH_PX,
+            TBM_ARTICLE_IMAGE_TARGET_HEIGHT_PX
+        );
         if ($resized !== null) {
             $resizedRel = preg_replace('~^' . preg_quote(__DIR__ . '/output/', '~') . '~', '', $resized);
             return e($resizedRel);

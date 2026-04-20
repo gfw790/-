@@ -16,7 +16,19 @@ if (auth_current_user() === null) {
     exit;
 }
 $raUser = auth_current_user();
+$isOperator = auth_is_admin($raUser) || ((string)($raUser['role'] ?? '') === 'safety_manager');
 $data = tbm_request_data();
+$uploadError = null;
+if ($isOperator) {
+    try {
+        $uploadedImageFile = tbm_store_uploaded_manual_image($_FILES['image_upload'] ?? null, (string)($data['doc_date'] ?? ''));
+        if ($uploadedImageFile !== null) {
+            $data['image_file'] = $uploadedImageFile;
+        }
+    } catch (Throwable $e) {
+        $uploadError = $e->getMessage();
+    }
+}
 $postedTeam = trim($_POST['selected_team'] ?? '');
 if ($postedTeam !== '') {
     $documentTeam = tbm_normalize_display_team_name(auth_normalize_team_name($postedTeam));
@@ -180,6 +192,8 @@ a{color:#0b57d0;text-decoration:none;}a:hover{text-decoration:underline;}
     <?php endif; ?>
     <?php if ($dbError): ?>
         <div class="warn">⚠️ DB 저장 오류 (HTML은 생성됨):<br><?= h($dbError) ?></div>
+    <?php elseif ($uploadError): ?>
+        <div class="warn">⚠️ 사진 업로드는 반영되지 않았습니다:<br><?= h($uploadError) ?></div>
     <?php else: ?>
         <p style="color:#666;font-size:.9em;">✔ DB 저장 완료 (doc_id: <?= (int)$docId ?>)</p>
     <?php endif; ?>
