@@ -628,56 +628,195 @@ function tbm_trim_body(string $body): string
     $body = strip_tags($body);
     $body = str_replace(['\\n\\n', '\\n'], ["\n\n", "\n"], $body);
     $body = preg_replace('/[ \t]+/', ' ', $body);
-    $body = trim($body);
+    $body = preg_replace("/\n{3,}/", "\n\n", (string)$body);
 
-    if (strpos($body, "\n\n") !== false) {
-        $parts = preg_split('/\n\n+/', $body, 2);
-    } elseif (strpos($body, "\n") !== false) {
-        $lastNl = mb_strrpos($body, "\n", 0, 'UTF-8');
-        if ($lastNl !== false && $lastNl > 100) {
-            $parts = array(
-                mb_substr($body, 0, $lastNl, 'UTF-8'),
-                mb_substr($body, $lastNl + 1, null, 'UTF-8')
-            );
-        } else {
-            $parts = array($body);
-        }
-    } else {
-        $parts = array($body);
+    return trim((string)$body);
+}
+
+function tbm_measure_text_units(string $text): float
+{
+    $text = (string)$text;
+    if ($text === '') {
+        return 0.0;
     }
-    $part1 = trim($parts[0] ?? '');
-    $part2 = trim($parts[1] ?? '');
 
-    if ($part2 === '') {
-        $splitPos = false;
-        $bodyLen  = mb_strlen($body, 'UTF-8');
-        for ($i = min(320, $bodyLen - 1); $i >= 150; $i--) {
-            $twoChar = mb_substr($body, $i, 2, 'UTF-8');
-            if (in_array($twoChar, ['다.', '다,', '었.', '었,', '다 '])) {
-                $splitPos = $i + 2;
-                break;
+    $chars = preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY);
+    $units = 0.0;
+
+    foreach ($chars as $char) {
+        if (preg_match('/\s/u', $char) === 1) {
+            $units += 0.38;
+            continue;
+        }
+
+        if (preg_match('/[A-Za-z0-9]/u', $char) === 1) {
+            $units += 0.62;
+            continue;
+        }
+
+        if (preg_match('/[\x{2460}-\x{2473}]/u', $char) === 1) {
+            $units += 0.92;
+            continue;
+        }
+
+        if (preg_match('/[\.,:;!?()\[\]\-\/]/u', $char) === 1) {
+            $units += 0.52;
+            continue;
+        }
+
+        $units += 1.0;
+    }
+
+    return $units;
+}
+
+function tbm_wrap_text_line(string $text, int $maxChars): array
+{
+    $text = trim($text);
+    if ($text === '') {
+        return [];
+    }
+
+    $chars = preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY);
+    $lines = [];
+    $current = '';
+
+    foreach ($chars as $char) {
+        $candidate = $current . $char;
+        if ($current !== '' && mb_strlen($candidate, 'UTF-8') > $maxChars) {
+            $lines[] = $current;
+            $current = $char;
+            continue;
+        }
+        $current = $candidate;
+    }
+
+    if ($current !== '') {
+        $lines[] = $current;
+    }
+
+    return $lines;
+}
+
+function tbm_wrap_text_by_units(string $text, float $maxUnits): array
+{
+    $text = trim($text);
+    if ($text === '') {
+        return [];
+    }
+
+    $chars = preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY);
+    $lines = [];
+    $current = '';
+
+    foreach ($chars as $char) {
+        $candidate = $current . $char;
+        if ($current !== '' && tbm_measure_text_units($candidate) > $maxUnits) {
+            $lines[] = rtrim($current);
+            $current = ltrim($char);
+            continue;
+        }
+        $current = $candidate;
+    }
+
+    if ($current !== '') {
+        $lines[] = rtrim($current);
+    }
+
+    return $lines;
+}
+
+function tbm_build_edu_body_lines(string $body, int $maxChars): array
+{
+    $text = str_replace("\r\n", "\n", trim($body));
+    $paragraphs = explode("\n", $text);
+    $paragraphs = array_map('trim', $paragraphs);
+
+    $last = end($paragraphs);
+    if ($last === '[사고내용 및 원인]' || $last === '[예방대책]') {
+        array_pop($paragraphs);
+    }
+
+    $lines = [];
+    $prevWasContent = false;
+    foreach ($paragraphs as $paragraph) {
+        if ($paragraph === '[예방대책]' && $prevWasContent) {
+            $lines[] = '';
+        }
+        if ($paragraph === '') {
+            continue;
+        }
+
+        foreach (tbm_wrap_text_line($paragraph, $maxChars) as $line) {
+            $lines[] = $line;
+        }
+        $prevWasContent = true;
+    }
+
+    return $lines;
+}
+
+function tbm_prepare_quiz_groups(array $quizzes, float $maxUnits): array
+{
+    $groups = [];
+    foreach ($quizzes as $quiz) {
+        $quiz = trim(str_replace("\r\n", "\n", (string)$quiz));
+        if ($quiz === '') {
+            continue;
+        }
+
+        $groupLines = [];
+        $parts = preg_split("/\n+/", $quiz);
+        foreach ($parts as $part) {
+            $part = trim((string)$part);
+            if ($part === '') {
+                continue;
+            }
+
+            foreach (tbm_wrap_text_by_units($part, $maxUnits) as $line) {
+                $groupLines[] = $line;
             }
         }
-        if ($splitPos !== false && ($bodyLen - $splitPos) > 30) {
-            $part1 = trim(mb_substr($body, 0, $splitPos, 'UTF-8'));
-            $part2 = trim(mb_substr($body, $splitPos, null, 'UTF-8'));
-        } else {
-            $part1 = $body;
-        }
-    }
-    if ($part1 === '') {
-        $part1 = $body;
-    }
 
-    if ($part2 !== '' && mb_strlen($part2, 'UTF-8') > 200) {
-        $part2 = mb_substr($part2, 0, 200, 'UTF-8');
-        $lastDot = mb_strrpos($part2, '다.', 0, 'UTF-8');
-        if ($lastDot !== false && $lastDot > 100) {
-            $part2 = mb_substr($part2, 0, $lastDot + 2, 'UTF-8');
+        if ($groupLines !== []) {
+            $groups[] = $groupLines;
         }
     }
 
-    return $part2 !== '' ? $part1 . "\n\n" . $part2 : $part1;
+    return $groups;
+}
+
+function tbm_normalize_quiz_display_text(string $quiz): string
+{
+    $quiz = trim(str_replace("\r\n", "\n", $quiz));
+    if ($quiz === '') {
+        return '';
+    }
+
+    return preg_replace('/\n+(?=①)/u', ' ', $quiz, 1) ?? $quiz;
+}
+
+function tbm_split_quiz_display_parts(string $quiz): array
+{
+    $quiz = trim(str_replace(["\r\n", "\r"], "\n", $quiz));
+    if ($quiz === '') {
+        return ['question' => '', 'choices' => []];
+    }
+
+    $quiz = preg_replace('/\s*\n\s*/u', ' ', $quiz) ?? $quiz;
+    $parts = preg_split('/(?=①|②|③|④)/u', $quiz) ?: [];
+    $parts = array_values(array_filter(array_map(static fn($part) => trim((string)$part), $parts), static fn($part) => $part !== ''));
+
+    if ($parts === []) {
+        return ['question' => $quiz, 'choices' => []];
+    }
+
+    $question = array_shift($parts);
+
+    return [
+        'question' => $question,
+        'choices' => $parts,
+    ];
 }
 
 function tbm_is_csi_content(array $data): bool
@@ -701,66 +840,49 @@ function tbm_build_edu_body_heading(array $data): string
 
 function tbm_build_edu_body_block(string $body, ?string $heading = null): string
 {
-    $text       = str_replace("\r\n", "\n", trim($body));
-    $paragraphs = explode("\n", $text);
-    $paragraphs = array_map('trim', $paragraphs);
     $heading    = trim((string)$heading);
+    $layouts = [
+        ['maxChars' => 33, 'lineH' => 5.80, 'boxH' => 4.80, 'fontSize' => 9.0, 'availableHeight' => 102.0],
+        ['maxChars' => 34, 'lineH' => 5.65, 'boxH' => 4.68, 'fontSize' => 8.9, 'availableHeight' => 102.0],
+        ['maxChars' => 35, 'lineH' => 5.40, 'boxH' => 4.50, 'fontSize' => 8.6, 'availableHeight' => 102.0],
+        ['maxChars' => 36, 'lineH' => 5.20, 'boxH' => 4.34, 'fontSize' => 8.4, 'availableHeight' => 102.0],
+        ['maxChars' => 37, 'lineH' => 5.00, 'boxH' => 4.20, 'fontSize' => 8.2, 'availableHeight' => 102.0],
+        ['maxChars' => 38, 'lineH' => 4.80, 'boxH' => 4.05, 'fontSize' => 8.0, 'availableHeight' => 102.0],
+        ['maxChars' => 39, 'lineH' => 4.60, 'boxH' => 3.90, 'fontSize' => 7.8, 'availableHeight' => 102.0],
+        ['maxChars' => 40, 'lineH' => 4.45, 'boxH' => 3.78, 'fontSize' => 7.6, 'availableHeight' => 102.0],
+        ['maxChars' => 41, 'lineH' => 4.30, 'boxH' => 3.66, 'fontSize' => 7.5, 'availableHeight' => 102.0],
+        ['maxChars' => 42, 'lineH' => 4.18, 'boxH' => 3.56, 'fontSize' => 7.4, 'availableHeight' => 102.0],
+        ['maxChars' => 43, 'lineH' => 4.08, 'boxH' => 3.48, 'fontSize' => 7.3, 'availableHeight' => 102.0],
+        ['maxChars' => 44, 'lineH' => 4.00, 'boxH' => 3.40, 'fontSize' => 7.2, 'availableHeight' => 102.0],
+    ];
 
-    $last = end($paragraphs);
-    if ($last === '[사고내용 및 원인]' || $last === '[예방대책]') {
-        array_pop($paragraphs);
+    $chosenLayout = $layouts[count($layouts) - 1];
+    $lines = [];
+    foreach ($layouts as $layout) {
+        $candidateLines = tbm_build_edu_body_lines($body, $layout['maxChars']);
+        $candidateMaxLines = max(1, (int)floor($layout['availableHeight'] / $layout['lineH']));
+        if (count($candidateLines) <= $candidateMaxLines) {
+            $chosenLayout = $layout;
+            $lines = $candidateLines;
+            break;
+        }
+        $chosenLayout = $layout;
+        $lines = $candidateLines;
     }
-
-    $maxChars = 33;
-    $lines    = [];
-    $prevWasContent = false;
-
-    foreach ($paragraphs as $para) {
-        $para = trim($para);
-        if ($para === '[예방대책]' && $prevWasContent) {
-            $lines[] = '';
-        }
-        if ($para === '') {
-            continue;
-        }
-
-        $chars = preg_split('//u', $para, -1, PREG_SPLIT_NO_EMPTY);
-        $cur   = '';
-
-        foreach ($chars as $ch) {
-            if (mb_strlen($cur . $ch, 'UTF-8') > $maxChars) {
-                $lines[] = $cur;
-                $cur     = $ch;
-            } else {
-                $cur .= $ch;
-            }
-        }
-        if ($cur !== '') {
-            $lines[] = $cur;
-        }
-        $prevWasContent = true;
-    }
-
-    $lineH    = 5.80;
-    $maxLines = 20;
-    $count    = 0;
 
     $html  = "\n" . '<div class="hcI">' . "\n";
     $html .= '  <div class="hls ps22" style="line-height:4.20mm;white-space:nowrap;left:0mm;top:0mm;height:4.80mm;width:82.51mm;">'
            . '<span class="hrt cs21">♣ 중대재해 전파</span></div>' . "\n";
 
-    $top = $lineH;
+    $top = $chosenLayout['lineH'];
     foreach ($lines as $line) {
-        if ($count >= $maxLines) break;
-
         $val   = ($line === '') ? '&nbsp;' : e($line);
         $html .= '  <div class="hls ps22" style="line-height:4.20mm;white-space:nowrap;left:0mm;top:'
                . number_format($top, 2, '.', '')
-               . 'mm;height:4.80mm;width:82.51mm;"><span class="hrt cs23">'
+               . 'mm;height:' . number_format($chosenLayout['boxH'], 2, '.', '') . 'mm;width:82.51mm;"><span class="hrt cs23" style="font-size:' . number_format($chosenLayout['fontSize'], 1, '.', '') . 'pt;">'
                . $val . '</span></div>' . "\n";
 
-        $top += $lineH;
-        $count++;
+        $top += $chosenLayout['lineH'];
     }
 
     $html .= "</div>\n";
@@ -775,53 +897,64 @@ function tbm_build_edu_body_block(string $body, ?string $heading = null): string
 function tbm_build_quiz_block(string $quiz1, string $quiz2, string $quiz3): string
 {
     $quizzes = [$quiz1, $quiz2, $quiz3];
-    $html = '';
-    $quizTotalLength = mb_strlen(trim($quiz1), 'UTF-8') + mb_strlen(trim($quiz2), 'UTF-8') + mb_strlen(trim($quiz3), 'UTF-8');
+    $layouts = [
+        ['maxUnits' => 29.5, 'lineH' => 4.90, 'boxH' => 4.00, 'fontSize' => 9.0, 'blockGap' => 4.0, 'availableHeight' => 172.0],
+        ['maxUnits' => 30.3, 'lineH' => 4.75, 'boxH' => 3.90, 'fontSize' => 8.9, 'blockGap' => 3.8, 'availableHeight' => 172.0],
+        ['maxUnits' => 31.2, 'lineH' => 4.55, 'boxH' => 3.70, 'fontSize' => 8.6, 'blockGap' => 3.2, 'availableHeight' => 172.0],
+        ['maxUnits' => 32.0, 'lineH' => 4.38, 'boxH' => 3.58, 'fontSize' => 8.4, 'blockGap' => 3.0, 'availableHeight' => 172.0],
+        ['maxUnits' => 32.8, 'lineH' => 4.20, 'boxH' => 3.45, 'fontSize' => 8.2, 'blockGap' => 2.6, 'availableHeight' => 172.0],
+        ['maxUnits' => 33.6, 'lineH' => 4.05, 'boxH' => 3.32, 'fontSize' => 8.0, 'blockGap' => 2.4, 'availableHeight' => 172.0],
+        ['maxUnits' => 34.4, 'lineH' => 3.90, 'boxH' => 3.20, 'fontSize' => 7.8, 'blockGap' => 2.0, 'availableHeight' => 172.0],
+        ['maxUnits' => 35.2, 'lineH' => 3.78, 'boxH' => 3.10, 'fontSize' => 7.7, 'blockGap' => 1.9, 'availableHeight' => 172.0],
+        ['maxUnits' => 36.0, 'lineH' => 3.68, 'boxH' => 3.02, 'fontSize' => 7.6, 'blockGap' => 1.8, 'availableHeight' => 172.0],
+        ['maxUnits' => 36.8, 'lineH' => 3.58, 'boxH' => 2.94, 'fontSize' => 7.5, 'blockGap' => 1.7, 'availableHeight' => 172.0],
+        ['maxUnits' => 37.6, 'lineH' => 3.48, 'boxH' => 2.86, 'fontSize' => 7.4, 'blockGap' => 1.6, 'availableHeight' => 172.0],
+        ['maxUnits' => 38.4, 'lineH' => 3.40, 'boxH' => 2.80, 'fontSize' => 7.3, 'blockGap' => 1.5, 'availableHeight' => 172.0],
+        ['maxUnits' => 39.2, 'lineH' => 3.32, 'boxH' => 2.74, 'fontSize' => 7.2, 'blockGap' => 1.4, 'availableHeight' => 172.0],
+    ];
 
-    $fontSizePt = 9.0;
-    $lineHeight = 1.28;
-    $blockGapMm = 4.0;
-    $lineGapMm = 1.8;
-
-    if ($quizTotalLength > 760) {
-        $fontSizePt = 8.1;
-        $lineHeight = 1.17;
-        $blockGapMm = 2.8;
-        $lineGapMm = 1.1;
-    } elseif ($quizTotalLength > 700) {
-        $fontSizePt = 8.5;
-        $lineHeight = 1.22;
-        $blockGapMm = 3.2;
-        $lineGapMm = 1.3;
+    $chosenLayout = $layouts[count($layouts) - 1];
+    $groups = [];
+    foreach ($layouts as $layout) {
+        $candidateGroups = tbm_prepare_quiz_groups($quizzes, $layout['maxUnits']);
+        $lineCount = 0;
+        foreach ($candidateGroups as $group) {
+            $lineCount += count($group);
+        }
+        $height = ($lineCount * $layout['lineH']) + (max(0, count($candidateGroups) - 1) * $layout['blockGap']);
+        if ($height <= $layout['availableHeight']) {
+            $chosenLayout = $layout;
+            $groups = $candidateGroups;
+            break;
+        }
+        $chosenLayout = $layout;
+        $groups = $candidateGroups;
     }
 
-    $html .= '<div style="position:absolute; left:90.51mm; top:0mm; width:82.51mm;">';
-    $html .= '<div style="margin:0 0 2.5mm 0;">'
-          .  '<span style="font-size:9pt; color:#ff0000; font-family:\'맑은 고딕\'; font-weight:bold; letter-spacing:-0.02em;">'
-          .  '♣ 오늘의 안전 퀴즈'
-          .  '</span>'
-          .  '</div>';
+    $html = '<div style="position:absolute; left:90.51mm; top:0mm; width:79.80mm; overflow:visible;">';
+    $html .= '<div style="margin:0 0 2.4mm 0; font-size:9pt; color:#ff0000; font-family:\'맑은 고딕\'; font-weight:bold; letter-spacing:-0.01em; line-height:1.1; text-align:left;">♣ 오늘의 안전 퀴즈</div>';
 
-    foreach ($quizzes as $quiz) {
-        $quiz = trim(str_replace("\r\n", "\n", $quiz));
-        if ($quiz === '') {
-            continue;
-        }
+    foreach ($groups as $groupIndex => $groupLines) {
+        $groupMargin = $groupIndex < count($groups) - 1
+            ? number_format($chosenLayout['blockGap'], 2, '.', '') . 'mm'
+            : '0';
 
-        $lines = preg_split("/\n+/", $quiz);
-        $html .= '<div style="margin:0 0 ' . number_format($blockGapMm, 1, '.', '') . 'mm 0;">';
+        $quizText = tbm_normalize_quiz_display_text((string)($quizzes[$groupIndex] ?? ''));
+        $quizParts = tbm_split_quiz_display_parts($quizText);
 
-        foreach ($lines as $line) {
-            $line = trim($line);
-            if ($line === '') {
-                continue;
-            }
-            $html .= '<div style="margin:0 0 ' . number_format($lineGapMm, 1, '.', '') . 'mm 0; font-size:' . number_format($fontSizePt, 1, '.', '') . 'pt; line-height:' . number_format($lineHeight, 2, '.', '') . '; color:#000000; font-family:\'맑은 고딕\'; letter-spacing:-0.02em; white-space:normal; word-break:keep-all; overflow-wrap:break-word;">'
-                  . e($line)
+          $html .= '<div style="display:block; margin:0 0 ' . $groupMargin . ' 0; padding:0 0.8mm 0 0; width:81.20mm; box-sizing:border-box; font-size:' . number_format($chosenLayout['fontSize'], 1, '.', '') . 'pt; line-height:' . number_format($chosenLayout['lineH'], 2, '.', '') . 'mm; color:#000000; font-family:\'맑은 고딕\'; letter-spacing:0; text-align:justify; text-justify:inter-character; white-space:pre-line; word-break:normal; overflow-wrap:anywhere;">'
+              . '<div style="margin:0; padding:0; white-space:normal; word-break:normal; overflow-wrap:anywhere; text-align:justify; text-justify:inter-character;">' . e($quizParts['question']) . '</div>';
+
+        foreach ($quizParts['choices'] as $choiceIndex => $choiceText) {
+            $choiceMarginTop = $choiceIndex === 0 ? '1.00mm' : '0.80mm';
+            $html .= '<div style="margin:' . $choiceMarginTop . ' 0 0 0; padding:0 0 0 4.8mm; text-indent:-4.8mm; white-space:normal; word-break:normal; overflow-wrap:anywhere; text-align:justify; text-justify:inter-character;">'
+                  . e($choiceText)
                   . '</div>';
         }
+
         $html .= '</div>';
     }
+
     $html .= '</div>';
 
     return $html;
