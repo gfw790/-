@@ -2832,6 +2832,102 @@ a:focus-visible {
         overflow-x: auto;
     }
 
+    .post-list-table {
+        display: block;
+        overflow: visible;
+        background: transparent;
+        border: 0;
+    }
+
+    .post-list-table thead,
+    .post-list-table colgroup {
+        display: none;
+    }
+
+    .post-list-table tbody {
+        display: grid;
+        gap: 12px;
+    }
+
+    .post-list-table tbody tr {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px 12px;
+        padding: 14px;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--bg2);
+    }
+
+    .post-list-table tbody tr:hover td {
+        background: transparent;
+    }
+
+    .post-list-table tbody td {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+        min-width: 0;
+        padding: 0;
+        border: 0;
+        text-align: left;
+        background: transparent;
+    }
+
+    .post-list-table tbody td::before {
+        content: attr(data-label);
+        color: var(--text-dim);
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+
+    .post-list-table tbody td.title-cell {
+        grid-column: 1 / -1;
+        gap: 6px;
+    }
+
+    .post-list-table tbody td.title-cell::before {
+        display: none;
+    }
+
+    .post-list-table tbody td:nth-child(2) {
+        display: flex;
+    }
+
+    .post-list-table tbody td:nth-child(6),
+    .post-list-table tbody td:nth-child(7) {
+        display: none;
+    }
+
+    .post-list-table .post-title {
+        display: inline;
+        font-size: 15px;
+        line-height: 1.5;
+        word-break: break-word;
+    }
+
+    .post-list-table .author-dept,
+    .post-list-table .cat-badge,
+    .post-list-table .notice-tag {
+        max-width: 100%;
+    }
+
+    .post-list-table .empty-row {
+        display: block;
+    }
+
+    .post-list-table .empty-row td {
+        display: block;
+        padding: 40px 16px !important;
+        text-align: center;
+    }
+
+    .post-list-table .empty-row td::before {
+        display: none;
+    }
+
     .admin-stat-grid {
         grid-template-columns: 1fr;
     }

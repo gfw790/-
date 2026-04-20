@@ -42,7 +42,7 @@ function statusLabel(string $status): string {
     </span>
 </h2>
 
-<table class="post-table nearmiss-table">
+<table class="post-table nearmiss-table nearmiss-list-table">
     <colgroup>
         <col class="col-num">
         <col class="col-date">
@@ -70,9 +70,9 @@ function statusLabel(string $status): string {
         <?php $rowNum = $total - $offset; ?>
         <?php foreach ($rows as $row): ?>
             <tr>
-                <td><?= $rowNum-- ?></td>
-                <td><?= dateFormat($row['incident_at'], 'Y-m-d H:i') ?></td>
-                <td class="title-cell">
+                <td data-label="번호"><?= $rowNum-- ?></td>
+                <td data-label="발생일시"><?= dateFormat($row['incident_at'], 'Y-m-d H:i') ?></td>
+                <td class="title-cell" data-label="장소 / 작업유형">
                     <a href="view.php?id=<?= (int)$row['id'] ?>" class="post-title">
                         <?= h($row['location']) ?>
                     </a>
@@ -81,16 +81,16 @@ function statusLabel(string $status): string {
                         <div class="post-summary"><?= h($row['risk_type']) ?></div>
                     <?php endif; ?>
                 </td>
-                <td>
+                <td data-label="상태">
                     <span class="status-badge status-<?= h($row['status']) ?>">
                         <?= statusLabel($row['status']) ?>
                     </span>
                 </td>
-                <td>
+                <td data-label="작성자">
                     <span class="author-name"><?= h($row['author_name']) ?></span>
                 </td>
-                <td><?= dateFormat($row['created_at'], 'Y-m-d') ?></td>
-                <td><?= number_format($row['views']) ?></td>
+                <td data-label="등록일"><?= dateFormat($row['created_at'], 'Y-m-d') ?></td>
+                <td data-label="조회"><?= number_format($row['views']) ?></td>
             </tr>
         <?php endforeach; ?>
     <?php endif; ?>

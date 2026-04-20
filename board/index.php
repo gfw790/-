@@ -87,7 +87,7 @@ $pageTitleText = $category ? $category['name'] : '전체 게시글';
     <span class="sub">총 <?= number_format($total) ?>건 / <?= $page ?>페이지</span>
 </h2>
 
-<table class="post-table">
+<table class="post-table post-list-table">
     <colgroup>
         <col class="col-num">
         <col class="col-cat">
@@ -111,21 +111,21 @@ $pageTitleText = $category ? $category['name'] : '전체 게시글';
     <tbody>
     <?php foreach ($notices as $n): ?>
         <tr class="notice-row">
-            <td><span class="notice-tag">공지</span></td>
-            <td><span class="cat-badge"><?= h($n['cat_name']) ?></span></td>
-            <td class="title-cell">
+            <td data-label="번호"><span class="notice-tag">공지</span></td>
+            <td data-label="분류"><span class="cat-badge"><?= h($n['cat_name']) ?></span></td>
+            <td class="title-cell" data-label="제목">
                 <a href="view.php?id=<?= (int)$n['id'] ?>" class="post-title"><?= h($n['title']) ?></a>
                 <?php if ($n['comment_count'] > 0): ?><span class="comment-count">[<?= (int)$n['comment_count'] ?>]</span><?php endif; ?>
                 <?php if ($n['attach_cnt'] > 0): ?><span class="attach-icon">첨부</span><?php endif; ?>
                 <?php if (strtotime($n['created_at']) > time() - 86400): ?><span class="new-tag">N</span><?php endif; ?>
             </td>
-            <td>
+            <td data-label="작성자">
                 <?php if ($n['author_dept']): ?><span class="author-dept"><?= h($n['author_dept']) ?></span> <?php endif; ?>
                 <span class="author-name"><?= h($n['author_name']) ?></span>
             </td>
-            <td><?= dateFormat($n['created_at'], 'Y-m-d') ?></td>
-            <td><?= number_format($n['views']) ?></td>
-            <td><?= number_format($n['like_count']) ?></td>
+            <td data-label="등록일"><?= dateFormat($n['created_at'], 'Y-m-d') ?></td>
+            <td data-label="조회"><?= number_format($n['views']) ?></td>
+            <td data-label="추천"><?= number_format($n['like_count']) ?></td>
         </tr>
     <?php endforeach; ?>
 
@@ -136,21 +136,21 @@ $pageTitleText = $category ? $category['name'] : '전체 게시글';
     <?php $rowNum = $total - $offset; ?>
     <?php foreach ($posts as $p): ?>
         <tr>
-            <td><?= $rowNum-- ?></td>
-            <td><span class="cat-badge"><?= h($p['cat_name']) ?></span></td>
-            <td class="title-cell">
+            <td data-label="번호"><?= $rowNum-- ?></td>
+            <td data-label="분류"><span class="cat-badge"><?= h($p['cat_name']) ?></span></td>
+            <td class="title-cell" data-label="제목">
                 <a href="view.php?id=<?= (int)$p['id'] ?>" class="post-title"><?= h($p['title']) ?></a>
                 <?php if ($p['comment_count'] > 0): ?><span class="comment-count">[<?= (int)$p['comment_count'] ?>]</span><?php endif; ?>
                 <?php if ($p['attach_cnt'] > 0): ?><span class="attach-icon">첨부</span><?php endif; ?>
                 <?php if (strtotime($p['created_at']) > time() - 86400): ?><span class="new-tag">N</span><?php endif; ?>
             </td>
-            <td>
+            <td data-label="작성자">
                 <?php if ($p['author_dept']): ?><span class="author-dept"><?= h($p['author_dept']) ?></span> <?php endif; ?>
                 <span class="author-name"><?= h($p['author_name']) ?></span>
             </td>
-            <td><?= dateFormat($p['created_at'], 'Y-m-d') ?></td>
-            <td><?= number_format($p['views']) ?></td>
-            <td><?= number_format($p['like_count']) ?></td>
+            <td data-label="등록일"><?= dateFormat($p['created_at'], 'Y-m-d') ?></td>
+            <td data-label="조회"><?= number_format($p['views']) ?></td>
+            <td data-label="추천"><?= number_format($p['like_count']) ?></td>
         </tr>
     <?php endforeach; ?>
     </tbody>
