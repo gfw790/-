@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../../risk_server/db_config.php';
 require_once __DIR__ . '/upload_validation.php';
+require_once __DIR__ . '/revision_request_board.php';
 
 /**
  * HTML escape helper.
@@ -128,6 +129,8 @@ function normalizePreventionData($rawValue): string
             continue;
         }
 
+        $workKey = trim((string)($item['work_key'] ?? ''));
+        $workLabel = trim((string)($item['work_label'] ?? ''));
         $measure = trim((string)($item['measure'] ?? ''));
         $status = trim((string)($item['status'] ?? ''));
         if ($measure === '') {
@@ -135,6 +138,8 @@ function normalizePreventionData($rawValue): string
         }
 
         $items[] = [
+            'work_key' => $workKey,
+            'work_label' => $workLabel,
             'measure' => $measure,
             'status' => $status,
         ];
@@ -162,6 +167,7 @@ $summary = trim($_POST['summary'] ?? '');
 $remark = trim($_POST['remark'] ?? '');
 $details = $_POST['details'] ?? [];
 $files = normalizeDetailFiles($_FILES['details'] ?? []);
+$revisionRequestDetails = [];
 
 if ($id === false || $id === null) {
     http_response_code(400);
@@ -260,6 +266,14 @@ try {
             continue;
         }
 
+        $revisionRequestDetails[] = [
+            'item_no' => $itemNo,
+            'work_time' => $workTime,
+            'activity' => $activity,
+            'description' => $description,
+            'prevention_data' => (string)($detail['prevention_data'] ?? $preventionData),
+        ];
+
         $insertDetail->execute([
             ':log_id' => $id,
             ':item_no' => $itemNo,
@@ -275,8 +289,24 @@ try {
     }
 
     $pdo->commit();
+    $revisionResult = safetyLogCreateRevisionRequestPosts([
+        'log_id' => (int)$id,
+        'log_date' => $logDate,
+        'manager_name' => $managerName,
+        'site_name' => $siteName,
+        'work_location' => $workLocation,
+        'subject' => $subject,
+        'remark' => $remark,
+        'details' => $revisionRequestDetails,
+    ]);
+    $successMessage = '업무일지가 수정되었습니다.';
+    if (!empty($revisionResult['error'])) {
+        $successMessage .= ' 수정요청 게시글 등록은 실패했습니다.';
+    } elseif (!empty($revisionResult['created'])) {
+        $successMessage .= ' 수정요청 게시글이 등록되었습니다.';
+    }
     // 수정 성공 시 상세보기 페이지로 이동하고 성공 메시지를 전달합니다.
-    header('Location: view.php?id=' . $id . '&type=success&message=' . rawurlencode('업무일지가 수정되었습니다.'));
+    header('Location: view.php?id=' . $id . '&type=success&message=' . rawurlencode($successMessage));
     exit;
 } catch (Throwable $e) {
     if (isset($pdo) && $pdo->inTransaction()) {

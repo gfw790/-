@@ -30,6 +30,51 @@ function safetyLogHasColumn(PDO $pdo, string $tableName, string $columnName): bo
     return (int)$stmt->fetchColumn() > 0;
 }
 
+function parsePreventionData(?string $rawValue): array
+{
+    if (!is_string($rawValue) || trim($rawValue) === '') {
+        return [
+            'activity' => '',
+            'process' => '',
+            'items' => [],
+        ];
+    }
+
+    $decoded = json_decode($rawValue, true);
+    if (!is_array($decoded)) {
+        return [
+            'activity' => '',
+            'process' => '',
+            'items' => [],
+        ];
+    }
+
+    $items = [];
+    foreach (($decoded['items'] ?? []) as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+
+        $measure = trim((string)($item['measure'] ?? ''));
+        if ($measure === '') {
+            continue;
+        }
+
+        $items[] = [
+            'work_key' => trim((string)($item['work_key'] ?? '')),
+            'work_label' => trim((string)($item['work_label'] ?? '')),
+            'measure' => $measure,
+            'status' => trim((string)($item['status'] ?? '')),
+        ];
+    }
+
+    return [
+        'activity' => trim((string)($decoded['activity'] ?? '')),
+        'process' => trim((string)($decoded['process'] ?? '')),
+        'items' => $items,
+    ];
+}
+
 $log = null;
 $details = [];
 $errorMessage = '';
@@ -47,6 +92,7 @@ $values = [
 try {
         $pdo = getDB();
         $id = getValidLogId($pdo);
+    $hasPreventionDataColumn = safetyLogHasColumn($pdo, 'safety_manager_log_detail', 'prevention_data');
     $hasPhoto3Column = safetyLogHasColumn($pdo, 'safety_manager_log_detail', 'photo_3');
 
         // safety_manager_log에서 단일 항목을 조회합니다.
@@ -75,7 +121,8 @@ try {
 
             // safety_manager_log_detail 목록을 조회합니다.
             $detailStmt = $pdo->prepare(
-                'SELECT id, item_no, work_time, activity, description, photo_1, photo_2, '
+                'SELECT id, item_no, work_time, activity, description, '
+                . ($hasPreventionDataColumn ? 'prevention_data' : 'NULL AS prevention_data') . ', photo_1, photo_2, '
                 . ($hasPhoto3Column ? 'photo_3' : 'NULL AS photo_3') . '
                  FROM safety_manager_log_detail
                  WHERE log_id = :log_id
@@ -91,10 +138,13 @@ try {
 
 function renderDetailRow(array $detail, int $index): string
 {
+    $preventionData = h((string)($detail['prevention_data'] ?? ''));
+
     return sprintf(
         '<tr class="detail-row">
             <td>
                 <input type="hidden" name="details[%1$d][item_no]" value="%2$d">
+                <input type="hidden" name="details[%1$d][prevention_data]" class="js-prevention-data-input" value="%9$s">
                 <span class="form-control-plaintext">%2$d</span>
             </td>
             <td><input type="text" name="details[%1$d][work_time]" class="form-control" value="%3$s"></td>
@@ -121,13 +171,14 @@ function renderDetailRow(array $detail, int $index): string
         h($detail['description'] ?? ''),
         !empty($detail['photo_1']) ? '<div class="form-text">현재: ' . h($detail['photo_1']) . '</div>' : '',
         !empty($detail['photo_2']) ? '<div class="form-text">현재: ' . h($detail['photo_2']) . '</div>' : '',
-        !empty($detail['photo_3']) ? '<div class="form-text">현재: ' . h($detail['photo_3']) . '</div>' : ''
+        !empty($detail['photo_3']) ? '<div class="form-text">현재: ' . h($detail['photo_3']) . '</div>' : '',
+        $preventionData
     );
 }
 ?>
 <?php
 $pageTitle = '안전관리자 업무일지 수정';
-$extraHead = '<style> .detail-table th, .detail-table td { vertical-align: middle; } .form-control-plaintext { margin-bottom: 0; } </style>';
+$extraHead = '<style> .detail-table th, .detail-table td { vertical-align: middle; } .form-control-plaintext { margin-bottom: 0; } .form-select { color: #f8fafc; background-color: #162033; border-color: #8b6b2f; } .form-select:focus { color: #f8fafc; background-color: #162033; border-color: #d6a545; box-shadow: 0 0 0 0.2rem rgba(214, 165, 69, 0.2); } .form-select option, .form-select option:checked, .form-select option:hover { color: #0f172a !important; background-color: #f8fafc !important; } .form-select option[value=""] { color: #475569 !important; } .edit-prevention-card { border: 1px solid #334155; border-radius: 12px; padding: 16px; background: #0f172a; } .edit-prevention-card + .edit-prevention-card { margin-top: 12px; } .edit-prevention-title { font-weight: 700; margin-bottom: 10px; } </style>';
 include __DIR__ . '/includes/header.php';
 ?>
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -177,7 +228,7 @@ include __DIR__ . '/includes/header.php';
 
                 <div class="row g-3 mt-3">
                     <div class="col-12">
-                        <label class="form-label">요약</label>
+                        <label class="form-label">작업자 의견사항</label>
                         <textarea name="summary" class="form-control" rows="3"><?= h($values['summary']) ?></textarea>
                     </div>
                 </div>
@@ -218,6 +269,14 @@ include __DIR__ . '/includes/header.php';
             </div>
         </div>
 
+        <div class="card mb-4">
+            <div class="card-header">예방대책 상태 수정</div>
+            <div class="card-body">
+                <div id="prevention-empty" class="text-muted">세부기록에 저장된 예방대책이 없습니다.</div>
+                <div id="prevention-sections" class="d-flex flex-column gap-3"></div>
+            </div>
+        </div>
+
         <div class="mb-4">
             <label class="form-label">비고</label>
             <textarea name="remark" class="form-control" rows="3"><?= h($values['remark']) ?></textarea>
@@ -232,11 +291,109 @@ include __DIR__ . '/includes/header.php';
 <script>
     const detailBody = document.getElementById('details-body');
     const addDetailButton = document.getElementById('add-detail');
+    const preventionEmpty = document.getElementById('prevention-empty');
+    const preventionSections = document.getElementById('prevention-sections');
+
+    function escapeHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function parsePreventionData(rawValue) {
+        if (!rawValue) {
+            return { activity: '', process: '', items: [] };
+        }
+
+        try {
+            const parsed = JSON.parse(rawValue);
+            return {
+                activity: String(parsed.activity || ''),
+                process: String(parsed.process || ''),
+                items: Array.isArray(parsed.items) ? parsed.items.map((item) => ({
+                    work_key: String(item.work_key || ''),
+                    work_label: String(item.work_label || ''),
+                    measure: String(item.measure || ''),
+                    status: String(item.status || '')
+                })).filter((item) => item.measure !== '') : []
+            };
+        } catch (error) {
+            return { activity: '', process: '', items: [] };
+        }
+    }
+
+    function updateRowPreventionInput(row, preventionData) {
+        const preventionInput = row.querySelector('.js-prevention-data-input');
+        if (!preventionInput) {
+            return;
+        }
+
+        preventionInput.value = JSON.stringify(preventionData);
+    }
+
+    function renderPreventionSections() {
+        if (!preventionSections || !preventionEmpty) {
+            return;
+        }
+
+        const rows = Array.from(detailBody.querySelectorAll('.detail-row'));
+        const sectionHtml = rows.map((row, index) => {
+            const preventionInput = row.querySelector('.js-prevention-data-input');
+            const preventionData = parsePreventionData(preventionInput ? preventionInput.value : '');
+
+            if (!preventionData.items.length) {
+                return '';
+            }
+
+            const rowsHtml = preventionData.items.map((item, preventionIndex) => `
+                <tr>
+                    <td>${preventionIndex + 1}</td>
+                    <td>${escapeHtml(item.work_label || '') || '&nbsp;'}</td>
+                    <td>${escapeHtml(item.measure)}</td>
+                    <td>
+                        <select class="form-select form-select-sm js-prevention-status-select" data-row-index="${index}" data-item-index="${preventionIndex}">
+                            <option value="">선택</option>
+                            <option value="양호"${item.status === '양호' ? ' selected' : ''}>양호</option>
+                            <option value="불량"${item.status === '불량' ? ' selected' : ''}>불량</option>
+                            <option value="조치완료"${item.status === '조치완료' ? ' selected' : ''}>조치완료</option>
+                            <option value="후속조치필요"${item.status === '후속조치필요' ? ' selected' : ''}>후속조치필요</option>
+                            <option value="[평가서 수정필요]"${item.status === '[평가서 수정필요]' ? ' selected' : ''}>[평가서 수정필요]</option>
+                            <option value="해당없음"${item.status === '해당없음' ? ' selected' : ''}>해당없음</option>
+                        </select>
+                    </td>
+                </tr>`).join('');
+
+            return `
+                <div class="edit-prevention-card">
+                    <div class="edit-prevention-title">No.${index + 1} / ${escapeHtml(preventionData.activity || '')} / ${escapeHtml(preventionData.process || '')}</div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered mb-0">
+                            <thead>
+                                <tr>
+                                    <th style="width: 70px;">No.</th>
+                                    <th style="width: 180px;">현장</th>
+                                    <th>예방대책</th>
+                                    <th style="width: 180px;">상태</th>
+                                </tr>
+                            </thead>
+                            <tbody>${rowsHtml}</tbody>
+                        </table>
+                    </div>
+                </div>`;
+        }).filter(Boolean);
+
+        preventionSections.innerHTML = sectionHtml.join('');
+        preventionEmpty.classList.toggle('d-none', sectionHtml.length > 0);
+    }
 
     function getDetailRowHtml(index, data = {}) {
         const workTime = data.work_time ?? '';
         const activity = data.activity ?? '';
         const description = data.description ?? '';
+        const preventionData = data.prevention_data ?? '';
         const currentPhoto1 = data.photo_1 ? `<div class="form-text">현재: ${data.photo_1}</div>` : '';
         const currentPhoto2 = data.photo_2 ? `<div class="form-text">현재: ${data.photo_2}</div>` : '';
         const currentPhoto3 = data.photo_3 ? `<div class="form-text">현재: ${data.photo_3}</div>` : '';
@@ -245,6 +402,7 @@ include __DIR__ . '/includes/header.php';
             <tr class="detail-row">
                 <td>
                     <input type="hidden" name="details[${index}][item_no]" value="${index + 1}">
+                    <input type="hidden" name="details[${index}][prevention_data]" class="js-prevention-data-input" value="${escapeHtml(preventionData)}">
                     <span class="form-control-plaintext">${index + 1}</span>
                 </td>
                 <td><input type="text" name="details[${index}][work_time]" class="form-control" value="${workTime}"></td>
@@ -288,6 +446,7 @@ include __DIR__ . '/includes/header.php';
     addDetailButton.addEventListener('click', () => {
         const rowCount = detailBody.querySelectorAll('.detail-row').length;
         detailBody.insertAdjacentHTML('beforeend', getDetailRowHtml(rowCount));
+        renderPreventionSections();
     });
 
     detailBody.addEventListener('click', (event) => {
@@ -296,8 +455,34 @@ include __DIR__ . '/includes/header.php';
             if (row) {
                 row.remove();
                 reindexRows();
+                renderPreventionSections();
             }
         }
     });
+
+    preventionSections?.addEventListener('change', (event) => {
+        if (!event.target.classList.contains('js-prevention-status-select')) {
+            return;
+        }
+
+        const rowIndex = Number.parseInt(String(event.target.dataset.rowIndex || '-1'), 10);
+        const itemIndex = Number.parseInt(String(event.target.dataset.itemIndex || '-1'), 10);
+        const rows = Array.from(detailBody.querySelectorAll('.detail-row'));
+        const row = rows[rowIndex] || null;
+        if (!row || itemIndex < 0) {
+            return;
+        }
+
+        const preventionInput = row.querySelector('.js-prevention-data-input');
+        const preventionData = parsePreventionData(preventionInput ? preventionInput.value : '');
+        if (!Array.isArray(preventionData.items) || !preventionData.items[itemIndex]) {
+            return;
+        }
+
+        preventionData.items[itemIndex].status = String(event.target.value || '');
+        updateRowPreventionInput(row, preventionData);
+    });
+
+    renderPreventionSections();
 </script>
 <?php include __DIR__ . '/includes/footer.php'; ?>

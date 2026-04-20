@@ -9,14 +9,16 @@ $_currentUser = getCurrentUser();
 // 가스팀 여부 판별
 $_userDept   = (string)($_currentUser['dept'] ?? '');
 $_isGasTeam  = (mb_strpos($_userDept, '가스') !== false);
+$_canSeeRevisionRequestTab = (($_currentUser['role'] ?? '') === 'admin') || (($_currentUser['original_role'] ?? '') === 'safety_manager');
 
 // 팀에 따라 카테고리 필터링
 // - 가스팀: '도면자료실'(dwg) 제외, '인계사항'(handover) 포함
 // - 그 외:  '인계사항'(handover) 제외, '도면자료실'(dwg) 포함
-$_categories = array_values(array_filter(getCategories(), function($cat) use ($_isGasTeam, $_currentUser) {
+$_categories = array_values(array_filter(getCategories(), function($cat) use ($_isGasTeam, $_currentUser, $_canSeeRevisionRequestTab) {
     $code = $cat['code'] ?? '';
     if ($_isGasTeam && $code === 'dwg') return false;
     if (!$_isGasTeam && $code === 'handover' && ($_currentUser['role'] ?? '') !== 'admin') return false;
+  if ($code === 'revision_request' && !$_canSeeRevisionRequestTab) return false;
     return true;
 }));
 $_currentPage = basename($_SERVER['PHP_SELF'] ?? '');
@@ -72,10 +74,11 @@ $_boardCssVersion = (string)@filemtime(__DIR__ . '/../assets/css/style.css');
         <?php $allInserted = false; ?>
         <?php foreach ($_categories as $cat): ?>
           <?php if (($cat['code'] ?? '') === 'near_miss') continue; ?>
+          <?php $tabLabel = ($cat['code'] ?? '') === 'revision_request' ? '평가서수정' : ($cat['name'] ?? ''); ?>
           <li class="<?= $_currentCat === $cat['code'] ? 'active' : '' ?>">
-            <a href="index.php?cat=<?= h($cat['code']) ?>"><?= h($cat['name']) ?></a>
+            <a href="index.php?cat=<?= h($cat['code']) ?>"><?= h($tabLabel) ?></a>
           </li>
-          <?php if (in_array($cat['name'] ?? '', ['평가서수정', '수정요청'], true) && !$allInserted): ?>
+          <?php if (in_array($tabLabel, ['평가서수정', '수정요청'], true) && !$allInserted): ?>
             <li class="<?= $_currentCat === 'all' ? 'active' : '' ?>">
               <a href="index.php?cat=all">전체</a>
             </li>

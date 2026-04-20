@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../../risk_server/db_config.php';
 require_once __DIR__ . '/upload_validation.php';
+require_once __DIR__ . '/revision_request_board.php';
 
 function h($value)
 {
@@ -94,6 +95,44 @@ function saveDetailFile(array $file, string $uploadRoot, string $relativeDir): s
     return $relativeDir . '/' . $filename;
 }
 
+function moveDraftDetailFile(string $tempRelativePath, string $uploadRoot, string $relativeDir): string
+{
+    $tempRelativePath = trim($tempRelativePath);
+    if ($tempRelativePath === '') {
+        return '';
+    }
+
+    $tempRoot = 'A:\\risk_server\\uploads\\safety_log_temp';
+    $normalizedTempPath = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $tempRelativePath);
+    $sourcePath = rtrim($tempRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . ltrim($normalizedTempPath, DIRECTORY_SEPARATOR);
+    $sourceReal = realpath($sourcePath);
+    $tempRootReal = realpath($tempRoot);
+    if ($sourceReal === false || $tempRootReal === false || strpos($sourceReal, $tempRootReal) !== 0 || !is_file($sourceReal)) {
+        return '';
+    }
+
+    $extension = strtolower(pathinfo($sourceReal, PATHINFO_EXTENSION));
+    $extension = preg_replace('/[^a-zA-Z0-9]/', '', $extension);
+    $extension = $extension !== '' ? '.' . $extension : '';
+    $filename = sprintf('safety_%s_%s%s', date('Ymd_His'), random_int(1000, 9999), $extension);
+
+    $relativeDir = trim($relativeDir, '/');
+    $targetDir = rtrim($uploadRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relativeDir);
+    if (!is_dir($targetDir) && !mkdir($targetDir, 0755, true)) {
+        throw new RuntimeException('업로드 폴더를 생성할 수 없습니다: ' . $targetDir);
+    }
+
+    $targetPath = $targetDir . DIRECTORY_SEPARATOR . $filename;
+    if (!rename($sourceReal, $targetPath)) {
+        if (!copy($sourceReal, $targetPath)) {
+            throw new RuntimeException('임시 사진 파일 이동에 실패했습니다.');
+        }
+        @unlink($sourceReal);
+    }
+
+    return $relativeDir . '/' . $filename;
+}
+
 function parseSiteVisitRows($rawValue): array
 {
     if (!is_string($rawValue) || trim($rawValue) === '') {
@@ -182,6 +221,8 @@ function normalizePreventionData($rawValue): string
             continue;
         }
 
+        $workKey = trim((string)($item['work_key'] ?? ''));
+        $workLabel = trim((string)($item['work_label'] ?? ''));
         $measure = trim((string)($item['measure'] ?? ''));
         $status = trim((string)($item['status'] ?? ''));
         if ($measure === '') {
@@ -189,6 +230,8 @@ function normalizePreventionData($rawValue): string
         }
 
         $items[] = [
+            'work_key' => $workKey,
+            'work_label' => $workLabel,
             'measure' => $measure,
             'status' => $status,
         ];
@@ -221,6 +264,7 @@ $summary = trim($_POST['summary'] ?? '');
 $remark = trim($_POST['remark'] ?? '');
 $details = $_POST['details'] ?? [];
 $files = restructureFilesArray($_FILES['details'] ?? []);
+$revisionRequestDetails = [];
 
 try {
     $pdo = getDB();
@@ -308,14 +352,34 @@ try {
         $activity = trim($detail['activity'] ?? '');
         $description = trim($detail['description'] ?? '');
         $preventionData = normalizePreventionData($detail['prevention_data'] ?? '');
+        $photo1Temp = trim((string)($detail['photo_1_temp'] ?? ''));
+        $photo2Temp = trim((string)($detail['photo_2_temp'] ?? ''));
+        $photo3Temp = trim((string)($detail['photo_3_temp'] ?? ''));
 
         $photo1 = saveDetailFile($files[$index]['photo_1'] ?? [], $uploadRoot, $relativeDir);
         $photo2 = saveDetailFile($files[$index]['photo_2'] ?? [], $uploadRoot, $relativeDir);
         $photo3 = saveDetailFile($files[$index]['photo_3'] ?? [], $uploadRoot, $relativeDir);
+        if ($photo1 === '' && $photo1Temp !== '') {
+            $photo1 = moveDraftDetailFile($photo1Temp, $uploadRoot, $relativeDir);
+        }
+        if ($photo2 === '' && $photo2Temp !== '') {
+            $photo2 = moveDraftDetailFile($photo2Temp, $uploadRoot, $relativeDir);
+        }
+        if ($photo3 === '' && $photo3Temp !== '') {
+            $photo3 = moveDraftDetailFile($photo3Temp, $uploadRoot, $relativeDir);
+        }
 
         if ($workTime === '' && $activity === '' && $description === '' && $preventionData === '' && $photo1 === '' && $photo2 === '' && $photo3 === '') {
             continue;
         }
+
+        $revisionRequestDetails[] = [
+            'item_no' => $index + 1,
+            'work_time' => $workTime,
+            'activity' => $activity,
+            'description' => $description,
+            'prevention_data' => (string)($detail['prevention_data'] ?? $preventionData),
+        ];
 
         $insertDetail->execute([
             ':log_id' => $logId,
@@ -332,8 +396,25 @@ try {
     }
 
     $pdo->commit();
+    $revisionResult = safetyLogCreateRevisionRequestPosts([
+        'log_id' => $logId,
+        'log_date' => $logDate,
+        'manager_name' => $managerName,
+        'site_name' => $siteName,
+        'work_location' => $workLocation,
+        'subject' => $subject,
+        'remark' => $remark,
+        'site_visit_rows' => $siteVisitRows,
+        'details' => $revisionRequestDetails,
+    ]);
+    $successMessage = '업무일지가 등록되었습니다.';
+    if (!empty($revisionResult['error'])) {
+        $successMessage .= ' 수정요청 게시글 등록은 실패했습니다.';
+    } elseif (!empty($revisionResult['created'])) {
+        $successMessage .= ' 수정요청 게시글이 등록되었습니다.';
+    }
     // 등록 성공 시 목록 페이지로 이동하고 성공 메시지를 전달합니다.
-    header('Location: index.php?type=success&message=' . rawurlencode('업무일지가 등록되었습니다.'));
+    header('Location: index.php?type=success&message=' . rawurlencode($successMessage));
     exit;
 
 } catch (Throwable $e) {

@@ -115,6 +115,10 @@ function addDetailOption(array &$optionMap, string $workKey, string $workType, s
     if ($processName !== '') {
         $optionMap[$workKey][$workType][$processName] = $processName;
     }
+
+    if ($workKey !== '__all__') {
+        addDetailOption($optionMap, '__all__', $workType, $processName);
+    }
 }
 
 function collectTaskNamesByUnitIds(PDO $pdo, array $unitIds): array
@@ -169,7 +173,8 @@ function extractPreventionMeasureLines(string $text): array
 
     foreach ($lines as $line) {
         $line = trim((string)$line);
-        $line = preg_replace('/^[\-•·\*\d\)\.\s]+/u', '', $line) ?? $line;
+        $line = preg_replace('/^(?:[\-•·\*]\s*|\d+[\.)]\s+)/u', '', $line) ?? $line;
+        $line = preg_replace('/\s+/u', ' ', $line) ?? $line;
         $line = trim($line);
         if ($line === '') {
             continue;
@@ -607,6 +612,18 @@ try {
     $wStmt->execute([':today' => date('Y-m-d')]);
     $todayWorkList = $wStmt->fetchAll();
 
+                        $allTargetUnitRows = $raPdo->query(
+                                "SELECT unit_ra_id, unit_title
+                                 FROM unit_ra_header
+                                 WHERE use_yn = 'Y'
+                                     AND unit_type = 'target'
+                                 ORDER BY sort_no ASC, unit_ra_id ASC"
+                        )->fetchAll();
+                        $allTargetUnitIds = array_values(array_unique(array_filter(array_map(
+                                static fn($row) => (int)($row['unit_ra_id'] ?? 0),
+                                $allTargetUnitRows
+                        ), static fn($unitId) => $unitId > 0)));
+
             $targetUnitIds = [];
             foreach ($todayWorkList as $workRow) {
                 $baseUnitRaId = (int)($workRow['base_unit_ra_id'] ?? 0);
@@ -633,9 +650,48 @@ try {
                 }
             }
 
+            $targetUnitIds = array_values(array_unique(array_merge($targetUnitIds, $allTargetUnitIds)));
+
             $taskNamesByUnitId = collectTaskNamesByUnitIds($raPdo, $targetUnitIds);
             $preventionMeasuresByUnitId = collectPreventionMeasuresByUnitIds($raPdo, $targetUnitIds);
             $preventionSummaryByUnitId = collectPreventionSummaryByUnitIds($raPdo, $targetUnitIds);
+
+    foreach ($allTargetUnitRows as $targetUnitRow) {
+        $targetUnitId = (int)($targetUnitRow['unit_ra_id'] ?? 0);
+        $activityTitle = (string)($targetUnitRow['unit_title'] ?? '');
+        if ($targetUnitId <= 0 || trim($activityTitle) === '') {
+            continue;
+        }
+
+        $taskNames = array_values($taskNamesByUnitId[$targetUnitId] ?? []);
+        addReportOptionFromUnitTitle(
+            $detailOptionMap,
+            '__all__',
+            $activityTitle,
+            $taskNames
+        );
+
+        foreach ($taskNames as $taskName) {
+            addPreventionMeasures(
+                $preventionMeasureMap,
+                '__all__',
+                $activityTitle,
+                (string)$taskName,
+                array_values($preventionMeasuresByUnitId[$targetUnitId][$taskName] ?? [])
+            );
+
+            foreach (($preventionSummaryByUnitId[$targetUnitId][$taskName] ?? []) as $measure => $summaryItems) {
+                addPreventionSummaryDetails(
+                    $preventionDetailMap,
+                    '__all__',
+                    $activityTitle,
+                    (string)$taskName,
+                    (string)$measure,
+                    array_values($summaryItems)
+                );
+            }
+        }
+    }
 
     foreach ($todayWorkList as $workRow) {
         $workKey = buildReportWorkOptionKey((int)($workRow['report_id'] ?? 0));
@@ -728,37 +784,58 @@ function renderDetailRow(array $detail, int $index): string
 {
     global $detailOptionMap;
 
+    $workKey = (string)($detail['work_key'] ?? '');
     $activityOptionHtml = renderActivityOptionsHtml($detailOptionMap, (string)($detail['activity'] ?? ''));
+    $workKeyOptionHtml = renderCurrentSelectOption($workKey, '현장 선택');
     $descriptionOptionHtml = renderCurrentSelectOption((string)($detail['description'] ?? ''), '작업유형 먼저 선택');
     $preventionData = h((string)($detail['prevention_data'] ?? ''));
+    $photo1Temp = h((string)($detail['photo_1_temp'] ?? ''));
+    $photo2Temp = h((string)($detail['photo_2_temp'] ?? ''));
+    $photo3Temp = h((string)($detail['photo_3_temp'] ?? ''));
+    $photo1TempName = h(basename((string)($detail['photo_1_temp'] ?? '')));
+    $photo2TempName = h(basename((string)($detail['photo_2_temp'] ?? '')));
+    $photo3TempName = h(basename((string)($detail['photo_3_temp'] ?? '')));
 
     return sprintf(
         '<tr class="detail-row">
-            <td><input type="hidden" name="details[%1$d][item_no]" value="%2$d"><input type="hidden" name="details[%1$d][prevention_data]" class="js-prevention-data-input" value="%6$s"><span class="form-control-plaintext">%2$d</span></td>
-            <td><input type="time" name="details[%1$d][work_time]" class="form-control" value="%3$s" step="600"></td>
-            <td>
-                <select name="details[%1$d][activity]" class="form-select js-activity-select" data-selected="%4$s">
-                    %7$s
-                </select>
-            </td>
-            <td>
-                <select name="details[%1$d][description]" class="form-select js-process-select" data-selected="%5$s">
+            <td data-label="No."><input type="hidden" name="details[%1$d][item_no]" value="%2$d"><input type="hidden" name="details[%1$d][prevention_data]" class="js-prevention-data-input" value="%7$s"><span class="form-control-plaintext">%2$d</span></td>
+            <td data-label="시간"><input type="time" name="details[%1$d][work_time]" class="form-control" value="%3$s" step="600"></td>
+            <td data-label="현장">
+                <select name="details[%1$d][work_key]" class="form-select js-detail-work-key-select" data-selected="%4$s">
                     %8$s
                 </select>
             </td>
-            <td><input type="file" name="details[%1$d][photo_1]" class="form-control"></td>
-            <td><input type="file" name="details[%1$d][photo_2]" class="form-control"></td>
-            <td><input type="file" name="details[%1$d][photo_3]" class="form-control"></td>
-            <td><button type="button" class="btn btn-danger btn-sm delete-row">삭제</button></td>
+            <td data-label="관찰 업무">
+                <select name="details[%1$d][activity]" class="form-select js-activity-select" data-selected="%5$s">
+                    %9$s
+                </select>
+            </td>
+            <td data-label="공정">
+                <select name="details[%1$d][description]" class="form-select js-process-select" data-selected="%6$s">
+                    %10$s
+                </select>
+            </td>
+            <td data-label="사진1"><input type="file" name="details[%1$d][photo_1]" class="form-control js-detail-photo-input" data-photo-field="photo_1"><input type="hidden" name="details[%1$d][photo_1_temp]" class="js-detail-photo-temp" data-photo-field="photo_1" value="%11$s"><div class="form-text js-detail-photo-status" data-photo-field="photo_1">%14$s</div></td>
+            <td data-label="사진2"><input type="file" name="details[%1$d][photo_2]" class="form-control js-detail-photo-input" data-photo-field="photo_2"><input type="hidden" name="details[%1$d][photo_2_temp]" class="js-detail-photo-temp" data-photo-field="photo_2" value="%12$s"><div class="form-text js-detail-photo-status" data-photo-field="photo_2">%15$s</div></td>
+            <td data-label="사진3"><input type="file" name="details[%1$d][photo_3]" class="form-control js-detail-photo-input" data-photo-field="photo_3"><input type="hidden" name="details[%1$d][photo_3_temp]" class="js-detail-photo-temp" data-photo-field="photo_3" value="%13$s"><div class="form-text js-detail-photo-status" data-photo-field="photo_3">%16$s</div></td>
+            <td data-label="삭제"><button type="button" class="btn btn-danger btn-sm delete-row">삭제</button></td>
         </tr>',
         $index,
         $detail['item_no'] ?? ($index + 1),
         h($detail['work_time'] ?? ''),
+        h($workKey),
         h($detail['activity'] ?? ''),
         h($detail['description'] ?? ''),
         $preventionData,
+        $workKeyOptionHtml,
         $activityOptionHtml,
-        $descriptionOptionHtml
+        $descriptionOptionHtml,
+        $photo1Temp,
+        $photo2Temp,
+        $photo3Temp,
+        $photo1TempName !== '' ? '임시저장된 사진: ' . $photo1TempName : '선택된 파일 없음',
+        $photo2TempName !== '' ? '임시저장된 사진: ' . $photo2TempName : '선택된 파일 없음',
+        $photo3TempName !== '' ? '임시저장된 사진: ' . $photo3TempName : '선택된 파일 없음'
     );
 }
 
@@ -807,6 +884,244 @@ $extraHead = '<style>
     .weather-field[readonly] {
         background-color: #f8fafc;
         cursor: default;
+    }
+    .draft-status {
+        color: #94a3b8;
+        font-size: 13px;
+    }
+    .site-visit-toolbar {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 10px;
+    }
+    .site-visit-manual-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .site-visit-manual-delete {
+        white-space: nowrap;
+    }
+    .js-detail-photo-status {
+        min-height: 18px;
+    }
+    .prevention-detail-card-title {
+        font-weight: 700;
+        line-height: 1.4;
+    }
+    .preview-section + .preview-section {
+        margin-top: 16px;
+    }
+    .preview-section-title {
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+    .preview-empty {
+        color: #94a3b8;
+    }
+    .preview-photo-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 10px;
+    }
+    .preview-photo-card {
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 12px;
+        padding: 10px;
+        background: rgba(15, 23, 42, 0.3);
+    }
+    .preview-photo-label {
+        font-size: 12px;
+        font-weight: 700;
+        color: #94a3b8;
+        margin-bottom: 6px;
+    }
+    .preview-photo-image {
+        width: 100%;
+        height: 120px;
+        object-fit: cover;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        background: rgba(15, 23, 42, 0.45);
+    }
+    .preview-photo-empty {
+        color: #94a3b8;
+        font-size: 12px;
+        min-height: 120px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        border: 1px dashed rgba(148, 163, 184, 0.22);
+        border-radius: 10px;
+        background: rgba(15, 23, 42, 0.18);
+        padding: 8px;
+    }
+    .prevention-mobile-list {
+        display: none;
+    }
+    @media (max-width: 767.98px) {
+        .container.py-4 {
+            padding-left: 12px;
+            padding-right: 12px;
+        }
+        .card-body {
+            padding: 14px;
+        }
+        .table-responsive {
+            overflow: visible;
+        }
+        .site-visit-table,
+        .site-visit-table tbody,
+        .site-visit-table tr,
+        .site-visit-table td,
+        .detail-table,
+        .detail-table tbody,
+        .detail-table tr,
+        .detail-table td,
+        .prevention-group-table,
+        .prevention-group-table tbody,
+        .prevention-group-table tr,
+        .prevention-group-table td {
+            display: block;
+            width: 100%;
+        }
+        .site-visit-table thead,
+        .detail-table thead,
+        .prevention-group-table thead {
+            display: none;
+        }
+        .site-visit-table tr,
+        .detail-table tr,
+        .prevention-group-table tr {
+            border: 1px solid rgba(214, 165, 69, 0.22);
+            border-radius: 12px;
+            margin-bottom: 12px;
+            overflow: hidden;
+            background: rgba(15, 23, 42, 0.55);
+        }
+        .site-visit-table td,
+        .detail-table td,
+        .prevention-group-table td {
+            border: 0;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+            padding: 12px 14px;
+        }
+        .site-visit-table td:last-child,
+        .detail-table td:last-child,
+        .prevention-group-table td:last-child {
+            border-bottom: 0;
+        }
+        .site-visit-table td[data-label],
+        .detail-table td[data-label],
+        .prevention-group-table td[data-label] {
+            display: grid;
+            grid-template-columns: 84px minmax(0, 1fr);
+            gap: 10px;
+            align-items: start;
+        }
+        .site-visit-table td[data-label]::before,
+        .detail-table td[data-label]::before,
+        .prevention-group-table td[data-label]::before {
+            content: attr(data-label);
+            color: #94a3b8;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            padding-top: 2px;
+        }
+        .site-visit-table td[data-label="선택"] input,
+        .detail-table td[data-label="삭제"] .btn,
+        .detail-table td[data-label^="사진"] input[type="file"] {
+            width: 100%;
+        }
+        .detail-table td[data-label="No."] .form-control-plaintext {
+            padding-top: 0;
+        }
+        .detail-table td[data-label="삭제"] .btn {
+            min-height: 40px;
+        }
+        .mobile-form-actions {
+            display: grid !important;
+            grid-template-columns: 1fr;
+        }
+        .mobile-form-actions .btn {
+            width: 100%;
+        }
+        .draft-status {
+            text-align: center;
+        }
+        .prevention-work-group {
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+        .prevention-work-group .fw-semibold {
+            line-height: 1.4;
+        }
+        .prevention-detail-card-title {
+            font-size: 14px;
+        }
+        .prevention-work-group .table-responsive {
+            display: none;
+        }
+        .prevention-mobile-list {
+            display: grid;
+            gap: 10px;
+        }
+        .prevention-mobile-card {
+            border: 1px solid rgba(214, 165, 69, 0.2);
+            border-radius: 12px;
+            padding: 12px;
+            background: rgba(15, 23, 42, 0.45);
+        }
+        .prevention-mobile-card-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .prevention-mobile-number {
+            min-width: 34px;
+            height: 34px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(214, 165, 69, 0.16);
+            color: #fbbf24;
+            font-size: 13px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+        .prevention-mobile-title {
+            flex: 1;
+            line-height: 1.5;
+            word-break: keep-all;
+        }
+        .prevention-mobile-view {
+            width: 100%;
+        }
+        .prevention-mobile-status-label {
+            display: block;
+            color: #94a3b8;
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+        .site-visit-toolbar {
+            justify-content: stretch;
+        }
+        .site-visit-toolbar .btn {
+            width: 100%;
+        }
+        .site-visit-manual-meta {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+        .site-visit-manual-delete {
+            width: 100%;
+        }
     }
 </style>';
 include __DIR__ . '/includes/header.php';
@@ -861,6 +1176,9 @@ include __DIR__ . '/includes/header.php';
                 <div class="row g-3 mt-3">
                     <div class="col-12">
                         <label class="form-label">현장명</label>
+                        <div class="site-visit-toolbar">
+                            <button type="button" class="btn btn-outline-primary btn-sm" id="add-custom-site-row">직접입력 행 추가</button>
+                        </div>
                         <div class="table-responsive">
                             <table class="table table-bordered table-hover mb-0 site-visit-table">
                                 <thead class="table-light">
@@ -871,15 +1189,15 @@ include __DIR__ . '/includes/header.php';
                                     <th>미방문사유</th>
                                 </tr>
                                 </thead>
-                                <tbody>
+                                <tbody id="site-visit-body">
                                 <?php if (empty($todayWorkList)): ?>
-                                    <tr>
+                                    <tr class="js-site-visit-empty-row">
                                         <td colspan="4" class="text-center text-muted py-4">조회된 작업이 없습니다.</td>
                                     </tr>
                                 <?php else: ?>
                                     <?php foreach ($todayWorkList as $index => $w): ?>
                                         <tr class="site-visit-row">
-                                            <td class="text-center">
+                                            <td class="text-center" data-label="선택">
                                                 <input type="checkbox"
                                                        class="form-check-input js-site-visit-check"
                                                        id="site_visit_<?= (int)$index ?>"
@@ -888,13 +1206,13 @@ include __DIR__ . '/includes/header.php';
                                                        data-place="<?= h((string)($w['work_place'] ?? '')) ?>"
                                                        data-team="<?= h((string)($w['team_name'] ?? '')) ?>">
                                             </td>
-                                            <td>
+                                            <td data-label="작업명">
                                                 <label for="site_visit_<?= (int)$index ?>" class="mb-0 w-100">
                                                     <?= h((string)($w['work_title'] ?? '')) ?>
                                                 </label>
                                             </td>
-                                            <td><?= h((string)($w['work_place'] ?? '')) ?></td>
-                                            <td>
+                                            <td data-label="작업장소"><?= h((string)($w['work_place'] ?? '')) ?></td>
+                                            <td data-label="미방문사유">
                                                 <input type="text"
                                                        class="form-control form-control-sm js-site-visit-reason"
                                                        placeholder="미방문 시 사유 입력">
@@ -910,7 +1228,7 @@ include __DIR__ . '/includes/header.php';
 
                 <div class="row g-3 mt-3">
                     <div class="col-12">
-                        <label class="form-label">요약</label>
+                        <label class="form-label">작업자 의견사항</label>
                         <textarea name="summary" class="form-control" rows="3"><?= h($values['summary']) ?></textarea>
                     </div>
                 </div>
@@ -929,6 +1247,7 @@ include __DIR__ . '/includes/header.php';
                         <tr>
                             <th style="width: 70px;">No.</th>
                             <th style="width: 120px;">시간</th>
+                            <th style="width: 180px;">현장</th>
                             <th style="width: 180px;">관찰 업무</th>
                             <th style="width: 220px;">공정</th>
                             <th style="width: 140px;">사진1</th>
@@ -971,21 +1290,40 @@ include __DIR__ . '/includes/header.php';
             </div>
         </div>
 
+        <div class="modal fade" id="finalPreviewModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="finalPreviewModalLabel">등록 미리보기</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
+                    </div>
+                    <div class="modal-body" id="finalPreviewModalBody"></div>
+                </div>
+            </div>
+        </div>
+
         <div class="mb-4">
             <label class="form-label">비고</label>
             <textarea name="remark" class="form-control" rows="3"><?= h($values['remark']) ?></textarea>
         </div>
 
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 mobile-form-actions">
+            <button type="button" id="save-draft" class="btn btn-outline-warning">1차저장</button>
+            <button type="button" id="preview-submit" class="btn btn-outline-info">미리보기</button>
             <button type="submit" class="btn btn-primary">등록</button>
             <button type="button" class="btn btn-secondary" onclick="window.location.reload()">취소</button>
         </div>
+        <div class="draft-status mt-2" id="draft-status">임시저장 없음</div>
     </form>
 
 <script>
     const detailBody = document.getElementById('details-body');
     const addDetailButton = document.getElementById('add-detail');
-    const siteVisitRows = document.querySelectorAll('.site-visit-row');
+    const saveDraftButton = document.getElementById('save-draft');
+    const previewSubmitButton = document.getElementById('preview-submit');
+    const draftStatus = document.getElementById('draft-status');
+    const siteVisitTableBody = document.getElementById('site-visit-body');
+    const addCustomSiteRowButton = document.getElementById('add-custom-site-row');
     const siteNameInput = document.getElementById('site_name');
     const workLocationInput = document.getElementById('work_location');
     const siteVisitDataInput = document.getElementById('site_visit_data');
@@ -996,11 +1334,20 @@ include __DIR__ . '/includes/header.php';
     const preventionSummaryModalElement = document.getElementById('preventionSummaryModal');
     const preventionSummaryModalLabel = document.getElementById('preventionSummaryModalLabel');
     const preventionSummaryModalBody = document.getElementById('preventionSummaryModalBody');
+    const finalPreviewModalElement = document.getElementById('finalPreviewModal');
+    const finalPreviewModalBody = document.getElementById('finalPreviewModalBody');
+    const draftStorageKey = 'safety_log_create_draft_v1';
+    const draftPhotoUploadUrl = 'draft_upload.php';
+    let currentDraftData = null;
+    let currentSelectionDraftKey = '__none__';
     const weatherMap = <?= json_encode($calendarWeatherMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     const detailOptionsByWorkKey = <?= json_encode($detailOptionMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     const preventionMeasuresByWorkKey = <?= json_encode($preventionMeasureMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     const preventionSummaryByWorkKey = <?= json_encode($preventionDetailMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     let preventionSummaryModal = null;
+    let finalPreviewModal = null;
+    let manualSiteRowCounter = 0;
+    let previewObjectUrls = [];
 
     function getPreventionSummaryModalInstance() {
         if (!preventionSummaryModalElement || !window.bootstrap || !window.bootstrap.Modal) {
@@ -1012,6 +1359,18 @@ include __DIR__ . '/includes/header.php';
         }
 
         return preventionSummaryModal;
+    }
+
+    function getFinalPreviewModalInstance() {
+        if (!finalPreviewModalElement || !window.bootstrap || !window.bootstrap.Modal) {
+            return null;
+        }
+
+        if (!finalPreviewModal) {
+            finalPreviewModal = new window.bootstrap.Modal(finalPreviewModalElement);
+        }
+
+        return finalPreviewModal;
     }
 
     function formatWeatherText(weatherInfo) {
@@ -1065,16 +1424,185 @@ include __DIR__ . '/includes/header.php';
             .replace(/'/g, '&#039;');
     }
 
+    function normalizeMeasureText(value) {
+        return String(value ?? '')
+            .replace(/^(?:[\-•·*]\s*|\d+[.)]\s+)/u, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    function getSiteVisitRows() {
+        return Array.from(document.querySelectorAll('.site-visit-row'));
+    }
+
+    function removeSiteVisitEmptyRow() {
+        const emptyRow = siteVisitTableBody ? siteVisitTableBody.querySelector('.js-site-visit-empty-row') : null;
+        if (emptyRow) {
+            emptyRow.remove();
+        }
+    }
+
+    function ensureSiteVisitEmptyRow() {
+        if (!siteVisitTableBody) {
+            return;
+        }
+
+        if (siteVisitTableBody.querySelector('.site-visit-row')) {
+            return;
+        }
+
+        if (siteVisitTableBody.querySelector('.js-site-visit-empty-row')) {
+            return;
+        }
+
+        siteVisitTableBody.insertAdjacentHTML('beforeend', '<tr class="js-site-visit-empty-row"><td colspan="4" class="text-center text-muted py-4">조회된 작업이 없습니다.</td></tr>');
+    }
+
+    function buildManualSiteWorkKey() {
+        manualSiteRowCounter += 1;
+        return `manual_${Date.now()}_${manualSiteRowCounter}`;
+    }
+
+    function getManualSiteRowHtml(workKey, data = {}) {
+        const title = escapeHtml(String(data.work_title || '').trim());
+        const place = escapeHtml(String(data.work_place || '').trim());
+        const reason = escapeHtml(String(data.non_visit_reason || '').trim());
+        const checked = data.selected ? ' checked' : '';
+
+        return `
+            <tr class="site-visit-row site-visit-row-manual">
+                <td class="text-center" data-label="선택">
+                    <input type="checkbox"
+                           class="form-check-input js-site-visit-check"
+                           data-work-key="${escapeHtml(workKey)}"
+                           data-title="${title}"
+                           data-place="${place}"
+                           data-team=""
+                           data-manual="1"${checked}>
+                </td>
+                <td data-label="작업명">
+                    <input type="text" class="form-control form-control-sm js-site-visit-title" value="${title}" placeholder="작업명 직접 입력">
+                </td>
+                <td data-label="작업장소">
+                    <input type="text" class="form-control form-control-sm js-site-visit-place" value="${place}" placeholder="작업장소 직접 입력">
+                </td>
+                <td data-label="미방문사유">
+                    <div class="site-visit-manual-meta">
+                        <input type="text" class="form-control form-control-sm js-site-visit-reason" value="${reason}" placeholder="미방문 시 사유 입력">
+                        <button type="button" class="btn btn-outline-danger btn-sm site-visit-manual-delete js-site-visit-delete">행 삭제</button>
+                    </div>
+                </td>
+            </tr>`;
+    }
+
+    function appendManualSiteRow(data = {}) {
+        if (!siteVisitTableBody) {
+            return null;
+        }
+
+        removeSiteVisitEmptyRow();
+        const workKey = String(data.work_key || '').trim() || buildManualSiteWorkKey();
+        siteVisitTableBody.insertAdjacentHTML('beforeend', getManualSiteRowHtml(workKey, data));
+        return siteVisitTableBody.querySelector(`.js-site-visit-check[data-work-key="${CSS.escape(workKey)}"]`)?.closest('.site-visit-row') || null;
+    }
+
+    function removeManualSiteRows() {
+        getSiteVisitRows().forEach((row) => {
+            const checkbox = row.querySelector('.js-site-visit-check');
+            if (checkbox && checkbox.dataset.manual === '1') {
+                row.remove();
+            }
+        });
+        ensureSiteVisitEmptyRow();
+    }
+
+    function syncManualSiteRow(row) {
+        const checkbox = row ? row.querySelector('.js-site-visit-check') : null;
+        if (!checkbox || checkbox.dataset.manual !== '1') {
+            return;
+        }
+
+        const titleInput = row.querySelector('.js-site-visit-title');
+        const placeInput = row.querySelector('.js-site-visit-place');
+        checkbox.dataset.title = titleInput ? String(titleInput.value || '').trim() : '';
+        checkbox.dataset.place = placeInput ? String(placeInput.value || '').trim() : '';
+    }
+
     function getSelectedWorkKeys() {
-        return Array.from(siteVisitRows)
+        return getSiteVisitRows()
             .map((row) => row.querySelector('.js-site-visit-check'))
             .filter((checkbox) => checkbox && checkbox.checked)
             .map((checkbox) => checkbox.dataset.workKey || '')
             .filter((workKey) => workKey !== '');
     }
 
-    function getAvailableActivityOptions() {
-        const selectedWorkKeys = getSelectedWorkKeys();
+    function hasSelectedManualSiteRow() {
+        return getSiteVisitRows().some((row) => {
+            const checkbox = row.querySelector('.js-site-visit-check');
+            return !!(checkbox && checkbox.checked && checkbox.dataset.manual === '1');
+        });
+    }
+
+    function getSelectedWorkInfos() {
+        return getSiteVisitRows()
+            .map((row) => {
+                syncManualSiteRow(row);
+                const checkbox = row.querySelector('.js-site-visit-check');
+                if (!checkbox || !checkbox.checked) {
+                    return null;
+                }
+
+                return {
+                    work_key: String(checkbox.dataset.workKey || ''),
+                    work_title: String(checkbox.dataset.title || '').trim(),
+                    work_place: String(checkbox.dataset.place || '').trim(),
+                    team_name: String(checkbox.dataset.team || '').trim()
+                };
+            })
+            .filter((item) => item && item.work_key !== '')
+            ;
+    }
+
+    function getSelectedWorkInfosForKeys(workKeys) {
+        const selectedKeySet = new Set((Array.isArray(workKeys) ? workKeys : [workKeys])
+            .map((workKey) => String(workKey || '').trim())
+            .filter((workKey) => workKey !== ''));
+
+        return getSelectedWorkInfos().filter((workInfo) => selectedKeySet.has(String(workInfo.work_key || '').trim()));
+    }
+
+    function formatWorkInfoLabel(workInfo) {
+        const place = String(workInfo.work_place || '').trim();
+        const title = String(workInfo.work_title || '').trim();
+        const team = String(workInfo.team_name || '').trim();
+
+        if (place) {
+            return place;
+        }
+
+        return title || team || String(workInfo.work_key || '현장');
+    }
+
+    function getCurrentSelectionDraftKey() {
+        const selectedWorkKeys = getSelectedWorkKeys().slice().sort();
+        return selectedWorkKeys.length > 0 ? selectedWorkKeys.join('||') : '__none__';
+    }
+
+    function getDetailRowWorkKey(row) {
+        return String(row?.querySelector('.js-detail-work-key-select')?.value || '').trim();
+    }
+
+    function getAvailableWorkOptions() {
+        return getSelectedWorkInfos().map((workInfo) => ({
+            value: String(workInfo.work_key || '').trim(),
+            label: formatWorkInfoLabel(workInfo) || String(workInfo.work_key || '').trim()
+        })).filter((option) => option.value !== '');
+    }
+
+    function getAvailableActivityOptions(workKeys = null) {
+        const selectedWorkKeys = Array.isArray(workKeys)
+            ? workKeys.map((workKey) => String(workKey || '').trim()).filter((workKey) => workKey !== '')
+            : getSelectedWorkKeys();
         const merged = new Map();
 
         function appendOptionsFromKeys(sourceKeys) {
@@ -1111,16 +1639,24 @@ include __DIR__ . '/includes/header.php';
 
         appendOptionsFromKeys(selectedWorkKeys);
 
+        if (hasSelectedManualSiteRow()) {
+            appendOptionsFromKeys(['__all__']);
+        }
+
+        if (merged.size === 0) {
+            appendOptionsFromKeys(['__all__']);
+        }
+
         return Array.from(merged.values()).sort((left, right) => left.label.localeCompare(right.label, 'ko'));
     }
 
-    function getAvailableProcessOptions(activityValue) {
+    function getAvailableProcessOptions(activityValue, workKeys = null) {
         const normalizedActivity = String(activityValue || '').trim();
         if (!normalizedActivity) {
             return [];
         }
 
-        const matched = getAvailableActivityOptions().find((option) => option.value === normalizedActivity);
+        const matched = getAvailableActivityOptions(workKeys).find((option) => option.value === normalizedActivity);
         if (!matched || !Array.isArray(matched.processes)) {
             return [];
         }
@@ -1139,6 +1675,8 @@ include __DIR__ . '/includes/header.php';
                 activity: String(parsed.activity || ''),
                 process: String(parsed.process || ''),
                 items: Array.isArray(parsed.items) ? parsed.items.map((item) => ({
+                    work_key: String(item.work_key || ''),
+                    work_label: String(item.work_label || ''),
                     measure: String(item.measure || ''),
                     status: String(item.status || '')
                 })).filter((item) => item.measure !== '') : []
@@ -1164,11 +1702,11 @@ include __DIR__ . '/includes/header.php';
         const seen = new Set();
 
         selectedWorkKeys.forEach((workKey) => {
-            const activityMap = preventionMeasuresByWorkKey[workKey] || {};
+            const activityMap = preventionMeasuresByWorkKey[workKey] || preventionMeasuresByWorkKey.__all__ || {};
             const processMap = activityMap[normalizedActivity] || {};
             const currentMeasures = Array.isArray(processMap[normalizedProcess]) ? processMap[normalizedProcess] : [];
             currentMeasures.forEach((measure) => {
-                const normalizedMeasure = String(measure || '').trim();
+                const normalizedMeasure = normalizeMeasureText(measure);
                 if (!normalizedMeasure || seen.has(normalizedMeasure)) {
                     return;
                 }
@@ -1181,23 +1719,28 @@ include __DIR__ . '/includes/header.php';
         return measures;
     }
 
-    function getPreventionSummaryItems(activityValue, processValue, measure) {
+    function getPreventionSummaryItems(activityValue, processValue, measure, workKey = '') {
         const normalizedActivity = String(activityValue || '').trim();
         const normalizedProcess = String(processValue || '').trim();
-        const normalizedMeasure = String(measure || '').trim();
+        const normalizedMeasure = normalizeMeasureText(measure);
+        const normalizedWorkKey = String(workKey || '').trim();
         if (!normalizedActivity || !normalizedProcess || !normalizedMeasure) {
             return [];
         }
 
-        const selectedWorkKeys = getSelectedWorkKeys();
+        const selectedWorkKeys = normalizedWorkKey !== ''
+            ? [normalizedWorkKey]
+            : getSelectedWorkKeys();
         const items = [];
         const seen = new Set();
 
         selectedWorkKeys.forEach((workKey) => {
-            const activityMap = preventionSummaryByWorkKey[workKey] || {};
+            const activityMap = preventionSummaryByWorkKey[workKey] || preventionSummaryByWorkKey.__all__ || {};
             const processMap = activityMap[normalizedActivity] || {};
-            const summaryItems = Array.isArray((processMap[normalizedProcess] || {})[normalizedMeasure])
-                ? (processMap[normalizedProcess] || {})[normalizedMeasure]
+            const measureMap = processMap[normalizedProcess] || {};
+            const matchedMeasureKey = Object.keys(measureMap).find((key) => normalizeMeasureText(key) === normalizedMeasure) || '';
+            const summaryItems = Array.isArray(measureMap[matchedMeasureKey])
+                ? measureMap[matchedMeasureKey]
                 : [];
 
             summaryItems.forEach((item) => {
@@ -1222,13 +1765,15 @@ include __DIR__ . '/includes/header.php';
         return `<tr><th style="width: 160px;">${escapeHtml(label)}</th><td>${escapeHtml(normalizedValue).replace(/\n/g, '<br>')}</td></tr>`;
     }
 
-    function showPreventionSummaryModal(activityValue, processValue, measure) {
+    function showPreventionSummaryModal(activityValue, processValue, measure, workKey = '', workLabel = '') {
         if (!preventionSummaryModalBody || !preventionSummaryModalLabel) {
             return;
         }
 
-        const summaryItems = getPreventionSummaryItems(activityValue, processValue, measure);
-        preventionSummaryModalLabel.textContent = `예방대책 상세 - ${measure}`;
+        const summaryItems = getPreventionSummaryItems(activityValue, processValue, measure, workKey);
+        preventionSummaryModalLabel.textContent = workLabel
+            ? `예방대책 상세 - ${workLabel} - ${measure}`
+            : `예방대책 상세 - ${measure}`;
 
         if (summaryItems.length === 0) {
             preventionSummaryModalBody.innerHTML = '<p class="text-muted mb-0">표시할 위험성평가 상세 요약이 없습니다.</p>';
@@ -1268,23 +1813,52 @@ include __DIR__ . '/includes/header.php';
         }
     }
 
-    function buildPreventionData(activityValue, processValue, measures, previousItems) {
+    function buildPreventionData(activityValue, processValue, previousItems, workInfos = null) {
         const previousStatusMap = new Map();
         (Array.isArray(previousItems) ? previousItems : []).forEach((item) => {
-            const measure = String(item.measure || '').trim();
-            if (!measure || previousStatusMap.has(measure)) {
+            const workKey = String(item.work_key || '').trim();
+            const measure = normalizeMeasureText(item.measure);
+            const compositeKey = `${workKey}::${measure}`;
+            if (!measure || previousStatusMap.has(compositeKey)) {
                 return;
             }
-            previousStatusMap.set(measure, String(item.status || ''));
+            previousStatusMap.set(compositeKey, {
+                work_key: workKey,
+                work_label: String(item.work_label || ''),
+                status: String(item.status || '')
+            });
+        });
+
+        const items = [];
+        const seen = new Set();
+        const targetWorkInfos = Array.isArray(workInfos) && workInfos.length > 0 ? workInfos : getSelectedWorkInfos();
+        targetWorkInfos.forEach((workInfo) => {
+            const activityMap = preventionMeasuresByWorkKey[workInfo.work_key] || preventionMeasuresByWorkKey.__all__ || {};
+            const processMap = activityMap[String(activityValue || '').trim()] || {};
+            const measures = Array.isArray(processMap[String(processValue || '').trim()]) ? processMap[String(processValue || '').trim()] : [];
+
+            measures.forEach((measure) => {
+                const normalizedMeasure = normalizeMeasureText(measure);
+                const compositeKey = `${workInfo.work_key}::${normalizedMeasure}`;
+                if (!normalizedMeasure || seen.has(compositeKey)) {
+                    return;
+                }
+
+                seen.add(compositeKey);
+                const previousItem = previousStatusMap.get(compositeKey);
+                items.push({
+                    work_key: workInfo.work_key,
+                    work_label: formatWorkInfoLabel(workInfo) || previousItem?.work_label || '',
+                    measure: normalizedMeasure,
+                    status: previousItem?.status || ''
+                });
+            });
         });
 
         return {
             activity: String(activityValue || ''),
             process: String(processValue || ''),
-            items: measures.map((measure) => ({
-                measure,
-                status: previousStatusMap.get(measure) || ''
-            }))
+            items
         };
     }
 
@@ -1295,6 +1869,624 @@ include __DIR__ . '/includes/header.php';
         }
 
         preventionInput.value = JSON.stringify(preventionData);
+    }
+
+    function updateDraftStatus(message) {
+        if (!draftStatus) {
+            return;
+        }
+
+        draftStatus.textContent = message;
+    }
+
+    function getPhotoTempInput(row, fieldName) {
+        return row ? row.querySelector(`.js-detail-photo-temp[data-photo-field="${fieldName}"]`) : null;
+    }
+
+    function getPhotoStatusElement(row, fieldName) {
+        return row ? row.querySelector(`.js-detail-photo-status[data-photo-field="${fieldName}"]`) : null;
+    }
+
+    function getPhotoInput(row, fieldName) {
+        return row ? row.querySelector(`.js-detail-photo-input[data-photo-field="${fieldName}"]`) : null;
+    }
+
+    function getSavedPhotoLabel(tempPath) {
+        const normalizedPath = String(tempPath || '').trim();
+        if (!normalizedPath) {
+            return '선택된 파일 없음';
+        }
+
+        const segments = normalizedPath.split(/[\\/]/);
+        return `임시저장된 사진: ${segments[segments.length - 1] || normalizedPath}`;
+    }
+
+    function revokePreviewObjectUrls() {
+        previewObjectUrls.forEach((url) => {
+            try {
+                URL.revokeObjectURL(url);
+            } catch (error) {
+                // ignore revoke failures
+            }
+        });
+        previewObjectUrls = [];
+    }
+
+    function buildDraftPreviewImageUrl(tempPath) {
+        const normalizedPath = String(tempPath || '').trim();
+        if (!normalizedPath) {
+            return '';
+        }
+
+        return `show_draft_image.php?file=${encodeURIComponent(normalizedPath)}`;
+    }
+
+    function getPreviewPhotoMeta(row, fieldName) {
+        const photoInput = getPhotoInput(row, fieldName);
+        if (photoInput && photoInput.files && photoInput.files.length > 0) {
+            const objectUrl = URL.createObjectURL(photoInput.files[0]);
+            previewObjectUrls.push(objectUrl);
+            return {
+                name: photoInput.files[0].name,
+                url: objectUrl,
+                hasImage: true,
+            };
+        }
+
+        const tempPath = getPhotoTempInput(row, fieldName)?.value || '';
+        if (tempPath) {
+            return {
+                name: getSavedPhotoLabel(tempPath).replace('임시저장된 사진: ', ''),
+                url: buildDraftPreviewImageUrl(tempPath),
+                hasImage: true,
+            };
+        }
+
+        return {
+            name: '없음',
+            url: '',
+            hasImage: false,
+        };
+    }
+
+    function renderPreviewPhotoGrid(row) {
+        const photoCards = ['photo_1', 'photo_2', 'photo_3'].map((fieldName, index) => {
+            const photoMeta = getPreviewPhotoMeta(row, fieldName);
+            const contentHtml = photoMeta.hasImage
+                ? `<a href="${escapeHtml(photoMeta.url)}" target="_blank" rel="noopener noreferrer"><img src="${escapeHtml(photoMeta.url)}" alt="사진${index + 1}" class="preview-photo-image"></a><div class="form-text mt-2">${escapeHtml(photoMeta.name)}</div>`
+                : '<div class="preview-photo-empty">등록된 사진 없음</div>';
+
+            return `
+                <div class="preview-photo-card">
+                    <div class="preview-photo-label">사진${index + 1}</div>
+                    ${contentHtml}
+                </div>`;
+        }).join('');
+
+        return `<div class="preview-photo-grid">${photoCards}</div>`;
+    }
+
+    function renderPreviewTable(headers, rows) {
+        return `
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered mb-0">
+                    <thead class="table-light">
+                        <tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join('')}</tr>
+                    </thead>
+                    <tbody>${rows.join('')}</tbody>
+                </table>
+            </div>`;
+    }
+
+    function renderPreviewSection(title, contentHtml) {
+        return `
+            <div class="preview-section">
+                <div class="preview-section-title">${escapeHtml(title)}</div>
+                ${contentHtml}
+            </div>`;
+    }
+
+    function getPreviewBasicInfoHtml() {
+        const form = document.querySelector('form[action="store.php"]');
+        const managerValue = form ? form.querySelector('[name="manager_name"]')?.value || '' : '';
+        const subjectValue = form ? form.querySelector('[name="subject"]')?.value || '' : '';
+        const summaryValue = form ? form.querySelector('[name="summary"]')?.value || '' : '';
+        const remarkValue = form ? form.querySelector('[name="remark"]')?.value || '' : '';
+        const rows = [
+            ['작성일', logDateInput ? logDateInput.value : ''],
+            ['작성자', managerValue],
+            ['날씨', weatherInput ? weatherInput.value : ''],
+            ['현장명', siteNameInput ? siteNameInput.value : ''],
+            ['작업장소', workLocationInput ? workLocationInput.value : ''],
+            ['제목', subjectValue],
+            ['작업자 의견사항', summaryValue],
+            ['비고', remarkValue],
+        ].map(([label, value]) => `<tr><th style="width: 140px;">${escapeHtml(label)}</th><td>${escapeHtml(String(value || '')).replace(/\n/g, '<br>') || '&nbsp;'}</td></tr>`);
+
+        return renderPreviewTable(['항목', '내용'], rows);
+    }
+
+    function getPreviewSiteRowsHtml() {
+        const selectedRows = getSelectedSitePreviewRows();
+
+        if (selectedRows.length === 0) {
+            return '<div class="preview-empty">선택된 현장이 없습니다.</div>';
+        }
+
+        return renderPreviewTable(
+            ['작업명', '작업장소', '미방문사유'],
+            selectedRows.map((row) => `<tr><td>${escapeHtml(row.workTitle || '') || '&nbsp;'}</td><td>${escapeHtml(row.workPlace || '') || '&nbsp;'}</td><td>${escapeHtml(row.nonVisitReason || '') || '&nbsp;'}</td></tr>`)
+        );
+    }
+
+    function getSelectedSitePreviewRows() {
+        return getSiteVisitRows().map((row) => {
+            syncManualSiteRow(row);
+            const checkbox = row.querySelector('.js-site-visit-check');
+            const reasonInput = row.querySelector('.js-site-visit-reason');
+            const titleInput = row.querySelector('.js-site-visit-title');
+            const placeInput = row.querySelector('.js-site-visit-place');
+            if (!checkbox || !checkbox.checked) {
+                return null;
+            }
+
+            return {
+                workKey: String(checkbox.dataset.workKey || '').trim(),
+                workTitle: titleInput ? titleInput.value.trim() : String(checkbox.dataset.title || '').trim(),
+                workPlace: placeInput ? placeInput.value.trim() : String(checkbox.dataset.place || '').trim(),
+                nonVisitReason: reasonInput ? reasonInput.value.trim() : ''
+            };
+        }).filter(Boolean);
+    }
+
+    function renderPreviewPreventionItems(preventionData, workKey = '') {
+        const filteredItems = (Array.isArray(preventionData.items) ? preventionData.items : []).filter((item) => {
+            const itemWorkKey = String(item.work_key || '').trim();
+            return workKey === '' ? true : itemWorkKey === workKey;
+        });
+
+        if (filteredItems.length === 0) {
+            return '';
+        }
+
+        return `
+            <div class="mt-3">
+                ${renderPreviewTable(
+                    ['No.', '예방대책', '상태'],
+                    filteredItems.map((item, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(item.measure || '')}</td><td>${escapeHtml(item.status || '') || '&nbsp;'}</td></tr>`)
+                )}
+            </div>`;
+    }
+
+    function collectPreviewDetailEntries() {
+        const selectedSiteRows = getSelectedSitePreviewRows();
+        const fallbackSiteKeys = selectedSiteRows.map((site) => site.workKey).filter((workKey) => workKey !== '');
+
+        return Array.from(detailBody.querySelectorAll('.detail-row')).map((row, index) => {
+            const rowWorkKey = getDetailRowWorkKey(row);
+            const workTime = row.querySelector('[name$="[work_time]"]')?.value || '';
+            const activity = row.querySelector('.js-activity-select')?.value || '';
+            const description = row.querySelector('.js-process-select')?.value || '';
+            const photoMetas = ['photo_1', 'photo_2', 'photo_3'].map((fieldName) => getPreviewPhotoMeta(row, fieldName));
+            const preventionInput = row.querySelector('.js-prevention-data-input');
+            const preventionData = parsePreventionData(preventionInput ? preventionInput.value : '');
+            const mappedSiteKeys = rowWorkKey !== ''
+                ? [rowWorkKey]
+                : Array.from(new Set((preventionData.items || []).map((item) => String(item.work_key || '').trim()).filter((workKey) => workKey !== '')));
+
+            if (!workTime && !activity && !description && photoMetas.every((photoMeta) => !photoMeta.hasImage)) {
+                return null;
+            }
+
+            return {
+                index,
+                row,
+                workTime,
+                activity,
+                description,
+                preventionData,
+                mappedSiteKeys: mappedSiteKeys.length > 0 ? mappedSiteKeys : (fallbackSiteKeys.length === 1 ? fallbackSiteKeys : []),
+            };
+        }).filter(Boolean);
+    }
+
+    function renderPreviewDetailCard(entry, siteWorkKey = '') {
+        return `
+            <div class="border rounded p-3 mb-3 bg-body-tertiary">
+                <div class="fw-semibold mb-2">No.${entry.index + 1}</div>
+                ${renderPreviewTable(
+                    ['항목', '내용'],
+                    [
+                        `<tr><th style="width: 140px;">시간</th><td>${escapeHtml(entry.workTime) || '&nbsp;'}</td></tr>`,
+                        `<tr><th>관찰 업무</th><td>${escapeHtml(entry.activity) || '&nbsp;'}</td></tr>`,
+                        `<tr><th>공정</th><td>${escapeHtml(entry.description) || '&nbsp;'}</td></tr>`
+                    ]
+                )}
+                <div class="mt-3">${renderPreviewPhotoGrid(entry.row)}</div>
+                ${renderPreviewPreventionItems(entry.preventionData, siteWorkKey)}
+            </div>`;
+    }
+
+    function getPreviewDetailsHtml() {
+        const selectedSiteRows = getSelectedSitePreviewRows();
+        const detailEntries = collectPreviewDetailEntries();
+
+        if (selectedSiteRows.length === 0) {
+            return '<div class="preview-empty">선택된 현장이 없습니다.</div>';
+        }
+
+        if (detailEntries.length === 0) {
+            return '<div class="preview-empty">입력된 세부기록이 없습니다.</div>';
+        }
+
+        const siteSections = selectedSiteRows.map((site) => {
+            const matchedEntries = detailEntries.filter((entry) => entry.mappedSiteKeys.includes(site.workKey));
+            return `
+                <div class="mb-4">
+                    <div class="fw-semibold mb-2">현장: ${escapeHtml(site.workPlace || site.workTitle || '현장')}</div>
+                    ${matchedEntries.length > 0 ? matchedEntries.map((entry) => renderPreviewDetailCard(entry, site.workKey)).join('') : '<div class="preview-empty">이 현장에 연결된 세부기록이 없습니다.</div>'}
+                </div>`;
+        });
+
+        return siteSections.join('');
+    }
+
+    function showFinalPreview() {
+        updateSiteVisitSummary(false);
+        renderPreventionSections();
+        revokePreviewObjectUrls();
+
+        if (!finalPreviewModalBody) {
+            return;
+        }
+
+        finalPreviewModalBody.innerHTML = [
+            renderPreviewSection('기본 정보', getPreviewBasicInfoHtml()),
+            renderPreviewSection('현장 선택', getPreviewSiteRowsHtml()),
+            renderPreviewSection('세부 기록', getPreviewDetailsHtml()),
+        ].join('');
+
+        const modalInstance = getFinalPreviewModalInstance();
+        if (modalInstance) {
+            modalInstance.show();
+        }
+    }
+
+    function updatePhotoStatus(row, fieldName, message = '') {
+        const statusElement = getPhotoStatusElement(row, fieldName);
+        if (!statusElement) {
+            return;
+        }
+
+        if (message) {
+            statusElement.textContent = message;
+            return;
+        }
+
+        const tempInput = getPhotoTempInput(row, fieldName);
+        statusElement.textContent = getSavedPhotoLabel(tempInput ? tempInput.value : '');
+    }
+
+    function setTempPhotoPath(row, fieldName, tempPath) {
+        const tempInput = getPhotoTempInput(row, fieldName);
+        if (tempInput) {
+            tempInput.value = String(tempPath || '');
+        }
+        updatePhotoStatus(row, fieldName);
+    }
+
+    async function uploadDraftPhoto(row, fieldName) {
+        const photoInput = getPhotoInput(row, fieldName);
+        if (!photoInput || !photoInput.files || photoInput.files.length === 0) {
+            return getPhotoTempInput(row, fieldName)?.value || '';
+        }
+
+        const uploadFile = photoInput.files[0];
+        const formData = new FormData();
+        formData.append('photo', uploadFile);
+        formData.append('field_name', fieldName);
+
+        updatePhotoStatus(row, fieldName, '사진 임시업로드 중...');
+        const response = await fetch(draftPhotoUploadUrl, {
+            method: 'POST',
+            body: formData,
+            credentials: 'same-origin'
+        });
+
+        const result = await response.json();
+        if (!response.ok || !result || !result.success) {
+            throw new Error(result && result.message ? result.message : '사진 임시업로드에 실패했습니다.');
+        }
+
+        setTempPhotoPath(row, fieldName, result.temp_path || '');
+        photoInput.value = '';
+        return result.temp_path || '';
+    }
+
+    async function uploadDraftPhotos() {
+        const rows = Array.from(detailBody.querySelectorAll('.detail-row'));
+        for (const row of rows) {
+            for (const fieldName of ['photo_1', 'photo_2', 'photo_3']) {
+                await uploadDraftPhoto(row, fieldName);
+            }
+        }
+    }
+
+    function collectCurrentDetailDrafts() {
+        return Array.from(detailBody.querySelectorAll('.detail-row')).map((row, index) => ({
+            item_no: index + 1,
+            work_key: getDetailRowWorkKey(row),
+            work_time: row.querySelector('[name$="[work_time]"]')?.value || '',
+            activity: row.querySelector('.js-activity-select')?.value || '',
+            description: row.querySelector('.js-process-select')?.value || '',
+            prevention_data: row.querySelector('.js-prevention-data-input')?.value || '',
+            photo_1_temp: getPhotoTempInput(row, 'photo_1')?.value || '',
+            photo_2_temp: getPhotoTempInput(row, 'photo_2')?.value || '',
+            photo_3_temp: getPhotoTempInput(row, 'photo_3')?.value || ''
+        }));
+    }
+
+    function setDetailRowsFromDrafts(detailDrafts) {
+        detailBody.innerHTML = '';
+        if (!Array.isArray(detailDrafts) || detailDrafts.length === 0) {
+            addDetailRow();
+        } else {
+            detailDrafts.forEach((detail) => addDetailRow(detail || {}));
+        }
+        refreshAllDetailRows();
+    }
+
+    function persistCurrentSelectionDetails() {
+        if (!currentDraftData || typeof currentDraftData !== 'object') {
+            currentDraftData = {};
+        }
+
+        if (!currentDraftData.site_detail_map || typeof currentDraftData.site_detail_map !== 'object') {
+            currentDraftData.site_detail_map = {};
+        }
+
+        currentDraftData.site_detail_map[currentSelectionDraftKey] = collectCurrentDetailDrafts();
+    }
+
+    function buildMergedDetailDraftsForSelection(workKeys) {
+        if (!currentDraftData || !currentDraftData.site_detail_map || typeof currentDraftData.site_detail_map !== 'object') {
+            return [];
+        }
+
+        const mergedDrafts = [];
+        workKeys.forEach((workKey) => {
+            const draftRows = currentDraftData.site_detail_map[workKey];
+            if (!Array.isArray(draftRows)) {
+                return;
+            }
+
+            draftRows.forEach((detail) => {
+                if (!detail || typeof detail !== 'object') {
+                    return;
+                }
+
+                mergedDrafts.push({
+                    item_no: mergedDrafts.length + 1,
+                    work_key: String(detail.work_key || workKey || ''),
+                    work_time: String(detail.work_time || ''),
+                    activity: String(detail.activity || ''),
+                    description: String(detail.description || ''),
+                    prevention_data: String(detail.prevention_data || ''),
+                    photo_1_temp: String(detail.photo_1_temp || ''),
+                    photo_2_temp: String(detail.photo_2_temp || ''),
+                    photo_3_temp: String(detail.photo_3_temp || ''),
+                });
+            });
+        });
+
+        return mergedDrafts;
+    }
+
+    function normalizeDetailDraftsForSelection(detailDrafts, workKeys) {
+        if (!Array.isArray(detailDrafts) || detailDrafts.length === 0) {
+            return detailDrafts;
+        }
+
+        const normalizedWorkKeys = Array.isArray(workKeys)
+            ? workKeys.map((workKey) => String(workKey || '').trim()).filter((workKey) => workKey !== '')
+            : [];
+
+        if (normalizedWorkKeys.length <= 1) {
+            return detailDrafts;
+        }
+
+        const hasAssignedWorkKey = detailDrafts.some((detail) => String(detail?.work_key || '').trim() !== '');
+        if (hasAssignedWorkKey) {
+            return detailDrafts;
+        }
+
+        const mergedDrafts = buildMergedDetailDraftsForSelection(normalizedWorkKeys);
+        return mergedDrafts.length > 0 ? mergedDrafts : detailDrafts;
+    }
+
+    function collectDraftData() {
+        const form = document.querySelector('form[action="store.php"]');
+        const managerInput = form ? form.querySelector('[name="manager_name"]') : null;
+        const subjectInput = form ? form.querySelector('[name="subject"]') : null;
+        const summaryInput = form ? form.querySelector('[name="summary"]') : null;
+        const remarkInput = form ? form.querySelector('[name="remark"]') : null;
+        const siteDetailMap = (currentDraftData && typeof currentDraftData.site_detail_map === 'object' && currentDraftData.site_detail_map)
+            ? { ...currentDraftData.site_detail_map }
+            : {};
+        siteDetailMap[getCurrentSelectionDraftKey()] = collectCurrentDetailDrafts();
+
+        return {
+            saved_at: new Date().toISOString(),
+            log_date: logDateInput ? logDateInput.value : '',
+            manager_name: managerInput ? managerInput.value : '',
+            weather: weatherInput ? weatherInput.value : '',
+            subject: subjectInput ? subjectInput.value : '',
+            summary: summaryInput ? summaryInput.value : '',
+            remark: remarkInput ? remarkInput.value : '',
+            site_visit_rows: getSiteVisitRows().map((row) => {
+                syncManualSiteRow(row);
+                const checkbox = row.querySelector('.js-site-visit-check');
+                const reasonInput = row.querySelector('.js-site-visit-reason');
+                const titleInput = row.querySelector('.js-site-visit-title');
+                const placeInput = row.querySelector('.js-site-visit-place');
+                return {
+                    work_key: checkbox ? String(checkbox.dataset.workKey || '') : '',
+                    is_manual: checkbox ? String(checkbox.dataset.manual || '') === '1' : false,
+                    selected: checkbox ? checkbox.checked : false,
+                    work_title: titleInput ? String(titleInput.value || '').trim() : (checkbox ? String(checkbox.dataset.title || '').trim() : ''),
+                    work_place: placeInput ? String(placeInput.value || '').trim() : (checkbox ? String(checkbox.dataset.place || '').trim() : ''),
+                    team_name: checkbox ? String(checkbox.dataset.team || '').trim() : '',
+                    non_visit_reason: reasonInput ? reasonInput.value : ''
+                };
+            }),
+            site_detail_map: siteDetailMap
+        };
+    }
+
+    function saveDraft() {
+        const draftData = collectDraftData();
+        currentDraftData = draftData;
+        currentSelectionDraftKey = getCurrentSelectionDraftKey();
+        window.localStorage.setItem(draftStorageKey, JSON.stringify(draftData));
+        const savedAt = new Date(draftData.saved_at);
+        updateDraftStatus(`1차저장 완료: ${savedAt.toLocaleString('ko-KR')}`);
+    }
+
+    function loadDraftData() {
+        const rawDraft = window.localStorage.getItem(draftStorageKey);
+        if (!rawDraft) {
+            updateDraftStatus('임시저장 없음');
+            return null;
+        }
+
+        try {
+            const parsed = JSON.parse(rawDraft);
+            if (!parsed || typeof parsed !== 'object') {
+                updateDraftStatus('임시저장 없음');
+                return null;
+            }
+
+            if (parsed.saved_at) {
+                updateDraftStatus(`1차저장 불러옴: ${new Date(parsed.saved_at).toLocaleString('ko-KR')}`);
+            }
+
+            currentDraftData = parsed;
+            return parsed;
+        } catch (error) {
+            updateDraftStatus('임시저장 읽기 실패');
+            return null;
+        }
+    }
+
+    function applyDraftData(draftData) {
+        if (!draftData || typeof draftData !== 'object') {
+            return;
+        }
+
+        const form = document.querySelector('form[action="store.php"]');
+        const managerInput = form ? form.querySelector('[name="manager_name"]') : null;
+        const subjectInput = form ? form.querySelector('[name="subject"]') : null;
+        const summaryInput = form ? form.querySelector('[name="summary"]') : null;
+        const remarkInput = form ? form.querySelector('[name="remark"]') : null;
+
+        if (logDateInput && draftData.log_date) {
+            logDateInput.value = String(draftData.log_date);
+        }
+        if (managerInput && draftData.manager_name !== undefined) {
+            managerInput.value = String(draftData.manager_name || '');
+        }
+        if (subjectInput && draftData.subject !== undefined) {
+            subjectInput.value = String(draftData.subject || '');
+        }
+        if (summaryInput && draftData.summary !== undefined) {
+            summaryInput.value = String(draftData.summary || '');
+        }
+        if (remarkInput && draftData.remark !== undefined) {
+            remarkInput.value = String(draftData.remark || '');
+        }
+
+        removeManualSiteRows();
+
+        (Array.isArray(draftData.site_visit_rows) ? draftData.site_visit_rows : []).forEach((row) => {
+            if (!row || !row.is_manual) {
+                return;
+            }
+
+            appendManualSiteRow(row);
+        });
+
+        const rowMap = new Map((Array.isArray(draftData.site_visit_rows) ? draftData.site_visit_rows : []).map((row) => [String(row.work_key || ''), row]));
+        getSiteVisitRows().forEach((row) => {
+            const checkbox = row.querySelector('.js-site-visit-check');
+            const reasonInput = row.querySelector('.js-site-visit-reason');
+            const titleInput = row.querySelector('.js-site-visit-title');
+            const placeInput = row.querySelector('.js-site-visit-place');
+            if (!checkbox) {
+                return;
+            }
+
+            const savedRow = rowMap.get(String(checkbox.dataset.workKey || ''));
+            checkbox.checked = !!(savedRow && savedRow.selected);
+            if (titleInput) {
+                titleInput.value = savedRow ? String(savedRow.work_title || '') : '';
+            }
+            if (placeInput) {
+                placeInput.value = savedRow ? String(savedRow.work_place || '') : '';
+            }
+            if (reasonInput) {
+                reasonInput.value = savedRow ? String(savedRow.non_visit_reason || '') : '';
+            }
+            syncManualSiteRow(row);
+        });
+
+        currentSelectionDraftKey = getCurrentSelectionDraftKey();
+        let detailDrafts = draftData.site_detail_map && Array.isArray(draftData.site_detail_map[currentSelectionDraftKey])
+            ? draftData.site_detail_map[currentSelectionDraftKey]
+            : (Array.isArray(draftData.details) ? draftData.details : []);
+        detailDrafts = normalizeDetailDraftsForSelection(detailDrafts, getSelectedWorkKeys());
+        if (draftData.site_detail_map && typeof draftData.site_detail_map === 'object') {
+            draftData.site_detail_map[currentSelectionDraftKey] = detailDrafts;
+        }
+        setDetailRowsFromDrafts(detailDrafts);
+        updateSiteVisitSummary(false);
+        if (weatherInput && draftData.weather !== undefined) {
+            weatherInput.value = String(draftData.weather || '');
+        }
+    }
+
+    function switchDetailRowsForSelection() {
+        const nextSelectionDraftKey = getCurrentSelectionDraftKey();
+        if (nextSelectionDraftKey === currentSelectionDraftKey) {
+            refreshAllDetailRows();
+            return;
+        }
+
+        const currentDetailDrafts = collectCurrentDetailDrafts();
+        persistCurrentSelectionDetails();
+
+        let nextDetailDrafts = currentDraftData && currentDraftData.site_detail_map && Array.isArray(currentDraftData.site_detail_map[nextSelectionDraftKey])
+            ? currentDraftData.site_detail_map[nextSelectionDraftKey]
+            : [];
+
+        nextDetailDrafts = normalizeDetailDraftsForSelection(nextDetailDrafts, getSelectedWorkKeys());
+        if (currentDraftData && currentDraftData.site_detail_map) {
+            currentDraftData.site_detail_map[nextSelectionDraftKey] = nextDetailDrafts;
+        }
+
+        if (nextDetailDrafts.length === 0) {
+            const selectedWorkKeys = getSelectedWorkKeys();
+            const mergedDrafts = selectedWorkKeys.length > 1
+                ? buildMergedDetailDraftsForSelection(selectedWorkKeys)
+                : [];
+            nextDetailDrafts = mergedDrafts.length > 0 ? mergedDrafts : currentDetailDrafts;
+        }
+
+        if (currentDraftData && currentDraftData.site_detail_map && !Array.isArray(currentDraftData.site_detail_map[nextSelectionDraftKey])) {
+            currentDraftData.site_detail_map[nextSelectionDraftKey] = nextDetailDrafts;
+        }
+
+        currentSelectionDraftKey = nextSelectionDraftKey;
+        setDetailRowsFromDrafts(nextDetailDrafts);
     }
 
     function setSelectOptions(selectElement, options, placeholder, selectedValue, disabled) {
@@ -1321,6 +2513,11 @@ include __DIR__ . '/includes/header.php';
             html.push(`<option value="${escapeHtml(value)}"${isSelected ? ' selected' : ''}>${escapeHtml(label)}</option>`);
         });
 
+        if (!hasSelected && normalizedSelected !== '') {
+            html.push(`<option value="${escapeHtml(normalizedSelected)}" selected>${escapeHtml(normalizedSelected)} (임시유지)</option>`);
+            hasSelected = true;
+        }
+
         selectElement.innerHTML = html.join('');
         if (!hasSelected) {
             selectElement.value = '';
@@ -1335,7 +2532,10 @@ include __DIR__ . '/includes/header.php';
             return;
         }
 
-        const processOptions = getAvailableProcessOptions(activitySelect.value).map((processName) => ({
+        const rowWorkKey = getDetailRowWorkKey(row);
+        const workKeys = rowWorkKey !== '' ? [rowWorkKey] : [];
+
+        const processOptions = getAvailableProcessOptions(activitySelect.value, workKeys).map((processName) => ({
             value: processName,
             label: processName
         }));
@@ -1343,11 +2543,36 @@ include __DIR__ . '/includes/header.php';
         setSelectOptions(
             processSelect,
             processOptions,
-            processOptions.length > 0 ? '공정 선택' : '작업유형 먼저 선택',
+            rowWorkKey !== ''
+                ? (processOptions.length > 0 ? '공정 선택' : '선택한 현장에 공정이 없습니다')
+                : '현장 먼저 선택',
             selectedProcess !== null ? selectedProcess : (processSelect.dataset.selected || processSelect.value),
-            processOptions.length === 0
+            processOptions.length === 0 || rowWorkKey === ''
         );
         processSelect.dataset.selected = processSelect.value;
+    }
+
+    function refreshDetailWorkKeySelect(row, selectedWorkKey = null) {
+        const workKeySelect = row.querySelector('.js-detail-work-key-select');
+        if (!workKeySelect) {
+            return;
+        }
+
+        const workOptions = getAvailableWorkOptions();
+        const normalizedSelectedWorkKey = selectedWorkKey !== null ? selectedWorkKey : (workKeySelect.dataset.selected || workKeySelect.value);
+        setSelectOptions(
+            workKeySelect,
+            workOptions,
+            workOptions.length > 0 ? '현장 선택' : '현장 먼저 선택',
+            normalizedSelectedWorkKey,
+            workOptions.length === 0
+        );
+
+        if (workOptions.length === 1 && !workKeySelect.value) {
+            workKeySelect.value = workOptions[0].value;
+        }
+
+        workKeySelect.dataset.selected = workKeySelect.value;
     }
 
     function refreshActivitySelect(row, selectedActivity = null, selectedProcess = null) {
@@ -1356,13 +2581,17 @@ include __DIR__ . '/includes/header.php';
             return;
         }
 
-        const activityOptions = getAvailableActivityOptions();
+        const rowWorkKey = getDetailRowWorkKey(row);
+        const workKeys = rowWorkKey !== '' ? [rowWorkKey] : [];
+        const activityOptions = getAvailableActivityOptions(workKeys);
         setSelectOptions(
             activitySelect,
             activityOptions,
-            activityOptions.length > 0 ? '작업유형 선택' : '작업 선택 후 작업유형 선택',
+            rowWorkKey !== ''
+                ? (activityOptions.length > 0 ? '작업유형 선택' : '선택한 현장에 작업유형이 없습니다')
+                : '현장 먼저 선택',
             selectedActivity !== null ? selectedActivity : (activitySelect.dataset.selected || activitySelect.value),
-            activityOptions.length === 0
+            activityOptions.length === 0 || rowWorkKey === ''
         );
         activitySelect.dataset.selected = activitySelect.value;
         refreshProcessSelect(row, selectedProcess);
@@ -1370,8 +2599,13 @@ include __DIR__ . '/includes/header.php';
 
     function refreshAllDetailRows() {
         detailBody.querySelectorAll('.detail-row').forEach((row) => {
+            const workKeySelect = row.querySelector('.js-detail-work-key-select');
             const activitySelect = row.querySelector('.js-activity-select');
             const processSelect = row.querySelector('.js-process-select');
+            refreshDetailWorkKeySelect(
+                row,
+                workKeySelect ? workKeySelect.value || workKeySelect.dataset.selected || '' : ''
+            );
             refreshActivitySelect(
                 row,
                 activitySelect ? activitySelect.value || activitySelect.dataset.selected || '' : '',
@@ -1391,37 +2625,72 @@ include __DIR__ . '/includes/header.php';
         const rows = Array.from(detailBody.querySelectorAll('.detail-row'));
 
         rows.forEach((row, index) => {
+            const rowWorkKey = getDetailRowWorkKey(row);
             const activitySelect = row.querySelector('.js-activity-select');
             const processSelect = row.querySelector('.js-process-select');
             const preventionInput = row.querySelector('.js-prevention-data-input');
             const activityValue = activitySelect ? String(activitySelect.value || '').trim() : '';
             const processValue = processSelect ? String(processSelect.value || '').trim() : '';
+            const rowWorkInfos = rowWorkKey !== '' ? getSelectedWorkInfosForKeys([rowWorkKey]) : [];
 
-            if (!activityValue || !processValue) {
+            if (!rowWorkKey || !activityValue || !processValue) {
                 updateRowPreventionInput(row, { activity: activityValue, process: processValue, items: [] });
                 return;
             }
 
-            const availableMeasures = getAvailablePreventionMeasures(activityValue, processValue);
             const previousData = parsePreventionData(preventionInput ? preventionInput.value : '');
-            const preventionData = buildPreventionData(activityValue, processValue, availableMeasures, previousData.items || []);
+            const preventionData = buildPreventionData(activityValue, processValue, previousData.items || [], rowWorkInfos);
             updateRowPreventionInput(row, preventionData);
 
             if (preventionData.items.length === 0) {
                 return;
             }
 
-            const rowsHtml = preventionData.items.map((item, preventionIndex) => `
-                <tr>
-                    <td>${preventionIndex + 1}</td>
-                    <td>
-                        <div class="d-flex justify-content-between align-items-start gap-2">
-                            <span>${escapeHtml(item.measure)}</span>
-                            <button type="button" class="btn btn-outline-secondary btn-sm js-prevention-view" data-row-index="${index}" data-activity="${escapeHtml(activityValue)}" data-process="${escapeHtml(processValue)}" data-measure="${escapeHtml(item.measure)}">보기</button>
+            const groupHtml = rowWorkInfos.map((workInfo) => {
+                const workKey = String(workInfo.work_key || '').trim();
+                const workLabel = formatWorkInfoLabel(workInfo) || workKey;
+                const groupItems = preventionData.items.filter((item) => String(item.work_key || '').trim() === workKey);
+
+                if (groupItems.length === 0) {
+                    return `
+                        <div class="border rounded p-3 mb-3 bg-body-tertiary prevention-work-group">
+                            <div class="prevention-detail-card-title mb-2">No.${index + 1} / ${escapeHtml(activityValue)} / ${escapeHtml(processValue)}</div>
+                            <div class="fw-semibold mb-2">현장: ${escapeHtml(workLabel)}</div>
+                            <div class="text-muted small">표시할 예방대책이 없습니다.</div>
+                        </div>`;
+                }
+
+                const rowsHtml = groupItems.map((item, preventionIndex) => `
+                    <tr>
+                        <td data-label="No.">${preventionIndex + 1}</td>
+                        <td data-label="예방대책">
+                            <div class="d-flex justify-content-between align-items-start gap-2">
+                                <span>${escapeHtml(item.measure)}</span>
+                                <button type="button" class="btn btn-outline-secondary btn-sm js-prevention-view" data-row-index="${index}" data-work-key="${escapeHtml(workKey)}" data-work-label="${escapeHtml(workLabel)}" data-activity="${escapeHtml(activityValue)}" data-process="${escapeHtml(processValue)}" data-measure="${escapeHtml(item.measure)}">보기</button>
+                            </div>
+                        </td>
+                        <td data-label="상태" style="width: 180px;">
+                            <select class="form-select form-select-sm js-prevention-status-select" data-row-index="${index}" data-work-key="${escapeHtml(workKey)}" data-measure="${escapeHtml(item.measure)}">
+                                <option value="">선택</option>
+                                <option value="양호"${item.status === '양호' ? ' selected' : ''}>양호</option>
+                                <option value="불량"${item.status === '불량' ? ' selected' : ''}>불량</option>
+                                <option value="조치완료"${item.status === '조치완료' ? ' selected' : ''}>조치완료</option>
+                                <option value="후속조치필요"${item.status === '후속조치필요' ? ' selected' : ''}>후속조치필요</option>
+                                <option value="[평가서 수정필요]"${item.status === '[평가서 수정필요]' ? ' selected' : ''}>[평가서 수정필요]</option>
+                                <option value="해당없음"${item.status === '해당없음' ? ' selected' : ''}>해당없음</option>
+                            </select>
+                        </td>
+                    </tr>`).join('');
+
+                const mobileCardsHtml = groupItems.map((item, preventionIndex) => `
+                    <div class="prevention-mobile-card">
+                        <div class="prevention-mobile-card-header">
+                            <span class="prevention-mobile-number">${preventionIndex + 1}</span>
+                            <div class="prevention-mobile-title">${escapeHtml(item.measure)}</div>
                         </div>
-                    </td>
-                    <td style="width: 180px;">
-                        <select class="form-select form-select-sm js-prevention-status-select" data-row-index="${index}" data-measure="${escapeHtml(item.measure)}">
+                        <button type="button" class="btn btn-outline-secondary btn-sm js-prevention-view prevention-mobile-view mb-3" data-row-index="${index}" data-work-key="${escapeHtml(workKey)}" data-work-label="${escapeHtml(workLabel)}" data-activity="${escapeHtml(activityValue)}" data-process="${escapeHtml(processValue)}" data-measure="${escapeHtml(item.measure)}">상세 보기</button>
+                        <label class="prevention-mobile-status-label">상태</label>
+                        <select class="form-select form-select-sm js-prevention-status-select" data-row-index="${index}" data-work-key="${escapeHtml(workKey)}" data-measure="${escapeHtml(item.measure)}">
                             <option value="">선택</option>
                             <option value="양호"${item.status === '양호' ? ' selected' : ''}>양호</option>
                             <option value="불량"${item.status === '불량' ? ' selected' : ''}>불량</option>
@@ -1430,25 +2699,29 @@ include __DIR__ . '/includes/header.php';
                             <option value="[평가서 수정필요]"${item.status === '[평가서 수정필요]' ? ' selected' : ''}>[평가서 수정필요]</option>
                             <option value="해당없음"${item.status === '해당없음' ? ' selected' : ''}>해당없음</option>
                         </select>
-                    </td>
-                </tr>`).join('');
+                    </div>`).join('');
 
-            sectionHtml.push(`
-                <div class="border rounded p-3 bg-light-subtle">
-                    <div class="fw-semibold mb-2">No.${index + 1} / ${escapeHtml(activityValue)} / ${escapeHtml(processValue)}</div>
-                    <div class="table-responsive">
-                        <table class="table table-sm table-bordered mb-0">
-                            <thead>
-                                <tr>
-                                    <th style="width: 70px;">No.</th>
-                                    <th>예방대책</th>
-                                    <th style="width: 180px;">상태</th>
-                                </tr>
-                            </thead>
-                            <tbody>${rowsHtml}</tbody>
-                        </table>
-                    </div>
-                </div>`);
+                return `
+                    <div class="border rounded p-3 mb-3 bg-body-tertiary prevention-work-group">
+                        <div class="prevention-detail-card-title mb-2">No.${index + 1} / ${escapeHtml(activityValue)} / ${escapeHtml(processValue)}</div>
+                        <div class="fw-semibold mb-2">현장: ${escapeHtml(workLabel)}</div>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered mb-0 prevention-group-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 70px;">No.</th>
+                                        <th>예방대책</th>
+                                        <th style="width: 180px;">상태</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${rowsHtml}</tbody>
+                            </table>
+                        </div>
+                        <div class="prevention-mobile-list">${mobileCardsHtml}</div>
+                    </div>`;
+            }).join('');
+
+            sectionHtml.push(groupHtml);
         });
 
         preventionSections.innerHTML = sectionHtml.join('');
@@ -1456,10 +2729,18 @@ include __DIR__ . '/includes/header.php';
     }
 
     function getDetailRowHtml(index, data = {}) {
+        const workKey = data.work_key ?? '';
         const workTime = data.work_time ?? '';
         const activity = data.activity ?? '';
         const description = data.description ?? '';
         const preventionData = data.prevention_data ?? '';
+        const photo1Temp = data.photo_1_temp ?? '';
+        const photo2Temp = data.photo_2_temp ?? '';
+        const photo3Temp = data.photo_3_temp ?? '';
+        const workOptionsHtml = ['<option value="">현장 선택</option>'];
+        if (workKey) {
+            workOptionsHtml.push(`<option value="${escapeHtml(workKey)}" selected>${escapeHtml(workKey)}</option>`);
+        }
         const activityOptionsHtml = ['<option value="">작업 선택 후 작업유형 선택</option>'];
         if (activity) {
             activityOptionsHtml.push(`<option value="${escapeHtml(activity)}" selected>${escapeHtml(activity)}</option>`);
@@ -1467,22 +2748,27 @@ include __DIR__ . '/includes/header.php';
 
         return `
             <tr class="detail-row">
-                <td><input type="hidden" name="details[${index}][item_no]" value="${index + 1}"><input type="hidden" name="details[${index}][prevention_data]" class="js-prevention-data-input" value="${escapeHtml(preventionData)}"><span class="form-control-plaintext">${index + 1}</span></td>
-                <td><input type="time" name="details[${index}][work_time]" class="form-control" value="${workTime}" step="600"></td>
-                <td>
+                <td data-label="No."><input type="hidden" name="details[${index}][item_no]" value="${index + 1}"><input type="hidden" name="details[${index}][prevention_data]" class="js-prevention-data-input" value="${escapeHtml(preventionData)}"><span class="form-control-plaintext">${index + 1}</span></td>
+                <td data-label="시간"><input type="time" name="details[${index}][work_time]" class="form-control" value="${workTime}" step="600"></td>
+                <td data-label="현장">
+                    <select name="details[${index}][work_key]" class="form-select js-detail-work-key-select" data-selected="${escapeHtml(workKey)}">
+                        ${workOptionsHtml.join('')}
+                    </select>
+                </td>
+                <td data-label="관찰 업무">
                     <select name="details[${index}][activity]" class="form-select js-activity-select" data-selected="${escapeHtml(activity)}">
                         ${activityOptionsHtml.join('')}
                     </select>
                 </td>
-                <td>
+                <td data-label="공정">
                     <select name="details[${index}][description]" class="form-select js-process-select" data-selected="${escapeHtml(description)}">
                         <option value="">작업유형 먼저 선택</option>
                     </select>
                 </td>
-                <td><input type="file" name="details[${index}][photo_1]" class="form-control"></td>
-                <td><input type="file" name="details[${index}][photo_2]" class="form-control"></td>
-                <td><input type="file" name="details[${index}][photo_3]" class="form-control"></td>
-                <td><button type="button" class="btn btn-danger btn-sm delete-row">삭제</button></td>
+                <td data-label="사진1"><input type="file" name="details[${index}][photo_1]" class="form-control js-detail-photo-input" data-photo-field="photo_1"><input type="hidden" name="details[${index}][photo_1_temp]" class="js-detail-photo-temp" data-photo-field="photo_1" value="${escapeHtml(photo1Temp)}"><div class="form-text js-detail-photo-status" data-photo-field="photo_1">${escapeHtml(getSavedPhotoLabel(photo1Temp))}</div></td>
+                <td data-label="사진2"><input type="file" name="details[${index}][photo_2]" class="form-control js-detail-photo-input" data-photo-field="photo_2"><input type="hidden" name="details[${index}][photo_2_temp]" class="js-detail-photo-temp" data-photo-field="photo_2" value="${escapeHtml(photo2Temp)}"><div class="form-text js-detail-photo-status" data-photo-field="photo_2">${escapeHtml(getSavedPhotoLabel(photo2Temp))}</div></td>
+                <td data-label="사진3"><input type="file" name="details[${index}][photo_3]" class="form-control js-detail-photo-input" data-photo-field="photo_3"><input type="hidden" name="details[${index}][photo_3_temp]" class="js-detail-photo-temp" data-photo-field="photo_3" value="${escapeHtml(photo3Temp)}"><div class="form-text js-detail-photo-status" data-photo-field="photo_3">${escapeHtml(getSavedPhotoLabel(photo3Temp))}</div></td>
+                <td data-label="삭제"><button type="button" class="btn btn-danger btn-sm delete-row">삭제</button></td>
             </tr>`;
     }
 
@@ -1511,6 +2797,7 @@ include __DIR__ . '/includes/header.php';
         row.className = 'detail-row';
         row.innerHTML = getDetailRowHtml(index, data);
         detailBody.appendChild(row);
+        refreshDetailWorkKeySelect(row, data.work_key ?? '');
         refreshActivitySelect(row, data.activity ?? '', data.description ?? '');
     }
 
@@ -1529,10 +2816,42 @@ include __DIR__ . '/includes/header.php';
     addDetailButton.addEventListener('click', () => {
         addDetailRow();
     });
+    previewSubmitButton?.addEventListener('click', () => {
+        showFinalPreview();
+    });
+    saveDraftButton?.addEventListener('click', async () => {
+        const originalText = saveDraftButton.textContent;
+        saveDraftButton.disabled = true;
+        saveDraftButton.textContent = '사진 업로드 중...';
+
+        try {
+            await uploadDraftPhotos();
+            updateSiteVisitSummary();
+            saveDraft();
+        } catch (error) {
+            updateDraftStatus(error instanceof Error ? error.message : '사진 임시저장 중 오류가 발생했습니다.');
+        } finally {
+            saveDraftButton.disabled = false;
+            saveDraftButton.textContent = originalText;
+        }
+    });
 
     detailBody.addEventListener('click', onDeleteRow);
     detailBody.addEventListener('change', (event) => {
-        if (!event.target.classList.contains('js-activity-select') && !event.target.classList.contains('js-process-select')) {
+        if (!event.target.classList.contains('js-detail-photo-input')) {
+            return;
+        }
+
+        const row = event.target.closest('.detail-row');
+        const fieldName = event.target.dataset.photoField || '';
+        if (!row || !fieldName) {
+            return;
+        }
+
+        updatePhotoStatus(row, fieldName, event.target.files && event.target.files.length > 0 ? `선택됨: ${event.target.files[0].name}` : getSavedPhotoLabel(getPhotoTempInput(row, fieldName)?.value || ''));
+    });
+    detailBody.addEventListener('change', (event) => {
+        if (!event.target.classList.contains('js-detail-work-key-select') && !event.target.classList.contains('js-activity-select') && !event.target.classList.contains('js-process-select')) {
             return;
         }
 
@@ -1542,6 +2861,9 @@ include __DIR__ . '/includes/header.php';
         }
 
         event.target.dataset.selected = event.target.value;
+        if (event.target.classList.contains('js-detail-work-key-select')) {
+            refreshActivitySelect(row, '');
+        }
         if (event.target.classList.contains('js-activity-select')) {
             refreshProcessSelect(row, '');
         }
@@ -1553,7 +2875,8 @@ include __DIR__ . '/includes/header.php';
         }
 
         const rowIndex = Number.parseInt(String(event.target.dataset.rowIndex || '-1'), 10);
-        const measure = String(event.target.dataset.measure || '').trim();
+        const workKey = String(event.target.dataset.workKey || '').trim();
+        const measure = normalizeMeasureText(event.target.dataset.measure);
         const rows = Array.from(detailBody.querySelectorAll('.detail-row'));
         const row = rows[rowIndex] || null;
         if (!row || !measure) {
@@ -1563,11 +2886,13 @@ include __DIR__ . '/includes/header.php';
         const preventionInput = row.querySelector('.js-prevention-data-input');
         const preventionData = parsePreventionData(preventionInput ? preventionInput.value : '');
         preventionData.items = (preventionData.items || []).map((item) => {
-            if (String(item.measure || '').trim() !== measure) {
+            if (String(item.work_key || '').trim() !== workKey || normalizeMeasureText(item.measure) !== measure) {
                 return item;
             }
 
             return {
+                work_key: item.work_key,
+                work_label: item.work_label,
                 measure: item.measure,
                 status: String(event.target.value || '')
             };
@@ -1583,18 +2908,25 @@ include __DIR__ . '/includes/header.php';
         showPreventionSummaryModal(
             String(button.dataset.activity || ''),
             String(button.dataset.process || ''),
-            String(button.dataset.measure || '')
+            String(button.dataset.measure || ''),
+            String(button.dataset.workKey || ''),
+            String(button.dataset.workLabel || '')
         );
     });
 
-    function updateSiteVisitSummary() {
-        const rows = Array.from(siteVisitRows).map((row) => {
+    function updateSiteVisitSummary(shouldSwitchDetails = true) {
+        const rows = getSiteVisitRows().map((row) => {
+            syncManualSiteRow(row);
             const checkbox = row.querySelector('.js-site-visit-check');
             const reasonInput = row.querySelector('.js-site-visit-reason');
+            const titleInput = row.querySelector('.js-site-visit-title');
+            const placeInput = row.querySelector('.js-site-visit-place');
             return {
+                work_key: checkbox ? checkbox.dataset.workKey || '' : '',
+                is_manual: checkbox ? String(checkbox.dataset.manual || '') === '1' : false,
                 selected: checkbox ? checkbox.checked : false,
-                work_title: checkbox ? checkbox.dataset.title || '' : '',
-                work_place: checkbox ? checkbox.dataset.place || '' : '',
+                work_title: titleInput ? titleInput.value.trim() : (checkbox ? checkbox.dataset.title || '' : ''),
+                work_place: placeInput ? placeInput.value.trim() : (checkbox ? checkbox.dataset.place || '' : ''),
                 team_name: checkbox ? checkbox.dataset.team || '' : '',
                 non_visit_reason: reasonInput ? reasonInput.value.trim() : ''
             };
@@ -1618,32 +2950,112 @@ include __DIR__ . '/includes/header.php';
         siteNameInput.value = selectedTitles.join(', ');
         workLocationInput.value = selectedPlaces.join(', ');
         siteVisitDataInput.value = JSON.stringify(rows);
+        if (currentDraftData) {
+            currentDraftData.site_visit_rows = rows;
+        }
+
+        if (shouldSwitchDetails) {
+            switchDetailRowsForSelection();
+            return;
+        }
+
         refreshAllDetailRows();
     }
 
-    siteVisitRows.forEach((row) => {
-        const checkbox = row.querySelector('.js-site-visit-check');
-        const reasonInput = row.querySelector('.js-site-visit-reason');
+    if (siteVisitTableBody) {
+        siteVisitTableBody.addEventListener('change', (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLElement)) {
+                return;
+            }
 
-        if (checkbox) {
-            checkbox.addEventListener('change', updateSiteVisitSummary);
-        }
-        if (reasonInput) {
-            reasonInput.addEventListener('input', updateSiteVisitSummary);
-        }
-    });
+            if (target.classList.contains('js-site-visit-check')) {
+                updateSiteVisitSummary();
+                return;
+            }
+
+            if (target.classList.contains('js-site-visit-title') || target.classList.contains('js-site-visit-place')) {
+                const row = target.closest('.site-visit-row');
+                if (row) {
+                    syncManualSiteRow(row);
+                }
+                updateSiteVisitSummary(false);
+                return;
+            }
+        });
+
+        siteVisitTableBody.addEventListener('input', (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLElement)) {
+                return;
+            }
+
+            if (target.classList.contains('js-site-visit-reason')) {
+                updateSiteVisitSummary(false);
+                return;
+            }
+
+            if (target.classList.contains('js-site-visit-title') || target.classList.contains('js-site-visit-place')) {
+                const row = target.closest('.site-visit-row');
+                if (row) {
+                    syncManualSiteRow(row);
+                }
+                updateSiteVisitSummary(false);
+            }
+        });
+
+        siteVisitTableBody.addEventListener('click', (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLElement) || !target.classList.contains('js-site-visit-delete')) {
+                return;
+            }
+
+            const row = target.closest('.site-visit-row');
+            if (!row) {
+                return;
+            }
+
+            row.remove();
+            ensureSiteVisitEmptyRow();
+            updateSiteVisitSummary();
+        });
+    }
+
+    if (addCustomSiteRowButton) {
+        addCustomSiteRowButton.addEventListener('click', () => {
+            const row = appendManualSiteRow({ selected: true });
+            updateSiteVisitSummary();
+            const titleInput = row ? row.querySelector('.js-site-visit-title') : null;
+            if (titleInput) {
+                titleInput.focus();
+            }
+        });
+    }
 
     const createForm = document.querySelector('form[action="store.php"]');
     if (createForm) {
-        createForm.addEventListener('submit', updateSiteVisitSummary);
+        createForm.addEventListener('submit', () => {
+            updateSiteVisitSummary();
+            window.localStorage.removeItem(draftStorageKey);
+            updateDraftStatus('임시저장 없음');
+        });
     }
 
-    updateSiteVisitSummary();
-    refreshAllDetailRows();
+    const loadedDraftData = loadDraftData();
+    if (loadedDraftData) {
+        applyDraftData(loadedDraftData);
+    } else {
+        updateSiteVisitSummary();
+        refreshAllDetailRows();
+    }
 
     if (logDateInput) {
         logDateInput.addEventListener('change', syncWeatherByDate);
     }
+
+    finalPreviewModalElement?.addEventListener('hidden.bs.modal', () => {
+        revokePreviewObjectUrls();
+    });
 
     syncWeatherByDate();
 </script>

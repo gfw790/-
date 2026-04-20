@@ -292,7 +292,7 @@ $pageTitle = $post['title'];
             <textarea name="content" placeholder="댓글 내용을 입력해 주세요" required></textarea>
             <div class="form-bottom">
                 <span class="info"><?= h($_currentUser['name']) ?>님으로 댓글이 등록됩니다.</span>
-                <button class="btn btn-primary btn-sm">댓글 등록</button>
+                <button class="btn btn-primary btn-sm">수정완료</button>
             </div>
         </form>
     <?php else: ?>
