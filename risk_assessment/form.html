@@ -204,6 +204,17 @@ select:disabled { background: #f5f5f5; color: #aaa; cursor: not-allowed; }
         <select id="env_id" onchange="onEnvChange()">
           <option value="">— 선택하세요 —</option>
         </select>
+        <div class="inline-actions">
+          <button type="button" class="btn-inline" id="toggle-env-adder" onclick="toggleEnvAdder()" disabled>작업환경 추가</button>
+        </div>
+        <div class="inline-add-panel hidden" id="env_adder">
+          <div class="helper-text">새 작업환경명을 입력하고 추가하세요.</div>
+          <input type="text" id="new_env_name" placeholder="새 작업환경명 입력">
+          <div class="inline-actions">
+            <button type="button" class="btn-inline primary" id="btn-add-env" onclick="addEnv()">추가</button>
+            <button type="button" class="btn-inline" onclick="closeEnvAdder()">취소</button>
+          </div>
+        </div>
       </div>
 
     </div>
@@ -313,6 +324,7 @@ async function onUnitTypeChange() {
     show('area_env');
     if (!envData.length) envData = await loadData('env');
     buildList('env_id', envData, 'env_id', 'env_name');
+    syncEnvAdder();
   }
 }
 
@@ -812,6 +824,40 @@ function toggleToolAdder() {
 function closeToolAdder() {
   const panel = document.getElementById('tool_adder');
   const input = document.getElementById('new_tool_name');
+  if (panel) panel.classList.add('hidden');
+  if (input) input.value = '';
+}
+
+function resetEnvAdder() {
+  const toggle = document.getElementById('toggle-env-adder');
+  const panel = document.getElementById('env_adder');
+  const input = document.getElementById('new_env_name');
+  if (toggle) toggle.disabled = true;
+  if (panel) panel.classList.add('hidden');
+  if (input) input.value = '';
+}
+
+function syncEnvAdder() {
+  const toggle = document.getElementById('toggle-env-adder');
+  if (!toggle) return;
+  toggle.disabled = false;
+}
+
+function toggleEnvAdder() {
+  const panel = document.getElementById('env_adder');
+  const toggle = document.getElementById('toggle-env-adder');
+  if (!panel || !toggle || toggle.disabled) return;
+  if (panel.classList.contains('hidden')) {
+    panel.classList.remove('hidden');
+    document.getElementById('new_env_name').focus();
+  } else {
+    closeEnvAdder();
+  }
+}
+
+function closeEnvAdder() {
+  const panel = document.getElementById('env_adder');
+  const input = document.getElementById('new_env_name');
   if (panel) panel.classList.add('hidden');
   if (input) input.value = '';
 }
@@ -1486,6 +1532,47 @@ async function addTool() {
     addButton.disabled = false;
   }
 }
+
+async function addEnv() {
+  const newEnvName = document.getElementById('new_env_name').value.trim();
+  const addButton = document.getElementById('btn-add-env');
+
+  if (!newEnvName) {
+    showAlert('error', '추가할 작업환경명을 입력해주세요.');
+    document.getElementById('new_env_name').focus();
+    return;
+  }
+
+  addButton.disabled = true;
+  hideAlert();
+
+  try {
+    const res = await fetch('unit_ra_header_api.php?action=add_env', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ env_name: newEnvName }),
+    });
+    const json = await res.json();
+
+    if (!json.success) {
+      showAlert('error', json.message || '작업환경 추가에 실패했습니다.');
+      return;
+    }
+
+    envData = await loadData('env');
+    buildList('env_id', envData, 'env_id', 'env_name');
+    document.getElementById('env_id').value = String(json.data.env_id || '');
+    onEnvChange();
+    closeEnvAdder();
+
+    showAlert('success', '작업환경이 추가되었습니다. 방금 등록한 항목을 자동 선택했습니다.');
+  } catch (e) {
+    showAlert('error', '작업환경 추가 중 오류가 발생했습니다: ' + e.message);
+  } finally {
+    addButton.disabled = false;
+  }
+}
+
 function onEnvChange() {
   const id   = document.getElementById('env_id').value;
   const name = envData.find(r => r.env_id == id)?.env_name || '';
@@ -1510,6 +1597,7 @@ function hideAllAreas() {
   resetMajorCategoryAdder();
   resetWorkTypeAdder();
   resetToolAdder();
+  resetEnvAdder();
 }
 function resetSel(id, placeholder, disabled) {
   const sel = document.getElementById(id);

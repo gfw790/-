@@ -432,6 +432,69 @@ if ($action === 'env') {
     exit;
 }
 
+if ($action === 'add_env' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $body = decode_json_body();
+    if (!$body) {
+        echo json_encode(['success'=>false,'message'=>'요청 데이터가 없습니다.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $envName = trim((string)($body['env_name'] ?? ''));
+    if ($envName === '') {
+        echo json_encode(['success'=>false,'message'=>'추가할 작업환경명을 입력해주세요.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $envNameLength = function_exists('mb_strlen')
+        ? mb_strlen($envName, 'UTF-8')
+        : strlen($envName);
+    if ($envNameLength > 255) {
+        echo json_encode(['success'=>false,'message'=>'작업환경명은 255자 이내로 입력해주세요.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    try {
+        $pdo = getDB();
+        $stmt = $pdo->prepare("SELECT env_id, use_yn FROM env_master WHERE env_name = :env_name LIMIT 1");
+        $stmt->execute([':env_name' => $envName]);
+        $existing = $stmt->fetch();
+
+        if ($existing) {
+            if (($existing['use_yn'] ?? 'Y') === 'Y') {
+                echo json_encode(['success'=>false,'message'=>'이미 등록된 작업환경입니다.'], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+
+            $updateStmt = $pdo->prepare("UPDATE env_master SET use_yn = 'Y' WHERE env_id = :env_id");
+            $updateStmt->execute([':env_id' => $existing['env_id']]);
+            $envId = (int)$existing['env_id'];
+        } else {
+            $nextSortNo = (int)$pdo->query("SELECT COALESCE(MAX(sort_no), 0) FROM env_master")->fetchColumn() + 1;
+            $insertStmt = $pdo->prepare("
+                INSERT INTO env_master (env_name, use_yn, sort_no)
+                VALUES (:env_name, 'Y', :sort_no)
+            ");
+            $insertStmt->execute([
+                ':env_name' => $envName,
+                ':sort_no' => $nextSortNo,
+            ]);
+            $envId = (int)$pdo->lastInsertId();
+        }
+
+        echo json_encode([
+            'success' => true,
+            'message' => '작업환경이 추가되었습니다.',
+            'data' => [
+                'env_id' => $envId,
+                'env_name' => $envName,
+            ],
+        ], JSON_UNESCAPED_UNICODE);
+    } catch (\PDOException $e) {
+        echo json_encode(['success'=>false,'message'=>'DB 오류: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
+    }
+    exit;
+}
+
 if ($action === 'work_type_sub') {
     $processCategory = trim((string)($_GET['process_category'] ?? ''));
     if ($processCategory === '') {
