@@ -664,22 +664,12 @@ function applyDraftToForm(draft) {
     }
 
     const draftTeam = typeof draft.selected_team === 'string' ? draft.selected_team : '';
-    if (draftTeam && teamData[draftTeam]) {
+    const teamApplied = !!(draftTeam && teamData[draftTeam]);
+    if (teamApplied) {
         applyTeam(draftTeam);
     }
 
-    if (Array.isArray(draft.names)) {
-        const grid = document.getElementById('names-grid');
-        if (grid) {
-            grid.innerHTML = '';
-            currentSlotCount = 0;
-            const names = draft.names.length > 0 ? draft.names : [''];
-            names.forEach(name => addInputSlot(String(name || '')));
-            while (currentSlotCount < 8) {
-                addInputSlot('');
-            }
-        }
-    }
+    // names는 applyTeam(chooseTeam) 이 항상 마지막에 재설정하므로 여기서 복원하지 않음
 
     updateBodyCounter();
     updateImageSourcePreview();
@@ -966,17 +956,22 @@ function addNameSlot() {
 window.addEventListener('DOMContentLoaded', () => {
     const teams = Object.keys(teamData);
     const chooseTeam = initialTeam && teamData[initialTeam] ? initialTeam : (teams[0] ?? '');
+
+    bindDraftAutosave();
+    const draft = loadFormDraft();
+    if (draft) {
+        applyDraftToForm(draft);  // 폼 내용(제목·본문·퀴즈 등) 복원
+    }
+
+    // 인명부는 드래프트와 무관하게 항상 현재 팀으로 재설정
+    // (draftAutosaveEnabled=false 이므로 내부 saveFormDraft 호출은 no-op)
     if (chooseTeam) {
         applyTeam(chooseTeam);
     } else {
         while(currentSlotCount < 8) addInputSlot('');
         renderRecentDocs('');
     }
-    bindDraftAutosave();
-    const draft = loadFormDraft();
-    if (draft) {
-        applyDraftToForm(draft);
-    }
+
     draftAutosaveEnabled = true;
     saveFormDraft();
     updateBodyCounter();
