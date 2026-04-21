@@ -1327,12 +1327,15 @@ function tbm_ai_get_recent_used_source_urls(int $days = TBM_AI_USED_SOURCE_LOOKB
     try {
         $pdo = tbm_db();
         $stmt = $pdo->prepare(
-            'SELECT source_url
-               FROM tbm_accident_content
-              WHERE source_url IS NOT NULL
-                AND source_url <> ""
-                AND created_at >= DATE_SUB(NOW(), INTERVAL :days DAY)
-              ORDER BY id DESC
+            'SELECT DISTINCT c.source_url
+               FROM tbm_accident_content c
+               JOIN tbm_documents d
+                 ON d.content_id = c.id
+              WHERE c.source_url IS NOT NULL
+                AND c.source_url <> ""
+                AND d.generation_status = "success"
+                AND COALESCE(d.generated_at, d.updated_at) >= DATE_SUB(NOW(), INTERVAL :days DAY)
+              ORDER BY COALESCE(d.generated_at, d.updated_at) DESC
               LIMIT :lim'
         );
         $stmt->bindValue(':days', $days, PDO::PARAM_INT);
@@ -1445,12 +1448,15 @@ function tbm_ai_get_recent_used_title_map(int $days = TBM_AI_USED_SOURCE_LOOKBAC
     try {
         $pdo = tbm_db();
         $stmt = $pdo->prepare(
-            'SELECT accident_title
-               FROM tbm_accident_content
-              WHERE accident_title IS NOT NULL
-                AND accident_title <> ""
-                AND created_at >= DATE_SUB(NOW(), INTERVAL :days DAY)
-              ORDER BY id DESC
+            'SELECT DISTINCT c.accident_title
+               FROM tbm_accident_content c
+               JOIN tbm_documents d
+                 ON d.content_id = c.id
+              WHERE c.accident_title IS NOT NULL
+                AND c.accident_title <> ""
+                AND d.generation_status = "success"
+                AND COALESCE(d.generated_at, d.updated_at) >= DATE_SUB(NOW(), INTERVAL :days DAY)
+              ORDER BY COALESCE(d.generated_at, d.updated_at) DESC
               LIMIT :lim'
         );
         $stmt->bindValue(':days', $days, PDO::PARAM_INT);
@@ -1757,6 +1763,14 @@ function tbm_ai_fetch_csi_list_html(int $page = 1): string
 {
     $page = max(1, $page);
 
+    $responses = [];
+
+    // CSI 목록은 goPage(page_count) 폼 전송 기반이라 POST 응답을 우선 시도한다.
+    $postHtml = tbm_ai_fetch_csi_list_html_via_post($page);
+    if ($postHtml !== '') {
+        $responses[] = $postHtml;
+    }
+
     $urls = $page === 1
         ? [
             'https://www.csi.go.kr/acd/acdCaseList.do',
@@ -1769,11 +1783,66 @@ function tbm_ai_fetch_csi_list_html(int $page = 1): string
     foreach ($urls as $url) {
         $html = function_exists('tbm_news_fetch_url') ? tbm_news_fetch_url($url) : '';
         if ($html !== '') {
-            return $html;
+            $responses[] = $html;
         }
     }
 
-    return '';
+    $bestHtml = '';
+    $bestCount = -1;
+
+    foreach ($responses as $html) {
+        $itemCount = count(tbm_ai_parse_csi_case_list($html, 12));
+        if ($itemCount > $bestCount) {
+            $bestCount = $itemCount;
+            $bestHtml = $html;
+        }
+    }
+
+    return $bestHtml;
+}
+
+function tbm_ai_fetch_csi_list_html_via_post(int $page = 1): string
+{
+    $page = max(1, $page);
+
+    $ch = curl_init('https://www.csi.go.kr/acd/acdCaseList.do');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS      => 3,
+        CURLOPT_TIMEOUT        => 20,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => http_build_query([
+            'page_count' => (string)$page,
+            'search_dead_yn' => '',
+            'start_ymd' => '',
+            'end_ymd' => '',
+            'search_key' => '',
+            'search_val' => '',
+        ]),
+        CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+        CURLOPT_HTTPHEADER     => [
+            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language: ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Cache-Control: no-cache',
+            'Content-Type: application/x-www-form-urlencoded; charset=UTF-8',
+            'Origin: https://www.csi.go.kr',
+            'Referer: https://www.csi.go.kr/acd/acdCaseList.do',
+        ],
+    ]);
+
+    $response = curl_exec($ch);
+    $err = curl_error($ch);
+    $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($response === false || $err !== '' || $httpCode >= 400 || !is_string($response)) {
+        return '';
+    }
+
+    return $response;
 }
 
 function tbm_ai_extract_csi_case_no(string $text): string
@@ -2451,6 +2520,150 @@ function tbm_ai_collect_csi_candidates(string $targetDate, int $limit = 8): arra
     return $candidates;
 }
 
+function tbm_ai_collect_csi_candidates_enhanced(string $targetDate, int $limit = 8): array
+{
+    $usedUrls = array_fill_keys(tbm_ai_get_recent_used_source_urls(), true);
+    $usedTitles = tbm_ai_get_recent_used_title_map();
+    $listPages = [1, 2, 3];
+    $detailFetchLimit = max(10, min($limit * 2, 12));
+
+    $candidates = tbm_ai_collect_csi_candidates_pass(
+        $targetDate,
+        $limit,
+        $usedUrls,
+        $usedTitles,
+        $listPages,
+        $detailFetchLimit,
+        false
+    );
+
+    if ($candidates !== []) {
+        return $candidates;
+    }
+
+    tbm_ai_log_debug('[CSI 후보] 신규 사고사례 없음, 최근 사용 CSI 재사용 허용 폴백');
+
+    return tbm_ai_collect_csi_candidates_pass(
+        $targetDate,
+        $limit,
+        $usedUrls,
+        $usedTitles,
+        $listPages,
+        $detailFetchLimit,
+        true
+    );
+}
+
+function tbm_ai_collect_csi_candidates_pass(
+    string $targetDate,
+    int $limit,
+    array $usedUrls,
+    array $usedTitles,
+    array $listPages,
+    int $detailFetchLimit,
+    bool $allowRecentReuse
+): array {
+    $candidates = [];
+    $seen = [];
+    $seenTitles = [];
+    $seenPageFingerprints = [];
+
+    foreach ($listPages as $page) {
+        $listHtml = tbm_ai_fetch_csi_list_html((int)$page);
+        if ($listHtml === '') {
+            continue;
+        }
+
+        $listItems = tbm_ai_parse_csi_case_list($listHtml, $detailFetchLimit);
+        if ($listItems === []) {
+            continue;
+        }
+
+        $pageCaseNos = [];
+        foreach ($listItems as $item) {
+            $pageCaseNos[] = trim((string)($item['case_no'] ?? ''));
+        }
+        $pageFingerprint = implode('|', $pageCaseNos);
+
+        if ($pageFingerprint !== '' && isset($seenPageFingerprints[$pageFingerprint])) {
+            tbm_ai_log_debug('[CSI 후보] 중복 목록 감지 page=' . $page . ' skip');
+            continue;
+        }
+        $seenPageFingerprints[$pageFingerprint] = true;
+
+        foreach ($listItems as $listItem) {
+            $detail = tbm_ai_fetch_csi_case_detail((string)($listItem['case_no'] ?? ''));
+            if (empty($detail)) {
+                continue;
+            }
+
+            $article = tbm_ai_build_csi_article($listItem, $detail);
+            $url = trim((string)($article['article_url'] ?? ''));
+            $body = trim((string)($article['article_body'] ?? ''));
+            $title = trim((string)($article['article_title'] ?? ''));
+            $normalizedTitle = tbm_ai_normalize_title($title);
+
+            if ($url === '' || $title === '' || $body === '') {
+                continue;
+            }
+
+            if (!$allowRecentReuse && isset($usedUrls[$url])) {
+                continue;
+            }
+
+            $isUsedSimilar = false;
+            if (!$allowRecentReuse) {
+                foreach ($usedTitles as $usedTitle => $_) {
+                    similar_text($normalizedTitle, $usedTitle, $percent);
+                    if ($percent > 80) {
+                        $isUsedSimilar = true;
+                        break;
+                    }
+                }
+            }
+
+            if ($isUsedSimilar) {
+                continue;
+            }
+
+            $isSimilar = false;
+            foreach ($seenTitles as $existingTitle) {
+                similar_text($normalizedTitle, $existingTitle, $percent);
+                if ($percent > 80) {
+                    $isSimilar = true;
+                    break;
+                }
+            }
+
+            if ($isSimilar) {
+                continue;
+            }
+
+            $seenTitles[] = $normalizedTitle;
+
+            $key = md5(mb_strtolower($url . '|' . $normalizedTitle, 'UTF-8'));
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+
+            $candidates[] = [
+                'query' => 'CSI ?ш퀬?щ?',
+                'article' => $article,
+                'siren' => null,
+                'csi_case' => $detail,
+                'target_date' => $targetDate,
+            ];
+
+            if (count($candidates) >= $limit) {
+                return $candidates;
+            }
+        }
+    }
+
+    return $candidates;
+}
+
 function tbm_ai_collect_article_candidates_legacy(string $targetDate, int $limit = 15): array
 {
     $candidates = [];
@@ -3049,7 +3262,7 @@ function tbm_ai_generate_content(string $targetDate, bool $forceNew = false): ar
     tbm_ai_log_debug('[1순위 실패] KOSHA 사용 가능 항목 없음 → CSI 사고사례로 전환');
 
     // ── 2순위: CSI 사고사례 ─────────────────────────────────────
-    $csiCandidates = tbm_ai_collect_csi_candidates($targetDate, 6);
+    $csiCandidates = tbm_ai_collect_csi_candidates_enhanced($targetDate, 6);
     $pickedCsi = tbm_ai_pick_best_candidate($csiCandidates);
 
     if (is_array($pickedCsi)) {
