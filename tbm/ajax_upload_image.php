@@ -18,6 +18,7 @@ register_shutdown_function(function() {
 header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/tbm_functions.php';
+require_once __DIR__ . '/tbm_db.php';
 require_once __DIR__ . '/../risk_assessment/auth.php';
 
 $raUser = auth_current_user();
@@ -49,9 +50,17 @@ try {
         exit;
     }
 
+    $sharedDocId = null;
+    if ($date !== '') {
+        $sourceUrl = trim((string)($_POST['source_url'] ?? ''));
+        $sharedDocId = tbm_update_shared_image_for_date($date, $imageFile, $sourceUrl !== '' ? $sourceUrl : null);
+    }
+
     echo json_encode([
         'ok' => true,
         'image_file' => $imageFile,
+        'shared_reflected' => $sharedDocId !== null,
+        'shared_doc_id' => $sharedDocId,
     ], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
     http_response_code(500);

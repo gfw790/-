@@ -539,6 +539,91 @@ function tbm_create_document(string $date, int $instructorId, ?int $contentId, ?
 }
 
 /**
+ * 지정 날짜의 공통(team='') 문서에 콘텐츠를 동기화한다.
+ * 반환: 공통 문서 doc_id
+ */
+function tbm_sync_shared_document_content(string $date, int $instructorId, int $contentId): int
+{
+    $pdo = tbm_db();
+    $sharedDoc = tbm_get_document_for_team($date, '');
+
+    if ($sharedDoc) {
+        $sharedDocId = (int)$sharedDoc['id'];
+    } else {
+        $sharedDocId = tbm_create_document($date, $instructorId, $contentId, '');
+        tbm_link_document_members($sharedDocId, tbm_get_active_members());
+    }
+
+    $stmt = $pdo->prepare(
+        'UPDATE tbm_documents
+            SET team = "",
+                instructor_id = :iid,
+                content_id = :cid,
+                generation_status = "pending",
+                updated_at = NOW()
+          WHERE id = :id'
+    );
+    $stmt->execute([
+        ':iid' => $instructorId,
+        ':cid' => $contentId,
+        ':id'  => $sharedDocId,
+    ]);
+
+    return $sharedDocId;
+}
+
+/**
+ * 사진 변경 시 같은 날짜의 공통 콘텐츠를 새 이미지로 교체한다.
+ * 기존 공통 문서가 없으면 같은 날짜의 문서를 기준으로 공통 문서를 만든다.
+ * 반환: 공통 문서 doc_id (기준 문서가 없으면 null)
+ */
+function tbm_update_shared_image_for_date(string $date, string $imageFile, ?string $sourceUrl = null): ?int
+{
+    $normalizedDate = trim($date);
+    $normalizedImage = trim($imageFile);
+    if ($normalizedDate === '' || $normalizedImage === '') {
+        return null;
+    }
+
+    $baseDoc = tbm_get_document_for_team($normalizedDate, '');
+    if (!$baseDoc) {
+        $baseDoc = tbm_get_document($normalizedDate);
+    }
+    if (!$baseDoc) {
+        return null;
+    }
+
+    $resolvedSourceUrl = $sourceUrl;
+    if ($resolvedSourceUrl === null) {
+        $resolvedSourceUrl = trim((string)($baseDoc['source_url'] ?? ''));
+    }
+
+    $contentPayload = [
+        'accident_date'  => null,
+        'accident_title' => trim((string)($baseDoc['edu_title'] ?? '')),
+        'edu_title'      => trim((string)($baseDoc['edu_title'] ?? '')),
+        'body_text'      => trim((string)($baseDoc['body_text'] ?? '')),
+        'image_file'     => $normalizedImage,
+        'source_url'     => $resolvedSourceUrl !== '' ? $resolvedSourceUrl : null,
+        'quiz_1'         => trim((string)($baseDoc['quiz_1'] ?? '')),
+        'quiz_2'         => trim((string)($baseDoc['quiz_2'] ?? '')),
+        'quiz_3'         => trim((string)($baseDoc['quiz_3'] ?? '')),
+        'ai_generated'   => 0,
+    ];
+
+    $contentId = tbm_insert_content($contentPayload);
+    $instructorId = (int)($baseDoc['instructor_id'] ?? 0);
+    if ($instructorId <= 0) {
+        $activeInstructor = tbm_get_active_instructor();
+        $stmt = tbm_db()->prepare('SELECT id FROM tbm_instructors WHERE name = ? AND is_active = 1 LIMIT 1');
+        $stmt->execute([trim((string)($activeInstructor['name'] ?? ''))]);
+        $instructorId = (int)($stmt->fetchColumn() ?: 1);
+    }
+
+    return tbm_sync_shared_document_content($normalizedDate, $instructorId, $contentId);
+}
+
+/**
  * 일지의 생성 결과를 업데이트한다.
  */
 function tbm_update_document_result(int $docId, string $filename, string $status, ?string $error = null): void

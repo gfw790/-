@@ -519,6 +519,7 @@ async function handleImageUploadChange(event) {
     const formData = new FormData();
     formData.append('image_upload', file);
     formData.append('date', getDraftDateValue());
+    formData.append('source_url', document.getElementById('source_url')?.value || '');
 
     if (fileNameEl) {
         fileNameEl.textContent = file.name + ' 업로드 중...';

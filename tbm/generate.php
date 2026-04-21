@@ -43,6 +43,7 @@ if (!is_dir(TBM_OUTPUT_DIR)) {
 
 $dbError = null;
 $docId   = 0;
+$sharedDocId = 0;
 
 try {
     $pdo = tbm_db();
@@ -124,6 +125,10 @@ try {
         tbm_link_document_members($docId, tbm_get_active_members());
     }
 
+    if ($isOperator) {
+        $sharedDocId = tbm_sync_shared_document_content($docDate, $instructorId, $contentId);
+    }
+
 } catch (Throwable $e) {
     $dbError = $e->getMessage();
     error_log('[TBM generate] DB 오류: ' . $e->getMessage());
@@ -150,11 +155,17 @@ try {
         tbm_update_document_result($docId, $outputRelativePath, 'success');
         tbm_log($docId, 'manual', 'success', "수동 생성: {$outputRelativePath}");
     }
+    if ($sharedDocId > 0 && $sharedDocId !== $docId) {
+        tbm_update_document_result($sharedDocId, $outputRelativePath, 'success');
+    }
 } catch (Throwable $e) {
     $renderError = $e->getMessage();
     if ($docId > 0) {
         tbm_update_document_result($docId, '', 'failed', $e->getMessage());
         tbm_log($docId, 'manual', 'failed', $e->getMessage());
+    }
+    if ($sharedDocId > 0 && $sharedDocId !== $docId) {
+        tbm_update_document_result($sharedDocId, '', 'failed', $e->getMessage());
     }
 }
 
