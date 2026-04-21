@@ -408,10 +408,15 @@ body { font-family: "Malgun Gothic", sans-serif; margin: 0; background: #f5f6f7;
             </div>
             <div style="display:flex; gap:5px; margin-bottom:15px; flex-wrap:wrap;">
                 <?php foreach(array_keys($teamMembers) as $tName): ?>
-                    <button type="button" class="btn btn-sm btn-secondary team-btn" onclick="applyTeam('<?= h($tName) ?>')">
+                    <button type="button" class="btn btn-sm btn-secondary team-btn" data-team-key="<?= h($tName) ?>" onclick="applyTeam('<?= h($tName) ?>')">
                         <?= h($tName) ?>
                     </button>
                 <?php endforeach; ?>
+                <?php if ($isOperator): ?>
+                    <button type="button" class="btn btn-sm btn-secondary team-btn" data-team-key="공통" onclick="applyTeam('공통')" style="border-color:#d97706; color:#d97706;">
+                        공통
+                    </button>
+                <?php endif; ?>
             </div>
             
             <div style="border-top: 1px dashed #e5e7eb; padding-top: 12px; margin-top: 10px;">
@@ -799,9 +804,10 @@ renderRecentDocs = function(teamName) {
     }).filter(Boolean);
 
     if (Array.isArray(fallbackRecentDocs) && fallbackRecentDocs.length > 0) {
+        const fallbackClass = selectedRecentTeam === '공통' ? 'recent-group is-selected' : 'recent-group';
         sections.push(
-            '<div class="recent-group">'
-            + '<div class="recent-group-title">공통 / 팀 미지정</div>'
+            '<div class="' + fallbackClass + '">'
+            + '<div class="recent-group-title">공통</div>'
             + '<ul class="recent-list">' + renderDocItems(fallbackRecentDocs, '') + '</ul>'
             + '</div>'
         );
@@ -840,7 +846,9 @@ function applyTeam(teamName) {
     document.querySelectorAll('.team-btn').forEach(btn => {
         btn.classList.remove('btn-primary');
         btn.classList.add('btn-secondary');
-        if(btn.innerText.trim() === teamName) {
+        btn.style.borderColor = '';
+        btn.style.color = '';
+        if (btn.dataset.teamKey === teamName) {
             btn.classList.remove('btn-secondary');
             btn.classList.add('btn-primary');
         }

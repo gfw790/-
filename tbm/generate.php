@@ -30,12 +30,17 @@ if ($isOperator) {
     }
 }
 $postedTeam = trim($_POST['selected_team'] ?? '');
-if ($postedTeam !== '') {
+if ($isOperator && $postedTeam === '공통') {
+    // 운영자가 공통문서 직접 생성 선택 → team='' (공통문서 행)으로 처리
+    $documentTeam = '';
+    $returnTeam   = '공통';
+} elseif ($postedTeam !== '') {
     $documentTeam = tbm_normalize_display_team_name(auth_normalize_team_name($postedTeam));
+    $returnTeam   = $postedTeam;
 } else {
     $documentTeam = tbm_normalize_display_team_name(auth_normalize_team_name((string)($raUser['team'] ?? '')));
+    $returnTeam   = $documentTeam;
 }
-$returnTeam = $postedTeam !== '' ? $postedTeam : $documentTeam;
 
 if (!is_dir(TBM_OUTPUT_DIR)) {
     mkdir(TBM_OUTPUT_DIR, 0777, true);
@@ -125,7 +130,8 @@ try {
         tbm_link_document_members($docId, tbm_get_active_members());
     }
 
-    if ($isOperator) {
+    if ($isOperator && $documentTeam !== '') {
+        // 팀 문서 생성 시 공통문서에도 콘텐츠 동기화
         $sharedDocId = tbm_sync_shared_document_content($docDate, $instructorId, $contentId);
     }
 
