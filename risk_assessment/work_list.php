@@ -1473,14 +1473,104 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     .standard-preview-grid { grid-template-columns: 1fr; }
   }
   /* 조직도 */
+  .org-modal-shell {
+    width: min(940px, 100%);
+    border-radius: 20px;
+    border-color: rgba(255,255,255,0.18);
+    box-shadow: 0 28px 70px rgba(0,0,0,0.48);
+  }
+  .org-modal-head {
+    align-items: center;
+    padding: 18px 22px 14px;
+    border-bottom-color: rgba(255,255,255,0.12);
+    background:
+      radial-gradient(circle at 18% -35%, rgba(245,166,35,0.23), transparent 50%),
+      radial-gradient(circle at 90% 0%, rgba(77,157,255,0.2), transparent 42%),
+      rgba(12, 20, 32, 0.66);
+  }
+  .org-modal-title-wrap h2 {
+    margin: 0;
+    font-size: 20px;
+    letter-spacing: .01em;
+  }
+  .org-modal-sub {
+    margin-top: 7px;
+    color: var(--text-dim);
+    font-size: 12px;
+    letter-spacing: .01em;
+    line-height: 1.5;
+  }
+  .org-modal-body {
+    padding: 18px 20px 22px;
+    overflow-y: auto;
+    max-height: calc(100vh - 132px);
+  }
+  .org-modal-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-bottom: 12px;
+  }
+  .org-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 11px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.16);
+    background: rgba(255,255,255,0.03);
+    color: var(--text);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .03em;
+  }
+  .org-legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    flex-shrink: 0;
+  }
+  .org-legend-dot.ceo { background: #f5a623; }
+  .org-legend-dot.safety { background: #5ddb9a; }
+  .org-legend-dot.team { background: #5e8cff; }
+  .org-chart-surface {
+    --org-team-top-width: 110px;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 16px;
+    padding: 20px 16px 14px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+    background:
+      radial-gradient(circle at 50% -20%, rgba(255,255,255,0.08), transparent 50%),
+      linear-gradient(180deg, rgba(255,255,255,0.028), rgba(255,255,255,0.012)),
+      repeating-linear-gradient(
+        45deg,
+        rgba(255,255,255,0.008) 0px,
+        rgba(255,255,255,0.008) 10px,
+        rgba(255,255,255,0.0) 10px,
+        rgba(255,255,255,0.0) 20px
+      );
+  }
+  .org-teams-wrap::-webkit-scrollbar { height: 7px; }
+  .org-teams-wrap::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.22);
+    border-radius: 999px;
+  }
+  .org-teams-wrap::-webkit-scrollbar-track { background: rgba(255,255,255,0.07); border-radius: 999px; }
   .org-chart { display:flex; flex-direction:column; align-items:center; }
-  .org-vert { width:2px; height:36px; background:var(--border2); flex-shrink:0; }
+  .org-vert { width:2px; height:34px; background:linear-gradient(180deg, rgba(255,255,255,.3), rgba(255,255,255,.08)); flex-shrink:0; }
   /* 노드 */
-  .org-node { border:1px solid var(--border2); border-radius:10px; padding:10px 28px; text-align:center; background:var(--bg1); }
-  .org-node-label { font-size:10px; color:var(--text-lo); letter-spacing:.05em; margin-bottom:3px; }
-  .org-node-name { font-size:15px; font-weight:700; color:var(--text-hi); }
-  .org-node-ceo { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
-  .org-node-safety { border-color:rgba(93,219,154,.5); }
+  .org-node {
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 13px;
+    padding: 10px 24px;
+    text-align: center;
+    background: linear-gradient(180deg, rgba(15,27,43,.96), rgba(8,16,28,.96));
+    box-shadow: 0 8px 22px rgba(0,0,0,.24);
+  }
+  .org-node-label { font-size:10px; color:var(--text-lo); letter-spacing:.08em; margin-bottom:4px; }
+  .org-node-name { font-size:15px; font-weight:700; color:var(--text-hi); line-height: 1.35; }
+  .org-node-ceo { border-color:var(--accent); box-shadow:0 0 0 1px rgba(245,166,35,.52), 0 12px 30px rgba(245,166,35,.18); }
+  .org-node-safety { border-color:rgba(93,219,154,.58); box-shadow:0 10px 24px rgba(18,77,49,.28); }
   /* 안전관리자 T-분기:
      - junction이 컨테이너 전체 너비를 차지(align-self:stretch)하고 position:relative
      - stem은 flex-column으로 세로로 쌓아 중앙 정렬 → CEO와 수직 정렬 유지
@@ -1494,7 +1584,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     position:absolute; left:50% ; top:50%; transform:translateY(-50%);
     display:flex; align-items:center;
   }
-  .org-junction-hline { width:130px; height:2px; background:var(--border2); flex-shrink:0; }
+  .org-junction-hline { width:130px; height:2px; background:linear-gradient(90deg, rgba(255,255,255,.18), rgba(93,219,154,.42)); flex-shrink:0; }
   .org-junction-branch .org-node {
     margin-left: 0px; /* stem과 겹치지 않도록 여백 */
   }
@@ -1505,25 +1595,47 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     position:relative; width:fit-content; margin:0 auto;
   }
   .org-teams-row::before {
-    content:''; position:absolute; top:0; left: 55px;; right: 55px;;
-    height:2px; background:var(--border2);
+    content:''; position:absolute; top:0;
+    left: calc(var(--org-team-top-width) / 2);
+    right: calc(var(--org-team-top-width) / 2);
+    height:2px; background:rgba(255,255,255,0.2);
   }
   /* 팀 카드 래퍼: overflow:hidden 밖에서 수직 연결선을 그림 */
   .org-team-col {
     display:flex; flex-direction:column; align-items:center;
     padding-top:36px; position:relative;
+    width: var(--org-team-top-width);
+    flex: 0 0 var(--org-team-top-width);
   }
   .org-team-col::before {
     content:''; position:absolute; top:0; left:50%; transform:translateX(-50%);
-    width:2px; height:36px; background:var(--border2);
+    width:2px; height:36px; background:rgba(255,255,255,0.2);
   }
-  .org-team-card { background:var(--bg2); border:1px solid var(--border2); border-radius:8px; min-width:110px; overflow:hidden; }
+  .org-team-card {
+    width: 100%;
+    min-width: 0;
+    background: linear-gradient(180deg, rgba(13,23,36,.95), rgba(10,18,29,.95));
+    border:1px solid rgba(255,255,255,0.14);
+    border-radius:10px;
+    overflow:hidden;
+    box-shadow: 0 8px 22px rgba(0,0,0,.22);
+  }
   .org-team-card-child { min-width:190px; }
-  .org-team-head { background:var(--accent); color:#fff; text-align:center; padding:7px 14px; font-size:12px; font-weight:700; }
-  .org-team-body { padding:10px 12px; }
+  .org-team-head {
+    background: linear-gradient(90deg, rgba(245,166,35,.95), rgba(227,137,32,.95));
+    color:#fff;
+    text-align:center;
+    padding:9px 12px;
+    font-size:12px;
+    font-weight:800;
+    letter-spacing:.03em;
+    line-height: 1.25;
+  }
+  .org-team-body { padding:11px 12px 10px; }
   .org-team-children-wrap {
     position:relative;
-    width:100%;
+    width:max-content;
+    min-width:100%;
     margin-top:18px;
     display:flex;
     justify-content:center;
@@ -1542,7 +1654,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     display:flex;
     gap:16px;
     padding-top:16px;
-    width:100%;
+    width:max-content;
     justify-content:center;
   }
   .org-subteam-col {
@@ -1551,11 +1663,48 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     align-items:center;
   }
   .org-role-sec { padding:5px 0; border-top:1px solid var(--border2); }
+  .org-role-sec { padding:7px 0 6px; border-top:1px dashed rgba(255,255,255,0.12); }
   .org-role-sec:first-child { border-top:none; padding-top:0; }
-  .org-role-lbl { font-size:10px; color:var(--text-lo); margin-bottom:2px; }
-  .org-member-name { display:block; font-size:12px; color:var(--text-hi); padding:1px 0; }
-  .org-has-phone { cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px; }
-  .org-has-phone:hover { color:var(--accent); }
+  .org-role-lbl {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size:10px;
+    color:var(--text-lo);
+    margin-bottom:5px;
+    letter-spacing:.05em;
+    font-weight: 700;
+  }
+  .org-role-lbl::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    border-radius: 999px;
+    background: rgba(245,166,35,0.65);
+  }
+  .org-member-name { display:block; font-size:12px; color:var(--text-hi); padding:1px 0; line-height: 1.45; }
+  .org-member-name + .org-member-name { margin-top: 1px; }
+  .org-has-phone {
+    cursor:pointer;
+    text-decoration:none;
+    border-radius:6px;
+    padding:2px 5px;
+    margin:0 -5px;
+    transition: background .15s ease, color .15s ease;
+  }
+  .org-has-phone:hover { color:var(--accent); background: rgba(245,166,35,0.13); }
+  @media (max-width: 720px) {
+    .org-modal-shell { width: min(100%, 100%); }
+    .org-modal-head { align-items: flex-start; }
+    .org-modal-title-wrap h2 { font-size: 18px; }
+    .org-modal-body { padding: 14px 12px 16px; max-height: calc(100vh - 110px); }
+    .org-chart-surface { --org-team-top-width: 96px; padding: 14px 10px 10px; }
+    .org-teams-row { gap: 12px; }
+    .org-team-col { padding-top: 28px; }
+    .org-team-col::before { height: 28px; }
+    .org-team-card { min-width: 96px; }
+    .org-team-card-child { min-width: 160px; }
+  }
   #org-phone-tip {
     position:fixed; z-index:99999; display:none;
     background:var(--accent);
@@ -1925,12 +2074,20 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
 
   <!-- 조직도 모달 -->
   <div class="modal-backdrop" id="org-modal" aria-hidden="true">
-    <div class="unit-preview-modal" style="width:min(820px,100%);">
-      <div class="unit-preview-head">
-        <h2 style="font-size:16px;">조직도</h2>
+    <div class="unit-preview-modal org-modal-shell" role="dialog" aria-modal="true" aria-labelledby="org-modal-title">
+      <div class="unit-preview-head org-modal-head">
+        <div class="org-modal-title-wrap">
+          <h2 id="org-modal-title">조직도</h2>
+          <p class="org-modal-sub">이름을 누르면 전화번호를 빠르게 확인할 수 있습니다.</p>
+        </div>
         <button type="button" class="modal-close" id="org-modal-close" aria-label="닫기">&times;</button>
       </div>
-      <div class="unit-preview-body" style="padding:28px 24px;overflow-y:auto;max-height:calc(100vh - 140px);">
+      <div class="unit-preview-body org-modal-body">
+        <div class="org-modal-legend" aria-hidden="true">
+          <span class="org-legend-item"><span class="org-legend-dot ceo"></span>대표/임원</span>
+          <span class="org-legend-item"><span class="org-legend-dot safety"></span>안전관리</span>
+          <span class="org-legend-item"><span class="org-legend-dot team"></span>팀 조직</span>
+        </div>
         <?php
         $orgStrip = static function(string $n): string {
             return trim((string)preg_replace('/\s*\([^)]*\)/', '', $n));
@@ -2001,6 +2158,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
             return '<span class="org-member-name">' . $name . '</span>';
         };
         ?>
+        <div class="org-chart-surface">
         <div class="org-chart">
           <!-- 대표이사 -->
           <?php foreach ($orgCeo as $entry): ?>
@@ -2110,6 +2268,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
             </div>
             </div><!-- org-teams-wrap -->
           <?php endif; ?>
+        </div>
         </div>
       </div>
     </div>
