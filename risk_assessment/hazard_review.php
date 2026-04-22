@@ -45,7 +45,8 @@ function hazard_review_user_can_view_report(array $user, array $report): bool
         return false;
     }
 
-    if (auth_is_admin($user)) {
+  $userRole = (string)($user['role'] ?? '');
+  if (auth_is_admin($user) || $userRole === 'safety_manager') {
         return true;
     }
 
@@ -63,6 +64,66 @@ function hazard_review_user_can_view_report(array $user, array $report): bool
     $userLoginId = trim((string)($user['login_id'] ?? ''));
     return $userLoginId !== '' && (string)($report['user_login_id'] ?? '') === $userLoginId;
 }
+
+  function hazard_review_resolve_role_people(array $report): array
+  {
+    $teamName = hazard_review_report_team_context($report);
+    $reportRole = auth_normalize_role((string)($report['role_code'] ?? ''));
+    $ownerName = trim((string)($report['user_name'] ?? ''));
+    $ownerLoginId = trim((string)($report['user_login_id'] ?? ''));
+    $ownerDisplayName = $ownerName !== '' ? $ownerName : ($ownerLoginId !== '' ? $ownerLoginId : '');
+
+    $leaderName = '';
+    $managerName = '';
+
+    if ($reportRole === 'leader') {
+      $leaderName = $ownerDisplayName;
+    }
+    if (in_array($reportRole, ['manager', 'safety_manager', 'admin', 'ceo'], true)) {
+      $managerName = $ownerDisplayName;
+    }
+
+    $findMemberName = static function (string $baseTeamName, array $roles): string {
+      $currentTeam = auth_normalize_team_name($baseTeamName);
+      $visited = [];
+
+      while ($currentTeam !== '') {
+        $teamKey = auth_team_key($currentTeam);
+        if ($teamKey === '' || isset($visited[$teamKey])) {
+          break;
+        }
+        $visited[$teamKey] = true;
+
+        $members = auth_team_members($currentTeam, $roles);
+        if (!empty($members)) {
+          $name = trim((string)($members[0]['name'] ?? ''));
+          if ($name !== '') {
+            return $name;
+          }
+        }
+
+        $currentTeam = auth_get_team_supervisor($currentTeam);
+      }
+
+      return '';
+    };
+
+    if ($teamName !== '' && $leaderName === '') {
+      $leaderMembers = auth_team_members($teamName, ['leader']);
+      if (!empty($leaderMembers)) {
+        $leaderName = trim((string)($leaderMembers[0]['name'] ?? ''));
+      }
+    }
+
+    if ($teamName !== '' && $managerName === '') {
+      $managerName = $findMemberName($teamName, ['manager', 'safety_manager', 'admin', 'ceo']);
+    }
+
+    return [
+      'leader_name' => $leaderName,
+      'manager_name' => $managerName,
+    ];
+  }
 
 $user = auth_current_user();
 if ($user === null) {
@@ -119,7 +180,9 @@ if ($reportId > 0) {
 $reportListStmt = $pdo->query("
     SELECT
         wr.report_id,
+    wr.role_code,
         wr.user_login_id,
+    wr.user_name,
         wr.team_name,
         wr.work_date,
         wr.work_title,
@@ -140,6 +203,46 @@ $reportList = array_values(array_filter(
     $reportList,
     static fn(array $listReport) => hazard_review_user_can_view_report($user, $listReport)
 ));
+
+$todayKey = date('Y-m-d');
+$teamCounts = [];
+$totalParticipants = 0;
+$reportsWithParticipants = 0;
+$todayReports = 0;
+
+foreach ($reportList as $listReport) {
+  $participantCount = (int)($listReport['participant_count'] ?? 0);
+  if ($participantCount > 0) {
+    $reportsWithParticipants++;
+  }
+  $totalParticipants += max(0, $participantCount);
+
+  $workDate = substr((string)($listReport['work_date'] ?? ''), 0, 10);
+  if ($workDate === $todayKey) {
+    $todayReports++;
+  }
+
+  $teamName = hazard_review_report_team_context($listReport);
+  if ($teamName === '') {
+    $teamName = '미지정';
+  }
+  if (!isset($teamCounts[$teamName])) {
+    $teamCounts[$teamName] = 0;
+  }
+  $teamCounts[$teamName]++;
+}
+
+arsort($teamCounts);
+$topTeams = array_slice($teamCounts, 0, 5, true);
+$topTeamName = '-';
+$topTeamCount = 0;
+if (!empty($teamCounts)) {
+  $topTeamName = (string)array_key_first($teamCounts);
+  $topTeamCount = (int)($teamCounts[$topTeamName] ?? 0);
+}
+
+$reportCount = count($reportList);
+$averageParticipants = $reportCount > 0 ? round($totalParticipants / $reportCount, 1) : 0;
 
 $participantRows = $pdo->query("
     SELECT
@@ -323,6 +426,75 @@ foreach ($participantRows as $participantRow) {
     margin-bottom: 12px;
     letter-spacing: .04em;
   }
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .stat-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+  }
+  .stat-label {
+    color: var(--text-dim);
+    font-size: 11px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    letter-spacing: .04em;
+  }
+  .stat-value {
+    color: var(--text-hi);
+    font-size: 20px;
+    font-weight: 900;
+    line-height: 1.1;
+  }
+  .stat-sub {
+    margin-top: 4px;
+    color: var(--text-dim);
+    font-size: 11px;
+  }
+  .team-mini-list {
+    margin-top: 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .team-mini-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border2);
+    background: rgba(255,255,255,0.04);
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .team-mini-item:hover { background: rgba(255,255,255,0.09); }
+  .team-mini-item.is-active {
+    border-color: rgba(245,166,35,0.55);
+    background: rgba(245,166,35,0.18);
+    color: #ffe8c3;
+  }
+  .team-mini-item em {
+    font-style: normal;
+    color: var(--accent2);
+  }
+  .team-filter-empty {
+    margin-top: 10px;
+    border: 1px dashed var(--border2);
+    border-radius: 10px;
+    padding: 12px;
+    color: var(--text-dim);
+    font-size: 12px;
+    display: none;
+  }
   .report-list { display: grid; gap: 8px; }
   .report-row {
     display: grid;
@@ -393,6 +565,29 @@ foreach ($participantRows as $participantRow) {
     padding: 11px 14px;
   }
   .participant-name { color: var(--text-hi); font-size: 14px; font-weight: 700; }
+  .participant-role-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .participant-role-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border2);
+    border-radius: 999px;
+    padding: 6px 10px;
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .participant-role-chip strong {
+    color: var(--accent2);
+    font-size: 11px;
+    font-weight: 700;
+  }
   @media (max-width: 720px) {
     .panel-head, .content { padding-left: 18px; padding-right: 18px; }
     .report-row { grid-template-columns: 1fr; }
@@ -456,12 +651,63 @@ foreach ($participantRows as $participantRow) {
         <?php else: ?>
           <section>
             <div class="section-title">위험성평가 목록</div>
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="stat-label">총 평가 건수</div>
+                <div class="stat-value"><?= number_format($reportCount) ?></div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">금일 평가 건수</div>
+                <div class="stat-value"><?= number_format($todayReports) ?></div>
+                <div class="stat-sub"><?= h($todayKey) ?></div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">팀 수</div>
+                <div class="stat-value"><?= number_format(count($teamCounts)) ?></div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">참여자 제출 건수</div>
+                <div class="stat-value"><?= number_format($reportsWithParticipants) ?></div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">전체 참여자 수</div>
+                <div class="stat-value"><?= number_format($totalParticipants) ?></div>
+                <div class="stat-sub">보고서 기준 합계</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">보고서당 평균 참여자</div>
+                <div class="stat-value"><?= number_format($averageParticipants, 1) ?></div>
+                <div class="stat-sub"><?= h($topTeamName) ?> 최다(<?= number_format($topTeamCount) ?>건)</div>
+              </div>
+            </div>
+
+            <?php if (!empty($topTeams)): ?>
+              <div class="team-mini-list">
+                <button type="button" class="team-mini-item is-active" data-team-filter="all">전체 <em><?= number_format($reportCount) ?>건</em></button>
+                <?php foreach ($topTeams as $teamName => $teamCount): ?>
+                  <button
+                    type="button"
+                    class="team-mini-item"
+                    data-team-filter="<?= h(auth_team_key((string)$teamName)) ?>"
+                    data-team-name="<?= h((string)$teamName) ?>"
+                  ><?= h((string)$teamName) ?> <em><?= number_format((int)$teamCount) ?>건</em></button>
+                <?php endforeach; ?>
+              </div>
+              <div class="team-filter-empty" id="team-filter-empty">선택한 팀의 위험성평가 목록이 없습니다.</div>
+            <?php endif; ?>
+
             <?php if (empty($reportList)): ?>
               <div class="empty">표시할 위험성평가 목록이 없습니다.</div>
             <?php else: ?>
               <div class="report-list">
                 <?php foreach ($reportList as $listReport): ?>
-                  <div class="report-row">
+                  <?php
+                    $listTeamName = hazard_review_report_team_context($listReport);
+                    if ($listTeamName === '') {
+                        $listTeamName = '미지정';
+                    }
+                  ?>
+                  <div class="report-row" data-team-key="<?= h(auth_team_key($listTeamName)) ?>" data-team-name="<?= h($listTeamName) ?>">
                     <div>
                       <div class="report-head">날짜</div>
                       <div class="report-value"><?= h($listReport['work_date']) ?></div>
@@ -471,11 +717,14 @@ foreach ($participantRows as $participantRow) {
                       <div class="report-value"><?= h($listReport['work_title']) ?></div>
                     </div>
                     <div class="actions">
+                      <?php $rolePeople = hazard_review_resolve_role_people($listReport); ?>
                       <?php $participants = $participantMap[(int)$listReport['report_id']] ?? []; ?>
                       <button
                         type="button"
                         class="participant-text"
                         data-report-title="<?= h($listReport['work_title']) ?>"
+                        data-leader-name="<?= h((string)($rolePeople['leader_name'] ?? '')) ?>"
+                        data-manager-name="<?= h((string)($rolePeople['manager_name'] ?? '')) ?>"
                         data-participants='<?= h(json_encode($participants, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) ?>'
                         <?= empty($participants) ? 'disabled' : '' ?>
                       >참여자 <?= (int)($listReport['participant_count'] ?? 0) ?>명</button>
@@ -498,6 +747,7 @@ foreach ($participantRows as $participantRow) {
         <button type="button" class="modal-close" id="participant-modal-close">닫기</button>
       </div>
       <div class="modal-body">
+        <div class="participant-role-meta" id="participant-role-meta"></div>
         <ul class="participant-list" id="participant-modal-list">
           <li class="participant-item">
             <div class="participant-name">참여자 정보가 없습니다.</div>
@@ -513,61 +763,107 @@ foreach ($participantRows as $participantRow) {
       const closeButton = document.getElementById('participant-modal-close');
       const list = document.getElementById('participant-modal-list');
       const title = document.getElementById('participant-modal-title');
+      const roleMeta = document.getElementById('participant-role-meta');
       const triggers = document.querySelectorAll('.participant-text[data-participants]');
+      const teamFilterButtons = document.querySelectorAll('.team-mini-item[data-team-filter]');
+      const reportRows = document.querySelectorAll('.report-row[data-team-key]');
+      const teamFilterEmpty = document.getElementById('team-filter-empty');
 
-      if (!modal || !closeButton || !list || !title || !triggers.length) {
-        return;
+      if (teamFilterButtons.length && reportRows.length) {
+        const setActiveButton = (activeButton) => {
+          teamFilterButtons.forEach((button) => {
+            button.classList.toggle('is-active', button === activeButton);
+          });
+        };
+
+        const applyTeamFilter = (teamKey) => {
+          let visibleCount = 0;
+          reportRows.forEach((row) => {
+            const rowTeamKey = row.getAttribute('data-team-key') || '';
+            const visible = teamKey === 'all' || rowTeamKey === teamKey;
+            row.style.display = visible ? '' : 'none';
+            if (visible) {
+              visibleCount += 1;
+            }
+          });
+
+          if (teamFilterEmpty) {
+            teamFilterEmpty.style.display = visibleCount > 0 ? 'none' : 'block';
+          }
+        };
+
+        teamFilterButtons.forEach((button) => {
+          button.addEventListener('click', () => {
+            const teamKey = button.getAttribute('data-team-filter') || 'all';
+            setActiveButton(button);
+            applyTeamFilter(teamKey);
+          });
+        });
       }
 
-      const closeModal = () => {
-        modal.classList.remove('is-open');
-        modal.setAttribute('aria-hidden', 'true');
-      };
+      if (modal && closeButton && list && title && roleMeta && triggers.length) {
+        const closeModal = () => {
+          modal.classList.remove('is-open');
+          modal.setAttribute('aria-hidden', 'true');
+        };
 
-      const openModal = (workTitle, participants) => {
-        title.textContent = workTitle ? workTitle + ' 참여자 명단' : '참여자 명단';
-        if (!participants.length) {
-          list.innerHTML = '<li class="participant-item"><div class="participant-name">참여자 정보가 없습니다.</div></li>';
-        } else {
-          list.innerHTML = participants.map((participant) => {
-            const name = participant.user_name || '-';
-            return '<li class="participant-item">'
-              + '<div class="participant-name">' + name + '</div>'
-              + '</li>';
-          }).join('');
-        }
+        const openModal = (workTitle, participants, leaderName, managerName) => {
+          title.textContent = workTitle ? workTitle + ' 참여자 명단' : '참여자 명단';
 
-        modal.classList.add('is-open');
-        modal.setAttribute('aria-hidden', 'false');
-      };
+          const leaderText = leaderName && leaderName.trim() !== '' ? leaderName : '';
+          const managerText = managerName && managerName.trim() !== '' ? managerName : '미지정';
+          const chips = [];
+          if (leaderText !== '') {
+            chips.push('<span class="participant-role-chip"><strong>작업지휘자</strong>' + leaderText + '</span>');
+          }
+          chips.push('<span class="participant-role-chip"><strong>관리감독자</strong>' + managerText + '</span>');
+          roleMeta.innerHTML = chips.join('');
 
-      triggers.forEach((trigger) => {
-        trigger.addEventListener('click', () => {
-          const workTitle = trigger.getAttribute('data-report-title') || '';
-          const raw = trigger.getAttribute('data-participants') || '[]';
-          let participants = [];
-
-          try {
-            participants = JSON.parse(raw);
-          } catch (error) {
-            participants = [];
+          if (!participants.length) {
+            list.innerHTML = '<li class="participant-item"><div class="participant-name">참여자 정보가 없습니다.</div></li>';
+          } else {
+            list.innerHTML = participants.map((participant) => {
+              const name = participant.user_name || '-';
+              return '<li class="participant-item">'
+                + '<div class="participant-name">' + name + '</div>'
+                + '</li>';
+            }).join('');
           }
 
-          openModal(workTitle, Array.isArray(participants) ? participants : []);
-        });
-      });
+          modal.classList.add('is-open');
+          modal.setAttribute('aria-hidden', 'false');
+        };
 
-      closeButton.addEventListener('click', closeModal);
-      modal.addEventListener('click', (event) => {
-        if (event.target === modal) {
-          closeModal();
-        }
-      });
-      document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape') {
-          closeModal();
-        }
-      });
+        triggers.forEach((trigger) => {
+          trigger.addEventListener('click', () => {
+            const workTitle = trigger.getAttribute('data-report-title') || '';
+            const leaderName = trigger.getAttribute('data-leader-name') || '';
+            const managerName = trigger.getAttribute('data-manager-name') || '';
+            const raw = trigger.getAttribute('data-participants') || '[]';
+            let participants = [];
+
+            try {
+              participants = JSON.parse(raw);
+            } catch (error) {
+              participants = [];
+            }
+
+            openModal(workTitle, Array.isArray(participants) ? participants : [], leaderName, managerName);
+          });
+        });
+
+        closeButton.addEventListener('click', closeModal);
+        modal.addEventListener('click', (event) => {
+          if (event.target === modal) {
+            closeModal();
+          }
+        });
+        document.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape') {
+            closeModal();
+          }
+        });
+      }
     }());
   </script>
 </body>

@@ -199,7 +199,8 @@ function hazard_review_detail_report_team_context(array $report): string
 
 function hazard_review_detail_user_can_view_report(array $user, array $report): bool
 {
-    if (auth_is_admin($user)) {
+  $userRole = (string)($user['role'] ?? '');
+  if (auth_is_admin($user) || $userRole === 'safety_manager') {
         return true;
     }
 
