@@ -1491,3 +1491,13 @@
 [2026-04-24 00:00:14] [점수 5위] score=12  incident_score=9  title=정강이 2cm정도 찢어짐
 [2026-04-24 00:00:14] [최종 선택] score=12  title=정강이 2cm정도 찢어짐
 [2026-04-24 00:00:15] [CSI 이미지] 원본 이미지 URL 확인: https://www.csi.go.kr/com/imageViewProc.do?file_no=tw5HAhCRkM4rqeezK8fmSA%3D%3D
+[2026-04-24 05:35:58] [시작] forceNew=1 → 캐시 무시
+[2026-04-24 05:35:58] [1순위] KOSHA 사이렌 수집 시작
+[2026-04-24 05:36:00] [1순위 실패] KOSHA 사용 가능 항목 없음 → CSI 사고사례로 전환
+[2026-04-24 05:36:09] [점수 1위] score=34  incident_score=9  title=서울역북부역세권 손가락 끼임
+[2026-04-24 05:36:09] [점수 2위] score=32  incident_score=9  title=세종천안 4공구 04.18. 철근 절곡기 끼임 사고
+[2026-04-24 05:36:09] [점수 3위] score=29  incident_score=9  title=고압가스용기 운반 중 손가락 협착사고
+[2026-04-24 05:36:09] [점수 4위] score=28  incident_score=9  title=(가칭)명지3중학교 교사신축공사(철근밴딩작업에 따른 손가락 말단부분 절단 사고)
+[2026-04-24 05:36:09] [점수 5위] score=27  incident_score=9  title=정림 재해위험개선지구 정비사업
+[2026-04-24 05:36:09] [최종 선택] score=32  title=세종천안 4공구 04.18. 철근 절곡기 끼임 사고
+[2026-04-24 05:36:09] [CSI 이미지] 원본 이미지 URL 확인: https://www.csi.go.kr/com/imageViewProc.do?file_no=w7n50Q5T1nNeVGO9e7%2Bs5w%3D%3D

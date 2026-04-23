@@ -18,6 +18,7 @@ register_shutdown_function(function() {
 header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/tbm_db.php';
+require_once __DIR__ . '/tbm_functions.php';
 require_once __DIR__ . '/../risk_assessment/auth.php';
 require_once __DIR__ . '/tbm_ai.php';
 

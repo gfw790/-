@@ -273,3 +273,19 @@ Stack trace:
 #0 {main}
   thrown in Command line code on line 8
 [23-Apr-2026 00:00:10 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=2) — Gemini Vision 폴백
+[24-Apr-2026 05:31:53 Asia/Seoul] PHP Fatal error:  Uncaught Error: Call to undefined function tbm_can_use_ai_generation() in A:\risk_server\project\tbm\ajax_ai_generate.php:31
+Stack trace:
+#0 {main}
+  thrown in A:\risk_server\project\tbm\ajax_ai_generate.php on line 31
+[24-Apr-2026 05:32:14 Asia/Seoul] PHP Fatal error:  Uncaught Error: Call to undefined function tbm_can_use_ai_generation() in A:\risk_server\project\tbm\ajax_ai_generate.php:31
+Stack trace:
+#0 {main}
+  thrown in A:\risk_server\project\tbm\ajax_ai_generate.php on line 31
+[24-Apr-2026 05:32:29 Asia/Seoul] PHP Fatal error:  Uncaught Error: Call to undefined function tbm_can_use_ai_generation() in A:\risk_server\project\tbm\ajax_ai_generate.php:31
+Stack trace:
+#0 {main}
+  thrown in A:\risk_server\project\tbm\ajax_ai_generate.php on line 31
+[24-Apr-2026 05:33:36 Asia/Seoul] PHP Fatal error:  Uncaught Error: Call to undefined function tbm_can_use_ai_generation() in A:\risk_server\project\tbm\ajax_ai_generate.php:31
+Stack trace:
+#0 {main}
+  thrown in A:\risk_server\project\tbm\ajax_ai_generate.php on line 31

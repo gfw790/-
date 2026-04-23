@@ -1,0 +1,2282 @@
+<!DOCTYPE html>
+<!--[if IE 8]> <html lang="en" class="ie8 no-js"> <![endif]-->
+<!--[if IE 9]> <html lang="en" class="ie9 no-js"> <![endif]-->
+<!--[if !IE]><!-->
+<html lang="ko">
+<!--<![endif]-->
+    <!-- head 시작 -->
+    <head>
+        <title>건설사고 &gt; 사고사례 &gt; 사고사례</title>
+        
+        <link rel="canonical" href="https://www.csi.go.kr/">
+        <meta name="description" content="건설공사 안전관리 종합정보망은 건설공사 안전관리에 필요한 정보를 통합(연계) 관리하고 공동활용을 촉진함으로써 건설현장의 안전을 확보합니다.">
+        <meta property="og:type" content="website">
+		<meta property="og:title" content="건설공사 안전관리 종합정보망">
+		<meta property="og:description" content="건설공사 안전관리 종합정보망은 건설공사 안전관리에 필요한 정보를 통합(연계) 관리하고 공동활용을 촉진함으로써 건설현장의 안전을 확보합니다.">
+		<meta property="og:image" content="https://www.csi.go.kr/com/img/common/header/logo.png">
+		<meta property="og:url" content="https://www.csi.go.kr/">		
+		<meta name="twitter:card" content="summary">
+		<meta name="twitter:title" content="건설공사 안전관리 종합정보망">
+		<meta name="twitter:description" content="건설공사 안전관리 종합정보망은 건설공사 안전관리에 필요한 정보를 통합(연계) 관리하고 공동활용을 촉진함으로써 건설현장의 안전을 확보합니다.">
+		<meta name="twitter:image" content="https://www.csi.go.kr/com/img/common/header/logo.png">
+		<meta name="twitter:domain" content="https://www.csi.go.kr/">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <link rel="shortcut icon" href="/com/favicon.ico" />
+
+        <!-- 공통 -->
+		<link href="/com/plugins/font-awesome/css/font-awesome.css" rel="stylesheet" type="text/css" />
+		<link href="/com/plugins/simple-line-icons/simple-line-icons.css" rel="stylesheet" type="text/css" />
+		<script src="/com/plugins/jquery.min.js" type="text/javascript"></script>
+		<script src="/com/plugins/js.cookie.min.js" type="text/javascript"></script>
+		<script src="/com/js/app.js" type="text/javascript"></script>
+
+		<!-- bootstrap -->
+		<link href="/com/plugins/bootstrap/css/bootstrap.min.css" rel="stylesheet" type="text/css" />
+		<script src="/com/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
+
+		<!-- bootstrap-datepicker -->
+		<link href="/com/plugins/bootstrap-datepicker/css/bootstrap-datepicker3.css" rel="stylesheet" type="text/css" />
+		<link href="/com/plugins/bootstrap-timepicker/css/bootstrap-timepicker.css" rel="stylesheet" type="text/css" />
+		<link href="/com/plugins/bootstrap-datetimepicker/css/bootstrap-datetimepicker.css" rel="stylesheet" type="text/css" />
+		<script src="/com/plugins/bootstrap-datepicker/js/bootstrap-datepicker.js" type="text/javascript"></script>
+		<script src="/com/plugins/bootstrap-datepicker/locales/bootstrap-datepicker.kr.min.js" type="text/javascript"></script>
+		<script src="/com/plugins/bootstrap-timepicker/js/bootstrap-timepicker.js" type="text/javascript"></script>
+		<script src="/com/plugins/bootstrap-datetimepicker/js/bootstrap-datetimepicker.js" type="text/javascript"></script>
+		<script src="/com/plugins/bootstrap-datetimepicker/js/locales/bootstrap-datetimepicker.kr.js" type="text/javascript"></script>
+		<script src="/com/js/bootstrap-datepicker.kr.js" type="text/javascript"></script>
+		<script src="/com/js/components-date-time-pickers.js?ver=1.0" type="text/javascript"></script>
+
+		<!-- bootstrap-fileinput -->
+		<link href="/com/plugins/bootstrap-fileinput/bootstrap-fileinput.css" rel="stylesheet" type="text/css" />
+		<script src="/com/plugins/bootstrap-fileinput/bootstrap-fileinput.js" type="text/javascript"></script>
+
+		<!-- bootstrap-tabdrop -->
+		<script src="/com/plugins/bootstrap-tabdrop/js/bootstrap-tabdrop.js" type="text/javascript"></script>
+		<!-- jstree -->
+		<!-- 
+		<link href="/com/plugins/jstree/dist/themes/default/style.css" rel="stylesheet" type="text/css" />
+		<script src="/com/plugins/jstree/dist/jstree.js" type="text/javascript"></script>
+		<script src="/com/js/ui-tree.js" type="text/javascript"></script>
+ 		-->
+
+		<!-- datatables-managed -->
+		<!-- 
+		<script src="/com/js/datatable.js" type="text/javascript"></script>
+		<script src="/com/plugins/datatables/datatables.min.js" type="text/javascript"></script>
+		<script src="/com/plugins/datatables/plugins/bootstrap/datatables.bootstrap.js" type="text/javascript"></script>
+		<script src="/com/js/table-datatables-managed.min.js" type="text/javascript"></script>
+		-->
+		<!-- bootstrap-touchspin -->
+		<link href="/com/plugins/bootstrap-touchspin/bootstrap.touchspin.css" rel="stylesheet" type="text/css" />
+		<script src="/com/plugins/bootstrap-touchspin/bootstrap.touchspin.js" type="text/javascript"></script>
+		<script src="/com/js/components-bootstrap-touchspin.js" type="text/javascript"></script>
+
+		<!-- bootstrap-switch -->
+		<link href="/com/plugins/bootstrap-switch/css/bootstrap-switch.min.css" rel="stylesheet" type="text/css" />
+		<script src="/com/plugins/bootstrap-switch/js/bootstrap-switch.min.js" type="text/javascript"></script>
+		<script src="/com/js/components-bootstrap-switch.min.js" type="text/javascript"></script>
+
+		<!-- bootstrap-toastr -->
+		<link href="/com/plugins/bootstrap-toastr/toastr.css" rel="stylesheet" type="text/css" />
+		<script src="/com/plugins/bootstrap-toastr/toastr.js" type="text/javascript"></script>
+		<script src="/com/js/ui-toastr.js" type="text/javascript"></script>
+		<!-- jquery-ui -->
+		<script src="/com/plugins/jquery-ui/jquery-ui.min.js" type="text/javascript"></script>
+		<script src="/com/js/ui-modals.js" type="text/javascript"></script>
+
+        <!-- pace-loading -->
+		<script src="/com/plugins/pace-1.0.2/pace.js" type="text/javascript"></script>
+        <link href="/com/plugins/pace-1.0.2/themes/blue/pace-theme-loading-bar.css" rel="stylesheet" type="text/css" />
+        <script type="text/javascript">
+	        paceOptions = {
+	            ajax: true, // enabled
+	            document: true, // enabled
+	            eventLag: false // disabled
+	        };
+	        
+	        $(function() {
+	        	//$(document).ajaxStart(function() { Pace.restart(); });<!-- pace-loading -->
+	        });
+        </script>
+
+		<!-- splitter -->
+		<link href="/com/plugins/jquery-touch-splitter/css/touchsplitter.css" rel="stylesheet" type="text/css" />
+		<script src="/com/plugins/jquery-touch-splitter/js/jquery.touchsplitter.js" type="text/javascript"></script>
+
+		<!-- amcharts -->
+		<script src="/com/plugins/amcharts/amcharts.js" type="text/javascript"></script>
+		<script src="/com/plugins/amcharts/serial.js" type="text/javascript"></script>
+		<script src="/com/plugins/amcharts/pie.js" type="text/javascript"></script>
+		<script src="/com/plugins/amcharts/plugins/export/export.js" type="text/javascript"></script>
+		<script src="/com/plugins/amcharts/themes/light.js" type="text/javascript"></script>
+		<!-- quick-nav -->
+		<script src="/com/js/quick-sidebar.js" type="text/javascript"></script>
+        <script src="/com/js/quick-nav.js" type="text/javascript"></script>
+
+		<!-- jquery-slimscroll -->
+		<script src="/com/plugins/jquery-slimscroll/jquery.slimscroll.min.js" type="text/javascript"></script>
+
+		<!-- FlexSlider -->
+		<link href="/com/plugins/flex-slider-2/css/flexslider.css" rel="stylesheet" type="text/css" />
+		<script src="/com/plugins/flex-slider-2/js/modernizr.js"></script>
+		<script src="/com/plugins/flex-slider-2/js/jquery.flexslider.js"></script>
+		<script src="/com/plugins/flex-slider-2/js/jquery.easing.js"></script>
+		<script src="/com/plugins/flex-slider-2/js/jquery.mousewheel.js"></script>
+		<script src="/com/plugins/flex-slider-2/js/demo.js"></script>
+
+		<!-- layout & themes -->
+		<link href="/com/skin/layout/css/components_compact.css?ver=1.0" rel="stylesheet" id="style_components" type="text/css" />
+		<link href="/com/skin/layout/css/plugins.css?ver=1.0" rel="stylesheet" type="text/css" />
+		<link href="/com/skin/layout/css/layout_compact.css?ver=1.0" rel="stylesheet" type="text/css" />
+		<script src="/com/skin/layout/scripts/layout.js" type="text/javascript"></script>
+
+        <!-- customizing -->
+        <script src="/com/js/common.js" type="text/javascript"></script>
+        <script src="/com/js/commonMsg.js" type="text/javascript"></script>
+		<link href="/com/css/default.css?ver=1.3" rel="stylesheet" type="text/css" />
+		<link href="/com/css/custom.css?ver=1.2" rel="stylesheet" type="text/css" />
+		<link href="/com/css/login.css?ver=1.0" rel="stylesheet" type="text/css" />
+	<!-- main renewal -->
+		<link href="/com/css/main_renewal.css?ver=1.2" rel="stylesheet" type="text/css" />
+		<link href="/com/css/page_search.css?ver=1.0" rel="stylesheet" type="text/css" />
+
+		<!-- sinjin-custom -->
+		<script src="/com/js/jquery.form.js" type="text/javascript"></script>
+		<script src="/com/js/util_common.js?ver=2.6" type="text/javascript"></script>
+		<script src="/com/js/util_datetime.js" type="text/javascript"></script>
+		<script src="/com/js/util_popup.js?ver=1.6" type="text/javascript"></script>
+		<script src="/com/js/util_string.js" type="text/javascript"></script>
+		<script src="/com/js/jquery.table2excel.js" type="text/javascript"></script>
+		
+		<!-- innorix -->
+		<link rel="stylesheet" href="/com/innorix/innorix.css" type="text/css">
+		<script src="/com/innorix/innorix.js" type="text/javascript"></script>
+		<!-- introjs -->
+		<link rel="stylesheet" href="/com/introjs/introjs.min.css" type="text/css">
+		<script src="/com/introjs/intro.min.js" type="text/javascript"></script>
+		<!-- moment -->
+		<script src="/com/js/moment/moment.min.js"></script>
+		<script src="/com/js/moment/ko.js"></script>
+		
+		<!-- 남광식 직원 요청으로 인해 넷퍼넬 해제 처리 26.01.28 요청 -->
+		<!-- 검색엔진 js -->
+		<script src ="/com/js/search/diquest.js"></script>
+
+	    <!-- lodash js -->
+		<script src="/com/js/lodash.min.js" type="text/javascript"></script>
+		<!-- 건설기계 e 마당 관련 -->
+		<script src="/script/cro/equipmentSpec.js?ver=20260424055636" type="text/javascript"></script>
+		<script src="/script/cro/region.js?ver=20260424055636" type="text/javascript"></script>
+		<script src="/script/cro/equipmentSpecEtc.js?ver=20260424055636" type="text/javascript"></script>
+		<script src="/script/cro/cro_common.js?ver=20260424055636" type="text/javascript"></script>
+		<script src="/script/sas/sas.js?ver=20260424055636" type="text/javascript"></script>
+		<!-- 가상계좌 -->
+		<script src="https://js.tosspayments.com/v1/payment"></script>
+		<!-- ========================= 리뉴얼 추가 & 수정 시작 ========================= -->
+		<!-- 상단메뉴 - 20240801 추가 -->
+		<link type="text/css" rel="stylesheet" href="/com/plugins/top-menu/css/menu.css">
+		<script type="text/javascript" src="/com/plugins/top-menu/js/custom.js"></script>
+
+		<!-- 슬라이드 bxslider - 20240801 추가 -->
+		<script type="text/javascript" src="/com/plugins/jquery.bxslider/jquery.bxslider.js"></script>
+		<script type="text/javascript" src="/com/plugins/jquery.bxslider/main.slides.js"></script>
+		<link type="text/css" rel="stylesheet" href="/com/plugins/jquery.bxslider/jquery.bxslider.css">
+
+		<!-- main renewal - 20240801 변경 -->
+		<link href="/com/css/main_renewal_v2.0.css" rel="stylesheet" type="text/css" />
+		<!-- ========================= 리뉴얼 추가 & 수정 끝 ========================= -->
+       
+       	<script language="javascript">
+       		
+       		function moveUrl(){
+				console.log($('#relationSite option:selected').val());
+				if($('#relationSite option:selected').val() != ''){
+					var win = window.open($('#relationSite option:selected').val(), '_blank');
+					win.focus();
+				}
+       		}
+       		
+	       	function noAccess() {
+	       		alert('접근 권한이 없습니다.');
+	       	}
+	       	
+	     // left 메뉴 출력(권한 적용)
+			function fnLeftMenuCreate(systemCd){
+				$.ajax({
+					       url         : "/com/selectLeftMenuAjax.do?system_cd="+systemCd,
+					       contentType : "application/x-www-form-urlencoded;charset=UTF-8",
+					       type        : "post",
+					       dataType    : "json",
+					       data		   : "{}",
+					       success     : function(rstData, status){
+											if(status == "success"){
+												var arrLength = rstData.rtnList.length;
+												var topMenuId = $("#pageSidebarMenu");
+												if(arrLength > 0){
+													
+													var mainMenuId = "";
+													var mainMenuContent = "";
+													var subMenuId = "";
+													var subMenuContent = "";
+													var subMenuArea = "";
+													var DefaultPageUrl = "";
+													var arrowMark = "";
+													var selectYn = "";
+													var activeYn = "";
+													
+													//3레벨 서브메뉴아이디
+													var level2MenuId = "";
+													var thirdMenuId = "";
+													var thirdMenuArea = "";
+													
+													//up level id
+													var level_1_id = "";
+													var level_2_id = "";
+													
+													for (var i=0; i < arrLength; i++) {
+														var rowObj 		= rstData.rtnList[i];
+														
+														if(rowObj.menu_lvl == 1) {
+															
+															if(rowObj.default_page_url != "") {
+																DefaultPageUrl = rowObj.default_page_url;
+															} else {
+																DefaultPageUrl = "javascript:;";
+															}
+															
+															if(rowObj.submenu_cnt > 0) {
+																arrowMark = "<span class='arrow'></span>";															
+															} else {
+																arrowMark = "";
+															}
+															
+															if(rowObj.menu_id=="ACD00158" || rowObj.menu_id=="ACD00147" || rowObj.menu_id=="") {
+																activeYn = "active";
+																//arrowMark = "<span class='arrow open'></span>";
+															} else {
+																activeYn = "";
+															}
+															
+															if(rowObj.popup_yn=="Y") {
+																mainMenuContent = $("<li class='nav-item "+activeYn+"' id='mainMenu"+i+"' style='word-break:keep-all;word-wrap:break-word;'><a href='javascript:open_menuUrl(\""+rowObj.default_page_url+"\");' class='nav-link nav-toggle'><span class='title'>"+rowObj.menu_nm+"</span>"+arrowMark+" <img src='/com/img/common/icon/icon_popup_url.png' alt='icon' width=10 height=10></a></li>");
+															} else {
+																mainMenuContent = $("<li class='nav-item "+activeYn+"' id='mainMenu"+i+"' style='word-break:keep-all;word-wrap:break-word;'><a href='"+DefaultPageUrl+"' class='nav-link nav-toggle'><span class='title'>"+rowObj.menu_nm+"</span>"+arrowMark+"</a></li>");
+															}
+															
+															$(topMenuId).append(mainMenuContent);
+															mainMenuId = $("#mainMenu"+i);
+															
+															if(rowObj.submenu_cnt > 0) {
+																subMenuArea = $("<ul class='sub-menu' id='subMenu"+i+"'></ul>");
+																$(mainMenuId).append(subMenuArea);
+																subMenuId = $("#subMenu"+i);
+															}
+															
+															level_1_id = rowObj.menu_id;
+																
+														} else if(rowObj.menu_lvl == 2) {
+															
+															if(rowObj.default_page_url != "") {
+																DefaultPageUrl = rowObj.default_page_url;
+															} else {
+																DefaultPageUrl = "javascript:;";
+															}
+															
+															if(rowObj.submenu_cnt > 0) {
+																arrowMark = "<span class='arrow'></span>";															
+															} else {
+																arrowMark = "";
+															}
+															
+															if(rowObj.menu_id=="ACD00158" || rowObj.menu_id=="ACD00147" ) {
+																activeYn = "active";
+																selectYn = "selected";
+																if(rowObj.submenu_cnt > 0) arrowMark = "<span class='arrow open'></span>";
+															} else {
+																activeYn = "";
+																selectYn = "";
+															}
+																														
+															if(rowObj.popup_yn=="Y") {
+																subMenuContent = $("<li class='nav-item "+activeYn+"' id='level2Menu"+i+"'><a href='javascript:open_menuUrl(\""+rowObj.default_page_url+"\");' class='nav-link nav-toggle'><span class='title'>"+rowObj.menu_nm+" <img src='/com/img/common/icon/icon_popup_url.png' alt='icon' width=10 height=10></span><span class='"+selectYn+"'></span></a></li>");
+															} else {
+																//subMenuContent = $("<li class='nav-item "+activeYn+"'><a onclick='javascript:href=\""+rowObj.default_page_url+"\"' class='nav-link nav-toggle'><span class='title'>"+rowObj.menu_nm+"</span><span class='"+selectYn+"'></span></a></li>");
+																//ubMenuContent = $("<li class='nav-item "+activeYn+"' id='level2Menu"+i+"'><a href='"+DefaultPageUrl+"' class='nav-link nav-toggle'><span class='title'>"+rowObj.menu_nm+"</span><span class='"+selectYn+"'></span>"+arrowMark+"</a></li>");
+																if(rowObj.menu_id == "CTS00214" || rowObj.menu_id == "CTS00234" || rowObj.menu_id == "CTS00209"){
+																	subMenuContent = $("<li class='nav-item "+activeYn+"' id='level2Menu"+i+"'><a href='"+DefaultPageUrl+"' class='nav-link nav-toggle'  onclick='javascript:go_alert();'><span class='title'>"+rowObj.menu_nm+"</span><span class='"+selectYn+"'></span>"+arrowMark+"</a></li>");
+																}else {
+																	subMenuContent = $("<li class='nav-item "+activeYn+"' id='level2Menu"+i+"'><a href=' "+DefaultPageUrl+" ' class='nav-link nav-toggle'><span class='title'>"+rowObj.menu_nm+"</span><span class='"+selectYn+"'></span>"+arrowMark+"</a></li>");
+																} 
+															}
+															
+															$(subMenuId).append(subMenuContent);
+															level2MenuId = $("#level2Menu"+i);
+															
+															if(rowObj.submenu_cnt > 0) {
+																//thirdMenuArea = $("<ul class='sub-menu' id='thirdMenu"+i+"'></ul>");
+																thirdMenuArea = $("<ul class='sub-menu sub-menu-depth3' id='thirdMenu"+i+"' style='padding-top: 0px; padding-bottom: 0px;'></ul>");
+																$(level2MenuId).append(thirdMenuArea);
+																thirdMenuId = $("#thirdMenu"+i);
+															}
+																														
+														} else if(rowObj.menu_lvl == 3) {
+															
+															if(rowObj.menu_id=="ACD00158") {
+																activeYn = "active";
+																selectYn = "selected";
+															} else {
+																activeYn = "";
+																selectYn = "";
+															} 
+															
+															if(rowObj.popup_yn=="Y") {
+																//subMenuContent = $("<li class='nav-item "+activeYn+" padL20'><a href='javascript:open_menuUrl(\""+rowObj.default_page_url+"\");' class='nav-link nav-toggle'><span class='title'>"+rowObj.menu_nm+" <img src='/com/img/common/icon/icon_popup_url.png' alt='icon' width=10 height=10></span><span class='"+selectYn+"'></span></a></li>");
+																subMenuContent = $("<li class='nav-item "+activeYn+"'><a href='javascript:open_menuUrl(\""+rowObj.default_page_url+"\");' class='nav-link nav-toggle'><span class='title'>"+rowObj.menu_nm+" <img src='/com/img/common/icon/icon_popup_url.png' alt='icon' width=10 height=10></span><span class='"+selectYn+"'></span></a></li>");
+															} else {
+																//subMenuContent = $("<li class='nav-item "+activeYn+" padL20'><a onclick='javascript:href=\""+rowObj.default_page_url+"\"' class='nav-link nav-toggle'><span class='title'>"+rowObj.menu_nm+"</span><span class='"+selectYn+"'></span></a></li>");
+																subMenuContent = $("<li class='nav-item "+activeYn+"'><a href='"+rowObj.default_page_url+"' class='nav-link nav-toggle'><span class='title'>"+rowObj.menu_nm+"</span><span class='"+selectYn+"'></span></a></li>");
+															}
+															
+															//$(subMenuId).append(subMenuContent);
+															$(thirdMenuId).append(subMenuContent);
+															
+														}
+										                
+													}
+												}
+											}else{
+												alert('서버와 통신중 오류가 발생하였습니다.');
+											}
+											
+											//contentWrapper 최소높이값 조정
+											//console.log("page-sidebar-wrapper height="+$(".page-sidebar-wrapper").height());
+											//console.log("contentWrapper height="+$(".contentWrapper").height());											
+											var sidebar_height = 0;
+											var contentWrapper_height = 0;
+											
+											if($(".page-sidebar-wrapper").length > 0) sidebar_height = parseInt($(".page-sidebar-wrapper").height());
+											 
+											if($(".contentWrapper").length > 0){												
+												contentWrapper_height = parseInt($(".contentWrapper").height());											
+												if( sidebar_height > contentWrapper_height ){
+													$(".contentWrapper").css('min-height',sidebar_height+'px');
+												}
+											}
+											
+						   				 }
+				});	
+			}
+	     
+			// TOP 메뉴 타이틀 출력
+			function fnTopMenuTitleCreate(schBool){
+				$.ajax({
+					       url         : "/com/selectTopMenuTitleAjax.do?schBool="+schBool,
+					       contentType : "application/x-www-form-urlencoded;charset=UTF-8",
+					       type        : "post",
+					       dataType    : "json",
+					       data		   : "{}",
+					       success     : function(rstData, status){
+											if(status == "success"){
+												var arrLength = rstData.rtnList.length;
+												if(arrLength > 0){
+													
+													var topMenuTitleId = "";
+													var topMenuTitle = "";
+													var topMenuUrl = "#";
+
+													for (var i=0; i < arrLength; i++) {
+														var rowObj 		= rstData.rtnList[i];
+														
+														if(rowObj.top_menu_url != "") {
+															topMenuUrl = rowObj.top_menu_url;
+														}
+														
+														topMenuTitleId = $("#title_"+rowObj.system_cd);
+														var className = "";
+														
+														if("false" == schBool){
+															if(rowObj.system_cd == "ACD"){
+																className = "active";
+															}
+															
+															var classGap = "";
+															if(className!="") {
+																classGap = " ";
+															}
+															if(rowObj.system_nm.length > 8) {
+																className = className+classGap+"font-transform-scaleY";
+															}
+
+															topMenuTitle = $("<a href='"+topMenuUrl+"' id='mainMenuLnk' class='"+className+"'>"+rowObj.system_nm+"</a>");
+															
+														}else{
+															if(rowObj.system_cd == "ACD00158"){
+																
+																$(topMenuTitleId).addClass("active");
+															}
+															topMenuTitle = $("<a href='"+topMenuUrl+"' id='mainMenuLnk' class='"+className+"'>"+rowObj.system_nm+"</a>");
+															
+														}
+														// 추가 e-마당 강조
+														if(rowObj.system_cd == "CRO") {
+															topMenuTitle = $("<a href='"+topMenuUrl+"' id='mainMenuLnk' class='textY'>"+rowObj.system_nm+"</a>");
+														}
+
+														$(topMenuTitleId).append(topMenuTitle);
+														
+														topMenuTitleId = "";
+														topMenuTitle = "";
+													}
+												}
+											}else{
+												alert('서버와 통신중 오류가 발생하였습니다.');
+											}
+						   				 }
+				});	
+			}
+			
+			
+			// TOP 메뉴 타이틀 출력
+			function fnSearchTopMenuTitleCreate(userId, schBool){
+				$.ajax({
+					       url         : "/com/selectTopMenuTitleAjax.do?schBool="+schBool,
+					       contentType : "application/x-www-form-urlencoded;charset=UTF-8",
+					       type        : "post",
+					       dataType    : "json",
+					       data		   : "{}",
+					       success     : function(rstData, status){
+											if(status == "success"){
+												var arrLength = rstData.rtnList.length;
+												if(arrLength > 0){
+													
+													var topMenuTitleId = "";
+													var topMenuTitle = "";
+													var topMenuUrl = "#";
+
+													for (var i=0; i < arrLength; i++) {
+														var rowObj 		= rstData.rtnList[i];
+														
+														if(rowObj.top_menu_url != "") {
+															topMenuUrl = rowObj.top_menu_url;
+														}
+														
+														
+														topMenuTitleId = $("#title_"+rowObj.system_cd);
+														
+														var className = "";
+														
+														if("false" == schBool){
+															if(rowObj.system_cd == "ACD"){
+																className = "active";
+																
+															}
+															
+															var classGap = "";
+															if(className!="") {
+																classGap = " ";
+															}
+															if(rowObj.system_nm.length > 8) {
+																className = className+classGap+"font-transform-scaleY";
+															}
+															topMenuTitle = $("<a href='javascript:goSearchCategory(\""+topMenuUrl+"\",\""+rowObj.system_cd+"\");' class='"+className+"'"+rowObj.system_nm+"</a>");
+															
+														}else{
+															if(rowObj.system_cd == "ACD00158"){
+									
+																$(topMenuTitleId).addClass("active");
+															}
+															topMenuTitle = $("<a href='javascript:goSearchCategory(\""+topMenuUrl+"\",\""+rowObj.system_cd+"\");' class='"+className+"'>"+rowObj.system_nm+"</a>");
+														}
+
+														$(topMenuTitleId).append(topMenuTitle);
+														
+														topMenuTitleId = "";
+														topMenuTitle = "";
+													}
+												}
+											}else{
+												alert('서버와 통신중 오류가 발생하였습니다.');
+											}
+						   				 }
+				});	
+			}
+			
+			// TOP 메뉴 출력(권한 적용)
+			function fnTopMenuCreate(){
+				$.ajax({
+					       url         : "/com/selectTopMenuAjax.do",
+					       contentType : "application/x-www-form-urlencoded;charset=UTF-8",
+					       type        : "post",
+					       dataType    : "json",
+					       data		   : "{}",
+					       success     : function(rstData, status){
+					    	   
+											if(status == "success"){
+												var arrLength = rstData.rtnList.length;
+												if(arrLength > 0){
+													
+													var menuName = "";
+													var menuUrl = "";
+													var topMenuContent = "";
+													var topMenuId;
+													var topMenuTitleId;
+													
+													for (var i=0; i < arrLength; i++) {
+														var rowObj 		= rstData.rtnList[i];
+														topMenuId = $("#"+rowObj.system_cd);
+														
+														menuUrl = rowObj.menu_url;
+														menuName = rowObj.menu_nm;
+														
+														if(menuUrl=="") {
+															//topMenuContent = $("<li style='list-style-type:none;'><a href='javascript:noAccess();' style='color:#CFCFCF;'>"+menuName+"</a></li>");
+															topMenuContent = "";
+														} else {
+															if(rowObj.popup_yn=="Y") {
+																topMenuContent = $("<li style='list-style-type:none;word-break:keep-all;word-wrap:break-word;'><a href='javascript:open_menuUrl(\""+menuUrl+"\");' id='subMenuLnk'>"+menuName+" <img src='/com/img/common/icon/icon_popup_url.png' alt='icon' width=10 height=10></a></li>");
+															} else {
+																topMenuContent = $("<li style='list-style-type:none;word-break:keep-all;word-wrap:break-word;'><a href='"+menuUrl+"' id='subMenuLnk'>"+menuName+"</a></li>");
+															}
+														}
+														
+														$(topMenuId).append(topMenuContent);
+
+														topMenuId = "";
+														topMenuContent = "";
+													}
+												}
+											}else{
+												alert('서버와 통신중 오류가 발생하였습니다.');
+											}
+						   				 }
+				});	
+			}
+			
+			// TOP 메뉴 타이틀 출력
+			function fnMsgUnreadCount(){
+				$.ajax({
+					       url         : "/com/selectMsgUnreadCountAjax.do",
+					       contentType : "application/x-www-form-urlencoded;charset=UTF-8",
+					       type        : "post",
+					       dataType    : "json",
+					       data		   : "{}",
+					       success     : function(rstData, status){
+											if(status == "success"){
+												if(rstData.msgUnreadCount!="0"){
+													$('#msgCount').html("쪽지도착("+rstData.msgUnreadCount+"건)");
+													$('#msgCount').addClass("textR");
+													$('#msgCount').addClass("font-bold");
+												}
+											}else{
+												alert('서버와 통신중 오류가 발생하였습니다.');
+											}
+						   				 }
+				});	
+			}
+
+			function go_login(flag) {
+				document.loginForm.target = '_self';
+				document.loginForm.action = '/com/loginProc.do';
+				document.loginForm.submit();
+			}
+			
+			function go_logout(flag) {
+				document.logoutForm.target = '_self';
+				document.logoutForm.action = '/com/logoutProc.do';
+				document.logoutForm.submit();
+			}
+		
+			function go_myInfo() {
+				document.location.href="/por/myInfo.do";
+			}
+			
+			function go_MyMsg() {
+				var url ="/por/myMsgReceive.do";
+				
+				document.location.href= url;
+			}
+			
+			function go_admin() {
+				window.open("http://www.csi.go.kr:8081/adm/index.do");
+			}
+			
+			function go_sitemap() {
+				alert("구성중");
+				//document.location.href="/por/sitemap.do";
+			}
+			
+			function go_alert() {
+				alert("로딩에 시간이 소요되는 페이지입니다. \n한번만 클릭하고 기다려주세요.");
+			}
+			
+			function open_menuUrl(url) {
+				window.open(url,"_blank","");
+			}
+			
+			function go_menuUrl(url) {
+				window.open(url,"_self","");
+			}
+			
+			// SSO 기능 접근 (이관용)
+			function go_menuSSO(url) {
+			    let scrWidth = screen.width;
+			    let scrHeight = screen.height;
+				if(url.indexOf('cts') > 0 || url.indexOf('dfs') > 0){
+				    if('false' == 'true'){
+                        $.ajax({
+                            type : "GET",
+                            url : "/com/ssoCodeProc.do",
+                            data : {"userId" : ''},
+                            async : false,
+                            //dataType    : "json",
+                            error : function(err){
+                                console.log(err);
+                            },
+                            success : function(rstData, status){
+                                let ssoCode = rstData;
+								//아래 도메인에 연결하려는 시스템쪽 sso로그인 url 설정 필요(하드코딩 or 프로퍼티). next_url없으면 메인화면으로 이동.
+                                let newCsiUrl = "https://gcloud.csi.go.kr/com/ssoLoginProc.do?sso_code="+ssoCode+"&next_url="+url;
+                                window.open(newCsiUrl, '_blank');
+                            }
+                        });
+				    }else{
+				        alert("로그인을 먼저 진행해주세요.");
+				        return false;
+				    }
+				}else{
+    				window.open(url,"_self","");
+				}
+			}
+			
+			
+			function open_editpwd() {
+				window.open("/por/findUserCertiPop.do",'findIdPw','width=400,height=400,menubar=no,toolbar=no,scrollbars=yes,resizable=yes');	
+			}
+			 
+			function open_dashboard() {
+				jQuery("<form target='_blank' method='post' action='/dashboard.do'></form>").appendTo('body').submit().remove();
+			}
+			
+			$(function () {
+				$(".detail-search-btn").detailSch();	// 통합검색 상세옵션보기
+				$(".total-search-bar").selectSch();		// 통합검색 흰트 상세옵션보기
+			});
+
+			// 상세 검색 - Show / Hide
+			$.fn.detailSch = function () {
+				return this.each(function () {
+					var $obj = $(this),
+						$tgt = $(".detail-option-wrapper")					
+						$tgtPage = $(".top-total-search")
+					;
+
+					$obj.on("click", function () {
+						if (!$obj.hasClass("on")) {
+							$obj.addClass("on");
+							$tgt.addClass("on");
+							$tgtPage.addClass("detail-option-active");
+						} else {
+							$obj.removeClass("on");
+							$tgt.removeClass("on");
+							$tgtPage.removeClass("detail-option-active");
+						}
+					});
+
+					$tgt.find(".btn-close").on("click", function () {
+						$obj.removeClass("on");
+						$tgt.removeClass("on");
+						$tgtPage.removeClass("detail-option-active");
+					});
+				});
+			};
+
+			// 통합검색 흰트 - Show / Hide
+			$.fn.selectSch = function () {
+				return this.each(function () {
+					var $obj = $(this),
+						$tgt = $(".search-select")
+					;
+
+					$obj.on("click", function () {
+						if (!$tgt.hasClass("on")) {
+							$tgt.addClass("on");
+						} else {
+							$tgt.removeClass("on");
+						}
+					});
+
+					$obj.on("focusout", function () {
+						if ($tgt.hasClass("on")) {
+							$tgt.removeClass("on");
+						}
+					});
+				});
+			};
+			
+			
+			//통합검색
+			function go_sch_search(){
+			
+			var searchTerm = $("#searchTerm").val().replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll("&", "&amp;").replaceAll("\"", "&quot;").replaceAll("'", "&apos;").replaceAll("\\(", "").replaceAll("\\)", "");
+				
+			setCookie("diquest",searchTerm); //최근검색어 추가
+			
+			var chkArray = new Array(); // 배열 선언
+			
+			if($('#chk_all').is(':checked')){
+					$("#searchRange").val('all');
+				}else{
+					$('input:checkbox[name=rangeCheck]:checked').each(function() { // 체크된 체크박스의 value 값을 가지고 온다.
+			            chkArray.push(this.value);
+			        });
+			        $('#searchRange').val(chkArray);
+				}
+				
+				var order = $('input[name=radioInline]:checked').val();
+				
+				$("#order").val(order); 
+				$("#searchType").val('');
+				$("#check").val('2');
+				$('#diquestForm').attr('action', '/search/schTotalList.do');
+				$('#diquestForm').attr('target', '_blank');
+				$('#diquestForm').submit();
+				
+			}
+			
+			//최근검색어,인기검색어 자동완성 누르고 검색
+			function keywordSearch(searchTerm) {
+
+				setCookie("diquest",$("#searchTerm").val()); //최근검색어 추가
+				$("#searchTerm").val(searchTerm);
+				
+				go_sch_search();
+			}
+			
+			//자동완성
+			var index=0;
+			function autoCompletes(event){
+				var originTag = $("#searchTerm").val();
+				var code = event.keyCode; //키보드 이벤트 키 값
+				
+				var checkCount =0;
+				
+				
+				if(code!=40 && code!=38 &&code!=13){
+					//alert($("#searchTerm").val());
+					$.ajax({
+						type : "GET",
+				        url : "/search/autoCompleteAjax.do",
+				        data : {"keyword" :$("#searchTerm").val()},
+				        async : false,
+				        dataType    : "json",
+				        error : function(){
+				   
+				        },
+				        success : function(rstData, status){
+							var text = "";
+							text += "<ul>";
+							
+							var arrLength = rstData.rtnList.length;
+				        	if(arrLength > 0){
+								
+								var keyword = "";
+								var count = "";
+							
+								
+								for (var i=0; i < arrLength; i++) {
+									var rowObj 		= rstData.rtnList[i];
+									
+									keyword = rowObj.keyword;
+									count = rowObj.count;
+									
+									
+									checkCount = arrLength+1;
+									
+									text +="<li><a href='javascript:void(0);' onclick='keywordSearch(\""+keyword+"\")';>"+keyword+"</a></li>"
+									
+									//text += "<li><a href='javascript:void(0);' onclick='keywordSearch(";
+									//text +=  '"'+keyword+'"';
+									//text += ");";
+									
+								}
+								
+							}else{
+								text = "<li>검색 결과가 없습니다.</li>";
+							}
+				        	text += "<ul>";
+				        	
+				        	$("#search-select").html(text) ;
+				        }
+				         
+				    });
+				}
+				
+				
+				var len = $("#search-select > ul > li").length;//검색된 리스트 수
+				
+				
+				if(len>0){  //검색결과가 하나라도 있는 경우
+					var start = index;
+					if(code ==40){    //아래방향키 눌렀을 때
+						index++;
+						if(index > len){  //마지막 인덱스 까지 간 경우
+							
+							$("#search-select > ul > li:nth-child("+(index-1)+")").css('background-color','');
+							
+							index = 0;
+							$("input[name=searchTerm]").val(originTag);  //검색창에 처음 입력한 검색값을 넣는다.
+							return;
+						}else{
+							if(index>=0){ //정상적인 경우
+								var tagName = $.trim($("#search-select > ul > li:nth-child("+index+") a").text());
+								$("input[name=searchTerm]").val(tagName);
+								$("#search-select > ul > li:nth-child("+index+")").css('background-color','#D5D5D5');
+								$("#search-select > ul > li:nth-child("+(index-1)+")").css('background-color','');
+								
+								
+							}
+							//index++;
+							
+						}
+					}else if(code==38){
+						index--;
+						if(index==0){
+							$("input[name=searchTerm]").val(originTag);
+							$("#search-select > ul > li:nth-child("+(index+1)+")").css('background-color','');
+						}else{
+							if(index<0){
+								index = len+1;
+							}else{
+								var tagName = $.trim($("#search-select > ul > li:nth-child("+index+") a").text());
+								$("input[name=searchTerm]").val(tagName);
+								$("#search-select > ul > li:nth-child("+index+")").css('background-color','#D5D5D5');
+								$("#search-select > ul > li:nth-child("+(index+1)+")").css('background-color','');
+							}
+						}
+						
+					}
+				}
+
+			}
+
+			
+		</script>
+		
+		
+		<script language="javascript"> <!-- LDB, 210621 추가, 세션 타임아웃에 따른 자동 로그아웃 -->
+			var time;
+			
+			$(function() {
+				var toMd = ""
+				    toMd +="	<div class='modal fade' id='timeOutModal' data-backdrop='static' data-keyboard='false' style='display: none;'>"
+					toMd +="	<div class='modal-dialog' style='width:520px;'>"
+					toMd +="		<div class='modal-content'>"
+					toMd +="			<div class='modal-header'>"
+					toMd +="				<h4 class='modal-title'>로그아웃 알림</h4>"
+					toMd +="			</div>"
+					toMd +="			<div class='modal-body'>"
+					toMd +="				<div class='table-top-control'>"
+					toMd +="					<!-- 알림 시작 -->"
+					toMd +="					<div class='notice-view'>"
+					toMd +="						<img class='notice-view-ico' src='/com/img/common/icon/ico_view_notice.png' alt='notice'>"
+					toMd +="						<span>장시간 사용하지 않아 </span><span id='timeoutView' class='textR'></span><span>초 후 자동 로그아웃됩니다. </span>"
+					toMd +="					</div>"
+					toMd +="				</div>"
+					toMd +="				<div class='modal-footer'>"
+					toMd +="					<button type='button' class='btn btn-danger' data-dismiss='modal' onclick='timeOutModal_choice(`r`);'>연장</button>"
+					toMd +="					<button type='button' class='btn dark btn-outline' data-dismiss='modal' onclick='timeOutModal_choice(`c`);'>로그아웃</button>"
+					toMd +="				</div>"
+					toMd +="			</div>"
+					toMd +="		</div>"
+					toMd +="	</div>"
+					toMd +="</div>"
+				
+				$("body").append(toMd);
+			
+				if(false) {
+					time = 5400 -400;
+					var timer = setInterval(function() {
+					
+						time--;
+						if(time == 300) {
+							go_timeOutModal();
+						}
+						
+						$("#timeoutView").html(time);
+						
+						if(time == 0) {
+							clearInterval(timer);
+							autoLogout();						
+						}
+					}, 1000);
+					
+				}
+				
+			});
+			
+			function timeOutModal_choice(type) {
+				if(type == 'r') {
+					
+					$.ajax({
+	                    type: "post",
+	                    url: "/com/extSesTimeAjax.do",
+	                    data: "",
+	                    success: function (data) {
+	                    	time = 5400 -400;
+	                    },
+	                    error: function (error) {
+	                    	alert("에러");
+	                        go_logout();
+	                    }
+	                });
+				} else if (type == 'c') {
+					go_logout();
+				}
+			}
+			
+			function go_timeOutModal() {
+				$("#timeOutModal").modal();
+			}
+			
+			
+			function autoLogout() {
+				$.ajax({
+                    type: "post",
+                    url: "/com/autoLogoutAjax.do",
+                    data: "",
+                    success: function (data) {
+                        if(data.isOk == "Y") {
+                        	alert("장시간 사용하지 않아 접속이 차단되었습니다. 재로그인 후 사용하시기 바랍니다.");
+                        	$("#timeOutModal").modal("hide");
+                        	window.location.href = '/index.do';
+                        } else {
+                        	go_logout();
+                        }
+                    },
+                    error: function (error) {
+                        go_logout();
+                    }
+                });
+			}
+			
+		</script>
+<script language="javascript">
+       	
+	       	$(document).ready(function(){
+	    		$('#page_title').html("사고사례");
+	    		$('#page_desc').html("사고사례 목록 및 검색");
+	    		
+	    		fnTopMenuTitleCreate("false");
+	    		fnTopMenuCreate();
+	    		fnLeftMenuCreate("ACD");
+	    		if(""!="") {
+	    			fnMsgUnreadCount();
+	    		}
+	    		
+	    		/* 날짜 시작일 종료일 체크(테스트중)
+
+	    		var start_date_div = $('#start_ymd');//document.getElementById('start_ymd');
+	    		var end_date_div = $('#end_ymd');//document.getElementById('end_ymd');
+	    		
+	    		if(start_date_div != null && end_date_div != null) {
+	    			
+	    		    if($('#start_ymd').val()!="") {
+	    		    	alert("2:"+$("#start_ymd").val());
+	    		    	$('.date-picker').datepicker();
+	    		    	$('.date-picker').datepicker("option", "minDate", $("#start_ymd").val());
+	    		    	$('.date-picker').datepicker("option", "onClose", function ( selectedDate ) {
+	    		    		$('.date-picker').datepicker( "option", "maxDate", selectedDate );
+		    		    });
+	    		    	
+	    		    }
+	    		    
+	    		    if($('#end_ymd').val()!="") {
+	    		    	alert("3:"+$("#end_ymd").val());
+	    		    	$('.date-picker').datepicker();
+		    			$('.date-picker').datepicker("option", "maxDate", $("#end_ymd").val());
+		    		    $('.date-picker').datepicker("option", "onClose", function ( selectedDate ) {
+		    		    	$('.date-picker').datepicker( "option", "minDate", selectedDate );
+		    		    });
+	    		    }
+
+		    		$('#start_ymd').on('change', function() {
+		    			alert("4:"+$("#start_ymd").val());
+		    			$('.date-picker').datepicker();
+		    			$('.date-picker').datepicker("option", "minDate", $("#start_ymd").val());
+		    			$('.date-picker').datepicker("option", "onClose", function ( selectedDate ) {
+		    				$('.date-picker').datepicker( "option", "maxDate", selectedDate );
+		    		    });
+		    		});
+		    		
+		    		$('#end_ymd').on('change', function() {
+		    			alert("5:"+$("#end_ymd").val());
+		    			$('.date-picker').datepicker();
+		    			$('.date-picker').datepicker("option", "maxDate", $("#end_ymd").val());
+		    			$('.date-picker').datepicker("option", "onClose", function ( selectedDate ) {
+		    				$('.date-picker').datepicker( "option", "minDate", selectedDate );
+		    		    });
+		    		});
+	    		}
+	    		*/
+	    		
+	    	});
+	       	
+       	
+		</script>
+    </head>
+    <!-- head 끝 -->
+   	 
+	<body class="page-content-white page-front page-renewal top-total-search" onKeyUp="tabKeyEvent()"> <!-- 가로 꽉찬화면은 class="page-full-screen"를 추가합니다. -->
+<!-- skip To Content 시작 -->
+	<div id="skipToContent" tabindex="-999">
+		<a href="#content">본문 바로가기</a>
+	</div>
+	<script>
+		$('#skipToContent a').on('focus', function(){
+			$(this).stop().animate({"top":0, "opacity":1});
+		});
+		$('#skipToContent a').on('click', function(){
+			$(this).stop().animate({"top":"-30px", "opacity":0});
+		});
+		$('#skipToContent a').on('focusout', function(){
+			$(this).stop().animate({"top":"-30px", "opacity":0});
+		});
+		
+		function tabKeyEvent() {
+			var focuElm = document.activeElement.id;
+			var code = event.charCode || event.keyCode;
+			
+			//alert(focuElm+"/"+code);
+			
+			/* if((focuElm == "mainMenuLnk" || focuElm == "subMenuLnk") && code == "9") {
+				if(!document.getElementById("subMenu").classList.contains('on')) {
+					document.getElementById("subMenu").className += ' on';	
+				} 
+			} else {
+				if(document.getElementById("subMenu").classList.contains('on')) {
+					document.getElementById("subMenu").classList.remove('on');	
+				}
+			} */
+
+		}
+		
+	</script>
+	<!-- skip To Content 끝 -->
+		<div class="page-wrapper">
+		
+			<!-- 글로벌 시작 -->
+			<div class="page-header navbar navbar-fixed-top">
+			
+				<div class="page-header-inner">
+				
+					<div class="page-logo">
+						<a href="/index.do">
+							<span class="logo-default"><img src="/com/img/main_renewal/header/logo.png" alt="건설공사안전관리종합정보망 로고"></span>
+						</a>
+					</div>
+					
+					<!-- 홈으로 가기 시작 -->
+					<div class="quality-btn-group">
+						<a href="http://www.csi.go.kr/cmq/index.do" class="quality-btn ico-btn-l ico-arrow">건설품질 바로가기</a>
+					</div>
+					<!-- 홈으로 가기 끝 -->
+					
+				<!-- 로그아웃 했을때 시작 -->
+					<div class="top-menu">
+					<form name="loginForm" id="loginForm" action="#" method="post">
+					<input type="hidden" id="bbs_id" 		name="bbs_id" 		value="">
+					<input type="hidden" id="bbt_no" 		name="bbt_no" 		value="">
+					<input type="hidden" id="case_no" 	 	name="case_no" 		value="">
+					<input type="hidden" id="nextUrl"       name="nextUrl"      value="/acd/acdCaseList.do">
+						<ul class="nav navbar-nav pull-right">
+							<li class="dropdown dropdown-extended dropdown-user">
+								<div class="form-inline">
+									<div class="form-group">
+										<label for="user_id" class="control-label visible-ie8 visible-ie9">아이디</label>
+										<div class="input-icon">
+											<i class="fa fa-user"></i>
+											<input class="form-control" type="text" autocomplete="off" placeholder="아이디" name="user_id" id="user_id" value="" maxlength="20" style="width: 120px;">
+										</div>
+									</div>
+									<div class="form-group">
+										<label for="pswd" class="control-label visible-ie8 visible-ie9">비밀번호</label>
+										<div class="input-icon">
+											<i class="fa fa-lock"></i>
+											<input class="form-control" type="password" autocomplete="off" placeholder="비밀번호" name="pswd" id="pswd" value="" onkeydown="if (event.keyCode == 13) go_login('N')" style="width: 120px;">
+										</div>
+									</div>
+								</div>
+							</li>
+							<li class="dropdown dropdown-extended dropdown-inbox"><a class="login-btn" href="javascript:go_login('N')">로그인</a></li>
+							<li class="dropdown dropdown-extended dropdown-inbox"><a class="user-btn" href="/por/realNameCerti.do">회원가입</a></li>
+							<li class="dropdown dropdown-extended dropdown-inbox"><a class="idpw-btn" href="" onclick="open_editpwd()">아이디/비밀번호 찾기</a></li>
+							<li class="dropdown dropdown-extended dropdown-inbox">
+								<a href="/por/about004.do" class="dropdown-toggle top-btn btn-sitemap">사이트맵</a>
+							</li>
+						</ul>
+						</form>
+					</div>
+					<!-- 로그아웃 했을때 끝 -->
+				<form name="diquestForm" id="diquestForm" method="post">
+						
+						<input type="hidden" name="order" value="" id ="order"/>
+						<input type="hidden" name="searchType" id="searchType" value="">
+						<input type="hidden" name="researchKeyword" value="" >
+						<input type="hidden" name="researchCheck" value="" id="check" >
+						<input type="hidden" name="researchWatchKeyword" value="">
+						<!-- 통합검색 시작 -->
+						<div class="total-search-wrapper">
+							<div class="input-group">
+								<input type="text" class="form-control total-search-bar" onkeyup="autoCompletes(event);" onclick="autoCompletes(event);" placeholder="검색어를 입력하세요." name="searchTerm" title="통합검색입력창" aria-label="통합검색입력창" onkeydown="if(event.keyCode == 13) go_sch_search();" autocomplete="off" id="searchTerm" value="">
+								<span class="input-group-btn">
+									<button class="btn search-btn" type="button" onclick="go_sch_search()" title="통합검색버튼" aria-label="통합검색버튼"><i class="fa fa-search" aria-hidden="true"></i></button>
+								</span>
+							</div>
+							<div class="detail-search-wrapper">
+								<div class="form-inline">
+									<div class="form-group">
+										<label class="mt-checkbox-outline">
+											&nbsp;&nbsp;<input type="checkbox" value="1" name="researchFlag"> 결과내 검색
+										</label>
+									</div>
+									<div class="form-group">
+										<button type="button" class="btn dark detail-search-btn" onclick="javascript:;">상세검색</button>
+									</div>
+								</div>
+							</div>
+							<!-- 통합검색 흰트 시작 -->
+							<div class="search-layer">
+								<div class="search-select" id="search-select">
+									
+								</div>
+							</div>
+							<!-- 통합검색 흰트 끝 -->
+						</div>
+						<!-- 통합검색 끝 -->
+	
+						<!-- 상세검색 시작 -->
+						<div class="detail-option-wrapper">
+							<table class="table">
+								<colgroup>
+									<col class="W20">
+									<col class="WAuto">
+								</colgroup>
+								<tbody>
+									<tr>
+										<td class="td-head">검색범위</td>
+										<td class="t-left">
+											
+											<div class="mt-checkbox-inline">
+												<input type="hidden" value="" name="searchRange" id="searchRange">
+											<label class="mt-checkbox mt-checkbox-outline">
+												<input type="checkbox" value="all"  id="chk_all"  > 전체
+												<span></span>
+											</label>
+											<label class="mt-checkbox mt-checkbox-outline">
+												<input type="checkbox" value="TITLE"  class="chk" name="rangeCheck"   > 제목
+												<span></span>
+											</label>
+											<label class="mt-checkbox mt-checkbox-outline">
+												<input type="checkbox" value="CONTENT" class="chk" name="rangeCheck"  > 내용
+												<span></span>
+											</label>
+											<label class="mt-checkbox mt-checkbox-outline">
+												<input type="checkbox" value="FILE" class="chk" name="rangeCheck"  > 첨부파일
+												<span></span>
+											</label>
+											<label class="mt-checkbox mt-checkbox-outline">
+												<input type="checkbox" value="USER" class="chk"  name="rangeCheck"  > 등록자
+												<span></span>
+											</label>
+											</div>
+										</td>
+									</tr>
+									<tr>
+										<td class="td-head">검색기간</td>
+										<td class="t-left">
+											<div class="form-inline">
+												<div class="form-group">
+													<div class="form-inline">
+														<div class="input-group input-medium date date-picker" data-date="" data-date-format="yyyy-mm-dd" data-date-viewmode="years">
+															<input type="text" id="note_ymd_from" name="note_ymd_from" value="" title="시작일" class="form-control tYMD">
+															<span class="input-group-btn"> 
+																<button class="btn dark" type="button" aria-label="시작일-달력선택">
+																	<i class="fa fa-calendar" aria-hidden="true"></i>
+																</button>
+															</span>
+														</div>
+														<span> ~ </span>
+														<div class="input-group input-medium date date-picker" data-date="" data-date-format="yyyy-mm-dd" data-date-viewmode="years">
+															<input type="text" id="note_ymd_to" name="note_ymd_to" value="" title="종료일" class="form-control tYMD" >
+															<span class="input-group-btn">
+																<button class="btn dark" type="button" aria-label="종료일-달력선택">
+																	<i class="fa fa-calendar" aria-hidden="true"></i>
+																</button>
+															</span>
+														</div>
+													</div>
+												</div>
+											<button class="btn dark" type="button" onclick="dayCheck('oneWeek');" >1주일</button>
+											<button class="btn dark" type="button" onclick="dayCheck('oneMonth');" >1개월</button>
+											<button class="btn dark" type="button" onclick="dayCheck('threeMonth');" >3개월</button>
+											</div>
+										</td>
+									</tr>
+									<tr>
+									<td class="td-head">검색방법</td>
+									<td class="t-left">
+										<div class="mt-radio-inline">
+											<label class="mt-radio mt-radio-outline">
+												<input type="radio" name="searchRadioInline" value="or"  > 하나라도 포함된 결과(OR)
+												<span></span>
+											</label>
+											<label class="mt-radio mt-radio-outline">
+												<input type="radio" name="searchRadioInline" value="and"  > 모두 포함된 결과(AND)
+												<span></span>
+											</label>
+										</div>
+									</td>
+								</tr>
+								</tbody>
+							</table>
+	
+							<div class="close-btn-group">
+								<button type="button" class="btn btn-close" aria-label="닫기버튼"><img src="/com/img/common/icon/remove-icon-small.png" alt="닫기버튼">닫기</button>
+							</div>
+	
+						</div>
+						<!-- 상세검색 끝 -->
+					</form>
+					<!-- 메뉴 시작 -->
+					<div class="nav-header-bg"></div>
+					<div class="navbar-collapse-wrapper">
+						<div id="navbar" class="navbar-collapse collapse">
+							<ul class="nav navbar-nav">
+								<li class="dropdown"> <!-- 메뉴 활성화는 class="active"를 추가 합니다.  -->
+									<a href=""  onclick="go_menuUrl('/por/about001.do');"  class="dropdown-toggle js-activated" data-toggle="dropdown">통합포털</a>
+									
+										<ul class="dropdown-menu">
+											<li class="dropdown-menu-li">
+												<div class="menu-content">
+													<div class="menu-item-title">
+														<span class="title-text">통합포털</span>
+															</div>
+													<div class="menu-item">  
+														<ul class="menu-item-2dep">
+															<li>
+																<a href="/por/about001.do"  Style="font-size: 14px;"><span>건설공사 안전관리 종합정보망은?</span></a><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																<ul class="menu-item-3dep">
+																	</ul>
+															</li>
+															<li>
+																<a href="/community/noticeMain.do"  Style="font-size: 14px;"><span>알려드립니다</span></a><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																<ul class="menu-item-3dep">
+																	<li><a href="/community/noticeMain.do"  Style="font-size: 12px;"><span>공지사항</span></a></li><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																	<li><a href="https://www.csi.go.kr/community/cnstInfoMain.do"  Style="font-size: 12px;"><span>시공사 안전·품질 정보 공개</span></a></li><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																	<li><a href="/community/faqMain.do"  Style="font-size: 12px;"><span>자주하는 질문</span></a></li><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																	<li><a href="/community/qnaMovePage.do"  Style="font-size: 12px;"><span>묻고답하기</span></a></li><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																	<li><a href="/community/dataMain.do"  Style="font-size: 12px;"><span>자료실</span></a></li><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																	<li><a href="/prl/prlList.do"  Style="font-size: 12px;"><span>건설안전 라이브러리</span></a></li><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																	</ul>
+															</li>
+															<li>
+																<a href="/onlineEdu/onlineEduIntro.do"  Style="font-size: 14px;"><span>사용자교육</span></a><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																<ul class="menu-item-3dep">
+																	<li><a href="/onlineEdu/onlineEduIntro.do"  Style="font-size: 12px;"><span>교육 소개</span></a></li><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																	</ul>
+															</li>
+															<li>
+																<a href="/sas/sasurveyList.do"  Style="font-size: 14px;"><span>만족도조사</span></a><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																<ul class="menu-item-3dep">
+																	<li><a href="/sas/sasurveyList.do"  Style="font-size: 12px;"><span>만족도조사 목록</span></a></li><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																	</ul>
+															</li>
+															</ul>
+													</div>
+												</div>
+											</li>
+										</ul>
+									</li>
+								<li class="dropdown"> <!-- 메뉴 활성화는 class="active"를 추가 합니다.  -->
+									<a href=""  onclick="go_menuSSO('/por/about_dfs_001.do');"  class="dropdown-toggle js-activated" data-toggle="dropdown"> 
+										설계안전성검토<img style="margin-left: 5px;" src="/com/img/common/icon/ico_btn_insertion_dark.png" alt="바로가기"></a>
+									</li>
+								<li class="dropdown"> <!-- 메뉴 활성화는 class="active"를 추가 합니다.  -->
+									<a href=""  onclick="go_menuUrl('/por/about_smp_001.do');"  class="dropdown-toggle js-activated" data-toggle="dropdown">안전관리계획서</a>
+									
+										<ul class="dropdown-menu">
+											<li class="dropdown-menu-li">
+												<div class="menu-content">
+													<div class="menu-item-title">
+														<span class="title-text">안전관리계획서</span>
+															</div>
+													<div class="menu-item">  
+														<ul class="menu-item-2dep">
+															<li>
+																<a href="/por/about_smp_001.do"  Style="font-size: 14px;"><span>안전관리계획서는?</span></a><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																<ul class="menu-item-3dep">
+																	<li><a href="/por/about_smp_001.do"  Style="font-size: 12px;"><span>안전관리계획서 개요</span></a></li><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																	<li><a href="/por/about_smp_002.do"  Style="font-size: 12px;"><span>안전관리계획서 근거</span></a></li><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																	<li><a href="/por/about_smp_003.do"  Style="font-size: 12px;"><span>안전관리계획서 수립대상</span></a></li><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																	<li><a href="/por/about_smp_004.do"  Style="font-size: 12px;"><span>안전관리계획서 업무처리 흐름도</span></a></li><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																	</ul>
+															</li>
+															</ul>
+													</div>
+												</div>
+											</li>
+										</ul>
+									</li>
+								<li class="dropdown"> <!-- 메뉴 활성화는 class="active"를 추가 합니다.  -->
+									<a href=""  onclick="go_menuUrl('/por/about_acd_002.do');"  class="dropdown-toggle js-activated" data-toggle="dropdown">건설사고</a>
+									
+										<ul class="dropdown-menu">
+											<li class="dropdown-menu-li">
+												<div class="menu-content">
+													<div class="menu-item-title">
+														<span class="title-text">건설사고</span>
+															</div>
+													<div class="menu-item">  
+														<ul class="menu-item-2dep">
+															<li>
+																<a href="/por/about_acd_002.do"  Style="font-size: 14px;"><span>사고신고 및 조사는?</span></a><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																<ul class="menu-item-3dep">
+																	<li><a href="/por/about_acd_001.do"  Style="font-size: 12px;"><span>건설사고 신고 개요 및 절차</span></a></li><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																	<li><a href="/por/about_acd_002.do"  Style="font-size: 12px;"><span>자주하는 질문</span></a></li><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																	<li><a href="/por/about_acd_003.do"  Style="font-size: 12px;"><span>정보망을 통한 건설사고 통보 방법</span></a></li><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																	<li><a href="/por/about_acd_004.do"  Style="font-size: 12px;"><span>정보망을 통한 건설사고 조사결과 제출방법</span></a></li><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																	</ul>
+															</li>
+															<li>
+																<a href="/ca/constAccidentEdit.do"  Style="font-size: 14px;"><span>건설사고발생신고</span></a><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																<ul class="menu-item-3dep">
+																	</ul>
+															</li>
+															<li>
+																<a href="/acd/acdCaseList.do"  Style="font-size: 14px;"><span>사고사례</span></a><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																<ul class="menu-item-3dep">
+																	<li><a href="/acd/acdCaseList.do"  Style="font-size: 12px;"><span>사고사례</span></a></li><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																	</ul>
+															</li>
+															</ul>
+													</div>
+												</div>
+											</li>
+										</ul>
+									</li>
+								<li class="dropdown"> <!-- 메뉴 활성화는 class="active"를 추가 합니다.  -->
+									<a href=""  onclick="go_menuUrl('/por/about_spt_001.do');"  class="dropdown-toggle js-activated" data-toggle="dropdown">현장점검</a>
+									
+										<ul class="dropdown-menu">
+											<li class="dropdown-menu-li">
+												<div class="menu-content">
+													<div class="menu-item-title">
+														<span class="title-text">현장점검</span>
+															</div>
+													<div class="menu-item">  
+														<ul class="menu-item-2dep">
+															<li>
+																<a href="/por/about_spt_001.do"  Style="font-size: 14px;"><span>현장점검은?</span></a><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																<ul class="menu-item-3dep">
+																	<li><a href="/por/about_spt_001.do"  Style="font-size: 12px;"><span>현장점검 소개</span></a></li><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																	<li><a href="/por/about_spt_002.do"  Style="font-size: 12px;"><span>건설공사 현장점검 절차</span></a></li><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																	</ul>
+															</li>
+															</ul>
+													</div>
+												</div>
+											</li>
+										</ul>
+									</li>
+								<li class="dropdown"> <!-- 메뉴 활성화는 class="active"를 추가 합니다.  -->
+									<a href=""  onclick="go_menuUrl('/lev/int01001_list.do');"  class="dropdown-toggle js-activated" data-toggle="dropdown">안전관리수준평가</a>
+									
+										<ul class="dropdown-menu">
+											<li class="dropdown-menu-li">
+												<div class="menu-content">
+													<div class="menu-item-title">
+														<span class="title-text">안전관리수준평가</span>
+															</div>
+													<div class="menu-item">  
+														<ul class="menu-item-2dep">
+															<li>
+																<a href="/lev/int01001_list.do"  Style="font-size: 14px;"><span>안전관리수준평가시스템은?</span></a><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																<ul class="menu-item-3dep">
+																	<li><a href="/lev/int01001_list.do"  Style="font-size: 12px;"><span>개요</span></a></li><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																	<li><a href="/lev/int01002_list.do"  Style="font-size: 12px;"><span>안전관리 수준평가 대상</span></a></li><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																	<li><a href="/lev/int01003_list.do"  Style="font-size: 12px;"><span>업무처리 흐름도</span></a></li><!-- 새창 띄우기 일때는 class="link-go"를 추가 -->
+																	</ul>
+															</li>
+															</ul>
+													</div>
+												</div>
+											</li>
+										</ul>
+									</li>
+								<li class="dropdown"> <!-- 메뉴 활성화는 class="active"를 추가 합니다.  -->
+									<a href=""  onclick="go_menuSSO('/cts/int/page01.do');"  class="dropdown-toggle js-activated" data-toggle="dropdown"> 
+										엔지니어링 및 시공평가<img style="margin-left: 5px;" src="/com/img/common/icon/ico_btn_insertion_dark.png" alt="바로가기"></a>
+									</li>
+								</ul>
+						</div>
+						</div>
+					<!-- 메뉴 끝 -->
+				</div> 
+			</div>
+			<!-- 글로벌 끝 -->
+		
+			<!-- 헤더 & 컨텐츠 분할 시작 -->
+			<div class="clearfix"> </div>
+			<!-- 헤더 & 컨텐츠 분할 끝 -->
+		
+			<!-- container 시작 -->
+			<div class="page-container">
+		
+				<!-- 페이지 레이아웃 시작 -->
+				<div class="page-content-wrapper">
+<div id="contents" class="page-content">
+						
+						<!-- 서브 비주얼 시작 -->
+						<div class="page-sub-visual sub-visual-type-01">
+							<div class="page-sub-visual-inner"></div>
+						</div>
+						<!-- 서브 비주얼 끝 -->
+						
+						<!-- 페이지바 시작 -->
+						<div class="page-bar hor-menu">
+							<div class="page-bar-inner">
+								<!-- 카테고리 시작 -->
+								<ul class="page-breadcrumb">
+									<li class='page-breadcrumb-home'><span></span></li><li><span>건설사고</span></li><li><span data-close-others='true'>사고사례</span></li><li><span data-close-others='true'>사고사례</span></li></ul>
+								<!-- 카테고리 끝 -->
+								<!-- 컨텐츠 옵션 시작 -->
+								<ul class="page-options">
+									<li class="page-options-print tooltips" data-container="body" data-placement="bottom" data-original-title="프린트" style="line-height: 0px;"><a id="print-preview"></a></li>
+								</ul>
+								<!-- 컨텐츠 옵션 끝 -->
+							</div>
+						</div>
+						<!-- 페이지바 끝 -->
+						
+						<form name="menu" id="menu" method="post" action="">
+						<input type="hidden" name="menu_id"	value="">
+						<input type="hidden" name="nextUrl"	value="">
+						<input type="hidden" name="p_dign_gbn" 	 value="">
+						
+						<!-- 왼쪽메뉴 시작 -->
+						<div class="page-sidebar-wrapper">
+							<div class="page-sidebar navbar-collapse collapse">
+								<ul class="page-sidebar-menu  page-header-fixed " data-keep-expanded="false" data-auto-scroll="true" data-slide-speed="200" id="pageSidebarMenu">
+									<li class="heading">
+										<h2 class="heading-title">건설사고</h2>
+									</li>
+								</ul>
+							</div>
+						</div>
+						<!-- 왼쪽메뉴 끝 -->
+						</form>
+						
+						<!-- 통합메세지 발송 -->
+						<form id="form_sendMsgPop" name="form_sendMsgPop" method="post">
+							<input type="hidden" name="inst_nm">
+							<input type="hidden" name="inst_chrgr_nm">
+							<input type="hidden" name="hp_no">
+							<input type="hidden" name="inst_chrgr_id">							
+						</form>
+						
+						<!-- 그룹웨어 팝업창을 위한 form -->
+						<form id="form_gwPop" name="form_gwPop" method="post">
+							<input type="hidden" name="key">
+							<input type="hidden" name="code1">
+						</form>
+						
+						<!-- 컨텐츠 시작 -->
+						<div class="contentWrapper" id="divRight">
+							<script language="javascript">
+
+	var isFirstKindA = true;
+	
+	$(function () {
+		removeMask($('#main'));
+	
+		if(!gfnIsNull("")){
+			$("#hmn_accd_kind_cd_u").change();
+		}
+		
+		if(!gfnIsNull("")){
+			$("#addr_sido").change();
+		}
+		
+		
+	});
+
+	function goPage(page_count) {
+		removeMask($('#main'));
+		if(!check_selectBox()) return;
+		
+		removeMask($('#main')); //'-' 제거
+		if(document.main.check_dead_yn.checked==true) {
+			document.main.search_dead_yn.value="Y";
+		} else {
+			document.main.search_dead_yn.value="";
+		}
+		$("#page_count").val(page_count);
+		$('#main').attr('action', '/acd/acdCaseList.do');
+		$('#main').attr('target', '_self');
+		$('#main').submit();
+
+		return false;
+	}
+
+	function go_search() {
+		removeMask($('#main'));
+		if(!check_selectBox()) return;
+		
+		removeMask($('#main')); //'-' 제거
+		if(document.main.check_dead_yn.checked==true) {
+			document.main.search_dead_yn.value="Y";
+		} else {
+			document.main.search_dead_yn.value="";
+		}
+		$("#page_count").val(1);
+		$('#main').attr('action', '/acd/acdCaseList.do');
+		$('#main').attr('target', '_self');
+		$('#main').submit();
+	}
+	
+	function check_selectBox(){
+		removeMask($('#main'));
+		var res = true;
+		/*
+		//공종
+		if(!gfnIsNull($("#search_work_class_cd_u").val())){
+			if(gfnIsNull($("#search_work_class_cd").val())){
+				alert("공종 대분류가 선택되어 있습니다.\n소분류를 선택하거나 공종 대분류를 '대분류선택'으로 변경 하세요.");
+				res = false;
+			}
+		}
+		//사고객체
+		if(!gfnIsNull($("#search_accd_obj_cd_u").val())){
+			if(gfnIsNull($("#search_accd_obj_cd").val())){
+				alert("사고객체 대분류가 선택되어 있습니다.\n소분류를 선택하거나 사고객체 대분류를 '대분류선택'으로 변경 하세요.");
+				res = false;
+			}
+		}
+		*/
+		return res;
+	}
+	
+	function reset_form() {
+		removeMask($('#main'));
+		document.main.addr_sido.value = "";
+		document.main.addr_sigungu.value = "";
+		document.main.search_key.value = "1";
+		document.main.search_val.value = "";
+		document.main.start_ymd.value = "";
+		document.main.end_ymd.value = "";
+		document.main.search_hmn_accd_kind_cd.value = "";
+		document.main.search_mtrl_accd_kind_cd.value = "";
+		document.main.search_work_class_cd_u.value = "";
+		document.main.search_work_class_cd.value = "";
+		document.main.search_accd_obj_cd_u.value = "";
+		document.main.search_accd_obj_cd.value = "";
+		document.main.search_accd_proc_cd.value = "";
+		document.main.search_dead_yn.value = "";
+		document.main.check_dead_yn.checked = false;
+	}
+
+	function goDetail(case_no) {
+		
+		removeMask($('#main'));	//'-' 제거
+		document.main.case_no.value = case_no;
+		$('#main').attr('action', '/acd/acdCaseView.do');
+		$('#main').attr('target', '_self');
+		$('#main').submit();
+	}
+	
+	// 사고객체(대) 변경 이벤트 : AJAX
+	function change_accd_obj(){
+		removeMask($('#main'));
+		
+		var accd_obj_cd = document.main.search_accd_obj_cd_u.value;
+		$.ajax({
+			type: "post",
+			url: "/com/codeListCommonAjax.do",
+			data: {
+				code_group : 'accd_obj',
+				action_type : 'LISTLV2',
+				code01 : accd_obj_cd
+			},
+			dataType: "json",
+			success: function (data) {
+				var sel = document.querySelector('select[name="search_accd_obj_cd"]');
+				sel.options.length = 0;
+				sel.options.add(new Option('선택', ''));
+				if(data.length > 0){
+					data.forEach(function(el){
+						if(el.data != ''){
+							sel.options.add(new Option(el.data, el.code));	
+						}
+					})
+				}
+			}
+		});
+	}
+	
+	// 공종(대) 변경 이벤트 : AJAX
+	function change_work_class(){
+		removeMask($('#main'));
+		
+		var work_class_cd = document.main.search_work_class_cd_u.value;
+		$.ajax({
+			type: "post",
+			url: "/com/codeListCommonAjax.do",
+			data: {
+				code_group : 'work_class',
+				action_type : 'LISTLV2',
+				code01 : work_class_cd
+			},
+			dataType: "json",
+			success: function (data) {
+				var sel = document.querySelector('select[name="search_work_class_cd"]');
+				sel.options.length = 0;
+				sel.options.add(new Option('선택', ''));
+				if(data.length > 0){
+					data.forEach(function(el){
+						if(el.data != ''){
+							sel.options.add(new Option(el.data, el.code));	
+						}
+					})
+				}
+			}
+		});
+	}
+	
+	
+	/**
+	*	인적사고종류 selectbox change 
+	**/
+	function setAccdActionType() {
+		removeMask($('#main'));
+		var opt_val = $("#hmn_accd_kind_cd_u option:selected").val();	
+		var opt_text = $("#hmn_accd_kind_cd_u option:selected").text();
+		change_hnm_kind_u(opt_val,opt_text);
+	}
+	
+	// 인적사고종류 대분류 변경 이벤트 : AJAX
+	function change_hnm_kind_u(optVal,optText){
+		removeMask($('#main'));
+		
+		var data07_val = gfnGetDfVal(optVal,"");
+		var sel = document.querySelector('select[name="search_hmn_accd_kind_cd"]');
+		var selVal = '';
+		//console.log("data07_val=")
+		//떨어짐 또는 넘어짐 일경우 처리
+		if(data07_val.indexOf("C") != -1){
+			$.ajax({
+				type: "post",
+				url: "/com/codeListCustomAjax.do",
+				data: {
+					code_group 		: "accd_kind"
+					,action_type 	: "CUSTOM_COND_LIST"
+					,code01 		: "A"
+					,data07 		: data07_val
+					,param01 		: "code2" // 코드 컬럼
+					,param02 		: "data4" // 코드명 컬럼
+					,param03 		: "code2 is not null" // 그밖의 조건
+				},
+				dataType: "json",
+				success: function (data) {
+					sel.options.length = 0;
+					sel.options.add(new Option('중분류선택', data07_val));
+					if(data.length > 0){
+						data.forEach(function(el){
+							if(el.data != ''){
+								sel.options.add(new Option(el.data, el.code));
+							}
+						});
+					}
+					//console.log("selVal="+selVal+" , isFirstKindA="+isFirstKindA);
+					if(!gfnIsNull(selVal) && isFirstKindA ){
+						$('select[name="search_hmn_accd_kind_cd"]').val(selVal);
+					}
+					
+					isFirstKindA = false;
+				}
+			});
+		}else{
+			
+			//인적사고종류 대분류가 선택되지 않은경우
+			if(gfnIsNull(data07_val))
+			{
+				sel.options.length = 0;
+				sel.options.add(new Option('-', ''));
+			}
+			else
+			{//인적사고종류 대분류가 떨어짐 또는 넘어짐이 아닌경우
+				sel.options.length = 0;
+				sel.options.add(new Option('-', optVal));
+				
+				if(!gfnIsNull(selVal) && isFirstKindA ){
+					$('select[name="search_hmn_accd_kind_cd"]').val(selVal);
+				}
+			}
+			
+			isFirstKindA = false;
+		}
+	}
+	
+	// 시군구 변경 이벤트 : AJAX
+	function change_sigungu_class(){
+		removeMask($('#main'));
+	
+		
+		var addr_sido = document.main.addr_sido.value;
+		var v_sigungu = "";
+		$.ajax({
+			type: "post",
+			url: "/com/codeRegionCommonAjax.do",
+			data: {
+				action_type : 'SIGUNGU_LIST',
+				param01 : addr_sido
+			},
+			dataType: "json",
+			success: function (data) {
+				var sel = document.querySelector('select[name="addr_sigungu"]');
+				sel.options.length = 0;
+				sel.options.add(new Option('선택', ''));
+				if(data.length > 0){
+					data.forEach(function(el){
+						if(el.data != ''){
+							if(el.sigungu == v_sigungu){
+								sel.options.add(new Option(el.sigungu, el.sigungu, true, true));	
+							}else{
+								sel.options.add(new Option(el.sigungu, el.sigungu));	
+							}
+							
+						}
+					})
+				}
+			}
+		});
+	}
+	
+	
+	
+
+	function excel_download(){
+		
+		// 250219 남광식 지원 요청
+		
+		
+		 removeMask($('#main'));
+		if(confirm('엑셀을 다운로드 하시겠습니까? \n ※로딩 화면이 사라져도 다운로드에 시간이 더 소요될 수 있습니다.')) {
+			//날짜 validation 설정
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2025-10-17";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2025-09-13";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2025-08-22";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2025-08-19";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2025-08-01";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2025-05-26";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2025-03-24";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2024-10-12";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2024-09-03";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2024-08-31";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2024-08-26";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2024-08-22";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2024-08-13";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2024-08-12";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2024-07-17";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2024-06-01";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2024-05-09";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2024-04-08";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2023-10-25";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2023-09-14";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2023-09-01";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2023-08-28";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2023-08-28";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2023-08-21";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2023-08-15";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2023-07-14";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2023-06-08";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2023-05-17";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2023-05-09";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2023-04-24";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2022-10-27";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2022-10-04";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2022-09-02";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2022-08-20";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2022-08-02";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2022-07-16";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2022-06-18";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2021-09-24";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2021-08-07";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2021-08-05";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2021-04-26";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2021-04-08";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2020-11-29";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2020-11-20";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2020-11-18";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2020-10-22";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2020-09-14";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2020-09-11";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2020-07-18";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2020-02-06";
+			
+			var Fistdate = "2025-10-17";
+			var Listdate = "2020-02-06";
+			
+			const startDate = new Date(Fistdate);
+			const endDate = new Date(Listdate);
+			
+			const monthValid =  new Date(endDate.setMonth(endDate.getMonth() + 1));
+			if (monthValid < startDate){
+				alert("엑셀 다운로드는 사고일시를 기준으로, 처음과 마지막 사고사례가 \n1개월 이상 차이나면 다운로드할 수 없습니다.")
+				return false;
+			}else{
+				
+				if(document.main.check_dead_yn.checked==true) {
+					document.main.search_dead_yn.value="Y";
+				} else {
+					document.main.search_dead_yn.value="";
+				}
+				
+			 	var url = "acdCaseList.do";
+			 	$("#loading_bar").show();
+			 	document.main.action = url + '?excelParam=xls';
+				document.main.target = '_self';
+				document.main.submit(); 
+				
+				var loadingBar = document.getElementById("loading_bar");
+				setTimeout(function() {
+					loadingBar.style.display= "none";
+				}, 7000);
+			}
+		} 
+	}
+	
+</script>
+<section id="content">
+	<form id="main" name="main" method="post">
+		<input type="hidden" id="menu_id" 		name="menu_id" value="">
+		<input type="hidden" id="page_count" 	name="page_count" value="1">
+		<input type="hidden" id="biz_id" 		name="biz_id" value="acdDB">
+		<input type="hidden" id="case_no" 		name="case_no" value="">
+		<input type="hidden" id="search_dead_yn" name="search_dead_yn" value="">
+		
+		<input type="hidden" id="accd_no_list" 	name="accd_no_list" value="">
+		<input type="hidden" id="main_yn_list" 	name="main_yn_list" value="">
+		
+		<h1 class="page-title">사고사례</h1>
+
+		<!-- 검색영역 시작 -->
+		<table class="search-panel table table-bordered" summary="발생일자,발생장소,사고명,인적사고유형,물적사고유형,피해상황,공종,사고객체,작업프로세스로 구성되어 있습니다.">
+			<caption>사고사례 검색 테이블입니다.</caption>
+			<colgroup>
+				<col style="width:110px;" />
+				<col style="auto;" />
+				<col style="width:110px;" />
+				<col style="auto;" />
+				<col style="width:110px;" />
+				<col style="auto;" />
+				<col style="width:140px;" />
+			</colgroup>
+			<tbody>
+				<tr>
+					<th class="td-header">발생일자</th>
+					<td>
+						<div class="form-inline">
+							<div class="input-group input-medium date date-picker" data-date="" data-date-format="yyyy-mm-dd" data-date-viewmode="years">
+								<input type="text" id="start_ymd" name="start_ymd" title="사고일(부터)" value=""
+								class="form-control tYMD" placeholder="yyyy-mm-dd">
+								<span class="input-group-btn">
+									<button class="btn dark" type="button" tabindex="-1">
+										<i class="fa fa-calendar"></i>
+									</button>
+								</span>
+							</div>
+							<span> ~ </span>
+							<div class="input-group input-medium date date-picker" data-date="" data-date-format="yyyy-mm-dd" data-date-viewmode="years">
+								<input type="text" id="end_ymd" name="end_ymd" value="" title="사고일(까지)"
+								class="form-control tYMD" placeholder="yyyy-mm-dd">
+								<span class="input-group-btn">
+									<button class="btn dark" type="button" tabindex="-1">
+										<i class="fa fa-calendar"></i>
+									</button>
+								</span>
+							</div>
+						</div>
+					</td>
+					<th class="td-header">발생장소</th>
+					<td>
+						<select name="addr_sido" id="addr_sido" class="bs-select form-control" title="발생장소"  OnChange="javascript:change_sigungu_class()">
+							<option value=''>전체</option>
+							<option value='서울특별시' title=''>서울특별시</option> 	<option value='부산광역시' title=''>부산광역시</option> 	<option value='대구광역시' title=''>대구광역시</option> 	<option value='인천광역시' title=''>인천광역시</option> 	<option value='대전광역시' title=''>대전광역시</option> 	<option value='광주광역시' title=''>광주광역시</option> 	<option value='울산광역시' title=''>울산광역시</option> 	<option value='세종특별자치시' title=''>세종특별자치시</option> 	<option value='경기도' title=''>경기도</option> 	<option value='강원도' title=''>강원도</option> 	<option value='충청북도' title=''>충청북도</option> 	<option value='충청남도' title=''>충청남도</option> 	<option value='전라북도' title=''>전라북도</option> 	<option value='전라남도' title=''>전라남도</option> 	<option value='경상북도' title=''>경상북도</option> 	<option value='경상남도' title=''>경상남도</option> 	<option value='제주특별자치도' title=''>제주특별자치도</option> 	<option value='강원특별자치도' title=''>강원특별자치도</option> 	<option value='전북특별자치도' title=''>전북특별자치도</option> 	</select>
+						<select name="addr_sigungu" id="addr_sigungu" class="bs-select form-control" title="발생장소">
+							<option value=''>선택</option> 
+						</select>
+					</td>
+					<th class="td-header">
+					<input type="hidden" name="search_key" value="1">
+					사고명
+					</th>
+					<td>
+						<input type="text" name="search_val" value="감전" onkeydown="if(event.keyCode == 13)
+						go_search();" class="form-control input-inline" placeholder="입력" title="사고명" >
+					</td> 
+					<td rowspan="3" class="form-inline">
+						<button type="button" class="btn btn-primary" onclick="go_search()">검색하기</button>						
+						<button type="button" class="btn" onclick="reset_form()">초기화</button>
+					</td>
+				</tr>
+				<tr>
+					<th class="td-header">인적사고유형</th>
+					<td>
+						<div class="form-inline">
+							<select name="hmn_accd_kind_cd_u"      id="hmn_accd_kind_cd_u"      title="인적사고(대분류)" class="form-control" OnChange="javascript:setAccdActionType();">
+								<option value=''>전체</option>
+								<option value='A00' title=''>없음</option><option value='C01' title='높이가 있는 곳에서 사람이 떨어짐'>떨어짐</option><option value='C02' title='사람이 미끄러지거나 넘어짐'>넘어짐</option><option value='A03' title='날아오거나 떨어진 물체에 맞음'>물체에 맞음</option><option value='A15' title='물체에 의해 사람이 깔림'>깔림</option><option value='A04' title='기계설비에 끼이거나 감김'>끼임</option><option value='A05' title=''>절단, 베임</option><option value='A06' title=''>감전</option><option value='A16' title='현장 내·외에서 차량에 치임'>폭발·파열</option><option value='A17' title='개인지병에 의한 질병'>질병</option><option value='A18' title='날카로운 물체에 찔림'>찔림</option><option value='A19' title=''>질식</option><option value='A20' title=''>화재</option><option value='A21' title='물체에 부딪힘'>부딪힘</option><option value='A22' title=''>무너짐</option><option value='A24' title=''>온열질환</option><option value='A25' title=''>물빠짐·익사</option><option value='A23' title=''>분류불능</option><option value='A07' title=''>기타</option></select>
+							<select name="search_hmn_accd_kind_cd" id="search_hmn_accd_kind_cd" title="인적사고(중분류)" class="form-control">
+								<option value="">-</option>
+							</select>
+						
+						</div>
+					</td>
+					<th class="td-header">물적사고유형</th>
+					<td>
+						<div class="form-inline">
+						<select name="search_mtrl_accd_kind_cd" id="search_mtrl_accd_kind_cd" title="물적사고 분류" class="form-control">
+							<option value="">선택</option>
+							<option value='B00' title=''>없음</option><option value='B01' title='물체가 무너지고 깨어짐'>붕괴</option><option value='B02' title='물체가 쓰러짐'>전도</option><option value='B03' title='물체가 높은곳에서 낮은곳으로 떨어짐'>낙하</option><option value='B04' title='사람 및 물체 등이 서로 맞부딪힘'>충돌</option><option value='B05' title='물체에 불이남'>화재</option><option value='B06' title='힘이나 열기 등 갑자스럽게 퍼지거나 일어남'>폭발</option><option value='B07' title='물체가 떨어지거나 빠짐'>탈락</option><option value='B09' title='물체가 깨어지거나 갈라져 터짐'>파열,파단</option><option value='B08' title=''>기타</option></select>
+						</div>
+					</td>
+					<th class="td-header">피해상황</th>
+					<td>
+						<div class="form-inline">
+						<label class="mt-checkbox mt-checkbox-outline">
+						사망자 발생 <input type="checkbox" name="check_dead_yn" value="Y" title="사망자 발생여부" class="form-control" >
+						<span></span>
+						</label>
+						</div>
+					</td>
+				</tr>
+				<tr>
+					<th class="td-header">공종</th>
+					<td>
+						<select name="search_work_class_cd_u" id="search_work_class_cd_u" title="공종(대)" class="form-control" OnChange="javascript:change_work_class();">
+							<option value=''>대분류선택</option>
+							<option value='40' title=''>토목</option> 	<option value='50' title=''>건축</option> 	<option value='60' title=''>기계설비</option> 	<option value='70' title=''>전기설비</option> 	<option value='80' title=''>통신설비</option> 	<option value='90' title=''>산업설비</option> 	<option value='99' title=''>기타</option> 	</select>
+						<select name="search_work_class_cd" id="search_work_class_cd" title="공종(소)" class="form-control">
+							<option value=''>소분류선택</option>
+							</select>
+					</td>
+					<th class="td-header">사고객체</th>
+					<td>
+						<select name="search_accd_obj_cd_u" id="search_accd_obj_cd_u" title="사고객체(대)" class="form-control" OnChange="javascript:change_accd_obj();">
+							<option value=''>대분류선택</option>
+							<option value='901' title=''>가시설</option> 	<option value='902' title=''>건설기계</option> 	<option value='903' title=''>질병</option> 	<option value='904' title=''>건설자재</option> 	<option value='905' title=''>건설공구</option> 	<option value='906' title=''>부재</option> 	<option value='907' title=''>토사 및 암반</option> 	<option value='908' title=''>시설물</option> 	<option value='999' title=''>기타</option> 	</select>
+						<select name="search_accd_obj_cd" id="search_accd_obj_cd" title="사고객체(소)" class="form-control">
+							<option value=''>소분류선택</option>
+							</select>
+					</td>
+					<th class="td-header">작업프로세스</th>
+					<td>
+						<select name="search_accd_proc_cd" id="search_accd_proc_cd" title="작업프로세스" class="form-control">
+							<option value=''>선택</option>
+							<option value='01' title=''>타설작업</option> 	<option value='02' title=''>해체작업</option> 	<option value='03' title=''>설치작업</option> 	<option value='05' title=''>굴착작업</option> 	<option value='06' title=''>정리작업</option> 	<option value='07' title=''>매설작업</option> 	<option value='08' title=''>이동</option> 	<option value='09' title=''>연결작업</option> 	<option value='11' title=''>운반작업</option> 	<option value='13' title=''>부설 및 다짐작업</option> 	<option value='15' title=''>조립작업</option> 	<option value='16' title=''>거치작업</option> 	<option value='17' title=''>준비작업</option> 	<option value='18' title=''>벌목작업</option> 	<option value='19' title=''>장약 및 발파작업</option> 	<option value='20' title=''>반출작업</option> 	<option value='21' title=''>설비작업</option> 	<option value='22' title=''>용접작업</option> 	<option value='24' title=''>천공작업</option> 	<option value='25' title=''>상차 및 하역작업</option> 	<option value='27' title=''>도장작업</option> 	<option value='30' title=''>확인 및 점검작업</option> 	<option value='31' title=''>청소작업</option> 	<option value='32' title=''>측량작업</option> 	<option value='35' title=''>보수 및 교체작업</option> 	<option value='38' title=''>쌓기작업</option> 	<option value='41' title=''>적재작업</option> 	<option value='45' title=''>마감작업</option> 	<option value='46' title=''>전기작업</option> 	<option value='47' title=''>고소작업</option> 	<option value='55' title=''>물뿌리기 작업</option> 	<option value='56' title=''>절취작업</option> 	<option value='57' title=''>양생작업</option> 	<option value='62' title=''>양중작업</option> 	<option value='64' title=''>인발작업</option> 	<option value='69' title=''>절단작업</option> 	<option value='71' title=''>정비작업</option> 	<option value='76' title=''>항타 및 항발작업</option> 	<option value='77' title=''>형틀 및 목공</option> 	<option value='78' title=''>인양작업</option> 	<option value='99' title=''>기타</option> 	</select>
+					</td>
+				</tr>
+			</tbody>
+		</table>
+		<!-- 검색영역 끝 -->
+		
+		<div class="table-top-control">
+			<div class="form-inline f-right">
+				<div class="form-group">
+				<button type="button" class="btn dark" onclick="excel_download()"><img src="../com/img/common/icon/ico_btn_excel.png" alt="icon">엑셀다운로드</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- 그리드 시작 -->
+		<div class="contentsRow">
+			<div class="table-scrollable">
+				<table class="table table-striped table-bordered table-hover order-column"
+				summary="사고번호,사고명,시도,사고일시,조회수 입니다.">
+				<caption>사고사례 목록 테이블입니다.</caption>
+					<colgroup>						
+						<col style="width:80px;">
+						<col style="width:auto;">
+						<col style="width:150px;">
+						<col style="width:180px;">
+						<col style="width:70px;">
+						</colgroup>
+					<thead>
+						<tr>
+							<th>사고번호</h>
+							<th>사고명</th>
+							<th>시군구</th>
+							<th>사고일시</th>
+							<th>조회수</th>
+							</tr>
+					</thead>
+					<tbody>
+						<tr class="odd gradeX">							
+							<td><a href="javascript:goDetail('40144')">202500005298</a></td>
+							<td class="t-left"><a href="javascript:goDetail('40144')">양수작업 중 감전사고</a></td>
+							<td>경상북도&nbsp;
+								포항시 북구</td>
+							<td>2025-10-17 오후 02:10</td>
+							<td>542</td>
+							</tr>
+						<tr class="odd gradeX">							
+							<td><a href="javascript:goDetail('39723')">202500004689</a></td>
+							<td class="t-left"><a href="javascript:goDetail('39723')">미장작업중 절연조치 미흡한 전선에 의한 감전재해</a></td>
+							<td>광주광역시&nbsp;
+								동구</td>
+							<td>2025-09-13 오전 08:00</td>
+							<td>434</td>
+							</tr>
+						<tr class="odd gradeX">							
+							<td><a href="javascript:goDetail('41627')">202500006700</a></td>
+							<td class="t-left"><a href="javascript:goDetail('41627')">타워크레인 와이어 교체 중 감전에 의한 화상 사고</a></td>
+							<td>경기도&nbsp;
+								시흥시</td>
+							<td>2025-08-22 오후 03:30</td>
+							<td>161</td>
+							</tr>
+						<tr class="odd gradeX">							
+							<td><a href="javascript:goDetail('38319')">202500004095</a></td>
+							<td class="t-left"><a href="javascript:goDetail('38319')">고남-창기(제2공구) 도로건설공사 감전 사고</a></td>
+							<td>충청남도&nbsp;
+								태안군</td>
+							<td>2025-08-19 오전 09:00</td>
+							<td>403</td>
+							</tr>
+						<tr class="odd gradeX">							
+							<td><a href="javascript:goDetail('37657')">202500003745</a></td>
+							<td class="t-left"><a href="javascript:goDetail('37657')">완주 화산-운주 도로시설개량공사 / 감전사고 발생보고</a></td>
+							<td>전북특별자치도&nbsp;
+								완주군</td>
+							<td>2025-08-01 오전 07:40</td>
+							<td>674</td>
+							</tr>
+						<tr class="odd gradeX">							
+							<td><a href="javascript:goDetail('37758')">202500002354</a></td>
+							<td class="t-left"><a href="javascript:goDetail('37758')">통제구역 출입에 따른 감전사고</a></td>
+							<td>경상남도&nbsp;
+								양산시</td>
+							<td>2025-05-26 오후 02:55</td>
+							<td>317</td>
+							</tr>
+						<tr class="odd gradeX">							
+							<td><a href="javascript:goDetail('35556')">202500001174</a></td>
+							<td class="t-left"><a href="javascript:goDetail('35556')">전신주에 크레인이 닿으면서 아래서 작업하던 작업자 감전으로  화상</a></td>
+							<td>충청남도&nbsp;
+								아산시</td>
+							<td>2025-03-24 오후 03:10</td>
+							<td>424</td>
+							</tr>
+						<tr class="odd gradeX">							
+							<td><a href="javascript:goDetail('30464')">202400005698</a></td>
+							<td class="t-left"><a href="javascript:goDetail('30464')">사상구 감전동 134-1 주상복합 신축공사</a></td>
+							<td>부산광역시&nbsp;
+								사상구</td>
+							<td>2024-10-12 오전 08:00</td>
+							<td>598</td>
+							</tr>
+						<tr class="odd gradeX">							
+							<td><a href="javascript:goDetail('39166')">202400007730</a></td>
+							<td class="t-left"><a href="javascript:goDetail('39166')">건설용 리프트 좌대설치 작업을 하면서 작업장 내 절단된 전선이 좌대 설치 작업에 방해가 되어 전선을 치우던 중 왼쪽 손목에 감전되어 화상 (누전차단기 작동) 500원 동전 크기의 손목 2도 화상</a></td>
+							<td>대구광역시&nbsp;
+								북구</td>
+							<td>2024-09-03 오후 01:15</td>
+							<td>269</td>
+							</tr>
+						<tr class="odd gradeX">							
+							<td><a href="javascript:goDetail('29301')">202400004822</a></td>
+							<td class="t-left"><a href="javascript:goDetail('29301')">오조 자연재해위험개선지구 정비사업 시흥리 펌프장 작업 중 감전화재에 의한 사망 사고</a></td>
+							<td>제주특별자치도&nbsp;
+								서귀포시</td>
+							<td>2024-08-31 오후 01:10</td>
+							<td>1,064</td>
+							</tr>
+						</tbody>
+				</table>
+			</div>
+			<!-- 페이징 시작 -->
+			<div class="col-md-12 col-xs-12 col-sm-12 t-center pad0">
+				<div class="col-md-12 col-xs-12 col-sm-12 t-center pad0">   <ul class="pagination input-inline"><li class="prev"><a href="javascript:goPage('1');" title="첫 페이지"><span style="display:none;">첫페이지</span><i class="fa fa-angle-double-left"></i></a></li> <li><a href="javascript:goPage('1');" title="이전 10개 페이지"><span style="display:none;">이전 10개 페이지</span><i class="fa fa-angle-left"></i></a></li> <li class="active"><a href="javascript:;" title="현재 페이지(1)"> 1 </a></li> <li><a href="javascript:goPage('2');" title="2번 페이지"> 2 </a></li> <li><a href="javascript:goPage('3');" title="3번 페이지"> 3 </a></li> <li><a href="javascript:goPage('4');" title="4번 페이지"> 4 </a></li> <li><a href="javascript:goPage('5');" title="5번 페이지"> 5 </a></li> <li><a href="javascript:goPage('5');" title="다음 10개 페이지"><span style="display:none;">다음 10개 페이지</span><i class="fa fa-angle-right"></i></a></li> <li class="next"><a href="javascript:goPage('5');" title="끝 페이지"><span style="display:none;">끝페이지</span><i class="fa fa-angle-double-right"></i></a></li>    </ul><div class="input-group input-inline marL20"><div class="help-inline"> ( 1 / 5 페이지) / 총 50개</div></div></div></div>
+			<!-- 페이징 끝 -->
+		</div>
+		<!-- 그리드 끝 -->
+		
+	</form>
+	
+</section>
+<div id="loading_bar" class="bg-white bg-font-white bold" style="position:absolute;z-index:9;width:100%;height:100%;display: none;top: 0px;">
+	<div style='text-align:center;top:50%;position:absolute;margin-top:-16px;width:100%;'><img src='/com/img/loading.gif' alt='icon'>
+		다운로드 중 입니다. 잠시만 기다려주세요.
+		<br>(로딩 화면이 사라져도 다운로드에 시간이 더 소요될 수 있습니다.)
+	</div>
+</div></div>
+						<!-- 컨텐츠 끝 -->
+					</div>
+		
+				</div>
+				<!-- 페이지 레이아웃 끝 -->
+			</div>
+			<!-- container 끝 -->
+		
+<!-- footer 시작 -->
+			<div class="page-footer">
+		
+				<div class="page-footer-inner">
+					<div class="page-footer-logo">
+						<img src="/com/img/main_renewal/footer/logo_footer.png" alt="국토교통부" />
+					</div>
+					<div class="page-footer-container">
+					<span class="address">(우)52856 경상남도 진주시 에나로 128번길 24 국토안전관리원 </span><span class="address marL10" style="font-size:13px;"> 1588-8788</span><br />
+<span class="copyright">Copyright (c) Ministry of Land, Infrastructure and Transport. All Rights reserved.
+<br/>CSI 대표 이메일 : csi@kalis.or.kr</span></div>
+					<div class="page-footer-link">
+						<ul class="page-footer-info">
+							<li><a href="/por/serviceinfo.do?bbt_no=335">이용약관</a></li>
+							<li><a href="/por/privacyPolicy.do" style="color:red; font-weight:bold; text-decoration:underline;">개인정보 처리방침</a></li>
+							<li><a href="https://www.kalis.or.kr/wpge/m_280/guide/guide04.do" target="_blank">고정형 영상정보처리기기 운영관리방침(국토안전관리원)</a></li>
+							<li><a href="/por/serviceinfo.do?bbt_no=337">공공데이터 이용정책</a></li>
+							<li><a href="/por/serviceinfo.do?bbt_no=338">이메일주소 무단 수집 거부</a></li>
+							<li><a href="http://stat.molit.go.kr/portal/quality/qualityCenterWrite.do?system_id=S0066">공공데이터 품질오류신고</a></li>
+							<!-- <li><a href="http://stat.molit.go.kr/portal/quality/qualityCenterList.do?system_id=S0066">품질오류신고확인</a></li> -->
+						</ul>
+						<div class="page-footer-institution">
+							<div class="page-footer-select-set">
+								<div class="select-container">
+								<label for="relationSite" style="display: none;">관련사이트 링크 바로가기</label>
+								<select id="relationSite" class="bs-select form-control" onChange="if(this.value != '') window.open(this.value);">
+									<option value="">::: 관련사이트 링크 바로가기 :::</option>
+		                       <option value="http://www.molit.go.kr/">국토교통부</option>
+								<option value="http://www.kalis.or.kr/">국토안전관리원(KALIS)</option>
+								<option value="http://www.fms.or.kr/">시설물통합정보시스템(FMS)</option>
+								<option value="http://www.kiscon.net/">건설산업지식정보시스템(KISCON)</option>
+								<option value="https://www.jis.go.kr/">지하안전정보시스템(JIS)</option>
+								<option value="https://bigtori.kalis.or.kr/">국토안전 빅데이터 개방 포털(Bigtori)</option>
+								</select>
+								</div>
+								<button type="button" class="btn dark" onclick="moveUrl()">이동</button>
+							</div>
+						</div>
+					</div>
+				</div>
+		
+				<div class="scroll-to-top">
+					<i class="icon-arrow-up"></i>
+				</div>
+		
+			</div>
+			<!-- footer 끝 -->
+		</div>
+		<div id="divCommModal"></div>
+	</body>
+</html>
+                    
