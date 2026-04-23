@@ -18,10 +18,8 @@ $userTeamName = auth_normalize_team_name((string)($user['team'] ?? ''));
 // 요청한 팀 파라미터 확인 (공사팀-전기 관리감독자 혹은 운영자/안전관리자가 다른 팀의 일정을 볼 때)
 $requestedTeamName = '';
 $isViewingOtherTeam = false;
-$canViewOtherTeam = auth_can_manage($user) && (
-    auth_team_key($userTeamName) === auth_team_key('공사팀-전기')
-    || auth_is_admin($user)
-    || (string)($user['role'] ?? '') === 'safety_manager'
+$canViewOtherTeam = auth_is_admin($user) || (string)($user['role'] ?? '') === 'safety_manager' || (
+    auth_can_manage($user) && auth_team_key($userTeamName) === auth_team_key('공사팀-전기')
 );
 
 if (!empty($_GET['view_team'])) {
@@ -46,7 +44,7 @@ $isReadOnly = !auth_can_manage($user) || $isViewingOtherTeam;
 if (!$isViewingOtherTeam && $isReadOnly) {
     // 작업자는 자신의 팀 일정만 열람 가능
     $userRole = (string)($user['role'] ?? '');
-    if (!in_array($userRole, ['worker', 'leader'], true)) {
+    if (!in_array($userRole, ['worker', 'leader', 'administrator'], true)) {
         header('Location: task_select.php');
         exit;
     }
@@ -1026,8 +1024,7 @@ $prevMonth = date('Y-m-d', strtotime('-1 month', strtotime($monthStart)));
         <span style="color:var(--text-hi);font-size:14px;font-weight:700"><?= h(auth_display_name($user)) ?></span>
       </div>
       <div class="identity">
-        <a class="btn-secondary" href="task_select.php">작업 선택</a>
-        <a class="btn-secondary" href="work_list.php">작업목록</a>
+        <a class="btn-secondary" href="<?= h(auth_main_page_path($user)) ?>">작업목록</a>
         <a class="btn-secondary" href="schedule.php">근무일정표</a>
         <a class="btn-secondary" href="<?= h($boardPageUrl ?? '../board/index.php') ?>">게시판</a>
         <a class="btn-secondary" href="<?= h('task_select.php?logout=1') ?>">로그아웃</a>

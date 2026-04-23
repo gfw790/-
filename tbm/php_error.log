@@ -272,3 +272,4 @@ Stack trace:
 Stack trace:
 #0 {main}
   thrown in Command line code on line 8
+[23-Apr-2026 00:00:10 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=2) — Gemini Vision 폴백

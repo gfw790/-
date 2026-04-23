@@ -33,7 +33,7 @@ if (!is_array($user)) {
 }
 
 $userRole = (string)($user['role'] ?? '');
-if (!auth_is_admin($user) && $userRole !== 'safety_manager') {
+if (!auth_is_admin($user) && !in_array($userRole, ['safety_manager', 'administrator'], true)) {
     respond_json(403, [
         'success' => false,
         'message' => '안전관리자 또는 관리자만 사용할 수 있습니다.',

@@ -2,7 +2,7 @@
 require_once __DIR__ . '/auth.php';
 
 $user = auth_current_user();
-$canManageAccounts = auth_can_manage($user);
+$canManageAccounts = auth_can_manage($user) || auth_is_admin($user);
 $canManageTeams = auth_is_admin($user);
 $canAssignRoles = auth_is_admin($user);
 $registrationOpen = auth_is_worker_registration_open();
@@ -957,6 +957,7 @@ function h($value): string
               </div>
             <?php endif; ?>
 
+            <?php if ((string)($user['role'] ?? '') !== 'administrator'): ?>
             <div class="account-panel">
               <h2>회원가입 열기</h2>
               <p>로그인 화면의 회원가입 버튼을 필요할 때만 잠깐 열 수 있습니다.</p>
@@ -977,6 +978,7 @@ function h($value): string
                 </form>
               </div>
             </div>
+            <?php endif; ?>
           <?php endif; ?>
         </div>
       </div>

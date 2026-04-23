@@ -13,6 +13,20 @@ const TBM_ARTICLE_IMAGE_TARGET_HEIGHT_PX = 685;
 
 // ── 기본 데이터 ──────────────────────────────────────────────
 
+function tbm_can_use_ai_generation(?array $user): bool
+{
+    if (!is_array($user)) {
+        return false;
+    }
+
+    if (trim((string)($user['login_id'] ?? '')) === 'admin02') {
+        return false;
+    }
+
+    $userRole = (string)($user['role'] ?? '');
+    return auth_is_admin($user) || $userRole === 'safety_manager';
+}
+
 function tbm_default_data(): array
 {
     return [

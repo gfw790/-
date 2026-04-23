@@ -1463,3 +1463,31 @@
 [2026-04-22 00:44:29] [점수 1위] score=34  incident_score=8  title=정기선 회장이 내건 중대재해 제로...잠수함 공장 사망사고에 실효성...
 [2026-04-22 00:44:29] [점수 2위] score=26  incident_score=7  title=보령 동대동 하천공사현장서 매몰사고…60대 작업자 숨져
 [2026-04-22 00:44:29] [최종 선택] score=26  title=보령 동대동 하천공사현장서 매몰사고…60대 작업자 숨져
+[2026-04-23 00:00:02] [1순위] KOSHA 사이렌 수집 시작
+[2026-04-23 00:00:05] [KOSHA enrich 시작] title=(260413)중대재해 발생 알림(2)
+[2026-04-23 00:00:05] [KOSHA enrich 상태] has_image_file=N / has_image_base64=Y
+[2026-04-23 00:00:05] [KOSHA 이미지 저장 성공] output/images/siren_a970dc52fda3202a.jpg
+[2026-04-23 00:00:05] [KOSHA 이미지 crop 성공] output/images/crop_92b2c5e7914604af5979.jpg
+[2026-04-23 00:00:05] [KOSHA crop 시도 완료]
+[2026-04-23 00:00:05] [KOSHA OCR 시작] image_file=output/images/crop_92b2c5e7914604af5979.jpg
+[2026-04-23 00:00:05] [KOSHA OCR 대상] poster_image=output/images/siren_a970dc52fda3202a.jpg
+[2026-04-23 00:00:17] [KOSHA 후보] title=(260413)중대재해 발생 알림(2) / summary_len=71 / prevention_len=116 / image=Y / ocr_ok=Y / vision=N
+[2026-04-23 00:00:17] [KOSHA enrich 시작] title=(260413)중대재해 발생 알림(2)
+[2026-04-23 00:00:17] [KOSHA enrich 상태] has_image_file=Y / has_image_base64=Y
+[2026-04-23 00:00:17] [KOSHA 저장 스킵] image_file 이미 있거나 image_base64 없음
+[2026-04-23 00:00:17] [KOSHA OCR 시작] image_file=output/images/crop_92b2c5e7914604af5979.jpg
+[2026-04-23 00:00:17] [KOSHA OCR 대상] poster_image=output/images/siren_a970dc52fda3202a.jpg
+[2026-04-23 00:00:17] [1순위 선택] KOSHA siren_score=0 / title=(260413)중대재해 발생 알림(2) / summary_len=71 / prevention_len=116
+[2026-04-23 00:00:18] [fallback 이미지] 네이버 성공: https://www.gokseong.go.kr/board/getImage.do?atchFileId=FILE_000000014455483&fileSn=0
+[2026-04-23 00:00:32] [이미지 정리] 미사용 fallback 삭제: output/images/article_76fac719e10fa22f921ef2a9865d7668.jpg
+[2026-04-23 00:00:32] [이미지 정리] 삭제: output/images/siren_a970dc52fda3202a.jpg
+[2026-04-23 00:00:32] [이미지 정리] 총 1개 미사용 파일 삭제
+[2026-04-24 00:00:02] [1순위] KOSHA 사이렌 수집 시작
+[2026-04-24 00:00:04] [1순위 실패] KOSHA 사용 가능 항목 없음 → CSI 사고사례로 전환
+[2026-04-24 00:00:14] [점수 1위] score=34  incident_score=9  title=서울역북부역세권 손가락 끼임
+[2026-04-24 00:00:14] [점수 2위] score=32  incident_score=9  title=세종천안 4공구 04.18. 철근 절곡기 끼임 사고
+[2026-04-24 00:00:14] [점수 3위] score=29  incident_score=9  title=고압가스용기 운반 중 손가락 협착사고
+[2026-04-24 00:00:14] [점수 4위] score=27  incident_score=9  title=정림 재해위험개선지구 정비사업
+[2026-04-24 00:00:14] [점수 5위] score=12  incident_score=9  title=정강이 2cm정도 찢어짐
+[2026-04-24 00:00:14] [최종 선택] score=12  title=정강이 2cm정도 찢어짐
+[2026-04-24 00:00:15] [CSI 이미지] 원본 이미지 URL 확인: https://www.csi.go.kr/com/imageViewProc.do?file_no=tw5HAhCRkM4rqeezK8fmSA%3D%3D

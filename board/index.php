@@ -14,6 +14,8 @@ $currentDept = trim((string)($_currentUser['dept'] ?? ''));
 
 $where = '1=1';
 $params = [];
+// 관리자는 모든 게시물 볼 수 있음
+$isAdmin = in_array(($_currentUser['role'] ?? ''), ['admin', 'administrator'], true);
 $category = null;
 if ($effectiveCatCode !== '') {
     $category = getCategoryByCode($effectiveCatCode);
@@ -28,7 +30,7 @@ if ($isAllTab) {
     $where .= " AND c.code IN ($allTabPlaceholders)";
     $params = array_merge($params, $allTabAllowedCodes);
 
-    if ($currentDept !== '') {
+    if ($currentDept !== '' && !$isAdmin) {
         $sharedDeptPlaceholders = implode(',', array_fill(0, count($allTabSharedDeptCodes), '?'));
         $strictDeptPlaceholders = implode(',', array_fill(0, count($allTabStrictDeptCodes), '?'));
         $where .= " AND ((c.code IN ($sharedDeptPlaceholders) AND (COALESCE(p.author_dept, '') = '' OR p.author_dept = ?)) OR (c.code IN ($strictDeptPlaceholders) AND p.author_dept = ?))";
@@ -52,7 +54,7 @@ if ($isAllTab) {
     $noticeQuery .= " AND c.code IN ($allTabNoticePlaceholders)";
     $noticeParams = array_merge($noticeParams, $allTabAllowedCodes);
 
-    if ($currentDept !== '') {
+    if ($currentDept !== '' && !$isAdmin) {
         $noticeQuery .= " AND (COALESCE(p.author_dept, '') = '' OR p.author_dept = ?)";
         $noticeParams[] = $currentDept;
     }

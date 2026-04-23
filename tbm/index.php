@@ -25,8 +25,8 @@ $userRole   = (string)($raUser['role'] ?? '');
 // 운영자 = admin 또는 safety_manager (안전관리자)
 $isOperator = $isAdmin || $userRole === 'safety_manager';
 
-// AI 버튼은 운영자만 볼 수 있음
-$showAiButtons = $isOperator;
+// admin02는 TBM AI 자동생성 기능만 숨김
+$showAiButtons = tbm_can_use_ai_generation($raUser);
 
 // 팀 표시명 매핑: risk_assessment 팀 키 → TBM 표시명
 // 공사팀-전기와 공사팀-모터는 '공사팀'으로 통합
@@ -294,7 +294,7 @@ body { font-family: "Malgun Gothic", sans-serif; margin: 0; background: #f5f6f7;
             <h2 style="margin-bottom:0;">📋 TBM 일지 생성</h2>
             <div style="font-size:.85rem;color:#475569;">
                 <strong><?= h($userLabel) ?></strong>
-                <a href="../risk_assessment/task_select.php" style="margin-left:10px;">작업목록</a>
+                <a href="../risk_assessment/<?= h(auth_main_page_path($raUser)) ?>" style="margin-left:10px;">작업목록</a>
                 <a href="../risk_assessment/task_select.php?logout=1" style="margin-left:10px;">로그아웃</a>
             </div>
         </div>

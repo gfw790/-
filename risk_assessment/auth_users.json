@@ -163,8 +163,8 @@
     "2316": {
         "password": "1234",
         "name": "정주랑",
-        "role": "safety_manager",
-        "team": "제조팀",
+        "role": "administrator",
+        "team": "경영지원",
         "phone": "010-5360-2316"
     },
     "6680": {
@@ -173,6 +173,13 @@
         "role": "ceo",
         "team": "",
         "phone": "010-6374-6680"
+    },
+    "admin02": {
+        "password": "1234",
+        "name": "통합관리자",
+        "role": "administrator",
+        "team": "",
+        "phone": ""
     },
     "100": {
         "password": "1234",

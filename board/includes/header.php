@@ -57,7 +57,7 @@ $_mainPageHref = function_exists('auth_main_page_path') ? '../risk_assessment/' 
               <span class="user-badge"><?= h($_currentUser['sys_role_label']) ?></span>
             <?php endif; ?>
           </span>
-          <?php if ($_currentUser['role'] === 'admin'): ?>
+          <?php if (in_array($_currentUser['role'] ?? '', ['admin', 'administrator'], true)): ?>
             <a href="admin.php" class="btn-link">관리</a>
           <?php endif; ?>
           <a href="../near_miss/" class="btn-link">아차사고</a>

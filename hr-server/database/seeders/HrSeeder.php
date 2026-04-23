@@ -21,6 +21,7 @@ class HrSeeder extends Seeder
             ['id' => 2, 'code' => 'CS',  'name' => '공사팀',     'parent_id' => 1,    'sort_order' => 1, 'is_active' => true],
             ['id' => 3, 'code' => 'GAS', 'name' => 'GAS팀',      'parent_id' => 1,    'sort_order' => 2, 'is_active' => true],
             ['id' => 4, 'code' => 'MFG', 'name' => '제조팀',     'parent_id' => 1,    'sort_order' => 3, 'is_active' => true],
+            ['id' => 5, 'code' => 'ADM', 'name' => '경영지원',     'parent_id' => 1,    'sort_order' => 4, 'is_active' => true],
         ];
 
         foreach ($departments as $dept) {
@@ -33,7 +34,7 @@ class HrSeeder extends Seeder
         $employees = [
             // 대표이사실
             ['employee_number' => 'HD-001', 'name' => '정연탁', 'phone' => '010-6374-6680', 'job_title' => '대표이사', 'department_id' => 1],
-            ['employee_number' => 'HD-002', 'name' => '정주랑', 'phone' => '010-5360-2316', 'job_title' => '실장',     'department_id' => 1],
+            ['employee_number' => 'HD-002', 'name' => '정주랑', 'phone' => '010-5360-2316', 'job_title' => '실장',     'department_id' => 5],
             // 공사팀
             ['employee_number' => 'HD-003', 'name' => '진종철', 'phone' => '010-2058-7204', 'job_title' => '부장', 'department_id' => 2],
             ['employee_number' => 'HD-004', 'name' => '윤택천', 'phone' => '010-5366-6209', 'job_title' => '반장', 'department_id' => 2],

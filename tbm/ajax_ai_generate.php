@@ -21,9 +21,16 @@ require_once __DIR__ . '/tbm_db.php';
 require_once __DIR__ . '/../risk_assessment/auth.php';
 require_once __DIR__ . '/tbm_ai.php';
 
-if (auth_current_user() === null) {
+$raUser = auth_current_user();
+if ($raUser === null) {
     http_response_code(401);
     echo json_encode(['error' => '로그인이 필요합니다.'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+if (!tbm_can_use_ai_generation($raUser)) {
+    http_response_code(403);
+    echo json_encode(['error' => 'AI 자동생성 권한이 없습니다.'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 

@@ -62,7 +62,7 @@ function can_view_all_calendar_task_teams(?array $user): bool
         return false;
     }
 
-    return auth_is_admin($user) || (string)($user['role'] ?? '') === 'safety_manager';
+    return auth_is_admin($user) || in_array((string)($user['role'] ?? ''), ['safety_manager', 'administrator'], true);
 }
 
 function visible_team_keys_for_calendar(?array $user): array

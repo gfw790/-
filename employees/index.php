@@ -224,8 +224,9 @@ $teamOrder = "CASE
     WHEN team='가스팀'       THEN 4
     WHEN team='제조팀'       THEN 5
     WHEN team='안전관리'     THEN 6
-    WHEN team='공사팀-전기2' THEN 7
-    WHEN team='공사2팀'      THEN 8
+    WHEN team='경영지원'     THEN 7
+    WHEN team='공사팀-전기2' THEN 8
+    WHEN team='공사2팀'      THEN 9
     ELSE 99 END";
 $memberOrder = "CASE
     WHEN team='공사팀-전기' AND name LIKE '진종철%' THEN 1
@@ -246,10 +247,10 @@ $memberOrder = "CASE
     WHEN team='가스팀' AND name LIKE '최정섭%'  THEN 7
     WHEN team='제조팀' AND name LIKE '우홍기%'  THEN 1
     WHEN team='제조팀' AND name LIKE '정민교%'  THEN 2
-    WHEN team='제조팀' AND name LIKE '정주랑%'  THEN 3
-    WHEN team='제조팀' AND name LIKE '정영교%'  THEN 4
-    WHEN team='제조팀' AND name LIKE '김성용%'  THEN 5
-    WHEN team='제조팀' AND name LIKE '김진환%'  THEN 6
+    WHEN team='제조팀' AND name LIKE '정영교%'  THEN 3
+    WHEN team='제조팀' AND name LIKE '김성용%'  THEN 4
+    WHEN team='제조팀' AND name LIKE '김진환%'  THEN 5
+    WHEN team='경영지원' AND name LIKE '정주랑%' THEN 1
     ELSE 99 END";
 $sql = "SELECT * FROM employees" . (!empty($where) ? ' WHERE ' . implode(' AND ', $where) : '') . " ORDER BY $teamOrder, $memberOrder, name";
 $stmt = $pdo->prepare($sql);
@@ -277,6 +278,7 @@ function team_badge(string $team): string {
         '가스팀'        => ['#b45309','#fef3c7'],
         '제조팀'        => ['#047857','#d1fae5'],
         '안전관리'      => ['#be123c','#ffe4e6'],
+        '경영지원'      => ['#7c3aed','#ede9fe'],
         '공사2팀'       => ['#0f766e','#ccfbf1'],
     ];
     if ($team === '') return '';

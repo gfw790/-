@@ -804,7 +804,7 @@ function auth_write_stored_accounts(array $accounts): bool
 
 function auth_allowed_roles(): array
 {
-    return ['worker', 'leader', 'manager', 'safety_manager', 'admin', 'ceo'];
+    return ['worker', 'leader', 'manager', 'safety_manager', 'administrator', 'admin', 'ceo'];
 }
 
 function auth_normalize_role(string $role): string
@@ -906,6 +906,7 @@ function auth_role_label(string $role): string
     return match ($role) {
         'manager' => '관리감독자',
         'safety_manager' => '안전관리자',
+        'administrator' => '관리자',
         'leader' => '작업지휘자(작업반장)',
         'admin' => '운영자',
         'ceo' => '대표이사',
@@ -916,7 +917,7 @@ function auth_role_label(string $role): string
 
 function auth_is_admin(?array $user): bool
 {
-    return is_array($user) && in_array((string)($user['role'] ?? ''), ['admin', 'ceo'], true);
+    return is_array($user) && in_array((string)($user['role'] ?? ''), ['admin', 'administrator', 'ceo'], true);
 }
 
 function auth_can_manage(?array $user): bool
@@ -949,7 +950,8 @@ function auth_main_page_path(?array $user): string
     }
 
     $role = (string)($user['original_role'] ?? $user['role'] ?? '');
-    return $role === 'safety_manager' ? 'work_list.php' : 'task_select.php';
+    $workListRoles = ['safety_manager', 'administrator', 'admin', 'ceo'];
+    return in_array($role, $workListRoles, true) ? 'work_list.php' : 'task_select.php';
 }
 
 function auth_current_user(): ?array
