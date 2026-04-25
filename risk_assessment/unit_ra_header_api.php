@@ -210,11 +210,12 @@ function count_major_category_unit_ra_usage(PDO $pdo, string $processCategory, s
         FROM unit_ra_header
         WHERE unit_type = 'target'
           AND process_name = :process_name
-          AND LEFT(unit_title, CHAR_LENGTH(:major_prefix)) = :major_prefix
+          AND LEFT(unit_title, CHAR_LENGTH(:major_prefix_length)) = :major_prefix_value
     ");
     $stmt->execute([
         ':process_name' => $processCategory,
-        ':major_prefix' => $majorPrefix,
+        ':major_prefix_length' => $majorPrefix,
+        ':major_prefix_value' => $majorPrefix,
     ]);
 
     return (int)$stmt->fetchColumn();
@@ -1334,14 +1335,16 @@ if ($action === 'rename_major_category' && $_SERVER['REQUEST_METHOD'] === 'POST'
 
         $updateHeaderStmt = $pdo->prepare("
             UPDATE unit_ra_header
-            SET unit_title = CONCAT(:new_major_prefix, SUBSTRING(unit_title, CHAR_LENGTH(:old_major_prefix) + 1))
+            SET unit_title = CONCAT(:new_major_prefix, SUBSTRING(unit_title, CHAR_LENGTH(:old_major_prefix_length) + 1))
             WHERE unit_type = 'target'
               AND process_name = :process_name
-              AND LEFT(unit_title, CHAR_LENGTH(:old_major_prefix)) = :old_major_prefix
+              AND LEFT(unit_title, CHAR_LENGTH(:old_major_prefix_match_length)) = :old_major_prefix_match_value
         ");
         $updateHeaderStmt->execute([
             ':new_major_prefix' => $newMajorPrefix,
-            ':old_major_prefix' => $oldMajorPrefix,
+            ':old_major_prefix_length' => $oldMajorPrefix,
+            ':old_major_prefix_match_length' => $oldMajorPrefix,
+            ':old_major_prefix_match_value' => $oldMajorPrefix,
             ':process_name' => $processCategory,
         ]);
 
