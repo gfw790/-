@@ -12,7 +12,7 @@ $countStmt = db()->query(
 $total = (int)$countStmt->fetchColumn();
 
 $listStmt = db()->prepare(
-    "SELECT p.id, p.author_name, p.created_at, p.views,
+    "SELECT p.id, p.title, p.author_name, p.created_at, p.views,
             n.incident_at, n.location, n.work_type, n.risk_type, n.status
      FROM near_miss_reports n
      JOIN posts p ON p.id = n.post_id
@@ -33,6 +33,9 @@ function statusLabel(string $status): string {
     <span>아차사고 목록</span>
     <span class="page-title-right">
         <span class="sub">총 <?= number_format($total) ?>건 / <?= $page ?>페이지</span>
+        <?php if ($_currentUser && $_currentUser['role'] === 'admin'): ?>
+            <a href="import_excel.php" class="btn">엑셀 가져오기</a>
+        <?php endif; ?>
         <?php if ($_currentUser && (string)($_currentUser['original_role'] ?? '') === 'safety_manager'): ?>
             <a href="export_excel.php" class="btn">엑셀 다운로드</a>
         <?php endif; ?>
@@ -56,7 +59,7 @@ function statusLabel(string $status): string {
     <tr>
         <th>번호</th>
         <th>발생일시</th>
-        <th>장소 / 작업유형</th>
+        <th>제목 / 장소</th>
         <th>상태</th>
         <th>작성자</th>
         <th>등록일</th>
@@ -72,11 +75,13 @@ function statusLabel(string $status): string {
             <tr>
                 <td data-label="번호"><?= $rowNum-- ?></td>
                 <td data-label="발생일시"><?= dateFormat($row['incident_at'], 'Y-m-d H:i') ?></td>
-                <td class="title-cell" data-label="장소 / 작업유형">
+                <td class="title-cell" data-label="제목 / 장소">
                     <a href="view.php?id=<?= (int)$row['id'] ?>" class="post-title">
-                        <?= h($row['location']) ?>
+                        <?= h($row['title']) ?>
                     </a>
-                    <span class="post-summary"> / <?= h($row['work_type']) ?></span>
+                    <?php if (!empty($row['location'])): ?>
+                        <div class="post-summary"><?= h($row['location']) ?></div>
+                    <?php endif; ?>
                     <?php if (!empty($row['risk_type'])): ?>
                         <div class="post-summary"><?= h($row['risk_type']) ?></div>
                     <?php endif; ?>

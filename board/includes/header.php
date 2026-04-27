@@ -60,7 +60,7 @@ $_mainPageHref = function_exists('auth_main_page_path') ? '../risk_assessment/' 
           <?php if (in_array($_currentUser['role'] ?? '', ['admin', 'administrator'], true)): ?>
             <a href="admin.php" class="btn-link">관리</a>
           <?php endif; ?>
-          <a href="../near_miss/" class="btn-link">아차사고</a>
+          <a href="../near_miss/" class="btn-link btn-link-cta">아차사고</a>
           <a href="<?= h($_mainPageHref) ?>" class="btn-link">메인으로</a>
         <?php else: ?>
           <span class="user-info">비로그인</span>

@@ -1,15 +1,15 @@
-<?php
+﻿<?php
 require_once __DIR__ . '/db.php';
 
 /**
- * HTML 이스케이프
+ * HTML ?댁뒪耳?댄봽
  */
 function h($str) {
     return htmlspecialchars((string)$str, ENT_QUOTES | ENT_HTML5, 'UTF-8');
 }
 
 /**
- * CSRF 토큰
+ * CSRF ?좏겙
  */
 function csrfToken() {
     if (session_status() === PHP_SESSION_NONE) session_start();
@@ -23,12 +23,12 @@ function checkCsrf($token) {
     if (session_status() === PHP_SESSION_NONE) session_start();
     if (empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], (string)$token)) {
         http_response_code(400);
-        die('잘못된 요청입니다. (CSRF)');
+        die('?섎せ???붿껌?낅땲?? (CSRF)');
     }
 }
 
 /**
- * 아차사고 기능 테이블/카테고리 보정
+ * ?꾩감?ш퀬 湲곕뒫 ?뚯씠釉?移댄뀒怨좊━ 蹂댁젙
  */
 function ensureNearMissSchema() {
     static $done = false;
@@ -40,12 +40,16 @@ function ensureNearMissSchema() {
         "CREATE TABLE IF NOT EXISTS near_miss_reports (
             id INT NOT NULL AUTO_INCREMENT,
             post_id INT NOT NULL,
-            source_excel_id BIGINT DEFAULT NULL COMMENT '엑셀 원본 ID',
-            source_written_at DATETIME DEFAULT NULL COMMENT '엑셀 작성 시간',
+            source_excel_id BIGINT DEFAULT NULL COMMENT '?묒? ?먮낯 ID',
+            source_written_at DATETIME DEFAULT NULL COMMENT '?묒? ?묒꽦 ?쒓컙',
             incident_at DATETIME NOT NULL,
             location VARCHAR(200) NOT NULL,
             work_type VARCHAR(100) NOT NULL,
             risk_type VARCHAR(100) DEFAULT NULL,
+            unsafe_state VARCHAR(100) DEFAULT NULL,
+            unsafe_action VARCHAR(100) DEFAULT NULL,
+            careless_action VARCHAR(100) DEFAULT NULL,
+            careless_state VARCHAR(100) DEFAULT NULL,
             description TEXT NOT NULL,
             cause TEXT NOT NULL,
             action_taken TEXT NOT NULL,
@@ -63,15 +67,15 @@ function ensureNearMissSchema() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
 
-    // 기존 DB에도 엑셀 동기화 컬럼/인덱스를 안전하게 추가
+    // 湲곗〈 DB?먮룄 ?묒? ?숆린??而щ읆/?몃뜳?ㅻ? ?덉쟾?섍쾶 異붽?
     $col = db()->query("SHOW COLUMNS FROM near_miss_reports LIKE 'source_excel_id'")->fetch();
     if (!$col) {
-        db()->exec("ALTER TABLE near_miss_reports ADD COLUMN source_excel_id BIGINT DEFAULT NULL COMMENT '엑셀 원본 ID' AFTER post_id");
+        db()->exec("ALTER TABLE near_miss_reports ADD COLUMN source_excel_id BIGINT DEFAULT NULL COMMENT '?묒? ?먮낯 ID' AFTER post_id");
     }
 
     $col = db()->query("SHOW COLUMNS FROM near_miss_reports LIKE 'source_written_at'")->fetch();
     if (!$col) {
-        db()->exec("ALTER TABLE near_miss_reports ADD COLUMN source_written_at DATETIME DEFAULT NULL COMMENT '엑셀 작성 시간' AFTER source_excel_id");
+        db()->exec("ALTER TABLE near_miss_reports ADD COLUMN source_written_at DATETIME DEFAULT NULL COMMENT '?묒? ?묒꽦 ?쒓컙' AFTER source_excel_id");
     }
 
     $idx = db()->query("SHOW INDEX FROM near_miss_reports WHERE Key_name = 'uk_source_excel_id'")->fetch();
@@ -79,9 +83,29 @@ function ensureNearMissSchema() {
         db()->exec("ALTER TABLE near_miss_reports ADD UNIQUE KEY uk_source_excel_id (source_excel_id)");
     }
 
+    $col = db()->query("SHOW COLUMNS FROM near_miss_reports LIKE 'unsafe_state'")->fetch();
+    if (!$col) {
+        db()->exec("ALTER TABLE near_miss_reports ADD COLUMN unsafe_state VARCHAR(100) DEFAULT NULL AFTER risk_type");
+    }
+
+    $col = db()->query("SHOW COLUMNS FROM near_miss_reports LIKE 'unsafe_action'")->fetch();
+    if (!$col) {
+        db()->exec("ALTER TABLE near_miss_reports ADD COLUMN unsafe_action VARCHAR(100) DEFAULT NULL AFTER unsafe_state");
+    }
+
+    $col = db()->query("SHOW COLUMNS FROM near_miss_reports LIKE 'careless_action'")->fetch();
+    if (!$col) {
+        db()->exec("ALTER TABLE near_miss_reports ADD COLUMN careless_action VARCHAR(100) DEFAULT NULL AFTER unsafe_action");
+    }
+
+    $col = db()->query("SHOW COLUMNS FROM near_miss_reports LIKE 'careless_state'")->fetch();
+    if (!$col) {
+        db()->exec("ALTER TABLE near_miss_reports ADD COLUMN careless_state VARCHAR(100) DEFAULT NULL AFTER careless_action");
+    }
+
     db()->prepare(
         "INSERT INTO categories (code, name, sort_order, write_role, is_active)
-         VALUES ('near_miss', '아차사고', 5, 'user', 1)
+         VALUES ('near_miss', '?꾩감?ш퀬', 5, 'user', 1)
          ON DUPLICATE KEY UPDATE name = VALUES(name), is_active = VALUES(is_active)"
     )->execute();
 
@@ -105,6 +129,112 @@ function ensureNearMissSchema() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
 
+    nearMissBackfillChecklistColumns();
+
+    db()->exec("DROP VIEW IF EXISTS near_miss_excel_view");
+    db()->exec(
+        "CREATE VIEW near_miss_excel_view AS
+         SELECT
+            n.id AS `보고서ID`,
+            p.author_name AS `작성자명`,
+            CASE
+                WHEN p.title LIKE '[아차사고] %' THEN SUBSTRING(p.title, CHAR_LENGTH('[아차사고] ') + 1)
+                ELSE p.title
+            END AS `제목`,
+            n.incident_at AS `발생일시`,
+            n.location AS `발생장소`,
+            n.description AS `내용`,
+            n.cause AS `원인`,
+            n.risk_type AS `사고유형`,
+            n.unsafe_state AS `불안전한 상태`,
+            n.unsafe_action AS `불안전한 행동`,
+            n.careless_action AS `부주의한 행동`,
+            n.careless_state AS `부주의한 상태`,
+            REPLACE(n.action_taken, '<!--richtext-->', '') AS `즉시조치`,
+            n.prevention_plan AS `재발방지대책`
+         FROM near_miss_reports n
+         JOIN posts p ON p.id = n.post_id"
+    );
+
+    $done = true;
+}
+
+function nearMissExtractFieldFromContentForSchema(string $content, string $label): string {
+    if ($content === '' || $label === '') {
+        return '';
+    }
+
+    $quoted = preg_quote($label, '/');
+    if (preg_match('/^' . $quoted . '\s*:\s*(.+)$/mu', $content, $m)) {
+        $value = trim((string)$m[1]);
+        return $value === '-' ? '' : $value;
+    }
+
+    return '';
+}
+
+function nearMissBackfillChecklistColumns(): void {
+    static $done = false;
+    if ($done) {
+        return;
+    }
+
+    $rows = db()->query(
+        "SELECT n.post_id, p.content, n.risk_type, n.unsafe_state, n.unsafe_action, n.careless_action, n.careless_state
+         FROM near_miss_reports n
+         JOIN posts p ON p.id = n.post_id
+         WHERE n.risk_type IS NULL
+            OR n.unsafe_state IS NULL
+            OR n.unsafe_action IS NULL
+            OR n.careless_action IS NULL
+            OR n.careless_state IS NULL"
+    )->fetchAll();
+
+    if (empty($rows)) {
+        $done = true;
+        return;
+    }
+
+    $stmt = db()->prepare(
+        "UPDATE near_miss_reports
+         SET risk_type = ?, unsafe_state = ?, unsafe_action = ?, careless_action = ?, careless_state = ?
+         WHERE post_id = ?"
+    );
+
+    foreach ($rows as $row) {
+        $content = (string)($row['content'] ?? '');
+        $riskType = trim((string)($row['risk_type'] ?? ''));
+        $unsafeState = trim((string)($row['unsafe_state'] ?? ''));
+        $unsafeAction = trim((string)($row['unsafe_action'] ?? ''));
+        $carelessAction = trim((string)($row['careless_action'] ?? ''));
+        $carelessState = trim((string)($row['careless_state'] ?? ''));
+
+        if ($riskType === '') {
+            $riskType = nearMissExtractFieldFromContentForSchema($content, '?ш퀬?좏삎');
+        }
+        if ($unsafeState === '') {
+            $unsafeState = nearMissExtractFieldFromContentForSchema($content, '遺덉븞?꾪븳 ?곹깭');
+        }
+        if ($unsafeAction === '') {
+            $unsafeAction = nearMissExtractFieldFromContentForSchema($content, '遺덉븞?꾪븳 ?됰룞');
+        }
+        if ($carelessAction === '') {
+            $carelessAction = nearMissExtractFieldFromContentForSchema($content, '遺二쇱쓽 ?됰룞');
+        }
+        if ($carelessState === '') {
+            $carelessState = nearMissExtractFieldFromContentForSchema($content, '遺二쇱쓽 ?곹깭');
+        }
+
+        $stmt->execute([
+            $riskType !== '' ? $riskType : null,
+            $unsafeState !== '' ? $unsafeState : null,
+            $unsafeAction !== '' ? $unsafeAction : null,
+            $carelessAction !== '' ? $carelessAction : null,
+            $carelessState !== '' ? $carelessState : null,
+            (int)$row['post_id'],
+        ]);
+    }
+
     $done = true;
 }
 
@@ -116,15 +246,15 @@ function nearMissCategoryId(): int {
 }
 
 /**
- * (레거시 호환) 직원 목록 스키마 함수
- * HR 시스템(auth_accounts) 연동 방식에서는 별도 테이블이 필요하지 않음
+ * (?덇굅???명솚) 吏곸썝 紐⑸줉 ?ㅽ궎留??⑥닔
+ * HR ?쒖뒪??auth_accounts) ?곕룞 諛⑹떇?먯꽌??蹂꾨룄 ?뚯씠釉붿씠 ?꾩슂?섏? ?딆쓬
  */
 function ensureEmployeeSchema() {
     // no-op
 }
 
 /**
- * 팀별 직원 목록 조회
+ * ?蹂?吏곸썝 紐⑸줉 議고쉶
  */
 function getEmployeeDirectory(): array {
     $out = [];
@@ -151,7 +281,7 @@ function getEmployeeDirectory(): array {
             }
         }
     } else {
-        // fallback: users 캐시에서 생성
+        // fallback: users 罹먯떆?먯꽌 ?앹꽦
         $rows = db()->query(
             "SELECT dept, name
              FROM users
@@ -193,7 +323,7 @@ function employeeExists(string $teamName, string $employeeName): bool {
 }
 
 /**
- * 카테고리 목록 조회
+ * 移댄뀒怨좊━ 紐⑸줉 議고쉶
  */
 function getCategories() {
     static $cats = null;
@@ -218,16 +348,16 @@ function getCategoryByCode($code) {
 }
 
 /**
- * 상대 시간 표시 (방금 전, n분 전, n시간 전, 날짜)
+ * ?곷? ?쒓컙 ?쒖떆 (諛⑷툑 ?? n遺??? n?쒓컙 ?? ?좎쭨)
  */
 function timeAgo($datetime) {
     $time = strtotime($datetime);
     $diff = time() - $time;
 
-    if ($diff < 60) return '방금 전';
-    if ($diff < 3600) return floor($diff / 60) . '분 전';
-    if ($diff < 86400) return floor($diff / 3600) . '시간 전';
-    if ($diff < 86400 * 7) return floor($diff / 86400) . '일 전';
+    if ($diff < 60) return 'just now';
+    if ($diff < 3600) return floor($diff / 60) . 'm ago';
+    if ($diff < 86400) return floor($diff / 3600) . 'h ago';
+    if ($diff < 86400 * 7) return floor($diff / 86400) . 'd ago';
     return date('Y-m-d', $time);
 }
 
@@ -236,7 +366,7 @@ function dateFormat($datetime, $format = 'Y-m-d H:i') {
 }
 
 /**
- * 페이징 HTML 생성
+ * ?섏씠吏?HTML ?앹꽦
  */
 function paginate($total, $current, $perPage, $urlPattern) {
     $totalPages = max(1, (int)ceil($total / $perPage));
@@ -247,8 +377,8 @@ function paginate($total, $current, $perPage, $urlPattern) {
     $end = min($totalPages, $current + 5);
 
     if ($current > 1) {
-        $html .= '<a href="' . sprintf($urlPattern, 1) . '">«</a>';
-        $html .= '<a href="' . sprintf($urlPattern, $current - 1) . '">‹</a>';
+        $html .= '<a href="' . sprintf($urlPattern, 1) . '">짬</a>';
+        $html .= '<a href="' . sprintf($urlPattern, $current - 1) . '">??/a>';
     }
     for ($i = $start; $i <= $end; $i++) {
         if ($i == $current) {
@@ -258,15 +388,15 @@ function paginate($total, $current, $perPage, $urlPattern) {
         }
     }
     if ($current < $totalPages) {
-        $html .= '<a href="' . sprintf($urlPattern, $current + 1) . '">›</a>';
-        $html .= '<a href="' . sprintf($urlPattern, $totalPages) . '">»</a>';
+        $html .= '<a href="' . sprintf($urlPattern, $current + 1) . '">??/a>';
+        $html .= '<a href="' . sprintf($urlPattern, $totalPages) . '">쨩</a>';
     }
     $html .= '</div>';
     return $html;
 }
 
 /**
- * 파일 크기 포맷
+ * ?뚯씪 ?ш린 ?щ㎎
  */
 function formatBytes($bytes) {
     if ($bytes >= 1048576) return number_format($bytes / 1048576, 1) . ' MB';
@@ -360,12 +490,12 @@ function categoryUploadKey(string $code, string $name): ?string {
         : strtolower($nameKey);
 
     $aliases = [
-        '자유게시판' => 'free',
+        'free' => 'free',
         'q&a' => 'qna',
         'qna' => 'qna',
-        '자료실' => 'data',
-        '도면자료실' => 'dwg',
-        '아차사고' => 'near_miss',
+        'data' => 'data',
+        'dwg' => 'dwg',
+        'near_miss' => 'near_miss',
         'nearmiss' => 'near_miss',
     ];
 
@@ -474,7 +604,7 @@ function attachmentInlineUrl(array $att): string {
 }
 
 /**
- * 첨부파일 업로드 처리
+ * 泥⑤??뚯씪 ?낅줈??泥섎━
  */
 function attachmentDownloadUrl(array $att): string {
     return 'download.php?' . http_build_query(
@@ -542,19 +672,19 @@ function nearMissPhotoRoleFromAttachmentName(string $originalName): string {
         return 'other';
     }
 
-    if (str_contains($target, '상황')) {
+    if (str_contains($target, '?곹솴')) {
         return 'situation';
     }
 
-    if ((str_contains($target, '조치') && str_contains($target, '전')) || str_contains($target, 'before')) {
+    if ((str_contains($target, '議곗튂') && str_contains($target, 'before')) || str_contains($target, 'before')) {
         return 'action_before';
     }
 
-    if ((str_contains($target, '조치') && str_contains($target, '후')) || str_contains($target, 'after')) {
+    if ((str_contains($target, '議곗튂') && str_contains($target, 'after')) || str_contains($target, 'after')) {
         return 'action_after';
     }
 
-    if (str_contains($target, '조치') || str_contains($target, 'action')) {
+    if (str_contains($target, '議곗튂') || str_contains($target, 'action')) {
         return 'action';
     }
 
@@ -776,7 +906,7 @@ function handleUploads($postId, $files) {
 }
 
 /**
- * 게시글의 첨부파일 목록
+ * 寃뚯떆湲??泥⑤??뚯씪 紐⑸줉
  */
 function getAttachments($postId) {
     $stmt = db()->prepare("SELECT * FROM attachments WHERE post_id = ? ORDER BY id");
@@ -785,11 +915,11 @@ function getAttachments($postId) {
 }
 
 /**
- * 본문 안전 출력 (줄바꿈 보존, 링크 자동 변환)
+ * 蹂몃Ц ?덉쟾 異쒕젰 (以꾨컮轅?蹂댁〈, 留곹겕 ?먮룞 蹂??
  */
 function renderContent($text) {
     $text = h($text);
-    // URL 자동 링크
+    // URL ?먮룞 留곹겕
     $text = preg_replace(
         '#(https?://[^\s<]+)#i',
         '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>',
@@ -799,29 +929,28 @@ function renderContent($text) {
 }
 
 /**
- * 검색용 본문 요약
+ * 寃?됱슜 蹂몃Ц ?붿빟
  */
 function summarize($text, $length = 100) {
     $text = strip_tags($text);
     $text = preg_replace('/\s+/', ' ', $text);
     if (mb_strlen($text) > $length) {
-        $text = mb_substr($text, 0, $length) . '…';
+        $text = mb_substr($text, 0, $length) . '...';
     }
     return $text;
 }
 
 /**
- * 댓글 수 재계산
- */
+ * ?볤? ???ш퀎?? */
 function recalcCommentCount($postId) {
     $stmt = db()->prepare("UPDATE posts SET comment_count = (SELECT COUNT(*) FROM comments WHERE post_id = ? AND is_deleted = 0) WHERE id = ?");
     $stmt->execute([$postId, $postId]);
 }
 
 /**
- * 좋아요 수 재계산
- */
+ * 醫뗭븘?????ш퀎?? */
 function recalcLikeCount($postId) {
     $stmt = db()->prepare("UPDATE posts SET like_count = (SELECT COUNT(*) FROM likes WHERE post_id = ?) WHERE id = ?");
     $stmt->execute([$postId, $postId]);
 }
+

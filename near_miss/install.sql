@@ -138,6 +138,10 @@ CREATE TABLE IF NOT EXISTS `near_miss_reports` (
   `location` VARCHAR(200) NOT NULL COMMENT '발생 장소',
   `work_type` VARCHAR(100) NOT NULL COMMENT '작업 유형',
   `risk_type` VARCHAR(100) DEFAULT NULL COMMENT '위험 유형',
+  `unsafe_state` VARCHAR(100) DEFAULT NULL COMMENT '불안전한 상태',
+  `unsafe_action` VARCHAR(100) DEFAULT NULL COMMENT '불안전한 행동',
+  `careless_action` VARCHAR(100) DEFAULT NULL COMMENT '부주의한 행동',
+  `careless_state` VARCHAR(100) DEFAULT NULL COMMENT '부주의한 상태',
   `description` TEXT NOT NULL COMMENT '상황 설명',
   `cause` TEXT NOT NULL COMMENT '원인',
   `action_taken` TEXT NOT NULL COMMENT '즉시 조치',
@@ -173,6 +177,29 @@ CREATE TABLE IF NOT EXISTS `near_miss_photo_links` (
   KEY `idx_report_id` (`report_id`),
   KEY `idx_photo_role` (`photo_role`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+DROP VIEW IF EXISTS `near_miss_excel_view`;
+CREATE VIEW `near_miss_excel_view` AS
+SELECT
+  n.`id` AS `보고서ID`,
+  p.`author_name` AS `작성자명`,
+  CASE
+    WHEN p.`title` LIKE '[아차사고] %' THEN SUBSTRING(p.`title`, CHAR_LENGTH('[아차사고] ') + 1)
+    ELSE p.`title`
+  END AS `제목`,
+  n.`incident_at` AS `발생일시`,
+  n.`location` AS `발생장소`,
+  n.`description` AS `내용`,
+  n.`cause` AS `원인`,
+  n.`risk_type` AS `사고유형`,
+  n.`unsafe_state` AS `불안전한 상태`,
+  n.`unsafe_action` AS `불안전한 행동`,
+  n.`careless_action` AS `부주의한 행동`,
+  n.`careless_state` AS `부주의한 상태`,
+  REPLACE(n.`action_taken`, '<!--richtext-->', '') AS `즉시조치`,
+  n.`prevention_plan` AS `재발방지대책`
+FROM `near_miss_reports` n
+JOIN `posts` p ON p.`id` = n.`post_id`;
 
 -- ============================================
 -- 기본 카테고리 데이터

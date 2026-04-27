@@ -325,10 +325,10 @@ $form = [
     'location' => $nearMiss['location'] ?? '',
     'work_type' => $nearMiss['work_type'] ?? '일반',
     'risk_type' => $nearMiss['risk_type'] ?? extractNearMissFieldFromContent($nearMissContent, '사고유형'),
-    'unsafe_state' => extractNearMissFieldFromContent($nearMissContent, '불안전한 상태'),
-    'unsafe_action' => extractNearMissFieldFromContent($nearMissContent, '불안전한 행동'),
-    'careless_action' => extractNearMissFieldFromContent($nearMissContent, '부주의 행동'),
-    'careless_state' => extractNearMissFieldFromContent($nearMissContent, '부주의 상태'),
+    'unsafe_state' => $nearMiss['unsafe_state'] ?? extractNearMissFieldFromContent($nearMissContent, '불안전한 상태'),
+    'unsafe_action' => $nearMiss['unsafe_action'] ?? extractNearMissFieldFromContent($nearMissContent, '불안전한 행동'),
+    'careless_action' => $nearMiss['careless_action'] ?? extractNearMissFieldFromContent($nearMissContent, '부주의 행동'),
+    'careless_state' => $nearMiss['careless_state'] ?? extractNearMissFieldFromContent($nearMissContent, '부주의 상태'),
     'description' => $nearMiss['description'] ?? '',
     'cause' => $nearMiss['cause'] ?? '',
     'action_taken' => resolveUnresolvedTokens(
@@ -410,6 +410,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 db()->prepare(
                     "UPDATE near_miss_reports
                      SET incident_at = ?, location = ?, work_type = ?, risk_type = ?,
+                         unsafe_state = ?, unsafe_action = ?, careless_action = ?, careless_state = ?,
                          description = ?, cause = ?, action_taken = ?, prevention_plan = ?,
                          reporter_contact = ?, status = ?
                      WHERE post_id = ?"
@@ -418,6 +419,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $form['location'],
                     $form['work_type'],
                     $form['risk_type'] !== '' ? $form['risk_type'] : null,
+                    $form['unsafe_state'] !== '' ? $form['unsafe_state'] : null,
+                    $form['unsafe_action'] !== '' ? $form['unsafe_action'] : null,
+                    $form['careless_action'] !== '' ? $form['careless_action'] : null,
+                    $form['careless_state'] !== '' ? $form['careless_state'] : null,
                     $form['description'],
                     $form['cause'],
                     $form['action_taken'],
@@ -444,15 +449,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 db()->prepare(
                     "INSERT INTO near_miss_reports
-                     (post_id, incident_at, location, work_type, risk_type, description, cause,
+                     (post_id, incident_at, location, work_type, risk_type, unsafe_state, unsafe_action, careless_action, careless_state, description, cause,
                       action_taken, prevention_plan, reporter_contact, status)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
                 )->execute([
                     $postId,
                     $form['incident_at'],
                     $form['location'],
                     $form['work_type'],
                     $form['risk_type'] !== '' ? $form['risk_type'] : null,
+                    $form['unsafe_state'] !== '' ? $form['unsafe_state'] : null,
+                    $form['unsafe_action'] !== '' ? $form['unsafe_action'] : null,
+                    $form['careless_action'] !== '' ? $form['careless_action'] : null,
+                    $form['careless_state'] !== '' ? $form['careless_state'] : null,
                     $form['description'],
                     $form['cause'],
                     $form['action_taken'],

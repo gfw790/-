@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require_once 'includes/header.php';
 
 $id = (int)($_GET['id'] ?? 0);
@@ -33,25 +33,23 @@ function extractCauseLine(string $text, string $label): string {
 
 $attachments = getAttachments($id);
 $situationPhotos = [];
-$actionPhotos    = [];   // 전체 조치 사진 (토큰 렌더링용)
-$beforePhotos    = [];   // 조치 전
-$afterPhotos     = [];   // 조치 후
-
+$actionPhotos    = [];   // ?꾩껜 議곗튂 ?ъ쭊 (?좏겙 ?뚮뜑留곸슜)
+$beforePhotos    = [];   // 議곗튂 ??$afterPhotos     = [];   // 議곗튂 ??
 foreach ($attachments as $att) {
     $name = (string)$att['original_name'];
-    if (strncmp($name, '[상황] ', strlen('[상황] ')) === 0) {
+    if (strncmp($name, '[?곹솴] ', strlen('[?곹솴] ')) === 0) {
         $situationPhotos[] = $att;
-    } elseif (strncmp($name, '[조치 전] ', strlen('[조치 전] ')) === 0) {
+    } elseif (strncmp($name, '[議곗튂 ?? ', strlen('[議곗튂 ?? ')) === 0) {
         $actionPhotos[] = $att;
         $beforePhotos[] = $att;
-    } elseif (strncmp($name, '[조치 후] ', strlen('[조치 후] ')) === 0) {
+    } elseif (strncmp($name, '[議곗튂 ?? ', strlen('[議곗튂 ?? ')) === 0) {
         $actionPhotos[] = $att;
         $afterPhotos[] = $att;
-    } elseif (strncmp($name, '[조치] ', strlen('[조치] ')) === 0) {
-        // 이전 형식 호환: [조치] 조치 전_xxx / [조치] 조치 후_xxx
+    } elseif (strncmp($name, '[議곗튂] ', strlen('[議곗튂] ')) === 0) {
+        // ?댁쟾 ?뺤떇 ?명솚: [議곗튂] 議곗튂 ??xxx / [議곗튂] 議곗튂 ??xxx
         $actionPhotos[] = $att;
-        $stripped = substr($name, strlen('[조치] '));
-        if (str_starts_with($stripped, '조치 전_')) {
+        $stripped = substr($name, strlen('[議곗튂] '));
+        if (str_starts_with($stripped, '議곗튂 ??')) {
             $beforePhotos[] = $att;
         } else {
             $afterPhotos[] = $att;
@@ -60,14 +58,32 @@ foreach ($attachments as $att) {
 }
 
 $postContent    = (string)($row['content'] ?? '');
-$unsafeState    = extractCauseLine($postContent, '불안전한 상태');
-$unsafeAction   = extractCauseLine($postContent, '불안전한 행동');
-$carelessAction = extractCauseLine($postContent, '부주의 행동');
-$carelessState  = extractCauseLine($postContent, '부주의 상태');
+$unsafeState    = extractCauseLine($postContent, '遺덉븞?꾪븳 ?곹깭');
+$unsafeAction   = extractCauseLine($postContent, '遺덉븞?꾪븳 ?됰룞');
+$carelessAction = extractCauseLine($postContent, '遺二쇱쓽 ?됰룞');
+$carelessState  = extractCauseLine($postContent, '遺二쇱쓽 ?곹깭');
 $incidentName   = extractCauseLine($postContent, '아차사고명');
 
+ $unsafeStateDb = trim((string)($row['unsafe_state'] ?? ''));
+ $unsafeActionDb = trim((string)($row['unsafe_action'] ?? ''));
+ $carelessActionDb = trim((string)($row['careless_action'] ?? ''));
+ $carelessStateDb = trim((string)($row['careless_state'] ?? ''));
+
+ if ($unsafeStateDb !== '') {
+     $unsafeState = $unsafeStateDb;
+ }
+ if ($unsafeActionDb !== '') {
+     $unsafeAction = $unsafeActionDb;
+ }
+ if ($carelessActionDb !== '') {
+     $carelessAction = $carelessActionDb;
+ }
+ if ($carelessStateDb !== '') {
+     $carelessState = $carelessStateDb;
+ }
+
 function stripTagInView(string $name): string {
-    foreach (['[상황] ', '[조치 전] ', '[조치 후] ', '[조치] '] as $prefix) {
+    foreach (['[?곹솴] ', '[議곗튂 ?? ', '[議곗튂 ?? ', '[議곗튂] '] as $prefix) {
         if (strncmp($name, $prefix, strlen($prefix)) === 0) {
             return substr($name, strlen($prefix));
         }
@@ -80,16 +96,15 @@ function statusLabelView(string $status): string {
     if ($status === 'in_progress') return '조치중';
     return '접수';
 }
-
 function renderPhotoGridView(array $photos): string {
     if (empty($photos)) {
         return '<div class="editor-help">첨부된 사진이 없습니다.</div>';
     }
     $html = '<div class="attach-photo-grid">';
     foreach ($photos as $att) {
-        $html .= '<a class="attach-photo-item" href="download.php?id=' . (int)$att['id'] . '">';
-        $html .= '<img src="' . h(attachmentInlineUrl($att)) . '" alt="' . h(stripTagInView($att['original_name'])) . '">';
-        $html .= '<span>' . h(stripTagInView($att['original_name'])) . '</span>';
+        $html .= '<a class="attach-photo-item" href="download.php?id=' . (int)($att['id'] ?? 0) . '">';
+        $html .= '<img src="' . h(attachmentInlineUrl($att)) . '" alt="' . h(stripTagInView((string)($att['original_name'] ?? ''))) . '">';
+        $html .= '<span>' . h(stripTagInView((string)($att['original_name'] ?? ''))) . '</span>';
         $html .= '</a>';
     }
     $html .= '</div>';
@@ -210,7 +225,7 @@ function renderAttachmentTokenNM(string $tokenValue, array $photos): ?string {
         $index = (int)$targetToken;
         if ($index >= 1 && isset($imagePhotos[$index - 1])) $target = $imagePhotos[$index - 1];
     } else {
-        // 파일명 토큰: [태그] 접두사를 제거한 뒤 대소문자 무시 매칭
+        // ?뚯씪紐??좏겙: [?쒓렇] ?묐몢?щ? ?쒓굅??????뚮Ц??臾댁떆 留ㅼ묶
         $needle = mb_strtolower(trim($targetToken), 'UTF-8');
         foreach ($imagePhotos as $att) {
             $rawName = (string)($att['original_name'] ?? '');
@@ -244,8 +259,8 @@ function renderActionWithPhotoTokens(string $text, array $situationPhotos, array
     }
 
     $text = str_replace(['&#91;', '&#93;'], ['[', ']'], $text);
-    // [[첨부:...]] (board 에디터) + [상황사진]/[조치사진] (기존 토큰) 동시 처리
-    $tokenPattern = '/(\[\[\s*첨부\s*:\s*.+?\s*\]\]|\[[^\]\r\n]*상황사진[^\]\r\n]*\]|\[[^\]\r\n]*조치사진[^\]\r\n]*\])/u';
+    // [[泥⑤?:...]] (board ?먮뵒?? + [?곹솴?ъ쭊]/[議곗튂?ъ쭊] (湲곗〈 ?좏겙) ?숈떆 泥섎━
+    $tokenPattern = '/(\[\[\s*泥⑤?\s*:\s*.+?\s*\]\]|\[[^\]\r\n]*?곹솴?ъ쭊[^\]\r\n]*\]|\[[^\]\r\n]*議곗튂?ъ쭊[^\]\r\n]*\])/u';
     $parts = preg_split($tokenPattern, $text, -1, PREG_SPLIT_DELIM_CAPTURE);
     if (!is_array($parts)) {
         return $isRich ? sanitizeNearMissRichtextInline($text) : nl2br(h($text));
@@ -254,16 +269,16 @@ function renderActionWithPhotoTokens(string $text, array $situationPhotos, array
     $html = '';
     foreach ($parts as $part) {
         $trimmed = trim($part);
-        if ($trimmed !== '' && preg_match('/^\[\[\s*첨부\s*:\s*(.+?)\s*\]\]$/u', $trimmed, $m)) {
+        if ($trimmed !== '' && preg_match('/^\[\[\s*泥⑤?\s*:\s*(.+?)\s*\]\]$/u', $trimmed, $m)) {
             $rendered = renderAttachmentTokenNM($m[1], $actionPhotos);
             $html .= $rendered ?? '';
             continue;
         }
-        if ($trimmed !== '' && preg_match('/^\[[^\]]*상황사진[^\]]*\]$/u', $trimmed)) {
+        if ($trimmed !== '' && preg_match('/^\[[^\]]*?곹솴?ъ쭊[^\]]*\]$/u', $trimmed)) {
             $html .= renderPhotoGridView($situationPhotos);
             continue;
         }
-        if ($trimmed !== '' && preg_match('/^\[[^\]]*조치사진[^\]]*\]$/u', $trimmed)) {
+        if ($trimmed !== '' && preg_match('/^\[[^\]]*議곗튂?ъ쭊[^\]]*\]$/u', $trimmed)) {
             $html .= renderPhotoGridView($actionPhotos);
             continue;
         }
@@ -279,9 +294,9 @@ function renderActionWithPhotoTokens(string $text, array $situationPhotos, array
 $canEdit = $_currentUser && ($_currentUser['id'] === $row['author_id'] || $_currentUser['role'] === 'admin');
 $actionTaken = (string)($row['action_taken'] ?? '');
 $tokenScanText = str_replace(['&#91;', '&#93;'], ['[', ']'], $actionTaken);
-$hasSituationTokenInAction = (bool)preg_match('/\[[^\]\r\n]*상황사진[^\]\r\n]*\]/u', $tokenScanText);
-$hasActionTokenInAction = (bool)preg_match('/\[[^\]\r\n]*조치사진[^\]\r\n]*\]/u', $tokenScanText)
-    || (bool)preg_match('/\[\[\s*첨부\s*:\s*id:\d+/u', $tokenScanText);
+$hasSituationTokenInAction = (bool)preg_match('/\[[^\]\r\n]*?곹솴?ъ쭊[^\]\r\n]*\]/u', $tokenScanText);
+$hasActionTokenInAction = (bool)preg_match('/\[[^\]\r\n]*議곗튂?ъ쭊[^\]\r\n]*\]/u', $tokenScanText)
+    || (bool)preg_match('/\[\[\s*泥⑤?\s*:\s*id:\d+/u', $tokenScanText);
 $pageTitle = '아차사고 상세';
 ?>
 
@@ -305,6 +320,17 @@ $pageTitle = '아차사고 상세';
     <div class="post-view-body">
         <div class="detail-grid">
             <div class="detail-item">
+                <h3>내용</h3>
+                <p><?= nl2br(h($row['description'])) ?></p>
+                <?php if (!empty($situationPhotos) && !$hasSituationTokenInAction): ?>
+                    <?= renderPhotoGridView($situationPhotos) ?>
+                <?php endif; ?>
+            </div>
+            <div class="detail-item">
+                <h3>원인</h3>
+                <p><?= nl2br(h($row['cause'])) ?></p>
+            </div>
+            <div class="detail-item">
                 <h3>사고유형</h3>
                 <p><?= $row['risk_type'] !== null && $row['risk_type'] !== '' ? h($row['risk_type']) : '-' ?></p>
             </div>
@@ -325,19 +351,8 @@ $pageTitle = '아차사고 상세';
                 <p><?= $carelessState !== '' ? h($carelessState) : '-' ?></p>
             </div>
             <div class="detail-item">
-                <h3>제보 구분</h3>
+                <h3>제보자 구분</h3>
                 <p><?= $row['reporter_contact'] !== null && $row['reporter_contact'] !== '' ? h($row['reporter_contact']) : '-' ?></p>
-            </div>
-            <div class="detail-item">
-                <h3>상황 설명</h3>
-                <p><?= nl2br(h($row['description'])) ?></p>
-                <?php if (!empty($situationPhotos) && !$hasSituationTokenInAction): ?>
-                    <?= renderPhotoGridView($situationPhotos) ?>
-                <?php endif; ?>
-            </div>
-            <div class="detail-item">
-                <h3>원인</h3>
-                <p><?= nl2br(h($row['cause'])) ?></p>
             </div>
             <div class="detail-item">
                 <h3>즉시 조치</h3>

@@ -207,6 +207,25 @@ a:focus-visible {
     background: var(--accent2) !important;
 }
 
+.btn-link-cta {
+    min-height: 42px;
+    padding: 0 18px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+    border-color: transparent;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 800;
+    box-shadow: 0 12px 24px rgba(232, 146, 10, 0.28);
+}
+
+.btn-link-cta:hover {
+    background: linear-gradient(135deg, var(--accent2) 0%, var(--accent) 100%);
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 16px 28px rgba(232, 146, 10, 0.34);
+}
+
 .btn-danger {
     color: var(--danger);
     border-color: rgba(240, 128, 128, 0.25);

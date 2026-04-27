@@ -28,6 +28,7 @@ if ($autoloadPath === '') {
 require_once $autoloadPath;
 
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 function nearMissCleanIncidentName(string $title): string {
@@ -52,6 +53,10 @@ $rows = db()->query(
         n.location,
         n.work_type,
         n.risk_type,
+        n.unsafe_state,
+        n.unsafe_action,
+        n.careless_action,
+        n.careless_state,
         n.description,
         n.cause,
         n.action_taken,
@@ -82,6 +87,10 @@ $headers = [
     'location',
     'work_type',
     'risk_type',
+    'unsafe_state',
+    'unsafe_action',
+    'careless_action',
+    'careless_state',
     'description',
     'cause',
     'action_taken',
@@ -101,6 +110,7 @@ $headers = [
     'photo_urls',
 ];
 $sheet->fromArray($headers, null, 'A1');
+$lastColumn = Coordinate::stringFromColumnIndex(count($headers));
 
 $rowNum = 2;
 foreach ($rows as $row) {
@@ -122,6 +132,10 @@ foreach ($rows as $row) {
         $row['location'],
         $row['work_type'],
         $row['risk_type'],
+        $row['unsafe_state'],
+        $row['unsafe_action'],
+        $row['careless_action'],
+        $row['careless_state'],
         $row['description'],
         $row['cause'],
         $row['action_taken'],
@@ -145,14 +159,14 @@ foreach ($rows as $row) {
 
 $maxRow = max(1, $rowNum - 1);
 $sheet->freezePane('A2');
-$sheet->setAutoFilter('A1:Z1');
-$sheet->getStyle('A1:Z1')->getFont()->setBold(true);
+$sheet->setAutoFilter('A1:' . $lastColumn . '1');
+$sheet->getStyle('A1:' . $lastColumn . '1')->getFont()->setBold(true);
 if ($maxRow >= 2) {
-    $sheet->getStyle('J2:Z' . $maxRow)->getAlignment()->setWrapText(true);
+    $sheet->getStyle('J2:' . $lastColumn . $maxRow)->getAlignment()->setWrapText(true);
 }
 
-foreach (range('A', 'Z') as $col) {
-    $sheet->getColumnDimension($col)->setAutoSize(true);
+for ($i = 1, $n = count($headers); $i <= $n; $i++) {
+    $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($i))->setAutoSize(true);
 }
 
 $fileName = 'near_miss_export_' . date('Ymd_His') . '.xlsx';
