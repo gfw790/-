@@ -180,33 +180,5 @@
         "role": "administrator",
         "team": "",
         "phone": ""
-    },
-    "100": {
-        "password": "1234",
-        "name": "전계갑",
-        "role": "leader",
-        "team": "공사팀-전기3",
-        "phone": ""
-    },
-    "101": {
-        "password": "1234",
-        "name": "전영춘",
-        "role": "worker",
-        "team": "공사팀-전기3",
-        "phone": ""
-    },
-    "102": {
-        "password": "1234",
-        "name": "박석순",
-        "role": "worker",
-        "team": "공사팀-전기3",
-        "phone": ""
-    },
-    "103": {
-        "password": "1234",
-        "name": "유정완",
-        "role": "worker",
-        "team": "공사팀-전기3",
-        "phone": ""
     }
 }

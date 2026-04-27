@@ -694,7 +694,7 @@ function tbm_ai_validate_parsed_response(array $parsed): array
     return ['valid' => empty($errors), 'errors' => $errors];
 }
 
-function tbm_ai_trim_text_to_limit(string $text, int $maxLen, int $minSentenceCut = 80): string
+function tbm_ai_trim_text_to_limit(string $text, int $maxLen, int $minSentenceCut = 80, bool $allowHardCut = true): string
 {
     $text = trim(preg_replace('/\s+/u', ' ', $text));
     if ($text === '') {
@@ -721,6 +721,10 @@ function tbm_ai_trim_text_to_limit(string $text, int $maxLen, int $minSentenceCu
     }
 
     // 단어 경계(공백)에서 자르기 — 문장 경계 미발견 시 단어 중간 절단 방지
+    if (!$allowHardCut) {
+        return $text;
+    }
+
     $wordBoundaryMin = max((int)($maxLen * 0.85), max(1, $minSentenceCut));
     for ($i = $searchStart; $i >= $wordBoundaryMin; $i--) {
         if (mb_substr($text, $i - 1, 1, 'UTF-8') === ' ') {
@@ -910,7 +914,7 @@ function tbm_ai_autofit_single_quiz(string $quiz, int $targetMin = 183, int $tar
 
             $excess = mb_strlen($quiz, 'UTF-8') - $targetMax;
             $nextLimit = max(52, mb_strlen($questionLine, 'UTF-8') - $excess);
-            $trimmed = tbm_ai_trim_text_to_limit($questionLine, $nextLimit, 18);
+            $trimmed = tbm_ai_trim_text_to_limit($questionLine, $nextLimit, 18, false);
             if ($trimmed === '' || $trimmed === $questionLine) {
                 break;
             }
@@ -1014,8 +1018,8 @@ function tbm_ai_autofit_body_text(string $bodyText): string
     $firstBlock = tbm_ai_normalize_plain_style($firstBlock);
     $secondBlock = tbm_ai_normalize_plain_style($secondBlock);
 
-    $firstBlock = tbm_ai_trim_text_to_limit($firstBlock, 250, 180);
-    $secondBlock = tbm_ai_trim_text_to_limit($secondBlock, 160, 100);
+    $firstBlock = tbm_ai_trim_text_to_limit($firstBlock, 250, 180, false);
+    $secondBlock = tbm_ai_trim_text_to_limit($secondBlock, 160, 100, false);
 
     $firstBlock = tbm_ai_fill_text_to_min($firstBlock, 220, 250, [
         '작업 전에는 공정별 위험요인을 다시 확인하고 관리 책임을 명확히 해야 한다.',

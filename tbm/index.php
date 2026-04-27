@@ -123,10 +123,25 @@ try {
     $existingDoc = null;
 }
 
-$sharedContentDoc = $existingDoc;
+$hasDocumentContent = static function (?array $doc): bool {
+    if (!is_array($doc)) {
+        return false;
+    }
+
+    return
+        trim((string)($doc['body_text'] ?? '')) !== '' ||
+        trim((string)($doc['quiz_1'] ?? '')) !== '' ||
+        trim((string)($doc['quiz_2'] ?? '')) !== '' ||
+        trim((string)($doc['quiz_3'] ?? '')) !== '';
+};
+
+$sharedContentDoc = $hasDocumentContent($existingDoc) ? $existingDoc : null;
 if ($sharedContentDoc === null) {
     try {
         $sharedContentDoc = tbm_get_document($selectedDate);
+        if (!$hasDocumentContent($sharedContentDoc)) {
+            $sharedContentDoc = null;
+        }
     } catch (Throwable $e) {
         $sharedContentDoc = null;
     }
@@ -157,6 +172,31 @@ $formWork2       = $existingDoc['today_work_2'] ?? '';
 $formRemarks     = $existingDoc['remarks']    ?? '';
 $formSourceUrl   = $sharedContentDoc['source_url'] ?? $cachedAiDoc['source_url'] ?? '';
 $formImageFile   = $sharedContentDoc['image_file'] ?? $cachedAiDoc['image_file'] ?? '';
+$serverLockedFieldsJson = json_encode([
+    'edu_title' => $hasDocumentContent($sharedContentDoc),
+    'left_content' => $hasDocumentContent($sharedContentDoc),
+    'quiz1' => $hasDocumentContent($sharedContentDoc),
+    'quiz2' => $hasDocumentContent($sharedContentDoc),
+    'quiz3' => $hasDocumentContent($sharedContentDoc),
+    'source_url' => $hasDocumentContent($sharedContentDoc),
+    'image_file' => $hasDocumentContent($sharedContentDoc),
+], JSON_UNESCAPED_UNICODE);
+$draftScopeJson = json_encode([
+    'loginId' => trim((string)($raUser['login_id'] ?? '')),
+    'team' => $userDisplayTeam,
+], JSON_UNESCAPED_UNICODE);
+$draftProtectedFieldsJson = json_encode([
+    'today_work_1' => trim($formWork1) !== '',
+    'today_work_2' => trim($formWork2) !== '',
+    'edu_title' => trim($formEduTitle) !== '',
+    'left_content' => trim($formLeftContent) !== '',
+    'quiz1' => trim($formQuiz1) !== '',
+    'quiz2' => trim($formQuiz2) !== '',
+    'quiz3' => trim($formQuiz3) !== '',
+    'remarks' => trim($formRemarks) !== '',
+    'source_url' => trim($formSourceUrl) !== '',
+    'image_file' => trim($formImageFile) !== '',
+], JSON_UNESCAPED_UNICODE);
 
 // ── 최근 생성 목록 (최근 10건) ────────────────────────────────
 
@@ -394,7 +434,9 @@ body { font-family: "Malgun Gothic", sans-serif; margin: 0; background: #f5f6f7;
 
             <div class="btn-row">
                 <button type="submit" class="btn btn-primary">📄 문서 생성</button>
+                <?php if ($isOperator): ?>
                 <button type="button" class="btn btn-secondary" onclick="resetDraftAndReload()">🔄 전체 폼 초기화</button>
+                <?php endif; ?>
             </div>
         </form>
     </div><div class="side-panel">
@@ -450,9 +492,12 @@ const teamData = <?= $teamMembersJson ?>;
 const recentDocsByTeam = <?= $teamRecentDocsJson ?>;
 const fallbackRecentDocs = <?= $fallbackRecentDocsJson ?>;
 const initialTeam = <?= $initialTeamJson ?>;
+const draftScope = <?= $draftScopeJson ?>;
+const serverLockedFields = <?= $serverLockedFieldsJson ?>;
+const draftProtectedFields = <?= $draftProtectedFieldsJson ?>;
 let currentSlotCount = 0;
 let selectedRecentTeam = '';
-const formDraftVersion = 'v2';
+const formDraftVersion = 'v4';
 let draftAutosaveEnabled = false;
 let imagePreviewObjectUrl = null;
 
@@ -580,7 +625,9 @@ function getDraftDateValue() {
 }
 
 function getDraftStorageKey(dateValue = getDraftDateValue()) {
-    return 'tbm-form-draft:' + formDraftVersion + ':' + String(dateValue || 'unknown-date');
+    const loginId = String(draftScope?.loginId || 'anonymous');
+    const team = String(draftScope?.team || 'unknown-team');
+    return 'tbm-form-draft:' + formDraftVersion + ':' + loginId + ':' + team + ':' + String(dateValue || 'unknown-date');
 }
 
 function collectNameSlotValues() {
@@ -639,9 +686,23 @@ function applyDraftToForm(draft) {
         return;
     }
 
+    const shouldPreserveServerValue = (id, draftValue) => {
+        if (serverLockedFields[id]) {
+            const element = document.getElementById(id);
+            return !!(element && typeof element.value === 'string' && element.value.trim() !== '');
+        }
+
+        if (!draftProtectedFields[id] || typeof draftValue !== 'string' || draftValue.trim() !== '') {
+            return false;
+        }
+
+        const element = document.getElementById(id);
+        return !!(element && typeof element.value === 'string' && element.value.trim() !== '');
+    };
+
     const assignValue = (id, value) => {
         const element = document.getElementById(id);
-        if (element && typeof value === 'string') {
+        if (element && typeof value === 'string' && !shouldPreserveServerValue(id, value)) {
             element.value = value;
         }
     };
@@ -659,7 +720,7 @@ function applyDraftToForm(draft) {
     assignValue('image_file', draft.image_file || '');
 
     const remarks = document.querySelector('textarea[name="remarks"]');
-    if (remarks && typeof draft.remarks === 'string') {
+    if (remarks && typeof draft.remarks === 'string' && !shouldPreserveServerValue('remarks', draft.remarks)) {
         remarks.value = draft.remarks;
     }
 

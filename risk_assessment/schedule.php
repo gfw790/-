@@ -1,5 +1,6 @@
-<?php
+﻿<?php
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/db_config.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -15,11 +16,11 @@ $boardPageUrl = '../board/index.php';
 $user = auth_current_user();
 $userTeamName = auth_normalize_team_name((string)($user['team'] ?? ''));
 
-// 요청한 팀 파라미터 확인 (공사팀-전기 관리감독자 혹은 운영자/안전관리자가 다른 팀의 일정을 볼 때)
+// ?붿껌??? ?뚮씪誘명꽣 ?뺤씤 (怨듭궗?-?꾧린 愿由ш컧?낆옄 ?뱀? ?댁쁺???덉쟾愿由ъ옄媛 ?ㅻⅨ ????쇱젙??蹂???
 $requestedTeamName = '';
 $isViewingOtherTeam = false;
 $canViewOtherTeam = auth_is_admin($user) || (string)($user['role'] ?? '') === 'safety_manager' || (
-    auth_can_manage($user) && auth_team_key($userTeamName) === auth_team_key('공사팀-전기')
+    auth_can_manage($user) && auth_team_key($userTeamName) === auth_team_key('怨듭궗?-?꾧린')
 );
 
 if (!empty($_GET['view_team'])) {
@@ -34,15 +35,15 @@ if (!empty($_GET['view_team'])) {
     }
 }
 
-// 표시할 팀 결정 (요청한 팀이 있으면 그 팀, 없으면 사용자의 팀)
+// ?쒖떆??? 寃곗젙 (?붿껌??????덉쑝硫?洹??, ?놁쑝硫??ъ슜?먯쓽 ?)
 $teamName = $isViewingOtherTeam ? $requestedTeamName : $userTeamName;
 $teamScheduleKey = $teamName !== '' ? $teamName : 'unknown-team';
 
-// 읽기 전용 모드: 관리감독자가 아니거나, 다른 팀의 일정을 보고 있을 때
+// ?쎄린 ?꾩슜 紐⑤뱶: 愿由ш컧?낆옄媛 ?꾨땲嫄곕굹, ?ㅻⅨ ????쇱젙??蹂닿퀬 ?덉쓣 ??
 $isReadOnly = !auth_can_manage($user) || $isViewingOtherTeam;
 
 if (!$isViewingOtherTeam && $isReadOnly) {
-    // 작업자는 자신의 팀 일정만 열람 가능
+    // ?묒뾽?먮뒗 ?먯떊??? ?쇱젙留??대엺 媛??
     $userRole = (string)($user['role'] ?? '');
     if (!in_array($userRole, ['worker', 'leader', 'administrator'], true)) {
         header('Location: task_select.php');
@@ -55,7 +56,7 @@ function schedule_data_path(): string
     return __DIR__ . '/schedule_data.json';
 }
 
-function load_schedule_data(): array
+function load_legacy_schedule_data(): array
 {
     $path = schedule_data_path();
     if (!is_file($path)) {
@@ -79,18 +80,201 @@ function load_schedule_data(): array
     return $decoded;
 }
 
-function save_schedule_data(array $data): bool
+function ensure_schedule_table(PDO $pdo): void
 {
-    $path = schedule_data_path();
-    $data['updated_at'] = date('c');
-    $data['updated_by'] = auth_display_name(auth_current_user());
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS team_schedule (
+            schedule_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            team_key VARCHAR(120) NOT NULL,
+            team_name VARCHAR(120) NOT NULL,
+            schedule_date DATE NOT NULL,
+            shift_type ENUM('day', 'night', 'off') NOT NULL,
+            worker_names VARCHAR(255) NOT NULL,
+            updated_by_name VARCHAR(100) NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (schedule_id),
+            UNIQUE KEY uk_team_schedule_entry (team_key, schedule_date, shift_type),
+            KEY idx_team_schedule_lookup (team_key, schedule_date),
+            KEY idx_team_schedule_team_name (team_name, schedule_date)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+}
 
-    $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    if ($json === false) {
-        return false;
+function load_schedule_data(PDO $pdo): array
+{
+    $stmt = $pdo->query("
+        SELECT team_key, team_name, schedule_date, shift_type, worker_names, updated_at, updated_by_name
+        FROM team_schedule
+        ORDER BY team_name ASC, schedule_date ASC, shift_type ASC
+    ");
+
+    $data = ['teams' => []];
+    $lastUpdatedAt = null;
+    $lastUpdatedBy = null;
+
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $teamKey = (string)($row['team_key'] ?? '');
+        $date = (string)($row['schedule_date'] ?? '');
+        $shift = (string)($row['shift_type'] ?? '');
+        $value = trim((string)($row['worker_names'] ?? ''));
+
+        if ($teamKey === '' || $date === '' || $shift === '' || $value === '') {
+            continue;
+        }
+
+        if (!isset($data['teams'][$teamKey]) || !is_array($data['teams'][$teamKey])) {
+            $data['teams'][$teamKey] = [];
+        }
+        if (!isset($data['teams'][$teamKey][$date]) || !is_array($data['teams'][$teamKey][$date])) {
+            $data['teams'][$teamKey][$date] = [];
+        }
+
+        $data['teams'][$teamKey][$date][$shift] = $value;
+
+        $updatedAt = (string)($row['updated_at'] ?? '');
+        if ($updatedAt !== '' && ($lastUpdatedAt === null || $updatedAt > $lastUpdatedAt)) {
+            $lastUpdatedAt = $updatedAt;
+            $lastUpdatedBy = (string)($row['updated_by_name'] ?? '');
+        }
     }
 
-    return file_put_contents($path, $json, LOCK_EX) !== false;
+    if ($lastUpdatedAt !== null) {
+        $data['updated_at'] = $lastUpdatedAt;
+        $data['updated_by'] = $lastUpdatedBy;
+    }
+
+    return $data;
+}
+
+function save_team_schedule(PDO $pdo, string $teamKey, string $teamName, array $teamSchedule, string $updatedByName): bool
+{
+    try {
+        $pdo->beginTransaction();
+
+        $deleteStmt = $pdo->prepare("DELETE FROM team_schedule WHERE team_key = :team_key");
+        $deleteStmt->execute(['team_key' => $teamKey]);
+
+        $insertStmt = $pdo->prepare("
+            INSERT INTO team_schedule (
+                team_key,
+                team_name,
+                schedule_date,
+                shift_type,
+                worker_names,
+                updated_by_name
+            ) VALUES (
+                :team_key,
+                :team_name,
+                :schedule_date,
+                :shift_type,
+                :worker_names,
+                :updated_by_name
+            )
+        ");
+
+        foreach ($teamSchedule as $date => $shifts) {
+            if (!is_array($shifts)) {
+                continue;
+            }
+
+            foreach ($shifts as $shift => $value) {
+                $value = trim((string)$value);
+                if ($value === '') {
+                    continue;
+                }
+
+                $insertStmt->execute([
+                    'team_key' => $teamKey,
+                    'team_name' => $teamName !== '' ? $teamName : $teamKey,
+                    'schedule_date' => $date,
+                    'shift_type' => $shift,
+                    'worker_names' => $value,
+                    'updated_by_name' => $updatedByName,
+                ]);
+            }
+        }
+
+        $pdo->commit();
+        return true;
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        return false;
+    }
+}
+
+function migrate_legacy_schedule_data(PDO $pdo): void
+{
+    $tableCount = (int)$pdo->query("SELECT COUNT(*) FROM team_schedule")->fetchColumn();
+    if ($tableCount > 0) {
+        return;
+    }
+
+    $legacy = load_legacy_schedule_data();
+    $teams = $legacy['teams'] ?? [];
+    if (!is_array($teams) || $teams === []) {
+        return;
+    }
+
+    $insertStmt = $pdo->prepare("
+        INSERT INTO team_schedule (
+            team_key,
+            team_name,
+            schedule_date,
+            shift_type,
+            worker_names,
+            updated_by_name
+        ) VALUES (
+            :team_key,
+            :team_name,
+            :schedule_date,
+            :shift_type,
+            :worker_names,
+            :updated_by_name
+        )
+    ");
+
+    $updatedBy = trim((string)($legacy['updated_by'] ?? ''));
+
+    $pdo->beginTransaction();
+    try {
+        foreach ($teams as $teamKey => $dates) {
+            if (!is_array($dates)) {
+                continue;
+            }
+
+            foreach ($dates as $scheduleDate => $shifts) {
+                if (!is_array($shifts)) {
+                    continue;
+                }
+
+                foreach ($shifts as $shiftType => $workerNames) {
+                    $workerNames = trim((string)$workerNames);
+                    if ($workerNames === '') {
+                        continue;
+                    }
+
+                    $insertStmt->execute([
+                        'team_key' => (string)$teamKey,
+                        'team_name' => (string)$teamKey,
+                        'schedule_date' => (string)$scheduleDate,
+                        'shift_type' => (string)$shiftType,
+                        'worker_names' => $workerNames,
+                        'updated_by_name' => $updatedBy !== '' ? $updatedBy : null,
+                    ]);
+                }
+            }
+        }
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
 }
 
 function normalize_schedule_date(string $value): ?string
@@ -234,6 +418,24 @@ function delete_team_schedule_entry(array &$data, string $teamKey, string $date,
     set_team_schedule_entry($data, $teamKey, $date, $shift, '');
 }
 
+function clear_team_schedule_month(array &$data, string $teamKey, string $monthStart): void
+{
+    if (!isset($data['teams'][$teamKey]) || !is_array($data['teams'][$teamKey])) {
+        return;
+    }
+
+    $monthPrefix = date('Y-m', strtotime($monthStart));
+    foreach (array_keys($data['teams'][$teamKey]) as $dateKey) {
+        if (strncmp((string)$dateKey, $monthPrefix, 7) === 0) {
+            unset($data['teams'][$teamKey][$dateKey]);
+        }
+    }
+
+    if (empty($data['teams'][$teamKey])) {
+        unset($data['teams'][$teamKey]);
+    }
+}
+
 function parse_csv_rows(string $filePath): array
 {
     $rows = [];
@@ -343,8 +545,8 @@ function normalize_matrix_cell_shift(string $value): ?string
 
     $clean = preg_replace('/[^\p{L}\d]+/u', '', $clean);
     return match ($clean) {
-        '1', '1차', '1차근무자', '1차근무', '1cha', '주간', 'day', 'dayshift', '주간작업자', '주간근무자' => 'day',
-        '2', '2차', '2차근무자', '2차근무', '2cha', '야간', 'night', 'nightshift', '야간작업자', '야간근무자' => 'night',
+        '1', '1차', '1차근무자', '1차근무', '1cha', '주간', 'day', 'dayshift', '주간작업자', '주간근무' => 'day',
+        '2', '2차', '2차근무자', '2차근무', '2cha', '야간', 'night', 'nightshift', '야간작업자', '야간근무' => 'night',
         default => null,
     };
 }
@@ -510,7 +712,7 @@ function parse_korean_shift_schedule(array $rows, string $monthStart, array $val
 
         if ($nameCell !== '') {
             $lower = mb_strtolower($nameCell, 'UTF-8');
-            // Use canonical name from validWorkerMap; skip if not in the list (e.g. 관리감독자)
+            // Use canonical name from validWorkerMap; skip if not in the list (e.g. 愿由ш컧?낆옄)
             $currentName = !empty($validWorkerMap)
                 ? ($validWorkerMap[$lower] ?? null)
                 : $nameCell;
@@ -519,7 +721,7 @@ function parse_korean_shift_schedule(array $rows, string $monthStart, array $val
             continue;
         }
 
-        // Normalise shift label: "1차" → day, "2차" → night
+        // Normalise shift label: "1차" => day, "2차" => night
         $shiftNorm = preg_replace('/[\s\-_]+/u', '', mb_strtolower($shiftCell, 'UTF-8'));
         $shift = match ($shiftNorm) {
             '1차', '1차근무', '1차근무자', '주간', 'day', 'dayshift', '1' => 'day',
@@ -539,7 +741,7 @@ function parse_korean_shift_schedule(array $rows, string $monthStart, array $val
         }
     }
 
-    // 휴무 계산: validWorkerMap 기준으로 주간/야간 모두 없는 날 = 휴무
+    // ?대Т 怨꾩궛: validWorkerMap 湲곗??쇰줈 二쇨컙/?쇨컙 紐⑤몢 ?녿뒗 ??= ?대Т
     if (!empty($validWorkerMap)) {
         foreach (array_unique(array_values($dateColMap)) as $date) {
             $offWorkers = [];
@@ -701,7 +903,7 @@ function parse_schedule_upload(string $filePath, string $originalName, array $va
             }
 
             if (!isset($headerMap['off']) && ($dayValue === '' && $nightValue === '') && (isset($headerMap['day']) || isset($headerMap['night']))) {
-                $mappedRows[] = ['date' => $date, 'shift' => 'off', 'value' => '휴무'];
+                $mappedRows[] = ['date' => $date, 'shift' => 'off', 'value' => '?대Т'];
             }
         }
 
@@ -742,7 +944,7 @@ function parse_schedule_upload(string $filePath, string $originalName, array $va
     }
 
     if (empty($mappedRows)) {
-        // Try Korean shift-table format (worker rows × day columns, 1차/2차 per worker)
+        // Try Korean shift-table format (worker rows 횞 day columns, 1李?2李?per worker)
         $koreanRows = parse_korean_shift_schedule($rows, $monthStart, $validWorkerNames);
         if (!empty($koreanRows)) {
             return $koreanRows;
@@ -781,7 +983,10 @@ function parse_schedule_upload(string $filePath, string $originalName, array $va
 
 $errors = [];
 $messages = [];
-$data = load_schedule_data();
+$pdo = getDB();
+ensure_schedule_table($pdo);
+migrate_legacy_schedule_data($pdo);
+$data = load_schedule_data($pdo);
 $teamSchedule = load_team_schedule($data, $teamScheduleKey);
 
 $selectedDate = $_GET['date'] ?? date('Y-m-d');
@@ -789,7 +994,6 @@ $selectedDate = normalize_schedule_date($selectedDate) ?? date('Y-m-d');
 $monthStart = build_month_start($selectedDate);
 $monthDates = get_month_dates($monthStart);
 $monthWeeks = get_month_weeks($monthStart);
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['save_schedule_entry'])) {
         $entryDate = normalize_schedule_date((string)($_POST['entry_date'] ?? ''));
@@ -802,10 +1006,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors[] = '유효한 근무 유형을 선택해 주세요.';
         } else {
             set_team_schedule_entry($data, $teamScheduleKey, $entryDate, $entryShift, $entryValue);
-            if (!save_schedule_data($data)) {
+            $teamSchedule = load_team_schedule($data, $teamScheduleKey);
+
+            if (!save_team_schedule($pdo, $teamScheduleKey, $teamName, $teamSchedule, auth_display_name(auth_current_user()))) {
                 $errors[] = '일정을 저장하지 못했습니다.';
             } else {
                 $messages[] = '일정을 저장했습니다.';
+                $data = load_schedule_data($pdo);
                 $teamSchedule = load_team_schedule($data, $teamScheduleKey);
             }
         }
@@ -818,10 +1025,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors[] = '삭제할 일정 정보를 확인해 주세요.';
         } else {
             delete_team_schedule_entry($data, $teamScheduleKey, $entryDate, $entryShift);
-            if (!save_schedule_data($data)) {
+            $teamSchedule = load_team_schedule($data, $teamScheduleKey);
+
+            if (!save_team_schedule($pdo, $teamScheduleKey, $teamName, $teamSchedule, auth_display_name(auth_current_user()))) {
                 $errors[] = '일정을 삭제하지 못했습니다.';
             } else {
                 $messages[] = '일정을 삭제했습니다.';
+                $data = load_schedule_data($pdo);
                 $teamSchedule = load_team_schedule($data, $teamScheduleKey);
             }
         }
@@ -839,8 +1049,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $validWorkerNames = auth_team_member_names($teamName, ['worker', 'leader']);
                 $rows = parse_schedule_upload($tmpPath, $originalName, $validWorkerNames, $monthStart);
-                $data['teams'][$teamScheduleKey] = [];
+                clear_team_schedule_month($data, $teamScheduleKey, $monthStart);
                 $importedCount = 0;
+
                 foreach ($rows as $row) {
                     $rowDate = normalize_schedule_date($row['date'] ?? '');
                     $rowShift = normalize_shift_key($row['shift'] ?? '');
@@ -853,12 +1064,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 if ($importedCount === 0) {
-                    $errors[] = '업로드된 파일에서 유효한 일정이 발견되지 않았습니다.';
-                } elseif (!save_schedule_data($data)) {
-                    $errors[] = '업로드 후 일정을 저장하지 못했습니다.';
+                    $errors[] = '업로드한 파일에서 유효한 일정을 찾지 못했습니다.';
                 } else {
-                    $messages[] = "엑셀 업로드가 완료되었습니다. {$importedCount}개 항목이 반영되었습니다.";
                     $teamSchedule = load_team_schedule($data, $teamScheduleKey);
+                    if (!save_team_schedule($pdo, $teamScheduleKey, $teamName, $teamSchedule, auth_display_name(auth_current_user()))) {
+                        $errors[] = '업로드한 일정을 저장하지 못했습니다.';
+                    } else {
+                        $messages[] = "근무표 업로드가 완료되었습니다. {$importedCount}개 항목이 반영되었습니다.";
+                        $data = load_schedule_data($pdo);
+                        $teamSchedule = load_team_schedule($data, $teamScheduleKey);
+                    }
                 }
             } catch (Throwable $e) {
                 $errors[] = '업로드 처리 중 오류가 발생했습니다: ' . $e->getMessage();
@@ -867,16 +1082,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (isset($_POST['clear_schedule']) && !$isReadOnly) {
-        $data['teams'][$teamScheduleKey] = [];
-        if (!save_schedule_data($data)) {
+        clear_team_schedule_month($data, $teamScheduleKey, $monthStart);
+        $teamSchedule = load_team_schedule($data, $teamScheduleKey);
+
+        if (!save_team_schedule($pdo, $teamScheduleKey, $teamName, $teamSchedule, auth_display_name(auth_current_user()))) {
             $errors[] = '초기화 중 오류가 발생했습니다.';
         } else {
             $messages[] = '이번 달 일정이 모두 초기화되었습니다.';
+            $data = load_schedule_data($pdo);
             $teamSchedule = load_team_schedule($data, $teamScheduleKey);
         }
     }
 }
-
 $teamWorkers = auth_team_members($teamName);
 
 $monthLabel = build_month_label($monthDates);
@@ -920,12 +1137,12 @@ $prevMonth = date('Y-m-d', strtotime('-1 month', strtotime($monthStart)));
   .error { background: rgba(214,69,65,0.12); border: 1px solid rgba(214,69,65,0.35); color: #ffd8d6; border-radius: 10px; padding: 12px 16px; margin: 16px 24px; font-size: 13px; }
   .success { background: rgba(46,160,67,0.12); border: 1px solid rgba(46,160,67,0.35); color: #aff5b4; border-radius: 10px; padding: 12px 16px; margin: 16px 24px; font-size: 13px; }
 
-  /* ── 달력 네비게이션 ── */
+  /* ?? ?щ젰 ?ㅻ퉬寃뚯씠???? */
   .schedule-nav { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 18px; }
   .schedule-nav .btn-secondary { min-width: 80px; padding: 7px 12px; font-size: 12px; }
   .schedule-nav strong { color: var(--text-hi); font-size: 20px; font-weight: 900; }
 
-  /* ── 달력 그리드 ── */
+  /* ?? ?щ젰 洹몃━???? */
   .schedule-grid { display: grid; gap: 10px; width: 100%; margin-bottom: 24px; }
   .calendar-header,
   .calendar-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
@@ -938,7 +1155,7 @@ $prevMonth = date('Y-m-d', strtotime('-1 month', strtotime($monthStart)));
   .calendar-day-weekday { font-size: 11px; color: var(--text-dim); }
   .calendar-day-entries { display: grid; gap: 5px; }
 
-  /* ── 항목 카드 ── */
+  /* ?? ??ぉ 移대뱶 ?? */
   .calendar-entry { box-sizing: border-box; width: 100%; border: 1px solid var(--border2); border-radius: 8px; background: var(--bg2); color: var(--text); text-align: left; padding: 6px 9px; cursor: pointer; transition: background .15s; }
   .calendar-entry:hover { background: rgba(255,255,255,0.06); }
   body.readonly .calendar-entry { cursor: default; }
@@ -949,7 +1166,7 @@ $prevMonth = date('Y-m-d', strtotime('-1 month', strtotime($monthStart)));
   .calendar-entry-night { border-color: rgba(130,90,200,0.45); }
   .calendar-entry-off   { border-color: rgba(232,146,10,0.35); }
 
-  /* ── 작업자 선택 팝업 ── */
+  /* ?? ?묒뾽???좏깮 ?앹뾽 ?? */
   .calendar-worker-popup { position: absolute; z-index: 1000; min-width: 260px; max-height: 320px; overflow-y: hidden; border: 1px solid var(--border2); border-radius: 12px; background: #12203a; box-shadow: 0 20px 40px rgba(0,0,0,0.45); display: none; }
   .calendar-worker-popup.open { display: block; }
   .calendar-worker-list { max-height: 240px; overflow-y: auto; }
@@ -960,7 +1177,7 @@ $prevMonth = date('Y-m-d', strtotime('-1 month', strtotime($monthStart)));
   .calendar-worker-footer { display: flex; gap: 8px; align-items: center; justify-content: space-between; padding: 10px 12px; border-top: 1px solid var(--border); background: var(--bg3); }
   .calendar-worker-hint { color: var(--text-dim); font-size: 12px; }
 
-  /* ── 업로드 패널 ── */
+  /* ?? ?낅줈???⑤꼸 ?? */
   .schedule-note { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
   .schedule-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
   .upload-panel { border: 1px solid var(--border); padding: 18px; border-radius: 12px; margin-bottom: 28px; background: var(--bg3); }
@@ -1024,10 +1241,10 @@ $prevMonth = date('Y-m-d', strtotime('-1 month', strtotime($monthStart)));
         <span style="color:var(--text-hi);font-size:14px;font-weight:700"><?= h(auth_display_name($user)) ?></span>
       </div>
       <div class="identity">
-        <a class="btn-secondary" href="<?= h(auth_main_page_path($user)) ?>">작업목록</a>
+        <a class="btn-secondary" href="<?= h(auth_main_page_path($user)) ?>">?묒뾽紐⑸줉</a>
         <a class="btn-secondary" href="schedule.php">근무일정표</a>
-        <a class="btn-secondary" href="<?= h($boardPageUrl ?? '../board/index.php') ?>">게시판</a>
-        <a class="btn-secondary" href="<?= h('task_select.php?logout=1') ?>">로그아웃</a>
+        <a class="btn-secondary" href="<?= h($boardPageUrl ?? '../board/index.php') ?>">寃뚯떆??/a>
+        <a class="btn-secondary" href="<?= h('task_select.php?logout=1') ?>">濡쒓렇?꾩썐</a>
       </div>
     </div>
 
@@ -1035,7 +1252,7 @@ $prevMonth = date('Y-m-d', strtotime('-1 month', strtotime($monthStart)));
       <div class="panel-head">
         <div class="panel-head-label">SCHEDULE</div>
         <h1>근무 일정표</h1>
-        <p>현재 팀: <?= h($teamName !== '' ? $teamName : '미지정 팀') ?>. 1개월 단위로 주간/야간/휴무 작업자를 달력 형식으로 등록하고 엑셀로 업로드할 수 있습니다.</p>
+        <p>현재 팀: <?= h($teamName !== '' ? $teamName : '미지정 팀') ?>. 1개월 단위로 주간/야간/휴무 작업자를 달력 형식으로 등록하고 파일로 업로드할 수 있습니다.</p>
       </div>
 
       <?php if (!empty($errors)): ?>
@@ -1081,11 +1298,11 @@ $prevMonth = date('Y-m-d', strtotime('-1 month', strtotime($monthStart)));
                     <?php foreach (['day', 'night', 'off'] as $shift): ?>
                       <?php
                         $value = $teamSchedule[$date][$shift] ?? '';
-                        $display = $value === '' ? '등록 없음' : h($value);
+                        $display = $value === '' ? '?깅줉 ?놁쓬' : h($value);
                       ?>
                       <div class="calendar-entry calendar-entry-<?= h($shift) ?>" data-date="<?= h($date) ?>" data-shift="<?= h($shift) ?>">
                         <span class="calendar-entry-label"><?= h(schedule_shift_label($shift)) ?></span>
-                        <span class="calendar-entry-text" contenteditable="false" role="textbox" aria-label="<?= h(schedule_shift_label($shift)) ?> 내용"><?= $display ?></span>
+                        <span class="calendar-entry-text" contenteditable="false" role="textbox" aria-label="<?= h(schedule_shift_label($shift)) ?> ?댁슜"><?= $display ?></span>
                       </div>
                     <?php endforeach; ?>
                   </div>
@@ -1098,20 +1315,20 @@ $prevMonth = date('Y-m-d', strtotime('-1 month', strtotime($monthStart)));
 
       <?php if (!$isReadOnly): ?>
       <fieldset class="upload-panel">
-        <legend>엑셀 업로드</legend>
+        <legend>?묒? ?낅줈??/legend>
         <form method="post" enctype="multipart/form-data" action="schedule.php?date=<?= h($selectedDate) ?>">
           <label>
-            파일 선택
+            ?뚯씪 ?좏깮
             <input type="file" name="schedule_file" accept=".xlsx,.xls,.csv" required>
           </label>
           <div class="schedule-actions">
-            <button type="submit" name="upload_schedule" class="btn-secondary">업로드</button>
+            <button type="submit" name="upload_schedule" class="btn-secondary">?낅줈??/button>
           </div>
         </form>
       </fieldset>
 
-      <form method="post" action="schedule.php?date=<?= h($selectedDate) ?>" style="margin-top:12px;" onsubmit="return confirm('이번 달 일정을 모두 초기화하시겠습니까?\n이 작업은 되돌릴 수 없습니다.');">
-        <button type="submit" name="clear_schedule" class="btn-secondary" style="border-color:rgba(214,69,65,0.45);color:#ffd8d6;background:rgba(214,69,65,0.15);">전체 초기화</button>
+      <form method="post" action="schedule.php?date=<?= h($selectedDate) ?>" style="margin-top:12px;" onsubmit="return confirm('?대쾲 ???쇱젙??紐⑤몢 珥덇린?뷀븯?쒓쿋?듬땲源?\n???묒뾽? ?섎룎由????놁뒿?덈떎.');">
+        <button type="submit" name="clear_schedule" class="btn-secondary" style="border-color:rgba(214,69,65,0.45);color:#ffd8d6;background:rgba(214,69,65,0.15);">?대쾲 ??珥덇린??/button>
       </form>
       <?php endif; ?>
       </div><!-- /padding wrapper -->
@@ -1123,7 +1340,7 @@ $prevMonth = date('Y-m-d', strtotime('-1 month', strtotime($monthStart)));
         <input type="hidden" name="entry_value" id="inline-entry-value" value="">
         <input type="hidden" name="save_schedule_entry" value="1">
       </form>
-      <div id="calendar-worker-popup" class="calendar-worker-popup" role="dialog" aria-label="달력 작업자 선택 목록">
+      <div id="calendar-worker-popup" class="calendar-worker-popup" role="dialog" aria-label="?щ젰 ?묒뾽???좏깮 紐⑸줉">
         <div class="calendar-worker-list">
           <?php foreach ($teamWorkers as $worker): ?>
             <div class="calendar-worker-item" data-worker-name="<?= h($worker['name']) ?>">
@@ -1132,9 +1349,9 @@ $prevMonth = date('Y-m-d', strtotime('-1 month', strtotime($monthStart)));
           <?php endforeach; ?>
         </div>
         <div class="calendar-worker-footer">
-          <button type="button" id="calendar-worker-save" class="btn-secondary">확인</button>
-          <button type="button" id="calendar-worker-clear" class="btn-secondary">초기화</button>
-          <span class="calendar-worker-hint">최대 2명 선택</span>
+          <button type="button" id="calendar-worker-save" class="btn-secondary">?뺤씤</button>
+          <button type="button" id="calendar-worker-clear" class="btn-secondary">珥덇린??/button>
+          <span class="calendar-worker-hint">理쒕? 2紐??좏깮</span>
         </div>
       </div>
       <?php endif; ?>
@@ -1177,13 +1394,13 @@ $prevMonth = date('Y-m-d', strtotime('-1 month', strtotime($monthStart)));
     }
 
     function parseWorkerNames(value) {
-      if (typeof value !== 'string' || value.trim() === '' || value.trim() === '등록 없음') {
+      if (typeof value !== 'string' || value.trim() === '' || value.trim() === '?깅줉 ?놁쓬') {
         return [];
       }
       return value.split(',').map(function(name) {
         return name.trim();
       }).filter(function(name) {
-        return name !== '' && name !== '등록 없음';
+        return name !== '' && name !== '?깅줉 ?놁쓬';
       }).slice(0, 2);
     }
 
@@ -1232,7 +1449,7 @@ $prevMonth = date('Y-m-d', strtotime('-1 month', strtotime($monthStart)));
         return;
       }
       var workerName = activeWorkerNames.join(', ');
-      var display = workerName === '' ? '등록 없음' : workerName;
+      var display = workerName === '' ? '?깅줉 ?놁쓬' : workerName;
       activeWorkerTextNode.textContent = display;
       saveInlineEntry(activeWorkerDate, activeWorkerShift, workerName);
       hideCalendarWorkerPopup();
@@ -1311,3 +1528,5 @@ $prevMonth = date('Y-m-d', strtotime('-1 month', strtotime($monthStart)));
   </script>
 </body>
 </html>
+
+

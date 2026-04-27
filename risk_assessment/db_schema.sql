@@ -140,3 +140,19 @@ CREATE TABLE IF NOT EXISTS `unit_ra_item_history` (
 ALTER TABLE `unit_ra_header`
   ADD CONSTRAINT `chk_unit_ra_header_use_yn`
   CHECK (`use_yn` IN ('Y', 'N'));
+
+CREATE TABLE IF NOT EXISTS `team_schedule` (
+  `schedule_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `team_key` VARCHAR(120) NOT NULL,
+  `team_name` VARCHAR(120) NOT NULL,
+  `schedule_date` DATE NOT NULL,
+  `shift_type` ENUM('day', 'night', 'off') NOT NULL,
+  `worker_names` VARCHAR(255) NOT NULL,
+  `updated_by_name` VARCHAR(100) NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`schedule_id`),
+  UNIQUE KEY `uk_team_schedule_entry` (`team_key`, `schedule_date`, `shift_type`),
+  KEY `idx_team_schedule_lookup` (`team_key`, `schedule_date`),
+  KEY `idx_team_schedule_team_name` (`team_name`, `schedule_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
