@@ -156,3 +156,43 @@ CREATE TABLE IF NOT EXISTS `team_schedule` (
   KEY `idx_team_schedule_lookup` (`team_key`, `schedule_date`),
   KEY `idx_team_schedule_team_name` (`team_name`, `schedule_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `calendar_custom_category` (
+  `category_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `owner_login_id` VARCHAR(100) NOT NULL,
+  `category_key` VARCHAR(100) NOT NULL,
+  `label` VARCHAR(24) NOT NULL,
+  `color` CHAR(7) NOT NULL,
+  `sort_no` INT NOT NULL DEFAULT 0,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`category_id`),
+  UNIQUE KEY `uk_calendar_custom_category_owner_key` (`owner_login_id`, `category_key`),
+  KEY `idx_calendar_custom_category_owner_sort` (`owner_login_id`, `sort_no`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `calendar_manual_event` (
+  `manual_event_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `owner_login_id` VARCHAR(100) NOT NULL,
+  `event_key` VARCHAR(100) NOT NULL,
+  `title` VARCHAR(255) NOT NULL,
+  `event_date` DATE NOT NULL,
+  `start_time` CHAR(5) NOT NULL DEFAULT '',
+  `end_time` CHAR(5) NOT NULL DEFAULT '',
+  `category_key` VARCHAR(100) NOT NULL,
+  `category_label` VARCHAR(24) NULL,
+  `category_color` CHAR(7) NULL,
+  `memo` TEXT NULL,
+  `visibility_scope` VARCHAR(20) NOT NULL DEFAULT 'private',
+  `owner_team_key` VARCHAR(120) NOT NULL DEFAULT '',
+  `shared_team_key` VARCHAR(120) NOT NULL DEFAULT '',
+  `shared_team_name` VARCHAR(120) NOT NULL DEFAULT '',
+  `shared_user_ids` TEXT NULL,
+  `shared_user_names` TEXT NULL,
+  `sort_no` INT NOT NULL DEFAULT 0,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`manual_event_id`),
+  UNIQUE KEY `uk_calendar_manual_event_owner_key` (`owner_login_id`, `event_key`),
+  KEY `idx_calendar_manual_event_owner_date` (`owner_login_id`, `event_date`, `sort_no`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

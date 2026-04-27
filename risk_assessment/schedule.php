@@ -11,6 +11,19 @@ function h($value): string
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
 
+function build_schedule_url(array $params = []): string
+{
+    $query = [];
+    foreach ($params as $key => $value) {
+        if ($value === null || $value === '') {
+            continue;
+        }
+        $query[$key] = $value;
+    }
+
+    return empty($query) ? 'schedule.php' : 'schedule.php?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+}
+
 $boardPageUrl = '../board/index.php';
 
 $user = auth_current_user();
@@ -39,12 +52,15 @@ if (!empty($_GET['view_team'])) {
 $teamName = $isViewingOtherTeam ? $requestedTeamName : $userTeamName;
 $teamScheduleKey = $teamName !== '' ? $teamName : 'unknown-team';
 
-// ?쎄린 ?꾩슜 紐⑤뱶: 愿由ш컧?낆옄媛 ?꾨땲嫄곕굹, ?ㅻⅨ ????쇱젙??蹂닿퀬 ?덉쓣 ??
-$isReadOnly = !auth_can_manage($user) || $isViewingOtherTeam;
+$userRole = (string)($user['role'] ?? '');
+$canEditOwnSchedule = auth_can_manage($user) || in_array($userRole, ['leader', 'administrator'], true);
+$canEditViewedTeam = auth_is_admin($user);
+
+// ?쎄린 ?꾩슜 紐⑤뱶: ?ㅻⅨ ????쇱젙??蹂닿굅??沅뚰븳???놁쑝硫?읽기 ?꾩슜
+$isReadOnly = !$canEditOwnSchedule || ($isViewingOtherTeam && !$canEditViewedTeam);
 
 if (!$isViewingOtherTeam && $isReadOnly) {
     // ?묒뾽?먮뒗 ?먯떊??? ?쇱젙留??대엺 媛??
-    $userRole = (string)($user['role'] ?? '');
     if (!in_array($userRole, ['worker', 'leader', 'administrator'], true)) {
         header('Location: task_select.php');
         exit;
@@ -1099,6 +1115,10 @@ $teamWorkers = auth_team_members($teamName);
 $monthLabel = build_month_label($monthDates);
 $nextMonth = date('Y-m-d', strtotime('+1 month', strtotime($monthStart)));
 $prevMonth = date('Y-m-d', strtotime('-1 month', strtotime($monthStart)));
+$scheduleViewTeamParam = $isViewingOtherTeam ? $requestedTeamName : '';
+$prevMonthUrl = build_schedule_url(['date' => $prevMonth, 'view_team' => $scheduleViewTeamParam]);
+$nextMonthUrl = build_schedule_url(['date' => $nextMonth, 'view_team' => $scheduleViewTeamParam]);
+$currentMonthActionUrl = build_schedule_url(['date' => $selectedDate, 'view_team' => $scheduleViewTeamParam]);
 
 ?>
 <!DOCTYPE html>
@@ -1241,10 +1261,10 @@ $prevMonth = date('Y-m-d', strtotime('-1 month', strtotime($monthStart)));
         <span style="color:var(--text-hi);font-size:14px;font-weight:700"><?= h(auth_display_name($user)) ?></span>
       </div>
       <div class="identity">
-        <a class="btn-secondary" href="<?= h(auth_main_page_path($user)) ?>">?묒뾽紐⑸줉</a>
+        <a class="btn-secondary" href="<?= h(auth_main_page_path($user)) ?>">작업목록</a>
         <a class="btn-secondary" href="schedule.php">근무일정표</a>
-        <a class="btn-secondary" href="<?= h($boardPageUrl ?? '../board/index.php') ?>">寃뚯떆??/a>
-        <a class="btn-secondary" href="<?= h('task_select.php?logout=1') ?>">濡쒓렇?꾩썐</a>
+        <a class="btn-secondary" href="<?= h($boardPageUrl ?? '../board/index.php') ?>">게시판</a>
+        <a class="btn-secondary" href="<?= h('task_select.php?logout=1') ?>">로그아웃</a>
       </div>
     </div>
 
@@ -1273,9 +1293,9 @@ $prevMonth = date('Y-m-d', strtotime('-1 month', strtotime($monthStart)));
 
       <div style="padding: 20px 24px 24px;">
       <div class="schedule-nav">
-        <a class="btn-secondary" href="schedule.php?date=<?= h($prevMonth) ?>">이전 달</a>
+        <a class="btn-secondary" href="<?= h($prevMonthUrl) ?>">이전 달</a>
         <strong><?= h($monthLabel) ?></strong>
-        <a class="btn-secondary" href="schedule.php?date=<?= h($nextMonth) ?>">다음 달</a>
+        <a class="btn-secondary" href="<?= h($nextMonthUrl) ?>">다음 달</a>
       </div>
 
       <div class="schedule-grid">
@@ -1298,11 +1318,11 @@ $prevMonth = date('Y-m-d', strtotime('-1 month', strtotime($monthStart)));
                     <?php foreach (['day', 'night', 'off'] as $shift): ?>
                       <?php
                         $value = $teamSchedule[$date][$shift] ?? '';
-                        $display = $value === '' ? '?깅줉 ?놁쓬' : h($value);
+                        $display = $value === '' ? '등록 없음' : h($value);
                       ?>
                       <div class="calendar-entry calendar-entry-<?= h($shift) ?>" data-date="<?= h($date) ?>" data-shift="<?= h($shift) ?>">
                         <span class="calendar-entry-label"><?= h(schedule_shift_label($shift)) ?></span>
-                        <span class="calendar-entry-text" contenteditable="false" role="textbox" aria-label="<?= h(schedule_shift_label($shift)) ?> ?댁슜"><?= $display ?></span>
+                        <span class="calendar-entry-text" contenteditable="false" role="textbox" aria-label="<?= h(schedule_shift_label($shift)) ?> 내용"><?= $display ?></span>
                       </div>
                     <?php endforeach; ?>
                   </div>
@@ -1315,32 +1335,32 @@ $prevMonth = date('Y-m-d', strtotime('-1 month', strtotime($monthStart)));
 
       <?php if (!$isReadOnly): ?>
       <fieldset class="upload-panel">
-        <legend>?묒? ?낅줈??/legend>
-        <form method="post" enctype="multipart/form-data" action="schedule.php?date=<?= h($selectedDate) ?>">
+        <legend>근무표 업로드</legend>
+        <form method="post" enctype="multipart/form-data" action="<?= h($currentMonthActionUrl) ?>">
           <label>
-            ?뚯씪 ?좏깮
+            파일 선택
             <input type="file" name="schedule_file" accept=".xlsx,.xls,.csv" required>
           </label>
           <div class="schedule-actions">
-            <button type="submit" name="upload_schedule" class="btn-secondary">?낅줈??/button>
+            <button type="submit" name="upload_schedule" class="btn-secondary">업로드</button>
           </div>
         </form>
       </fieldset>
 
-      <form method="post" action="schedule.php?date=<?= h($selectedDate) ?>" style="margin-top:12px;" onsubmit="return confirm('?대쾲 ???쇱젙??紐⑤몢 珥덇린?뷀븯?쒓쿋?듬땲源?\n???묒뾽? ?섎룎由????놁뒿?덈떎.');">
-        <button type="submit" name="clear_schedule" class="btn-secondary" style="border-color:rgba(214,69,65,0.45);color:#ffd8d6;background:rgba(214,69,65,0.15);">?대쾲 ??珥덇린??/button>
+      <form method="post" action="<?= h($currentMonthActionUrl) ?>" style="margin-top:12px;" onsubmit="return confirm('이번 달 일정을 모두 초기화하시겠습니까?\n이 작업은 되돌릴 수 없습니다.');">
+        <button type="submit" name="clear_schedule" class="btn-secondary" style="border-color:rgba(214,69,65,0.45);color:#ffd8d6;background:rgba(214,69,65,0.15);">이번 달 초기화</button>
       </form>
       <?php endif; ?>
       </div><!-- /padding wrapper -->
 
       <?php if (!$isReadOnly): ?>
-      <form id="inline-save-form" method="post" action="schedule.php?date=<?= h($selectedDate) ?>" style="display:none;">
+      <form id="inline-save-form" method="post" action="<?= h($currentMonthActionUrl) ?>" style="display:none;">
         <input type="hidden" name="entry_date" id="inline-entry-date" value="">
         <input type="hidden" name="entry_shift" id="inline-entry-shift" value="">
         <input type="hidden" name="entry_value" id="inline-entry-value" value="">
         <input type="hidden" name="save_schedule_entry" value="1">
       </form>
-      <div id="calendar-worker-popup" class="calendar-worker-popup" role="dialog" aria-label="?щ젰 ?묒뾽???좏깮 紐⑸줉">
+      <div id="calendar-worker-popup" class="calendar-worker-popup" role="dialog" aria-label="달력 작업자 선택 목록">
         <div class="calendar-worker-list">
           <?php foreach ($teamWorkers as $worker): ?>
             <div class="calendar-worker-item" data-worker-name="<?= h($worker['name']) ?>">
@@ -1349,9 +1369,9 @@ $prevMonth = date('Y-m-d', strtotime('-1 month', strtotime($monthStart)));
           <?php endforeach; ?>
         </div>
         <div class="calendar-worker-footer">
-          <button type="button" id="calendar-worker-save" class="btn-secondary">?뺤씤</button>
-          <button type="button" id="calendar-worker-clear" class="btn-secondary">珥덇린??/button>
-          <span class="calendar-worker-hint">理쒕? 2紐??좏깮</span>
+          <button type="button" id="calendar-worker-save" class="btn-secondary">확인</button>
+          <button type="button" id="calendar-worker-clear" class="btn-secondary">초기화</button>
+          <span class="calendar-worker-hint">최대 2명 선택</span>
         </div>
       </div>
       <?php endif; ?>
@@ -1394,13 +1414,13 @@ $prevMonth = date('Y-m-d', strtotime('-1 month', strtotime($monthStart)));
     }
 
     function parseWorkerNames(value) {
-      if (typeof value !== 'string' || value.trim() === '' || value.trim() === '?깅줉 ?놁쓬') {
+      if (typeof value !== 'string' || value.trim() === '' || value.trim() === '등록 없음') {
         return [];
       }
       return value.split(',').map(function(name) {
         return name.trim();
       }).filter(function(name) {
-        return name !== '' && name !== '?깅줉 ?놁쓬';
+        return name !== '' && name !== '등록 없음';
       }).slice(0, 2);
     }
 
@@ -1449,7 +1469,7 @@ $prevMonth = date('Y-m-d', strtotime('-1 month', strtotime($monthStart)));
         return;
       }
       var workerName = activeWorkerNames.join(', ');
-      var display = workerName === '' ? '?깅줉 ?놁쓬' : workerName;
+      var display = workerName === '' ? '등록 없음' : workerName;
       activeWorkerTextNode.textContent = display;
       saveInlineEntry(activeWorkerDate, activeWorkerShift, workerName);
       hideCalendarWorkerPopup();
@@ -1507,22 +1527,12 @@ $prevMonth = date('Y-m-d', strtotime('-1 month', strtotime($monthStart)));
           return;
         }
 
-        entry.addEventListener('dblclick', function(event) {
+        entry.addEventListener('click', function(event) {
           event.stopPropagation();
           var date = this.getAttribute('data-date');
           var shift = this.getAttribute('data-shift');
           showCalendarWorkerPopup(this, textNode, date, shift);
         });
-
-                entry.addEventListener('click', function(event) {
-                    if (!window.matchMedia('(max-width: 768px)').matches) {
-                        return;
-                    }
-                    event.stopPropagation();
-                    var date = this.getAttribute('data-date');
-                    var shift = this.getAttribute('data-shift');
-                    showCalendarWorkerPopup(this, textNode, date, shift);
-                });
       });
     }
   </script>

@@ -794,13 +794,35 @@
               <textarea id="memoInput" maxlength="300" placeholder="필요한 메모를 입력하세요."></textarea>
             </div>
 
+            <div class="time-row">
+              <div class="field">
+                <label for="visibilityInput">공유 범위</label>
+                <select id="visibilityInput">
+                  <option value="private" selected>나만</option>
+                  <option value="team">팀 공유</option>
+                  <option value="users">계정 지정</option>
+                  <option value="global">전체 공유</option>
+                </select>
+              </div>
+              <div class="field" id="sharedTeamField" style="display:none;">
+                <label for="sharedTeamInput">공유 대상 팀</label>
+                <select id="sharedTeamInput"></select>
+              </div>
+            </div>
+
+            <div class="field" id="sharedUserField" style="display:none;">
+              <label for="sharedUserInput">공유할 계정</label>
+              <select id="sharedUserInput" multiple size="6"></select>
+              <div class="helper">Ctrl 또는 Shift로 여러 계정을 선택할 수 있습니다.</div>
+            </div>
+
             <div class="form-actions">
               <button type="submit" class="btn primary">저장</button>
               <button type="button" class="btn" id="cancelEditBtn">수정 취소</button>
               <button type="button" class="btn danger" id="deleteEventBtn" style="display:none;">삭제</button>
             </div>
 
-            <div class="helper">이 브라우저에 자동 저장됩니다. (localStorage)</div>
+            <div class="helper">계정 DB에 자동 저장되며, 이 브라우저에도 백업됩니다.</div>
           </form>
         </section>
       </aside>
@@ -813,6 +835,7 @@
       var STORAGE_KEY = "schedule_calendar_events_v1";
       var CATEGORY_STORAGE_KEY = "schedule_calendar_categories_v1";
       var WORK_LIST_EVENTS_API = "work_list_events.php";
+      var CALENDAR_STORE_API = "calendar_store.php";
       var KR_PUBLIC_HOLIDAYS_BY_YEAR = (window.KR_PUBLIC_HOLIDAYS_BY_YEAR && typeof window.KR_PUBLIC_HOLIDAYS_BY_YEAR === "object")
         ? window.KR_PUBLIC_HOLIDAYS_BY_YEAR
         : {};
@@ -963,7 +986,15 @@
         events: loadEvents(initialCustomCategories),
         taskEvents: [],
         canManualSync: false,
-        weatherData: {}
+        weatherData: {},
+        viewerContext: {
+          canShareTeam: false,
+          canShareGlobal: false,
+          canShareUsers: false,
+          teams: [],
+          users: [],
+          userTeamKey: ""
+        }
       };
 
       var monthTitleEl = document.getElementById("monthTitle");
@@ -985,6 +1016,11 @@
       var addCategoryBtnEl = document.getElementById("addCategoryBtn");
       var categoryListEl = document.getElementById("categoryList");
       var memoInputEl = document.getElementById("memoInput");
+      var visibilityInputEl = document.getElementById("visibilityInput");
+      var sharedTeamFieldEl = document.getElementById("sharedTeamField");
+      var sharedTeamInputEl = document.getElementById("sharedTeamInput");
+      var sharedUserFieldEl = document.getElementById("sharedUserField");
+      var sharedUserInputEl = document.getElementById("sharedUserInput");
       var cancelEditBtnEl = document.getElementById("cancelEditBtn");
       var syncTasksBtnEl = document.getElementById("syncTasksBtn");
 
@@ -1018,6 +1054,10 @@
       keywordInputEl.addEventListener("input", function () {
         renderCalendar();
         renderSelectedEvents();
+      });
+
+      visibilityInputEl.addEventListener("change", function () {
+        updateVisibilityControls();
       });
 
       addCategoryBtnEl.addEventListener("click", function () {
@@ -1093,7 +1133,7 @@
         }
 
         var affectedCount = state.events.filter(function (item) {
-          return item.category === categoryId;
+          return item.category === categoryId && item.canEdit !== false;
         }).length;
 
         var message = affectedCount > 0
@@ -1113,6 +1153,9 @@
             if (item.category !== categoryId) {
               return item;
             }
+            if (item.canEdit === false) {
+              return item;
+            }
             return {
               id: item.id,
               title: item.title,
@@ -1120,7 +1163,13 @@
               startTime: item.startTime,
               endTime: item.endTime,
               category: "personal",
-              memo: item.memo
+              categoryLabel: "개인",
+              categoryColor: "#16a34a",
+              memo: item.memo,
+              visibilityScope: item.visibilityScope || "private",
+              sharedTeamKey: item.sharedTeamKey || "",
+              sharedTeamName: item.sharedTeamName || "",
+              canEdit: item.canEdit !== false
             };
           });
           persistEvents();
@@ -1146,7 +1195,36 @@
         var startTime = startTimeInputEl.value;
         var endTime = endTimeInputEl.value;
         var category = resolveCategoryKey(categoryInputEl.value, state.customCategories, "personal");
+        var categoryMeta = currentUserCategoryMeta(category);
         var memo = memoInputEl.value.trim();
+        var visibilityScope = visibilityInputEl.value || "private";
+        var sharedTeamKey = visibilityScope === "team" ? (sharedTeamInputEl.value || state.viewerContext.userTeamKey || "") : "";
+        var sharedTeamName = "";
+        var sharedUserIds = visibilityScope === "users"
+          ? Array.prototype.map.call(sharedUserInputEl.selectedOptions || [], function (option) { return option.value; })
+          : [];
+        var sharedUserNames = "";
+
+        if (visibilityScope === "team") {
+          var selectedTeam = (state.viewerContext.teams || []).find(function (team) {
+            return team && team.key === sharedTeamKey;
+          });
+          sharedTeamName = selectedTeam && selectedTeam.name ? selectedTeam.name : "";
+          if (!sharedTeamKey || !sharedTeamName) {
+            alert("공유할 팀을 선택해 주세요.");
+            return;
+          }
+        }
+        if (visibilityScope === "users") {
+          if (!sharedUserIds.length) {
+            alert("공유할 계정을 하나 이상 선택해 주세요.");
+            return;
+          }
+          sharedUserNames = (state.viewerContext.users || [])
+            .filter(function (user) { return user && sharedUserIds.indexOf(user.loginId) !== -1; })
+            .map(function (user) { return user.name || user.loginId; })
+            .join(", ");
+        }
 
         if (!title || !date) {
           alert("제목과 날짜를 입력해 주세요.");
@@ -1170,7 +1248,15 @@
               startTime: startTime,
               endTime: endTime,
               category: category,
-              memo: memo
+              categoryLabel: categoryMeta.label,
+              categoryColor: categoryMeta.color,
+              memo: memo,
+              visibilityScope: visibilityScope,
+              sharedTeamKey: sharedTeamKey,
+              sharedTeamName: sharedTeamName,
+              sharedUserIds: sharedUserIds,
+              sharedUserNames: sharedUserNames,
+              canEdit: true
             };
           });
         } else {
@@ -1181,7 +1267,15 @@
             startTime: startTime,
             endTime: endTime,
             category: category,
-            memo: memo
+            categoryLabel: categoryMeta.label,
+            categoryColor: categoryMeta.color,
+            memo: memo,
+            visibilityScope: visibilityScope,
+            sharedTeamKey: sharedTeamKey,
+            sharedTeamName: sharedTeamName,
+            sharedUserIds: sharedUserIds,
+            sharedUserNames: sharedUserNames,
+            canEdit: true
           });
         }
 
@@ -1223,6 +1317,11 @@
 
         if (targetEvent.source === "task") {
           alert("작업목록 일정은 작업목록에서 수정/삭제해 주세요.");
+          return;
+        }
+
+        if (targetEvent.canEdit === false) {
+          alert("공유받은 일정은 수정하거나 삭제할 수 없습니다.");
           return;
         }
 
@@ -1280,8 +1379,24 @@
         return getCategoryMeta(categoryKey).label;
       }
 
+      function getEventCategoryMeta(item) {
+        var meta = getCategoryMeta(item && item.category ? item.category : "work");
+        if (item && item.categoryLabel) {
+          meta = {
+            id: meta.id,
+            label: item.categoryLabel,
+            color: item.categoryColor || meta.color,
+            builtin: meta.builtin,
+            readonly: meta.readonly
+          };
+        }
+        return meta;
+      }
+
       function applyCategoryStyle(element, categoryKey, variant) {
-        var meta = getCategoryMeta(categoryKey);
+        var meta = typeof categoryKey === "object" && categoryKey !== null
+          ? getEventCategoryMeta(categoryKey)
+          : getCategoryMeta(categoryKey);
         var color = meta.color;
 
         if (variant === "pill") {
@@ -1318,6 +1433,7 @@
 
       function persistCategories() {
         localStorage.setItem(CATEGORY_STORAGE_KEY, JSON.stringify(state.customCategories));
+        persistCalendarStore();
       }
 
       function populateCategoryOptions(selectedKey) {
@@ -1418,12 +1534,290 @@
                 startTime: item.startTime ? String(item.startTime) : "",
                 endTime: item.endTime ? String(item.endTime) : "",
                 category: resolveCategoryKey(item.category, customCategories, "work"),
-                memo: item.memo ? String(item.memo) : ""
+                categoryLabel: item.categoryLabel ? String(item.categoryLabel) : "",
+                categoryColor: item.categoryColor ? String(item.categoryColor) : "",
+                memo: item.memo ? String(item.memo) : "",
+                visibilityScope: item.visibilityScope ? String(item.visibilityScope) : "private",
+                sharedTeamKey: item.sharedTeamKey ? String(item.sharedTeamKey) : "",
+                sharedTeamName: item.sharedTeamName ? String(item.sharedTeamName) : "",
+                sharedUserIds: Array.isArray(item.sharedUserIds) ? item.sharedUserIds.map(String) : [],
+                sharedUserNames: item.sharedUserNames ? String(item.sharedUserNames) : "",
+                canEdit: true
               };
             });
         } catch (error) {
           return [];
         }
+      }
+
+      function normalizeStoredCategory(item) {
+        if (!item || typeof item !== "object") {
+          return null;
+        }
+
+        var id = String(item.id || "").trim();
+        var label = sanitizeCategoryName(item.label);
+        if (!id || !label) {
+          return null;
+        }
+
+        return {
+          id: id,
+          label: label,
+          color: normalizeHexColor(item.color, "#2563eb"),
+          custom: true
+        };
+      }
+
+      function normalizeStoredManualEvent(item, customCategories) {
+        if (!item || typeof item !== "object" || !item.id || !item.title || !item.date) {
+          return null;
+        }
+
+        return {
+          id: String(item.id),
+          title: String(item.title),
+          date: String(item.date),
+          startTime: item.startTime ? String(item.startTime) : "",
+          endTime: item.endTime ? String(item.endTime) : "",
+          category: resolveCategoryKey(item.category, customCategories, "work"),
+          categoryLabel: item.categoryLabel ? String(item.categoryLabel) : "",
+          categoryColor: item.categoryColor ? String(item.categoryColor) : "",
+          memo: item.memo ? String(item.memo) : "",
+          visibilityScope: item.visibilityScope ? String(item.visibilityScope) : "private",
+          sharedTeamKey: item.sharedTeamKey ? String(item.sharedTeamKey) : "",
+          sharedTeamName: item.sharedTeamName ? String(item.sharedTeamName) : "",
+          sharedUserIds: Array.isArray(item.sharedUserIds) ? item.sharedUserIds.map(String) : [],
+          sharedUserNames: item.sharedUserNames ? String(item.sharedUserNames) : "",
+          canEdit: item.canEdit !== false,
+          ownerLoginId: item.ownerLoginId ? String(item.ownerLoginId) : "",
+          ownerName: item.ownerName ? String(item.ownerName) : ""
+        };
+      }
+
+      function currentUserCategoryMeta(categoryKey) {
+        var meta = getCategoryMeta(categoryKey);
+        return {
+          label: meta.label,
+          color: meta.color
+        };
+      }
+
+      function updateVisibilityControls() {
+        if (!visibilityInputEl || !sharedTeamFieldEl || !sharedTeamInputEl || !sharedUserFieldEl || !sharedUserInputEl) {
+          return;
+        }
+
+        var current = visibilityInputEl.value || "private";
+        var canShareTeam = !!state.viewerContext.canShareTeam;
+        var canShareGlobal = !!state.viewerContext.canShareGlobal;
+        var canShareUsers = !!state.viewerContext.canShareUsers;
+
+        Array.prototype.forEach.call(visibilityInputEl.options, function (option) {
+          if (!(option instanceof HTMLOptionElement)) {
+            return;
+          }
+          option.disabled =
+            (option.value === "team" && !canShareTeam) ||
+            (option.value === "global" && !canShareGlobal) ||
+            (option.value === "users" && !canShareUsers);
+        });
+
+        if ((current === "team" && !canShareTeam) || (current === "global" && !canShareGlobal) || (current === "users" && !canShareUsers)) {
+          current = "private";
+          visibilityInputEl.value = current;
+        }
+
+        sharedTeamFieldEl.style.display = current === "team" && canShareTeam ? "" : "none";
+        sharedUserFieldEl.style.display = current === "users" && canShareUsers ? "" : "none";
+      }
+
+      function populateSharedTeamOptions(selectedTeamKey) {
+        if (!sharedTeamInputEl) {
+          return;
+        }
+
+        var teams = Array.isArray(state.viewerContext.teams) ? state.viewerContext.teams : [];
+        sharedTeamInputEl.innerHTML = "";
+
+        teams.forEach(function (team) {
+          if (!team || !team.key || !team.name) {
+            return;
+          }
+          var option = document.createElement("option");
+          option.value = team.key;
+          option.textContent = team.name;
+          sharedTeamInputEl.appendChild(option);
+        });
+
+        if (selectedTeamKey) {
+          sharedTeamInputEl.value = selectedTeamKey;
+        } else if (state.viewerContext.userTeamKey) {
+          sharedTeamInputEl.value = state.viewerContext.userTeamKey;
+        }
+
+        updateVisibilityControls();
+      }
+
+      function populateSharedUserOptions(selectedUserIds) {
+        if (!sharedUserInputEl) {
+          return;
+        }
+
+        var selected = Array.isArray(selectedUserIds) ? selectedUserIds.map(String) : [];
+        var users = Array.isArray(state.viewerContext.users) ? state.viewerContext.users : [];
+        sharedUserInputEl.innerHTML = "";
+
+        users.forEach(function (user) {
+          if (!user || !user.loginId) {
+            return;
+          }
+          var option = document.createElement("option");
+          option.value = user.loginId;
+          option.textContent = user.name + " (" + (user.roleLabel || user.role || user.loginId) + (user.team ? " / " + user.team : "") + ")";
+          option.selected = selected.indexOf(user.loginId) !== -1;
+          sharedUserInputEl.appendChild(option);
+        });
+      }
+
+      function getVisibilityLabel(item) {
+        if (!item || item.source === "task" || item.source === "holiday") {
+          return "";
+        }
+
+        if (item.visibilityScope === "global") {
+          return "전체 공유";
+        }
+        if (item.visibilityScope === "users") {
+          return item.sharedUserNames ? "계정 지정: " + item.sharedUserNames : "계정 지정";
+        }
+        if (item.visibilityScope === "team") {
+          return item.sharedTeamName ? "팀 공유: " + item.sharedTeamName : "팀 공유";
+        }
+        return "나만";
+      }
+
+      function fetchCalendarStore() {
+        return fetch(CALENDAR_STORE_API, {
+          headers: {
+            Accept: "application/json"
+          }
+        })
+          .then(function (response) {
+            if (!response.ok) {
+              throw new Error("Failed to fetch calendar store");
+            }
+            return response.json();
+          });
+      }
+
+      function persistCalendarStore() {
+        var payload = {
+          categories: state.customCategories.map(function (item) {
+            return {
+              id: item.id,
+              label: item.label,
+              color: item.color
+            };
+          }),
+          events: state.events.filter(function (item) {
+            return item && item.canEdit !== false;
+          }).map(function (item) {
+            return {
+              id: item.id,
+              title: item.title,
+              date: item.date,
+              startTime: item.startTime || "",
+              endTime: item.endTime || "",
+              category: item.category,
+              categoryLabel: item.categoryLabel || currentUserCategoryMeta(item.category).label,
+              categoryColor: item.categoryColor || currentUserCategoryMeta(item.category).color,
+              memo: item.memo || "",
+              visibilityScope: item.visibilityScope || "private",
+              sharedTeamKey: item.sharedTeamKey || "",
+              sharedTeamName: item.sharedTeamName || "",
+              sharedUserIds: Array.isArray(item.sharedUserIds) ? item.sharedUserIds.map(String) : [],
+              sharedUserNames: item.sharedUserNames || ""
+            };
+          })
+        };
+
+        return fetch(CALENDAR_STORE_API, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json"
+          },
+          body: JSON.stringify(payload)
+        })
+          .then(function (response) {
+            if (!response.ok) {
+              throw new Error("Failed to save calendar store");
+            }
+            return response.json();
+          })
+          .catch(function (error) {
+            console.error(error);
+          });
+      }
+
+      function hydrateCalendarStore() {
+        var localCategories = state.customCategories.slice();
+        var localEvents = state.events.slice();
+
+        return fetchCalendarStore()
+          .then(function (data) {
+            var serverCategories = Array.isArray(data && data.categories)
+              ? data.categories.map(normalizeStoredCategory).filter(Boolean)
+              : [];
+
+            var serverEvents = Array.isArray(data && data.events)
+              ? data.events.map(function (item) {
+                return normalizeStoredManualEvent(item, serverCategories);
+              }).filter(Boolean)
+              : [];
+
+            if (data && data.shareOptions && typeof data.shareOptions === "object") {
+              state.viewerContext = {
+                canShareTeam: !!data.shareOptions.canShareTeam,
+                canShareGlobal: !!data.shareOptions.canShareGlobal,
+                canShareUsers: !!data.shareOptions.canShareUsers,
+                teams: Array.isArray(data.shareOptions.teams) ? data.shareOptions.teams : [],
+                users: Array.isArray(data.shareOptions.users) ? data.shareOptions.users : [],
+                userTeamKey: data.shareOptions.userTeamKey ? String(data.shareOptions.userTeamKey) : ""
+              };
+            }
+
+            var hasServerData = serverCategories.length > 0 || serverEvents.length > 0;
+            var hasLocalData = localCategories.length > 0 || localEvents.length > 0;
+
+            if (hasServerData) {
+              state.customCategories = serverCategories;
+              state.events = serverEvents;
+              localStorage.setItem(CATEGORY_STORAGE_KEY, JSON.stringify(state.customCategories));
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(state.events));
+              return;
+            }
+
+            if (hasLocalData) {
+              state.customCategories = localCategories;
+              state.events = localEvents;
+              return persistCalendarStore();
+            }
+
+            state.customCategories = [];
+            state.events = [];
+          })
+          .catch(function (error) {
+            console.error(error);
+          })
+          .finally(function () {
+            populateCategoryOptions(state.editingId ? categoryInputEl.value : "personal");
+            populateSharedTeamOptions();
+            populateSharedUserOptions();
+            renderCategoryList();
+            render();
+          });
       }
 
       function normalizeTaskEvent(item) {
@@ -1570,6 +1964,7 @@
 
       function persistEvents() {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state.events));
+        persistCalendarStore();
       }
 
       function makeEventId() {
@@ -1715,7 +2110,7 @@
           dayEvents.slice(0, 3).forEach(function (item) {
             var pill = document.createElement("div");
             pill.className = "event-pill";
-            applyCategoryStyle(pill, item.category, "pill");
+            applyCategoryStyle(pill, item, "pill");
             pill.title = buildEventTitle(item);
             pill.textContent = buildEventPillLabel(item);
             stackEl.appendChild(pill);
@@ -1774,8 +2169,8 @@
 
             var badge = document.createElement("span");
             badge.className = "badge";
-            applyCategoryStyle(badge, item.category, "badge");
-            var badgeLabel = getCategoryLabel(item.category) || "업무";
+            applyCategoryStyle(badge, item, "badge");
+            var badgeLabel = getEventCategoryMeta(item).label || "업무";
             if (item.source === "task") {
               badgeLabel += " · 작업목록";
             }
@@ -1797,6 +2192,16 @@
               memo.textContent = "메모: " + item.memo;
               meta.appendChild(memo);
             }
+            if (item.source !== "task" && item.source !== "holiday") {
+              var visibility = document.createElement("span");
+              visibility.textContent = "공유: " + getVisibilityLabel(item);
+              meta.appendChild(visibility);
+            }
+            if (item.ownerName && item.canEdit === false) {
+              var owner = document.createElement("span");
+              owner.textContent = "작성자: " + item.ownerName;
+              meta.appendChild(owner);
+            }
             if (item.source === "task" && item.reportId) {
               var report = document.createElement("span");
               report.textContent = "작업번호: " + item.reportId;
@@ -1806,12 +2211,15 @@
             row.appendChild(top);
             row.appendChild(meta);
 
-            if (item.source === "task" || item.source === "holiday") {
+            if (item.source === "task" || item.source === "holiday" || item.canEdit === false) {
               var readonlyEl = document.createElement("div");
               readonlyEl.className = "event-readonly";
               readonlyEl.textContent = item.source === "task"
                 ? "작업목록 연동 일정 (읽기 전용)"
                 : "공휴일 기본 일정 (읽기 전용)";
+              if (item.canEdit === false && item.source !== "task" && item.source !== "holiday") {
+                readonlyEl.textContent = "공유받은 일정 (읽기 전용)";
+              }
               row.appendChild(readonlyEl);
             } else {
               var actions = document.createElement("div");
@@ -1880,6 +2288,10 @@
         populateCategoryOptions(target.category);
         categoryInputEl.value = target.category;
         memoInputEl.value = target.memo || "";
+        visibilityInputEl.value = target.visibilityScope || "private";
+        populateSharedTeamOptions(target.sharedTeamKey || "");
+        populateSharedUserOptions(target.sharedUserIds || []);
+        updateVisibilityControls();
         deleteEventBtnEl.style.display = "";
         eventTitleInputEl.focus();
       }
@@ -1891,6 +2303,10 @@
         eventFormEl.reset();
         eventDateInputEl.value = state.selectedDate;
         populateCategoryOptions("personal");
+        visibilityInputEl.value = "private";
+        populateSharedTeamOptions(state.viewerContext.userTeamKey || "");
+        populateSharedUserOptions([]);
+        updateVisibilityControls();
         deleteEventBtnEl.style.display = "none";
       }
 
@@ -1966,8 +2382,9 @@
       }
 
       resetFormForCreate();
-  renderCategoryList();
+      renderCategoryList();
       render();
+      hydrateCalendarStore();
       syncTaskEvents({ silent: true });
       fetchWeather();
     })();
