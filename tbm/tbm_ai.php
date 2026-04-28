@@ -691,6 +691,24 @@ function tbm_ai_validate_parsed_response(array $parsed): array
         $errors[] = "퀴즈 3개 총 글자 수가 {$quizTotal}자입니다. 545~820자여야 합니다.";
     }
 
+    foreach (['quiz_1' => $quiz1, 'quiz_2' => $quiz2, 'quiz_3' => $quiz3] as $key => $quizText) {
+        if ($quizText === '') {
+            continue;
+        }
+
+        $quizParts = tbm_ai_extract_single_quiz_parts($quizText);
+        if ($quizParts['question'] === '') {
+            $errors[] = "{$key}에 질문이 없습니다.";
+            continue;
+        }
+        if (count($quizParts['choices']) !== 4) {
+            $errors[] = "{$key}의 보기는 4개여야 합니다.";
+        }
+        if (preg_match_all('/[?？]/u', $quizParts['question']) > 1) {
+            $errors[] = "{$key}에는 질문이 1개만 있어야 합니다.";
+        }
+    }
+
     return ['valid' => empty($errors), 'errors' => $errors];
 }
 
@@ -739,6 +757,44 @@ function tbm_ai_trim_text_to_limit(string $text, int $maxLen, int $minSentenceCu
     $trimmed = rtrim($trimmed, " ,;:\t\n\r\0\x0B");
 
     return $trimmed;
+}
+
+function tbm_ai_has_sentence_ending(string $text): bool
+{
+    $text = trim((string)$text);
+    if ($text === '') {
+        return false;
+    }
+
+    return preg_match('/(?:[.!?]|다\.|다|이다\.|이다)$/u', $text) === 1;
+}
+
+function tbm_ai_trim_to_complete_sentences(string $text): string
+{
+    $text = trim((string)$text);
+    if ($text === '') {
+        return '';
+    }
+
+    if (tbm_ai_has_sentence_ending($text)) {
+        return $text;
+    }
+
+    $patterns = [
+        '/^(.+?(?:[.!?]))[^.!?]*$/u',
+        '/^(.+?(?:다\.|다|이다\.|이다))[^가-힣A-Za-z0-9]*$/u',
+    ];
+
+    foreach ($patterns as $pattern) {
+        if (preg_match($pattern, $text, $matches) === 1) {
+            $candidate = trim((string)($matches[1] ?? ''));
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+    }
+
+    return $text;
 }
 
 function tbm_ai_normalize_plain_style(string $text): string
@@ -799,6 +855,7 @@ function tbm_ai_normalize_plain_style(string $text): string
 function tbm_ai_fill_text_to_min(string $text, int $minLen, int $maxLen, array $fallbackSentences): string
 {
     $text = trim((string)$text);
+    $text = tbm_ai_trim_to_complete_sentences($text);
     if ($text === '') {
         $text = trim((string)($fallbackSentences[0] ?? ''));
     }
@@ -820,7 +877,7 @@ function tbm_ai_fill_text_to_min(string $text, int $minLen, int $maxLen, array $
                 break;
             }
 
-            $sentence = tbm_ai_trim_text_to_limit($sentence, $remaining, 10);
+            $sentence = tbm_ai_trim_text_to_limit($sentence, $remaining, 10, false);
             $candidate = trim($text === '' ? $sentence : ($text . ' ' . $sentence));
         }
 
@@ -829,7 +886,7 @@ function tbm_ai_fill_text_to_min(string $text, int $minLen, int $maxLen, array $
         }
     }
 
-    return trim($text);
+    return trim(tbm_ai_trim_to_complete_sentences($text));
 }
 
 function tbm_ai_quiz_normalize_lines(string $quiz): array
@@ -894,9 +951,90 @@ function tbm_ai_sanitize_quiz_text(string $quiz): string
     return tbm_ai_quiz_join_lines($lines);
 }
 
+function tbm_ai_extract_single_quiz_parts(string $quiz): array
+{
+    $quiz = str_replace(["\r\n", "\r"], "\n", trim($quiz));
+    if ($quiz === '') {
+        return ['question' => '', 'choices' => []];
+    }
+
+    $quiz = preg_replace('/(?<!\n)\s*(?=①|②|③|④)/u', "\n", $quiz) ?? $quiz;
+    $lines = tbm_ai_quiz_normalize_lines($quiz);
+
+    $question = '';
+    $choices = [];
+    foreach ($lines as $line) {
+        if (preg_match('/^\d+\.\s*/u', $line) === 1) {
+            if ($question !== '') {
+                break;
+            }
+            $question = $line;
+            continue;
+        }
+
+        if (preg_match('/^[①②③④]\s*/u', $line) === 1) {
+            if (count($choices) >= 4) {
+                break;
+            }
+            $choices[] = $line;
+            continue;
+        }
+
+        if ($question === '') {
+            $question = $line;
+            continue;
+        }
+
+        if ($choices !== []) {
+            $lastIndex = count($choices) - 1;
+            $choices[$lastIndex] = trim($choices[$lastIndex] . ' ' . $line);
+            continue;
+        }
+
+        $question = trim($question . ' ' . $line);
+    }
+
+    $question = tbm_ai_sanitize_quiz_line($question);
+    if (preg_match('/^(.+?[?？])/u', $question, $matches) === 1) {
+        $question = trim((string)$matches[1]);
+    }
+    $question = preg_replace('/\s{2,}/u', ' ', $question) ?? $question;
+
+    $choiceMarkers = ['①', '②', '③', '④'];
+    $normalizedChoices = [];
+    foreach (array_slice($choices, 0, 4) as $index => $choice) {
+        $choiceText = preg_replace('/^[①②③④]\s*/u', '', trim($choice)) ?? trim($choice);
+        if ($choiceText === '') {
+            continue;
+        }
+        $choiceText = preg_replace('/\s{2,}/u', ' ', $choiceText) ?? $choiceText;
+        $normalizedChoices[] = $choiceMarkers[$index] . ' ' . trim((string)$choiceText);
+    }
+
+    return [
+        'question' => trim((string)$question),
+        'choices' => $normalizedChoices,
+    ];
+}
+
+function tbm_ai_normalize_single_quiz(string $quiz): string
+{
+    $parts = tbm_ai_extract_single_quiz_parts($quiz);
+    if ($parts['question'] === '') {
+        return tbm_ai_sanitize_quiz_text($quiz);
+    }
+
+    $lines = [$parts['question']];
+    foreach ($parts['choices'] as $choice) {
+        $lines[] = $choice;
+    }
+
+    return tbm_ai_quiz_join_lines($lines);
+}
+
 function tbm_ai_autofit_single_quiz(string $quiz, int $targetMin = 183, int $targetMax = 225): string
 {
-    $lines = tbm_ai_quiz_normalize_lines(tbm_ai_sanitize_quiz_text($quiz));
+    $lines = tbm_ai_quiz_normalize_lines(tbm_ai_normalize_single_quiz($quiz));
     if ($lines === []) {
         return '';
     }
@@ -965,7 +1103,7 @@ function tbm_ai_autofit_single_quiz(string $quiz, int $targetMin = 183, int $tar
         }
     }
 
-    return tbm_ai_sanitize_quiz_text(tbm_ai_quiz_join_lines($lines));
+    return tbm_ai_normalize_single_quiz(tbm_ai_quiz_join_lines($lines));
 }
 
 function tbm_ai_autofit_quiz_fields(array $parsed): array
@@ -1026,8 +1164,43 @@ function tbm_ai_autofit_body_text(string $bodyText): string
         '현장에서는 기본 안전수칙 미준수와 관리 공백이 겹치면 중대재해로 이어질 수 있다.',
     ]);
     $secondBlock = tbm_ai_fill_text_to_min($secondBlock, 140, 160, [
+        '?묒뾽 ?꾩뿉 鍮꾩긽 ????덉감瑜?踰붿젅?섍퀬 ?듬낵瑜?怨듭쑀?댁빞 ?쒕떎.',
         '관리자는 작업 전 위험요인을 다시 점검하고 비상 대응 절차를 즉시 실행할 수 있어야 한다.',
         '작업자는 이상 징후 발견 시 즉시 보고하고 보호구와 감시 체계를 유지해야 한다.',
+    ]);
+
+    return $firstLabel . "\n" . $firstBlock . "\n\n" . $secondLabel . "\n" . $secondBlock;
+}
+
+function tbm_ai_autofit_body_text_safe(string $bodyText): string
+{
+    $bodyText = trim((string)$bodyText);
+    $firstLabel = json_decode('"\u005b\uC0AC\uACE0\uB0B4\uC6A9 \uBC0F \uC6D0\uC778\u005d"', true);
+    $secondLabel = json_decode('"\u005b\uC608\uBC29\uB300\uCC45\u005d"', true);
+    $firstPos = mb_strpos($bodyText, $firstLabel);
+    $secondPos = mb_strpos($bodyText, $secondLabel);
+
+    if ($bodyText === '' || $firstPos === false || $secondPos === false || $secondPos <= $firstPos) {
+        return $bodyText;
+    }
+
+    $firstBlock = trim(mb_substr($bodyText, $firstPos + mb_strlen($firstLabel, 'UTF-8'), $secondPos - ($firstPos + mb_strlen($firstLabel, 'UTF-8')), 'UTF-8'));
+    $secondBlock = trim(mb_substr($bodyText, $secondPos + mb_strlen($secondLabel, 'UTF-8'), null, 'UTF-8'));
+
+    $firstBlock = tbm_ai_normalize_plain_style($firstBlock);
+    $secondBlock = tbm_ai_normalize_plain_style($secondBlock);
+
+    $firstBlock = tbm_ai_trim_text_to_limit($firstBlock, 250, 180, false);
+    $secondBlock = tbm_ai_trim_text_to_limit($secondBlock, 160, 100, false);
+
+    $firstBlock = tbm_ai_fill_text_to_min($firstBlock, 220, 250, [
+        json_decode('"\uC791\uC5C5 \uC804\uC5D0\uB294 \uACF5\uC815\uBCC4 \uC704\uD5D8\uC694\uC778\uC744 \uB2E4\uC2DC \uD655\uC778\uD558\uACE0 \uAD00\uB9AC \uCC45\uC784\uC744 \uBA85\uD655\uD788 \uD574\uC57C \uD55C\uB2E4."', true),
+        json_decode('"\uD604\uC7A5\uC5D0\uC11C\uB294 \uAE30\uBCF8 \uC548\uC804\uC218\uCE59 \uBBF8\uC900\uC218\uAC00 \uB204\uC801\uB418\uBA74 \uC911\uB300\uC7AC\uD574\uB85C \uC774\uC5B4\uC9C8 \uC218 \uC788\uB2E4."', true),
+    ]);
+    $secondBlock = tbm_ai_fill_text_to_min($secondBlock, 140, 160, [
+        json_decode('"\uC791\uC5C5 \uC804 \uBE44\uC0C1 \uB300\uC751 \uC808\uCC28\uB97C \uACF5\uC720\uD558\uACE0 \uC989\uC2DC \uBCF4\uACE0\uD574\uC57C \uD55C\uB2E4."', true),
+        json_decode('"\uAD00\uB9AC\uC790\uB294 \uC791\uC5C5 \uC804 \uC704\uD5D8\uC694\uC778\uC744 \uB2E4\uC2DC \uC810\uAC80\uD558\uACE0 \uBE44\uC0C1 \uB300\uC751 \uACC4\uD68D\uC744 \uC989\uC2DC \uC2E4\uD589\uD560 \uC218 \uC788\uC5B4\uC57C \uD55C\uB2E4."', true),
+        json_decode('"\uC791\uC5C5\uC790\uB294 \uC774\uC0C1 \uC9D5\uD6C4 \uBC1C\uACAC \uC2DC \uC989\uC2DC \uBCF4\uACE0\uD558\uACE0 \uBCF4\uD638\uAD6C \uAC10\uC2DC \uCCB4\uACC4\uB97C \uC720\uC9C0\uD574\uC57C \uD55C\uB2E4."', true),
     ]);
 
     return $firstLabel . "\n" . $firstBlock . "\n\n" . $secondLabel . "\n" . $secondBlock;
@@ -1036,7 +1209,7 @@ function tbm_ai_autofit_body_text(string $bodyText): string
 function tbm_ai_autofit_parsed_response(array $parsed): array
 {
     if (isset($parsed['body_text']) && is_string($parsed['body_text'])) {
-        $parsed['body_text'] = tbm_ai_autofit_body_text($parsed['body_text']);
+        $parsed['body_text'] = tbm_ai_autofit_body_text_safe($parsed['body_text']);
     }
 
     $parsed = tbm_ai_autofit_quiz_fields($parsed);
