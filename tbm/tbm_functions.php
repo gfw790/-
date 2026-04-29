@@ -209,6 +209,89 @@ function tbm_request_data(): array
     return $base;
 }
 
+function tbm_has_filled_names(array $names): bool
+{
+    foreach ($names as $name) {
+        if (trim((string)$name) !== '') {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function tbm_clean_attendee_name(string $name): string
+{
+    $name = trim((string)preg_replace('/\s*\([^)]*\)/u', '', $name));
+    return $name;
+}
+
+function tbm_attendee_names_for_team(string $teamName, array $excludeNames = ['진준철']): array
+{
+    $teamName = trim($teamName);
+    if ($teamName === '') {
+        return [];
+    }
+
+    $names = [];
+    foreach (auth_read_teams() as $rawTeamName) {
+        $displayName = tbm_normalize_display_team_name($rawTeamName);
+        if ($displayName !== $teamName) {
+            continue;
+        }
+
+        if (auth_team_key($rawTeamName) === auth_team_key('안전관리')) {
+            continue;
+        }
+
+        foreach (auth_team_member_names($rawTeamName, ['worker', 'leader', 'manager']) as $rawName) {
+            $cleanName = tbm_clean_attendee_name($rawName);
+            if ($cleanName === '' || in_array($cleanName, $excludeNames, true)) {
+                continue;
+            }
+            $names[] = $cleanName;
+        }
+    }
+
+    $names = array_values(array_unique($names));
+    sort($names, SORT_STRING);
+
+    return $names;
+}
+
+function tbm_resolve_attendee_names(array $data, string $selectedTeam, ?array $user = null): array
+{
+    $postedNames = array_values(array_map(
+        static fn($name) => trim((string)$name),
+        is_array($data['names'] ?? null) ? $data['names'] : []
+    ));
+
+    if (tbm_has_filled_names($postedNames)) {
+        while (count($postedNames) < 8) {
+            $postedNames[] = '';
+        }
+        return $postedNames;
+    }
+
+    $teamName = trim($selectedTeam);
+    if ($teamName === '공통') {
+        $teamName = '';
+    }
+
+    if ($teamName === '' && is_array($user)) {
+        $teamName = tbm_normalize_display_team_name(
+            auth_normalize_team_name((string)($user['team'] ?? ''))
+        );
+    }
+
+    $resolvedNames = tbm_attendee_names_for_team($teamName);
+    while (count($resolvedNames) < 8) {
+        $resolvedNames[] = '';
+    }
+
+    return $resolvedNames;
+}
+
 function tbm_load_image_resource(string $imagePath)
 {
     $info = @getimagesize($imagePath);

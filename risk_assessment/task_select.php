@@ -3511,8 +3511,35 @@ function type_label(string $type): string
               <?php if (!$leaderElectricalDetailOnlyMode): ?>
                 <div style="margin-top: 22px;">
                   <h2 style="font-size:17px;">작업 유의사항</h2>
+                  <textarea name="note_html" id="note_html" class="note-editor-source" hidden><?= h($formDefaults['note_html']) ?></textarea>
                   <div class="note-editor-shell">
-                    <!-- ...existing code for note editor... -->
+                    <div class="note-toolbar">
+                      <div class="note-toolbar-group">
+                        <button type="button" id="note-upload-image">사진 추가</button>
+                        <button type="button" id="note-link-image">링크 이미지</button>
+                        <button type="button" id="note-insert-selected-image">선택 사진 넣기</button>
+                        <button type="button" id="note-mark-image" class="note-icon-button">
+                          <span class="note-visually-hidden">이미지 편집</span>
+                        </button>
+                      </div>
+                      <div class="note-toolbar-group">
+                        <button type="button" id="note-image-size-small">작게</button>
+                        <button type="button" id="note-image-size-medium">보통</button>
+                        <button type="button" id="note-image-size-large">크게</button>
+                        <button type="button" id="note-image-size-custom">직접입력</button>
+                      </div>
+                      <div class="note-toolbar-group">
+                        <button type="button" id="note-image-align-left">왼쪽</button>
+                        <button type="button" id="note-image-align-center">가운데</button>
+                        <button type="button" id="note-image-align-right">오른쪽</button>
+                        <button type="button" id="note-image-move-up">위로</button>
+                        <button type="button" id="note-image-move-down">아래로</button>
+                      </div>
+                    </div>
+                    <div class="note-editor-scroll">
+                      <div id="note-editor-root" class="note-editor-host"></div>
+                    </div>
+                    <input type="file" id="note-image-file" accept="image/*" multiple hidden>
                   </div>
                   <div class="note-help">TOAST UI Editor로 본문을 직접 편집하고, 아래 버튼이나 첨부 이미지 목록에서 사진을 골라 본문에 넣을 수 있습니다. 에디터 안의 이미지를 클릭하면 선택되고, 크기와 위치를 바로 조절할 수 있습니다.</div>
                   <div class="paste-preview" id="paste-preview"></div>

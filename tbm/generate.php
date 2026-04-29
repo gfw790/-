@@ -42,6 +42,8 @@ if ($isOperator && $postedTeam === '공통') {
     $returnTeam   = $documentTeam;
 }
 
+$data['names'] = tbm_resolve_attendee_names($data, $returnTeam, $raUser);
+
 if (!is_dir(TBM_OUTPUT_DIR)) {
     mkdir(TBM_OUTPUT_DIR, 0777, true);
 }

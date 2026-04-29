@@ -352,7 +352,7 @@ body { font-family: "Malgun Gothic", sans-serif; margin: 0; background: #f5f6f7;
 
             <div class="field-group">
                 <label for="doc_date">작업일자</label>
-                <input type="date" id="doc_date" name="doc_date" value="<?= h($selectedDate) ?>" onchange="location.href='index.php?date='+this.value">
+                <input type="date" id="doc_date" name="doc_date" value="<?= h($selectedDate) ?>" onchange="handleDocDateChange(this.value)">
             </div>
 
             <div class="section-title">강사 정보</div>
@@ -752,6 +752,18 @@ function resetDraftAndReload() {
     location.href = 'index.php?date=' + encodeURIComponent(getDraftDateValue());
 }
 
+function handleDocDateChange(dateValue) {
+    const params = new URLSearchParams();
+    params.set('date', dateValue || '');
+
+    const selectedTeam = document.getElementById('selected_team')?.value || '';
+    if (selectedTeam) {
+        params.set('team', selectedTeam);
+    }
+
+    location.href = 'index.php?' + params.toString();
+}
+
 function bindDraftAutosave() {
     const form = document.getElementById('tbm-form');
     if (!form) {
@@ -1016,18 +1028,23 @@ function addNameSlot() {
 // 페이지 로드 시 첫 번째 팀 자동 선택 + 카운터 초기화
 window.addEventListener('DOMContentLoaded', () => {
     const teams = Object.keys(teamData);
-    const chooseTeam = initialTeam && teamData[initialTeam] ? initialTeam : (teams[0] ?? '');
+    const defaultTeam = initialTeam && teamData[initialTeam] ? initialTeam : (teams[0] ?? '');
 
     bindDraftAutosave();
     const draft = loadFormDraft();
+    let activeTeam = defaultTeam;
     if (draft) {
+        const draftTeam = typeof draft.selected_team === 'string' ? draft.selected_team : '';
+        if (draftTeam && teamData[draftTeam]) {
+            activeTeam = draftTeam;
+        }
         applyDraftToForm(draft);  // 폼 내용(제목·본문·퀴즈 등) 복원
     }
 
     // 인명부는 드래프트와 무관하게 항상 현재 팀으로 재설정
     // (draftAutosaveEnabled=false 이므로 내부 saveFormDraft 호출은 no-op)
-    if (chooseTeam) {
-        applyTeam(chooseTeam);
+    if (activeTeam) {
+        applyTeam(activeTeam);
     } else {
         while(currentSlotCount < 8) addInputSlot('');
         renderRecentDocs('');
