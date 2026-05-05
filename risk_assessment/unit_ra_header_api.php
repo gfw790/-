@@ -7,6 +7,7 @@
 // ================================================================
 
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/lib/hazard_4m.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -1821,6 +1822,7 @@ if ($action === 'preview') {
                 task_code,
                 task_name,
                 hazard_name,
+                hazard_4m,
                 accident_type,
                 injury_result,
                 cause_text,
@@ -1843,7 +1845,10 @@ if ($action === 'preview') {
             ORDER BY sort_no ASC, item_id ASC
         ");
         $itemsStmt->execute([':unit_ra_id' => $unitRaId]);
-        $items = $itemsStmt->fetchAll() ?: [];
+        $items = array_map(
+            static fn(array $item): array => hazard_4m_enrich($item, true),
+            $itemsStmt->fetchAll() ?: []
+        );
 
         echo json_encode([
             'success' => true,

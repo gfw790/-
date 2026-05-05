@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/lib/hazard_4m.php';
 
 function h($value): string
 {
@@ -247,6 +248,7 @@ if (empty($unitIds)) {
             task_code,
             task_name,
             hazard_name,
+            hazard_4m,
             accident_type,
             injury_result,
             cause_text,
@@ -270,7 +272,7 @@ if (empty($unitIds)) {
     $itemStmt->execute(array_values($unitIds));
     $itemsByUnit = [];
     foreach ($itemStmt->fetchAll() as $itemRow) {
-        $itemsByUnit[(int)$itemRow['unit_ra_id']][] = $itemRow;
+        $itemsByUnit[(int)$itemRow['unit_ra_id']][] = hazard_4m_enrich($itemRow, true);
     }
 }
 
@@ -1080,42 +1082,46 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
   }
   .print-measure-root th:nth-child(3),
   .print-measure-root td:nth-child(3) {
-    width: 11%;
+    width: 6%;
   }
   .print-measure-root th:nth-child(4),
   .print-measure-root td:nth-child(4) {
-    width: 6%;
+    width: 11%;
   }
   .print-measure-root th:nth-child(5),
   .print-measure-root td:nth-child(5) {
-    width: 7%;
+    width: 6%;
   }
   .print-measure-root th:nth-child(6),
   .print-measure-root td:nth-child(6) {
-    width: 16%;
+    width: 7%;
   }
   .print-measure-root th:nth-child(7),
   .print-measure-root td:nth-child(7) {
-    width: 5%;
+    width: 16%;
   }
   .print-measure-root th:nth-child(8),
   .print-measure-root td:nth-child(8) {
-    width: 12%;
+    width: 5%;
   }
   .print-measure-root th:nth-child(9),
   .print-measure-root td:nth-child(9) {
-    width: 5%;
+    width: 12%;
   }
   .print-measure-root th:nth-child(10),
   .print-measure-root td:nth-child(10) {
-    width: 12%;
+    width: 5%;
   }
   .print-measure-root th:nth-child(11),
   .print-measure-root td:nth-child(11) {
-    width: 5%;
+    width: 12%;
   }
   .print-measure-root th:nth-child(12),
   .print-measure-root td:nth-child(12) {
+    width: 5%;
+  }
+  .print-measure-root th:nth-child(13),
+  .print-measure-root td:nth-child(13) {
     width: 7%;
   }
   @page {
@@ -1617,6 +1623,7 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
                       <tr>
                         <th class="center">No</th>
                         <th>세부작업명</th>
+                        <th>4M분류</th>
                         <th>위험요인</th>
                         <th>재해형태</th>
                         <th>상해결과</th>
@@ -1634,6 +1641,7 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
                         <tr class="<?= $index % 2 === 0 ? 'row-odd' : '' ?>">
                           <td class="center"><?= h($item['sort_no'] !== null ? $item['sort_no'] : ($index + 1)) ?></td>
                           <td><?= h($item['task_name']) ?></td>
+                          <td><?= h($item['hazard_4m_label'] ?? hazard_4m_label($item['hazard_4m'] ?? null)) ?></td>
                           <td><?= h($item['hazard_name']) ?></td>
                           <td><?= h($item['accident_type']) ?></td>
                           <td><?= h($item['injury_result']) ?></td>
@@ -1662,7 +1670,7 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
                     <?php if ($footerLabel !== ''): ?>
                       <tfoot class="table-print-footer">
                         <tr>
-                          <td colspan="12" class="table-print-footer-cell">
+                          <td colspan="13" class="table-print-footer-cell">
                             <span class="footer-badge <?= h($footerToneClass) ?>"><?= h($footerLabel) ?></span>
                           </td>
                         </tr>

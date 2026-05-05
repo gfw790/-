@@ -23,6 +23,18 @@ function jsonResponse(bool $success, string $message, array $data = []): void {
     exit;
 }
 
+function findUploadWorksheet(\PhpOffice\PhpSpreadsheet\Spreadsheet $spreadsheet): ?\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet
+{
+    foreach (['정기위험성평가', '단위위험성평가서', 'RiskAssessment'] as $sheetName) {
+        $sheet = $spreadsheet->getSheetByName($sheetName);
+        if ($sheet !== null) {
+            return $sheet;
+        }
+    }
+
+    return $spreadsheet->getSheetCount() > 0 ? $spreadsheet->getSheet(0) : null;
+}
+
 // ── 요청 검증 ────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     jsonResponse(false, 'POST 요청만 허용됩니다.');
@@ -40,8 +52,8 @@ if ($file['error'] !== UPLOAD_ERR_OK) {
 
 // 확장자 검사
 $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-if (!in_array($ext, ['xlsx', 'xls'], true)) {
-    jsonResponse(false, '.xlsx 또는 .xls 파일만 업로드 가능합니다.');
+if (!in_array($ext, ['xlsx', 'xls', 'xlsm'], true)) {
+    jsonResponse(false, '.xlsx, .xls, .xlsm 파일만 업로드 가능합니다.');
 }
 
 // 파일 크기 제한 (10MB)
@@ -56,9 +68,9 @@ try {
     jsonResponse(false, '엑셀 파일을 읽을 수 없습니다: ' . $e->getMessage());
 }
 
-$ws = $spreadsheet->getSheetByName('단위위험성평가서');
+$ws = findUploadWorksheet($spreadsheet);
 if ($ws === null) {
-    jsonResponse(false, '"단위위험성평가서" 시트를 찾을 수 없습니다. 양식을 확인하세요.');
+    jsonResponse(false, 'Worksheet not found. Please use the exported Excel template.');
 }
 
 // ── 헬퍼: 셀 값 가져오기 ─────────────────────────────────────────
@@ -131,16 +143,16 @@ function cellDate($ws, string $cell): ?string {
 //   행4: A=unit_ra_id(자동), B=unit_code, D=unit_title, I=process_name, L=unit_type, O=remark
 //   행6: A=created_by, D=created_at, M=use_yn, O=sort_no
 $header = [
-    'unit_code'     => cellVal($ws, 'B4'),  // B4셀에서 읽기
-    'unit_title'    => cellVal($ws, 'D4'),
-    'process_name'  => cellVal($ws, 'I4'),
-    'unit_type'     => cellVal($ws, 'L4') ?? 'major_work',
-    'remark'        => cellVal($ws, 'O4'),
-    'created_by'    => cellVal($ws, 'A6'),
-    'updated_by'    => cellVal($ws, 'G6'),
-    'use_yn'        => cellVal($ws, 'M6') ?? 'Y',
-    'sort_no'       => cellInt($ws, 'O6') ?? 0,
-    'evaluator_name' => cellVal($ws, 'Q6'),
+    'unit_code'      => cellVal($ws, 'D3'),
+    'unit_title'     => cellVal($ws, 'D4'),
+    'process_name'   => cellVal($ws, 'O3'),
+    'unit_type'      => cellVal($ws, 'O4') ?? 'major_work',
+    'remark'         => cellVal($ws, 'O6'),
+    'created_by'     => 'excel_upload',
+    'updated_by'     => 'excel_upload',
+    'use_yn'         => 'Y',
+    'sort_no'        => 0,
+    'evaluator_name' => cellVal($ws, 'D5'),
 ];
 
 // unit_type 한글 → DB값 변환
@@ -229,7 +241,8 @@ try {
     $pdo->beginTransaction();
 
     // A4셀에 unit_ra_id 있으면 UPDATE, 없으면 INSERT
-    $unitRaId = cellInt($ws, 'A4');
+    $configSheet = $spreadsheet->getSheetByName('__config');
+    $unitRaId = $configSheet ? cellInt($configSheet, 'A3') : null;
 
     if ($unitRaId) {
         // 존재 확인

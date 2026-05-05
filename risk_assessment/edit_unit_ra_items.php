@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/lib/hazard_4m.php';
 
 function h($value): string
 {
@@ -93,6 +94,7 @@ function item_history_snapshot(array $item): array
     'task_code' => nullable_text($item['task_code'] ?? null),
     'task_name' => trim((string)($item['task_name'] ?? '')),
     'hazard_name' => trim((string)($item['hazard_name'] ?? '')),
+    'hazard_4m' => hazard_4m_normalize_manual($item['hazard_4m'] ?? null),
     'accident_type' => nullable_text($item['accident_type'] ?? null),
     'injury_result' => nullable_text($item['injury_result'] ?? null),
     'cause_text' => nullable_text($item['cause_text'] ?? null),
@@ -270,7 +272,8 @@ function blank_item(array $defaults = []): array
         'sort_no' => '',
         'task_code' => '',
         'task_name' => '',
-        'hazard_name' => '',
+    'hazard_name' => '',
+        'hazard_4m' => '',
         'accident_type' => '',
         'injury_result' => '',
         'cause_text' => '',
@@ -306,6 +309,7 @@ function post_row_count(array $source): int
         'task_code',
         'task_name',
         'hazard_name',
+        'hazard_4m',
         'accident_type',
         'injury_result',
         'cause_text',
@@ -352,6 +356,7 @@ function build_posted_items(array $source): array
             'task_code' => (string)(post_array_value($source, 'task_code', $index) ?? ''),
             'task_name' => (string)(post_array_value($source, 'task_name', $index) ?? ''),
             'hazard_name' => (string)(post_array_value($source, 'hazard_name', $index) ?? ''),
+            'hazard_4m' => (string)(hazard_4m_normalize_manual(post_array_value($source, 'hazard_4m', $index)) ?? ''),
             'accident_type' => (string)(post_array_value($source, 'accident_type', $index) ?? ''),
             'injury_result' => (string)(post_array_value($source, 'injury_result', $index) ?? ''),
             'cause_text' => (string)(post_array_value($source, 'cause_text', $index) ?? ''),
@@ -393,6 +398,7 @@ if ($unitRaId <= 0) {
 } else {
     $pdo = getDB();
   ensure_history_table($pdo);
+  ensure_unit_ra_item_hazard_4m_column($pdo);
 
     if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && ($_POST['action'] ?? '') === 'save_items') {
         $postedItems = build_posted_items($_POST);
@@ -417,6 +423,7 @@ if ($unitRaId <= 0) {
                         task_code = :task_code,
                         task_name = :task_name,
                         hazard_name = :hazard_name,
+                        hazard_4m = :hazard_4m,
                         accident_type = :accident_type,
                         injury_result = :injury_result,
                         cause_text = :cause_text,
@@ -447,6 +454,7 @@ if ($unitRaId <= 0) {
                             task_code,
                             task_name,
                             hazard_name,
+                            hazard_4m,
                             accident_type,
                             injury_result,
                             cause_text,
@@ -474,6 +482,7 @@ if ($unitRaId <= 0) {
                             :task_code,
                             :task_name,
                             :hazard_name,
+                            :hazard_4m,
                             :accident_type,
                             :injury_result,
                             :cause_text,
@@ -515,6 +524,7 @@ if ($unitRaId <= 0) {
                     $taskCode = nullable_text($_POST['task_code'][$index] ?? null);
                     $taskName = trim((string)($_POST['task_name'][$index] ?? ''));
                     $hazardName = trim((string)($_POST['hazard_name'][$index] ?? ''));
+                    $hazard4m = hazard_4m_normalize_manual($_POST['hazard_4m'][$index] ?? null);
                     $accidentType = nullable_text($_POST['accident_type'][$index] ?? null);
                     $injuryResult = nullable_text($_POST['injury_result'][$index] ?? null);
                     $causeText = nullable_text($_POST['cause_text'][$index] ?? null);
@@ -529,6 +539,7 @@ if ($unitRaId <= 0) {
                     $hasContent = $taskCode !== null
                         || $taskName !== ''
                         || $hazardName !== ''
+                        || $hazard4m !== null
                         || $accidentType !== null
                         || $injuryResult !== null
                         || $causeText !== null
@@ -570,6 +581,7 @@ if ($unitRaId <= 0) {
                         ':task_code' => $taskCode,
                         ':task_name' => $taskName,
                         ':hazard_name' => $hazardName,
+                        ':hazard_4m' => $hazard4m,
                         ':accident_type' => $accidentType,
                         ':injury_result' => $injuryResult,
                         ':cause_text' => $causeText,
@@ -595,6 +607,7 @@ if ($unitRaId <= 0) {
                         'task_code' => $taskCode,
                         'task_name' => $taskName,
                         'hazard_name' => $hazardName,
+                        'hazard_4m' => $hazard4m,
                         'accident_type' => $accidentType,
                         'injury_result' => $injuryResult,
                         'cause_text' => $causeText,
@@ -683,6 +696,7 @@ if ($unitRaId <= 0) {
                 task_code,
                 task_name,
                 hazard_name,
+                hazard_4m,
                 accident_type,
                 injury_result,
                 cause_text,
@@ -1074,6 +1088,7 @@ if ($unitRaId <= 0) {
 
       <?php if ($header): ?>
         <?php $fieldLabels = history_field_labels(); ?>
+        <?php $hazard4mOptions = hazard_4m_manual_options(); ?>
         <div class="history-panel">
           <div class="history-head">
             <h3>최근 수정 이력</h3>
@@ -1165,6 +1180,13 @@ if ($unitRaId <= 0) {
                     <td><input type="text" name="task_code[]" value="<?= h($item['task_code'] ?? '') ?>" placeholder="안전작업표준서 번호"></td>
                     <td><input type="text" name="task_name[]" value="<?= h($item['task_name'] ?? '') ?>"></td>
                     <td><textarea name="hazard_name[]"><?= h($item['hazard_name'] ?? '') ?></textarea></td>
+                    <td>
+                      <select name="hazard_4m[]">
+                        <?php foreach ($hazard4mOptions as $optionValue => $optionLabel): ?>
+                          <option value="<?= h($optionValue) ?>" <?= (($item['hazard_4m'] ?? '') === $optionValue) ? 'selected' : '' ?>><?= h($optionLabel) ?></option>
+                        <?php endforeach; ?>
+                      </select>
+                    </td>
                     <td><input type="text" name="accident_type[]" value="<?= h($item['accident_type'] ?? '') ?>"></td>
                     <td><input type="text" name="injury_result[]" value="<?= h($item['injury_result'] ?? '') ?>"></td>
                     <td class="col-wide-text"><textarea name="cause_text[]"><?= h($item['cause_text'] ?? '') ?></textarea></td>
@@ -1215,6 +1237,7 @@ if ($unitRaId <= 0) {
     const itemsBody = document.getElementById('items-body');
     const addRowButton = document.getElementById('add-row-button');
     let nextRowIndex = <?= (int)count($items) ?>;
+    const hazard4mOptions = <?= json_encode(hazard_4m_manual_options(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 
     const actionButtons = document.querySelectorAll('.actions .btn');
     if (actionButtons[0] && returnTo) {
@@ -1252,6 +1275,10 @@ if ($unitRaId <= 0) {
     }
 
     function buildRowHtml(rowIndex, sortNo) {
+      const hazard4mSelect = Object.entries(hazard4mOptions).map(([value, label]) =>
+        `<option value="${String(value).replace(/"/g, '&quot;')}">${String(label).replace(/</g, '&lt;')}</option>`
+      ).join('');
+
       return `
         <tr>
           <td>
@@ -1262,6 +1289,7 @@ if ($unitRaId <= 0) {
           <td><input type="text" name="task_code[]" value="" placeholder="안전작업표준서 번호"></td>
           <td><input type="text" name="task_name[]" value=""></td>
           <td><textarea name="hazard_name[]"></textarea></td>
+          <td><select name="hazard_4m[]">${hazard4mSelect}</select></td>
           <td><input type="text" name="accident_type[]" value=""></td>
           <td><input type="text" name="injury_result[]" value=""></td>
           <td class="col-wide-text"><textarea name="cause_text[]"></textarea></td>
@@ -1290,6 +1318,17 @@ if ($unitRaId <= 0) {
     }
 
     if (itemsBody) {
+      const headerRow = document.querySelector('table thead tr');
+      if (headerRow) {
+        const headerCells = Array.from(headerRow.querySelectorAll('th'));
+        const hasHazard4mHeader = headerCells.some((cell) => cell.textContent.trim() === '4M분류');
+        if (!hasHazard4mHeader && headerCells.length >= 6) {
+          const th = document.createElement('th');
+          th.textContent = '4M분류';
+          headerRow.insertBefore(th, headerCells[5] || null);
+        }
+      }
+
       itemsBody.addEventListener('input', (event) => {
         const input = event.target.closest('input[data-score-group]');
         if (!input) {

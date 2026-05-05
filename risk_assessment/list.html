@@ -950,7 +950,80 @@ function escAttr(str) {
     .replace(/>/g, '&gt;');
 }
 
+function submitZipDownload(ids) {
+  const targetIds = normalizeIds(ids);
+  if (targetIds.length === 0) {
+    window.alert('다운로드할 위험성평가를 선택해 주세요.');
+    return;
+  }
+
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = 'unit_ra_excel_batch_download.php';
+
+  const idsInput = document.createElement('input');
+  idsInput.type = 'hidden';
+  idsInput.name = 'unit_ra_ids';
+  idsInput.value = targetIds.join(',');
+  form.appendChild(idsInput);
+
+  document.body.appendChild(form);
+  form.submit();
+  document.body.removeChild(form);
+}
+
+function downloadAllZip() {
+  submitZipDownload(filtered.map(row => row.unit_ra_id));
+}
+
+function downloadSelectedZip() {
+  submitZipDownload(Array.from(selectedIds));
+}
+
+function enhanceBatchDownloadButtons() {
+  const batchActions = document.querySelector('.batch-actions');
+  const clearButton = document.getElementById('btn-clear-selection');
+  if (!batchActions || !clearButton) {
+    return;
+  }
+
+  if (!document.getElementById('btn-download-all-zip')) {
+    const allZipButton = document.createElement('button');
+    allZipButton.type = 'button';
+    allZipButton.className = 'btn-print-go';
+    allZipButton.id = 'btn-download-all-zip';
+    allZipButton.textContent = '전체 ZIP 다운로드';
+    allZipButton.addEventListener('click', downloadAllZip);
+    batchActions.insertBefore(allZipButton, clearButton);
+  }
+
+  if (!document.getElementById('btn-download-selected-zip')) {
+    const selectedZipButton = document.createElement('button');
+    selectedZipButton.type = 'button';
+    selectedZipButton.className = 'btn-print-go';
+    selectedZipButton.id = 'btn-download-selected-zip';
+    selectedZipButton.textContent = '선택 ZIP 다운로드';
+    selectedZipButton.disabled = true;
+    selectedZipButton.addEventListener('click', downloadSelectedZip);
+    batchActions.insertBefore(selectedZipButton, clearButton);
+  }
+}
+
+const originalUpdateSelectionUI = updateSelectionUI;
+updateSelectionUI = function () {
+  originalUpdateSelectionUI();
+  const count = selectedIds.size;
+  const downloadSelectedZipButton = document.getElementById('btn-download-selected-zip');
+  if (downloadSelectedZipButton) {
+    downloadSelectedZipButton.disabled = count === 0;
+    downloadSelectedZipButton.textContent = count > 0
+      ? `선택 ZIP 다운로드 (${count.toLocaleString()})`
+      : '선택 ZIP 다운로드';
+  }
+};
+
 restoreListStateFromUrl();
+enhanceBatchDownloadButtons();
 loadList();
 </script>
 </body>
