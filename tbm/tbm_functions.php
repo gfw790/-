@@ -34,7 +34,7 @@ function tbm_default_data(): array
         'instructor_name'      => '김남균',
         'instructor_position'  => '과장',
         'instructor_note'      => '',
-        'names'                => ['윤택천','엄기준','윤순형','이정민','한지민','이돈희','김종훈','윤장희'],
+        'names'                => ['윤택천','엄기준','윤순형','이정민','한지민','이돈희','김종훈',''],
         'today_work_1'         => '',
         'today_work_2'         => '',
         'risk_checks'          => [],
