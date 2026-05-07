@@ -3,6 +3,7 @@ import os
 import re
 import shutil
 import threading
+import time
 from datetime import datetime
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
@@ -1086,6 +1087,7 @@ class ReceiptPreviewDialog:
         self.cancelled = True
         self.confirmed_crops: List[np.ndarray] = []
         self.active_handle_index: Optional[int] = None
+        self.active_edge_index: Optional[int] = None
         self.canvas_photo: Optional[tk.PhotoImage] = None
         self.preview_photo: Optional[tk.PhotoImage] = None
         self.display_scale = 1.0
@@ -1109,6 +1111,10 @@ class ReceiptPreviewDialog:
         self.title_var = tk.StringVar()
         self.hint_var = tk.StringVar()
         self.count_var = tk.StringVar()
+        self.rotation_var = tk.StringVar(value="회전: 원본")
+        self.manual_rotate_steps = 0
+        self.preview_update_interval_sec = 0.05
+        self._last_preview_update_ts = 0.0
 
         self._build_ui()
         self.window.update_idletasks()
@@ -1141,13 +1147,20 @@ class ReceiptPreviewDialog:
         self.canvas.bind("<ButtonRelease-1>", self.on_mouse_up)
 
         ttk.Label(right, text="결과 미리보기").pack(anchor="w", pady=(0, 6))
+
+        rotate_row = ttk.Frame(right)
+        rotate_row.pack(fill="x", pady=(0, 6))
+        ttk.Button(rotate_row, text="좌회전 90°", command=self.rotate_preview_left).pack(side="left")
+        ttk.Button(rotate_row, text="우회전 90°", command=self.rotate_preview_right).pack(side="left", padx=(6, 0))
+        ttk.Label(rotate_row, textvariable=self.rotation_var).pack(side="right")
+
         self.preview_label = ttk.Label(right, relief="solid", anchor="center")
         self.preview_label.pack(fill="both", expand=True)
 
         preview_help = (
             "- 사각형이 기울어져 있어도 결과는 직사각형으로 저장됩니다.\n"
-            "- 영수증이 여러 장이면 하나 확정 후 다음 버튼으로 넘어갑니다.\n"
-            "- 마지막 후보에서는 완료 버튼으로 저장 단계로 넘어갑니다."
+            "- 한 파일당 한 번만 경계를 조정하고 완료합니다.\n"
+            "- 완료 버튼을 누르면 저장 단계로 넘어갑니다."
         )
         ttk.Label(right, text=preview_help, justify="left", wraplength=260).pack(anchor="w", pady=(8, 0))
 
@@ -1185,8 +1198,13 @@ class ReceiptPreviewDialog:
     def load_candidate(self, index: int):
         self.current_index = index
         self.current_quad = self.candidate_quads[index].copy()
+        self.manual_rotate_steps = 0
+        self.rotation_var.set("회전: 원본")
         total = len(self.candidate_quads)
-        self.title_var.set(f"{self.source_name}  |  영수증 후보 {index + 1}/{total}")
+        if total <= 1:
+            self.title_var.set(f"{self.source_name}  |  영수증 경계 조정")
+        else:
+            self.title_var.set(f"{self.source_name}  |  영수증 후보 {index + 1}/{total}")
         self.hint_var.set("꼭지점 4개를 영수증 모서리에 맞춘 뒤 다음 또는 완료를 누르세요.")
         self.count_var.set(f"현재까지 확정: {len(self.confirmed_crops)}건")
         self.confirm_button.configure(text="완료" if index >= total - 1 else "다음")
@@ -1213,20 +1231,60 @@ class ReceiptPreviewDialog:
             self.canvas.create_oval(x - 7, y - 7, x + 7, y + 7, fill="#ffb000", outline="#ffffff", width=2)
             self.canvas.create_text(x, y - 14, text=str(index + 1), fill="#ffffff", font=("Malgun Gothic", 9, "bold"))
 
+        # Edge midpoint handles: top/bottom move vertically, left/right move horizontally.
+        edge_midpoints = self.get_edge_midpoints_canvas()
+        for edge_index, (mx, my) in enumerate(edge_midpoints):
+            self.canvas.create_oval(mx - 6, my - 6, mx + 6, my + 6, fill="#22d3ee", outline="#ffffff", width=2)
+            label = "↕" if edge_index in (0, 2) else "↔"
+            self.canvas.create_text(mx, my - 13, text=label, fill="#e5f9ff", font=("Malgun Gothic", 8, "bold"))
+
     def update_preview(self):
         try:
             cropped = crop_receipt_from_quad(self.image, self.current_quad, self.options)
+            cropped = self.apply_manual_rotation(cropped)
             self.preview_photo, _ = self.make_photoimage(cropped, 320, 560)
             self.preview_label.configure(image=self.preview_photo, text="")
         except Exception:
             self.preview_photo = None
             self.preview_label.configure(image="", text="미리보기 생성 실패")
 
+    def apply_manual_rotation(self, image: np.ndarray) -> np.ndarray:
+        steps = self.manual_rotate_steps % 4
+        if steps == 1:
+            return cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
+        if steps == 2:
+            return cv2.rotate(image, cv2.ROTATE_180)
+        if steps == 3:
+            return cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        return image
+
+    def refresh_rotation_label(self):
+        steps = self.manual_rotate_steps % 4
+        if steps == 0:
+            self.rotation_var.set("회전: 원본")
+        elif steps == 1:
+            self.rotation_var.set("회전: 우 90°")
+        elif steps == 2:
+            self.rotation_var.set("회전: 180°")
+        else:
+            self.rotation_var.set("회전: 좌 90°")
+
+    def rotate_preview_left(self):
+        self.manual_rotate_steps = (self.manual_rotate_steps - 1) % 4
+        self.refresh_rotation_label()
+        self.update_preview()
+
+    def rotate_preview_right(self):
+        self.manual_rotate_steps = (self.manual_rotate_steps + 1) % 4
+        self.refresh_rotation_label()
+        self.update_preview()
+
     def on_canvas_resize(self, _event):
         self.render_canvas()
 
     def on_mouse_down(self, event):
         self.active_handle_index = None
+        self.active_edge_index = None
         nearest_distance = float("inf")
         for index, point in enumerate(self.current_quad):
             canvas_x, canvas_y = self.image_to_canvas(point)
@@ -1235,16 +1293,77 @@ class ReceiptPreviewDialog:
                 nearest_distance = distance
                 self.active_handle_index = index
 
+        if self.active_handle_index is not None:
+            return
+
+        edge_midpoints = self.get_edge_midpoints_canvas()
+        nearest_edge_distance = float("inf")
+        for edge_index, (mx, my) in enumerate(edge_midpoints):
+            distance = (mx - event.x) ** 2 + (my - event.y) ** 2
+            if distance <= 16 ** 2 and distance < nearest_edge_distance:
+                nearest_edge_distance = distance
+                self.active_edge_index = edge_index
+
     def on_mouse_drag(self, event):
-        if self.active_handle_index is None:
+        if self.active_handle_index is None and self.active_edge_index is None:
             return
         img_x, img_y = self.canvas_to_image(event.x, event.y)
-        self.current_quad[self.active_handle_index] = [img_x, img_y]
+
+        if self.active_handle_index is not None:
+            self.current_quad[self.active_handle_index] = [img_x, img_y]
+        else:
+            self.move_edge_with_constraints(self.active_edge_index, img_x, img_y)
+
         self.render_canvas()
-        self.update_preview()
+        now = time.perf_counter()
+        if now - self._last_preview_update_ts >= self.preview_update_interval_sec:
+            self.update_preview()
+            self._last_preview_update_ts = now
 
     def on_mouse_up(self, _event):
+        self.update_preview()
         self.active_handle_index = None
+        self.active_edge_index = None
+
+    def get_edge_midpoints_canvas(self) -> List[Tuple[float, float]]:
+        pts = self.current_quad
+        # Edge order: top(0-1), right(1-2), bottom(2-3), left(3-0)
+        pairs = [(0, 1), (1, 2), (2, 3), (3, 0)]
+        midpoints = []
+        for a, b in pairs:
+            mx = (float(pts[a][0]) + float(pts[b][0])) / 2.0
+            my = (float(pts[a][1]) + float(pts[b][1])) / 2.0
+            midpoints.append(self.image_to_canvas(np.array([mx, my], dtype=np.float32)))
+        return midpoints
+
+    def move_edge_with_constraints(self, edge_index: Optional[int], img_x: float, img_y: float) -> None:
+        if edge_index is None:
+            return
+
+        h, w = self.image.shape[:2]
+        min_gap = 5.0
+
+        # Edge order: top(0-1), right(1-2), bottom(2-3), left(3-0)
+        if edge_index == 0:  # top edge vertical move
+            max_y = min(float(self.current_quad[2][1]), float(self.current_quad[3][1])) - min_gap
+            target_y = float(np.clip(img_y, 0.0, max_y))
+            self.current_quad[0][1] = target_y
+            self.current_quad[1][1] = target_y
+        elif edge_index == 2:  # bottom edge vertical move
+            min_y = max(float(self.current_quad[0][1]), float(self.current_quad[1][1])) + min_gap
+            target_y = float(np.clip(img_y, min_y, float(h - 1)))
+            self.current_quad[2][1] = target_y
+            self.current_quad[3][1] = target_y
+        elif edge_index == 3:  # left edge horizontal move
+            max_x = min(float(self.current_quad[1][0]), float(self.current_quad[2][0])) - min_gap
+            target_x = float(np.clip(img_x, 0.0, max_x))
+            self.current_quad[0][0] = target_x
+            self.current_quad[3][0] = target_x
+        elif edge_index == 1:  # right edge horizontal move
+            min_x = max(float(self.current_quad[0][0]), float(self.current_quad[3][0])) + min_gap
+            target_x = float(np.clip(img_x, min_x, float(w - 1)))
+            self.current_quad[1][0] = target_x
+            self.current_quad[2][0] = target_x
 
     def reset_current_quad(self):
         self.current_quad = self.candidate_quads[self.current_index].copy()
@@ -1254,6 +1373,7 @@ class ReceiptPreviewDialog:
     def confirm_current(self):
         try:
             cropped = crop_receipt_from_quad(self.image, self.current_quad, self.options)
+            cropped = self.apply_manual_rotation(cropped)
         except Exception as exc:
             messagebox.showerror("오류", f"현재 꼭지점으로 영수증을 보정할 수 없습니다.\n{exc}", parent=self.window)
             return
@@ -1341,9 +1461,9 @@ class ReceiptBatchCropperApp:
         help_frame = ttk.LabelFrame(right, text="설명", padding=10)
         help_frame.pack(fill="both", expand=True, pady=(10, 0))
         help_text = (
-            "- 사진 여러 장을 넣으면 영수증 후보를 찾아 미리보기로 하나씩 확정합니다.\n"
+            "- 사진 여러 장을 넣으면 파일마다 1회씩 미리보기로 확정합니다.\n"
             "- 꼭지점 4개를 드래그해서 영수증 경계를 직접 확정할 수 있습니다.\n"
-            "- 후보가 여러 개면 다음 버튼으로 넘기고 마지막 후보에서는 완료합니다.\n"
+            "- 한 파일에서 1회만 조정 후 완료 버튼으로 저장합니다.\n"
             "- 사각형이 기울거나 왜곡되어도 저장 결과는 직사각형으로 보정됩니다.\n"
             "- 저장 파일명은 거래일자/거래일시를 읽어 YYYYMMDD_HHMMSS.jpg 형태로 만듭니다.\n"
             "- 거래일자, 거래일시, 일자 표기와 YYYY/MM/DD 형식 날짜를 인식합니다.\n"
@@ -1472,13 +1592,16 @@ class ReceiptBatchCropperApp:
                 if img is None:
                     raise ValueError("이미지를 읽을 수 없습니다.")
 
-                quads = detect_receipt_quads(
+                best_quad = detect_receipt_quad(
                     img,
                     min_area_ratio=options.min_area_ratio,
                     max_candidates=options.max_candidates,
                 )
-                if not quads:
+                if best_quad is None:
+                    quads = []
                     self.log(f"[안내] {base_name} - 자동 검출 후보가 없어 전체 화면 기준으로 수동 조정을 시작합니다.")
+                else:
+                    quads = [best_quad]
 
                 self.status_var.set(f"미리보기 확인: {index}/{total} - {base_name}")
                 dialog = ReceiptPreviewDialog(self.root, img, quads, options, base_name)
@@ -1501,21 +1624,24 @@ class ReceiptBatchCropperApp:
                     self.root.update_idletasks()
                     continue
 
-                for receipt_index, cropped in enumerate(dialog.confirmed_crops, start=1):
-                    save_path, transaction_dt = build_receipt_output_path(out_dir, path, cropped)
-                    save_image(save_path, cropped)
-                    success += 1
-                    suffix = f" #{receipt_index}" if len(dialog.confirmed_crops) > 1 else ""
-                    if transaction_dt is not None:
-                        self.log(
-                            f"[성공] {base_name}{suffix} -> {os.path.basename(save_path)} "
-                            f"(거래일자/일시: {transaction_dt.strftime('%Y-%m-%d %H:%M:%S')})"
-                        )
-                    else:
-                        self.log(
-                            f"[성공] {base_name}{suffix} -> {os.path.basename(save_path)} "
-                            "(거래일자/일시 OCR 실패, 기본 파일명 사용)"
-                        )
+                cropped = dialog.confirmed_crops[0]
+                save_path, transaction_dt = build_receipt_output_path(out_dir, path, cropped)
+                save_image(save_path, cropped)
+                success += 1
+
+                if len(dialog.confirmed_crops) > 1:
+                    self.log(f"[안내] {base_name} - {len(dialog.confirmed_crops)}개 영역 중 첫 번째 영역만 저장했습니다.")
+
+                if transaction_dt is not None:
+                    self.log(
+                        f"[성공] {base_name} -> {os.path.basename(save_path)} "
+                        f"(거래일자/일시: {transaction_dt.strftime('%Y-%m-%d %H:%M:%S')})"
+                    )
+                else:
+                    self.log(
+                        f"[성공] {base_name} -> {os.path.basename(save_path)} "
+                        "(거래일자/일시 OCR 실패, 기본 파일명 사용)"
+                    )
 
             except Exception as exc:
                 failed += 1

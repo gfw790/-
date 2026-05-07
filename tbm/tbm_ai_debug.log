@@ -2014,3 +2014,38 @@
 [2026-05-06 00:00:13] [점수 5위] score=11  incident_score=9  title=그라인더 날에 의한 베임
 [2026-05-06 00:00:13] [최종 선택] score=14  title=근로자 이동 중 발목 부상
 [2026-05-06 00:00:38] [CSI 이미지] 원본 이미지 없음, 외부 fallback 이미지 사용 안 함
+[2026-05-07 00:00:02] [캐시 정리] 30일 이전 캐시 1건 삭제
+[2026-05-07 00:00:02] [1순위] KOSHA 사이렌 수집 시작
+[2026-05-07 00:00:04] [KOSHA enrich 시작] title=(260506)중대재해 발생 알림(1)
+[2026-05-07 00:00:04] [KOSHA enrich 상태] has_image_file=N / has_image_base64=Y
+[2026-05-07 00:00:04] [KOSHA 이미지 저장 성공] output/images/siren_f5fbfe57c1388aad.jpg
+[2026-05-07 00:00:04] [KOSHA 이미지 crop 성공] output/images/crop_490694065d0da1f68ded.jpg
+[2026-05-07 00:00:04] [KOSHA crop 시도 완료]
+[2026-05-07 00:00:04] [KOSHA OCR 시작] image_file=output/images/crop_490694065d0da1f68ded.jpg
+[2026-05-07 00:00:04] [KOSHA OCR 대상] poster_image=output/images/siren_f5fbfe57c1388aad.jpg
+[2026-05-07 00:00:17] [KOSHA 후보] title=(260506)중대재해 발생 알림(1) / summary_len=61 / prevention_len=110 / image=Y / ocr_ok=Y / vision=N
+[2026-05-07 00:00:17] [KOSHA enrich 시작] title=(260504)중대재해 발생 알림(1)
+[2026-05-07 00:00:17] [KOSHA enrich 상태] has_image_file=N / has_image_base64=Y
+[2026-05-07 00:00:17] [KOSHA 이미지 저장 성공] output/images/siren_2b89ffd76c285333.jpg
+[2026-05-07 00:00:17] [KOSHA 이미지 crop 성공] output/images/crop_bce6523983e0c09a75d1.jpg
+[2026-05-07 00:00:17] [KOSHA crop 시도 완료]
+[2026-05-07 00:00:17] [KOSHA OCR 시작] image_file=output/images/crop_bce6523983e0c09a75d1.jpg
+[2026-05-07 00:00:17] [KOSHA OCR 대상] poster_image=output/images/siren_2b89ffd76c285333.jpg
+[2026-05-07 00:00:32] [KOSHA 후보] title=(260504)중대재해 발생 알림(1) / summary_len=68 / prevention_len=117 / image=Y / ocr_ok=Y / vision=N
+[2026-05-07 00:00:32] [KOSHA enrich 시작] title=(260506)중대재해 발생 알림(1)
+[2026-05-07 00:00:32] [KOSHA enrich 상태] has_image_file=Y / has_image_base64=Y
+[2026-05-07 00:00:32] [KOSHA 저장 스킵] image_file 이미 있거나 image_base64 없음
+[2026-05-07 00:00:32] [KOSHA OCR 시작] image_file=output/images/crop_490694065d0da1f68ded.jpg
+[2026-05-07 00:00:32] [KOSHA OCR 대상] poster_image=output/images/siren_f5fbfe57c1388aad.jpg
+[2026-05-07 00:00:32] [KOSHA enrich 시작] title=(260504)중대재해 발생 알림(1)
+[2026-05-07 00:00:32] [KOSHA enrich 상태] has_image_file=Y / has_image_base64=Y
+[2026-05-07 00:00:32] [KOSHA 저장 스킵] image_file 이미 있거나 image_base64 없음
+[2026-05-07 00:00:32] [KOSHA OCR 시작] image_file=output/images/crop_bce6523983e0c09a75d1.jpg
+[2026-05-07 00:00:32] [KOSHA OCR 대상] poster_image=output/images/siren_2b89ffd76c285333.jpg
+[2026-05-07 00:00:32] [1순위 선택] KOSHA siren_score=0 / title=(260506)중대재해 발생 알림(1) / summary_len=61 / prevention_len=110
+[2026-05-07 00:00:33] [fallback 이미지] 네이버 성공: https://t1.daumcdn.net/cafeattach/Uzlo/d4028ab7a5a3ea108c3677ffdde00e59302b102b
+[2026-05-07 00:00:45] [이미지 정리] 미사용 fallback 삭제: output/images/article_1f1acf3cea71d0e87568e23805d6730d.jpg
+[2026-05-07 00:00:45] [이미지 정리] 삭제: output/images/siren_f5fbfe57c1388aad.jpg
+[2026-05-07 00:00:45] [이미지 정리] 삭제: output/images/crop_bce6523983e0c09a75d1.jpg
+[2026-05-07 00:00:45] [이미지 정리] 삭제: output/images/siren_2b89ffd76c285333.jpg
+[2026-05-07 00:00:45] [이미지 정리] 총 3개 미사용 파일 삭제
