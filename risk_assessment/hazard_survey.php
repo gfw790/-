@@ -624,11 +624,20 @@ header('Expires: 0');
 $pdo = getDB();
 ensureHazardSurveyTables($pdo);
 $isWorkerSurveyUser = auth_is_worker($user);
+$viewerLoginId = trim((string)($user['login_id'] ?? ''));
+$viewerRole = trim((string)($user['role'] ?? ''));
+$isSafetyManagerViewer = $viewerRole === 'safety_manager';
+$isWorkerTestMode = (
+        $viewerLoginId === 'admin01'
+        || $viewerRole === 'safety_manager'
+    )
+    && (string)($_GET['test_mode'] ?? $_POST['test_mode'] ?? '') === '1';
 
 $reportId = isset($_GET['report_id']) ? (int)$_GET['report_id'] : (int)($_POST['report_id'] ?? 0);
 $message = '';
 $error = '';
 $report = null;
+$testSubmitted = isset($_GET['test_submitted']) && $_GET['test_submitted'] === '1';
 
 if ($reportId > 0) {
     $stmt = $pdo->prepare("
@@ -667,6 +676,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $report && $requestAction === 'save
         echo json_encode([
             'success' => false,
             'message' => '수정요청 내용을 입력해주세요.',
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
+    if ($isWorkerTestMode) {
+        echo json_encode([
+            'success' => true,
+            'message' => '테스트 모드에서는 수정요청이 저장되지 않습니다.',
+            'test_mode' => true,
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;
     }
@@ -723,6 +741,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $report && $requestAction !== 'save
     $selectedMap = array_fill_keys(array_filter($selectedItems, static fn($value) => $value > 0), true);
     $changeRequestText = trim((string)($_POST['change_request_text'] ?? ''));
     $additionalRequestItems = normalize_requested_hazard_items($_POST['additional_items_json'] ?? '[]');
+
+    if ($isWorkerTestMode) {
+        header('Location: hazard_survey.php?report_id=' . $reportId . '&test_mode=1&test_submitted=1');
+        exit;
+    }
 
     try {
         $pdo->beginTransaction();
@@ -917,6 +940,15 @@ if ($report) {
             hazard_name,
             accident_type,
             injury_result,
+            likelihood_before,
+            severity_before,
+            risk_score_before,
+            likelihood_current,
+            severity_current,
+            risk_score_current,
+            likelihood_after,
+            severity_after,
+            risk_score_after,
             current_control_text,
             additional_control_text
         FROM unit_ra_item
@@ -1001,6 +1033,12 @@ if ($report) {
         ':user_login_id' => (string)$user['login_id'],
     ]);
     $additionalRequestItems = normalize_requested_hazard_items($additionStmt->fetchAll() ?: []);
+}
+
+if ($isWorkerTestMode && $message === '') {
+    $message = $testSubmitted
+        ? '테스트 제출이 완료되었습니다. 실제 저장은 수행하지 않았습니다.'
+        : '현재 테스트 모드입니다. 이 화면에서 제출하거나 요청을 저장해도 실제 데이터는 저장되지 않습니다.';
 }
 ?>
 <!DOCTYPE html>
@@ -1215,6 +1253,43 @@ if ($report) {
     white-space: nowrap;
   }
   .chip strong { color: var(--text-dim); font-size: 10px; }
+  .risk-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .risk-level-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 54px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .02em;
+    border: 1px solid transparent;
+  }
+  .risk-level-badge.is-low {
+    background: rgba(54, 179, 126, 0.16);
+    border-color: rgba(54, 179, 126, 0.36);
+    color: #8ef0ba;
+  }
+  .risk-level-badge.is-medium {
+    background: rgba(245, 166, 35, 0.16);
+    border-color: rgba(245, 166, 35, 0.36);
+    color: #ffd28f;
+  }
+  .risk-level-badge.is-high {
+    background: rgba(214, 69, 65, 0.16);
+    border-color: rgba(214, 69, 65, 0.38);
+    color: #ffb2ae;
+  }
+  .risk-chip-text {
+    color: var(--text);
+    font-weight: 700;
+  }
   .detail-toggle {
     margin-top: 8px;
     border-top: 1px solid var(--border);
@@ -1239,6 +1314,34 @@ if ($report) {
     line-height: 1.5;
   }
   .item-meta strong { color: var(--text); }
+  .control-text-card {
+    border-radius: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border2);
+    line-height: 1.6;
+  }
+  .control-text-card strong {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 11px;
+    letter-spacing: .02em;
+  }
+  .control-text-card.is-current {
+    background: rgba(58, 127, 193, 0.16);
+    border-color: rgba(58, 127, 193, 0.38);
+    color: #e7f2ff;
+  }
+  .control-text-card.is-current strong {
+    color: #8fc2ff;
+  }
+  .control-text-card.is-additional {
+    background: rgba(245, 166, 35, 0.12);
+    border-color: rgba(245, 166, 35, 0.28);
+    color: #ffe6bf;
+  }
+  .control-text-card.is-additional strong {
+    color: #ffd28f;
+  }
   .empty {
     border: 1px dashed var(--border2);
     border-radius: 12px;
@@ -1274,13 +1377,26 @@ if ($report) {
     color: var(--text);
     border: 1px solid var(--border2);
   }
-  .btn-secondary:hover { background: rgba(255,255,255,0.09); }
+  .btn-secondary:hover,
+  .btn-secondary:focus,
+  .btn-secondary:active,
+  .btn-secondary:visited {
+    background: rgba(255,255,255,0.09);
+    color: var(--text-hi);
+    border-color: rgba(245, 166, 35, 0.22);
+  }
   .btn-primary {
     background: var(--accent);
     color: #fff;
     border: none;
   }
-  .btn-primary:hover { background: var(--accent2); }
+  .btn-primary:hover,
+  .btn-primary:focus,
+  .btn-primary:active,
+  .btn-primary:visited {
+    background: var(--accent2);
+    color: #fff;
+  }
   .btn-primary[hidden], .btn-secondary[hidden] { display: none; }
 
   .request-summary {
@@ -1589,6 +1705,9 @@ if ($report) {
         <?php elseif ($report): ?>
           <form method="post" id="hazard-survey-form" autocomplete="off">
             <input type="hidden" name="report_id" value="<?= (int)$reportId ?>">
+            <?php if ($isWorkerTestMode): ?>
+              <input type="hidden" name="test_mode" value="1">
+            <?php endif; ?>
             <textarea name="change_request_text" id="change-request-input" hidden><?= h($changeRequestText) ?></textarea>
             <textarea name="additional_items_json" id="additional-items-input" hidden><?= h(json_encode($additionalRequestItems, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) ?></textarea>
 
@@ -1644,19 +1763,43 @@ if ($report) {
                             <?php if (!empty($item['injury_result'])): ?>
                               <span class="chip"><strong>상해</strong><?= h($item['injury_result']) ?></span>
                             <?php endif; ?>
+                            <?php
+                              $hasBeforeRisk = ($item['likelihood_before'] ?? '') !== '' || ($item['severity_before'] ?? '') !== '' || ($item['risk_score_before'] ?? '') !== '';
+                              $hasCurrentRisk = ($item['likelihood_current'] ?? '') !== '' || ($item['severity_current'] ?? '') !== '' || ($item['risk_score_current'] ?? '') !== '';
+                              $hasAfterRisk = ($item['likelihood_after'] ?? '') !== '' || ($item['severity_after'] ?? '') !== '' || ($item['risk_score_after'] ?? '') !== '';
+                              $riskBadge = static function ($score): array {
+                                $numericScore = (int)$score;
+                                if ($numericScore > 0 && $numericScore <= 6) {
+                                  return ['is-low', '저위험'];
+                                }
+                                if ($numericScore >= 15) {
+                                  return ['is-high', '고위험'];
+                                }
+                                return ['is-medium', '중위험'];
+                              };
+                            ?>
+                            <?php if ($hasBeforeRisk): ?>
+                              <?php [$beforeRiskClass, $beforeRiskLabel] = $riskBadge($item['risk_score_before'] ?? 0); ?>
+                              <span class="chip risk-chip"><span class="risk-level-badge <?= h($beforeRiskClass) ?>"><?= h($beforeRiskLabel) ?></span><span class="risk-chip-text"><strong>현재위험도</strong>P <?= h($item['likelihood_before'] ?? '-') ?> / S <?= h($item['severity_before'] ?? '-') ?> / R <?= h($item['risk_score_before'] ?? '-') ?></span></span>
+                            <?php endif; ?>
+                            <?php if ($hasCurrentRisk): ?>
+                              <?php [$currentRiskClass, $currentRiskLabel] = $riskBadge($item['risk_score_current'] ?? 0); ?>
+                              <span class="chip risk-chip"><span class="risk-level-badge <?= h($currentRiskClass) ?>"><?= h($currentRiskLabel) ?></span><span class="risk-chip-text"><strong>조치후위험도</strong>P <?= h($item['likelihood_current'] ?? '-') ?> / S <?= h($item['severity_current'] ?? '-') ?> / R <?= h($item['risk_score_current'] ?? '-') ?></span></span>
+                            <?php endif; ?>
+                            <?php if ($hasAfterRisk): ?>
+                              <?php [$afterRiskClass, $afterRiskLabel] = $riskBadge($item['risk_score_after'] ?? 0); ?>
+                              <span class="chip risk-chip"><span class="risk-level-badge <?= h($afterRiskClass) ?>"><?= h($afterRiskLabel) ?></span><span class="risk-chip-text"><strong>개선후위험도</strong>P <?= h($item['likelihood_after'] ?? '-') ?> / S <?= h($item['severity_after'] ?? '-') ?> / R <?= h($item['risk_score_after'] ?? '-') ?></span></span>
+                            <?php endif; ?>
                           </div>
                           <?php if (!empty($item['current_control_text']) || !empty($item['additional_control_text'])): ?>
-                          <details class="detail-toggle">
-                            <summary>대책보기</summary>
-                            <div class="item-meta">
-                              <?php if (!empty($item['current_control_text'])): ?>
-                                <div><strong>현재 대책</strong> <?= h($item['current_control_text']) ?></div>
-                              <?php endif; ?>
-                              <?php if (!empty($item['additional_control_text'])): ?>
-                                <div><strong>추가 대책</strong> <?= h($item['additional_control_text']) ?></div>
-                              <?php endif; ?>
-                            </div>
-                          </details>
+                          <div class="item-meta" style="margin-top:10px;">
+                            <?php if (!empty($item['current_control_text'])): ?>
+                              <div class="control-text-card is-current"><strong>현재 대책</strong><?= h($item['current_control_text']) ?></div>
+                            <?php endif; ?>
+                            <?php if (!empty($item['additional_control_text'])): ?>
+                              <div class="control-text-card is-additional"><strong>추가 대책</strong><?= h($item['additional_control_text']) ?></div>
+                            <?php endif; ?>
+                          </div>
                           <?php endif; ?>
                         </label>
                       </div>
@@ -1989,6 +2132,7 @@ if ($report) {
     const hazardAdditionUseYn = document.getElementById('addition-use-yn');
     const hazardSaveAdditionButton = document.getElementById('save-addition-item');
     const hazardBaseTaskCodesByUnit = <?= json_encode($existingTaskCodesByUnit, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    const hazardIsSafetyManagerViewer = <?= $isSafetyManagerViewer ? 'true' : 'false' ?>;
     let hazardCurrentPageIndex = 0;
     let hazardAdditionalItems = [];
 
@@ -2446,7 +2590,21 @@ if ($report) {
       });
     });
 
-    hazardOpenChangeRequestButton.addEventListener('click', hazardOpenChangeRequestModal);
+    hazardOpenChangeRequestButton.addEventListener('click', () => {
+      if (hazardIsSafetyManagerViewer) {
+        const context = hazardGetPageContext();
+        if (!context.unit_ra_id) {
+          window.alert('현재 페이지의 평가서를 찾을 수 없습니다.');
+          return;
+        }
+
+        const returnTo = 'work_list.php';
+        window.location.href = `edit_unit_ra_items.php?unit_ra_id=${encodeURIComponent(String(context.unit_ra_id))}&return_to=${encodeURIComponent(returnTo)}`;
+        return;
+      }
+
+      hazardOpenChangeRequestModal();
+    });
     hazardOpenAdditionButton.addEventListener('click', () => hazardOpenAdditionModal());
 
     hazardSaveChangeRequestButton.addEventListener('click', async () => {

@@ -182,7 +182,7 @@
                                 <div class="hcI" style="top:1.82mm;">
                                     <div class="hls ps18"
                                         style="line-height:2.79mm;white-space:nowrap;left:0mm;top:-0.18mm;height:3.53mm;width:131.56mm;">
-                                        <span class="hrt cs8">2026. &nbsp;&nbsp;&nbsp;05 . &nbsp;&nbsp;06 .
+                                        <span class="hrt cs8" id="education-report-date">2026. &nbsp;&nbsp;&nbsp;05 . &nbsp;&nbsp;06 .
                                             &nbsp;&nbsp;</span></div>
                                 </div>
                             </div>
@@ -732,7 +732,7 @@
         }
 
         function extractDateFromPage() {
-            const dateNode = document.querySelector('.hrt.cs8');
+            const dateNode = document.getElementById('education-report-date') || document.querySelector('.hrt.cs8');
             const raw = dateNode ? dateNode.textContent : '';
             const match = (raw || '').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
             if (!match) {
@@ -742,6 +742,123 @@
             const m = String(match[2]).padStart(2, '0');
             const d = String(match[3]).padStart(2, '0');
             return `${y}-${m}-${d}`;
+        }
+
+        function getQueryDate() {
+            const params = new URLSearchParams(window.location.search);
+            const date = params.get('date') || '';
+            return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : '';
+        }
+
+        function getTodayDate() {
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const d = String(now.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function formatEducationDate(date) {
+            const match = String(date || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (!match) {
+                return '';
+            }
+            return match[1] + '. &nbsp;&nbsp;&nbsp;' + match[2] + ' . &nbsp;&nbsp;' + match[3] + ' .&nbsp;&nbsp;';
+        }
+
+        function applyEducationDate(date) {
+            const dateNode = document.getElementById('education-report-date');
+            if (!dateNode || !date) {
+                return;
+            }
+            const formatted = formatEducationDate(date);
+            if (!formatted) {
+                return;
+            }
+            dateNode.innerHTML = formatted;
+            dateNode.dataset.dateValue = date;
+        }
+
+        function updateEducationReportDate(nextDate) {
+            if (!nextDate) {
+                return;
+            }
+            const params = new URLSearchParams(window.location.search);
+            params.set('date', nextDate);
+            window.location.search = params.toString();
+        }
+
+        function renderDateControlPanel(initialDate) {
+            let styleTag = document.getElementById('education-date-panel-style');
+            if (!styleTag) {
+                styleTag = document.createElement('style');
+                styleTag.id = 'education-date-panel-style';
+                styleTag.textContent = ''
+                    + '#education-date-panel { position: fixed; right: 14px; top: 14px; z-index: 9999; width: 280px; max-width: calc(100vw - 24px); '
+                    + 'background: #ffffff; border: 1px solid #cbd5e1; border-radius: 10px; box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16); '
+                    + 'padding: 10px 12px; font-family: "Malgun Gothic", sans-serif; }'
+                    + '#education-date-panel h4 { margin: 0 0 8px 0; font-size: 13px; color: #0f172a; }'
+                    + '#education-date-panel .hint { margin: 0 0 8px 0; font-size: 11px; color: #475569; }'
+                    + '#education-date-panel .row { display: flex; gap: 8px; align-items: center; }'
+                    + '#education-date-panel input[type="date"] { flex: 1; min-width: 0; box-sizing: border-box; font-size: 12px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; }'
+                    + '#education-date-panel button { padding: 6px 12px; border: 0; border-radius: 6px; background: #1d4ed8; color: #ffffff; font-size: 12px; cursor: pointer; }'
+                    + '#education-date-panel button:hover { background: #1e40af; }'
+                    + '@media print { #education-date-panel { display: none !important; } }';
+                document.head.appendChild(styleTag);
+            }
+
+            const oldPanel = document.getElementById('education-date-panel');
+            if (oldPanel) {
+                oldPanel.remove();
+            }
+
+            const panel = document.createElement('div');
+            panel.id = 'education-date-panel';
+
+            const title = document.createElement('h4');
+            title.textContent = '교육일시 변경';
+            panel.appendChild(title);
+
+            const hint = document.createElement('p');
+            hint.className = 'hint';
+            hint.textContent = '날짜를 바꾸면 교육일시와 참석자 조회 기준이 함께 변경됩니다.';
+            panel.appendChild(hint);
+
+            const row = document.createElement('div');
+            row.className = 'row';
+
+            const input = document.createElement('input');
+            input.type = 'date';
+            input.value = initialDate || '';
+
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.textContent = '적용';
+
+            const applyDate = function () {
+                if (!input.value) {
+                    return;
+                }
+                updateEducationReportDate(input.value);
+            };
+
+            input.addEventListener('change', function () {
+                applyEducationDate(input.value);
+            });
+
+            input.addEventListener('keydown', function (event) {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    applyDate();
+                }
+            });
+
+            button.addEventListener('click', applyDate);
+
+            row.appendChild(input);
+            row.appendChild(button);
+            panel.appendChild(row);
+            document.body.appendChild(panel);
         }
 
         function collectNameSlots() {
@@ -1062,6 +1179,11 @@
         }
 
         document.addEventListener('DOMContentLoaded', function () {
+            const initialDate = getQueryDate() || getTodayDate();
+            if (initialDate) {
+                applyEducationDate(initialDate);
+            }
+            renderDateControlPanel(initialDate);
             const blankLines = randomizeSafetyItems() || [];
             renderCustomInputPanel(blankLines);
             loadNames().catch(function () {

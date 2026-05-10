@@ -271,7 +271,7 @@ foreach ($participantRows as $participantRow) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>위험성평가 목록</title>
+<title>수시위험성평가 목록</title>
 <link rel="stylesheet" href="modern_ui.css?v=20260406a">
 <style>
   :root {
@@ -600,7 +600,7 @@ foreach ($participantRows as $participantRow) {
     <div class="topbar">
       <div>
         <div class="topbar-label">RISK ASSESSMENT · REVIEW</div>
-        <div class="topbar-title">위험성평가 <span>목록</span></div>
+        <div class="topbar-title">수시위험성평가 <span>목록</span></div>
       </div>
       <div class="identity">
         <?php if (!auth_is_worker($user)): ?>
@@ -609,7 +609,7 @@ foreach ($participantRows as $participantRow) {
         <span style="color:var(--text-dim);font-size:13px"><?= h(auth_display_name($user)) ?></span>
         <div class="actions">
           <a class="btn-secondary" href="work_list.php">작업목록</a>
-          <a class="btn-secondary" href="unit_ra_print_batch.php">단위 위험성평가 출력</a>
+          <a class="btn-secondary" href="unit_ra_print_batch.php">수시위험성평가 출력</a>
         </div>
       </div>
     </div>
@@ -617,8 +617,8 @@ foreach ($participantRows as $participantRow) {
     <div class="panel">
       <div class="panel-head">
         <div class="panel-head-label">HAZARD REVIEW</div>
-        <h1>위험성평가 <span>열람</span></h1>
-        <p>금일 위험성평가서를 열람해주세요</p>
+        <h1>수시위험성평가 <span>열람</span></h1>
+        <p>금일 수시위험성평가서를 열람해주세요</p>
         <?php if ($report): ?>
           <div class="report-meta">
             <div class="meta-box">
@@ -643,14 +643,14 @@ foreach ($participantRows as $participantRow) {
 
       <div class="content">
         <?php if ($submitted): ?>
-          <div class="message">위험성평가 제출이 완료되었습니다. 금일 위험성평가서를 열람해주세요.</div>
+          <div class="message">수시위험성평가 제출이 완료되었습니다. 금일 수시위험성평가서를 열람해주세요.</div>
         <?php endif; ?>
 
         <?php if ($error !== ''): ?>
           <div class="error"><?= h($error) ?></div>
         <?php else: ?>
           <section>
-            <div class="section-title">위험성평가 목록</div>
+            <div class="section-title">수시위험성평가 목록</div>
             <div class="stats-grid">
               <div class="stat-card">
                 <div class="stat-label">총 평가 건수</div>
@@ -693,11 +693,11 @@ foreach ($participantRows as $participantRow) {
                   ><?= h((string)$teamName) ?> <em><?= number_format((int)$teamCount) ?>건</em></button>
                 <?php endforeach; ?>
               </div>
-              <div class="team-filter-empty" id="team-filter-empty">선택한 팀의 위험성평가 목록이 없습니다.</div>
+              <div class="team-filter-empty" id="team-filter-empty">선택한 팀의 수시위험성평가 목록이 없습니다.</div>
             <?php endif; ?>
 
             <?php if (empty($reportList)): ?>
-              <div class="empty">표시할 위험성평가 목록이 없습니다.</div>
+              <div class="empty">표시할 수시위험성평가 목록이 없습니다.</div>
             <?php else: ?>
               <div class="report-list">
                 <?php foreach ($reportList as $listReport): ?>

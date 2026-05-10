@@ -768,7 +768,7 @@ if (!$report) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>위험성평가 상세</title>
+<title>수시위험성평가 상세</title>
 <link rel="stylesheet" href="modern_ui.css?v=20260406a">
 <style>
   :root {
@@ -987,7 +987,7 @@ if (!$report) {
     <div class="topbar">
       <div>
         <div class="topbar-label">RISK ASSESSMENT · DETAIL</div>
-        <div class="topbar-title">위험성평가 <span>세부내용</span></div>
+        <div class="topbar-title">수시위험성평가 <span>세부내용</span></div>
       </div>
       <div class="identity">
         <span class="role-badge"><?= h($user['role_label']) ?></span>
@@ -1012,7 +1012,7 @@ if (!$report) {
           <div class="message"><?= h($message) ?></div>
         <?php endif; ?>
         <?php if ($submitted): ?>
-          <div class="message">위험성평가 제출이 완료되었습니다. 금일 위험성평가서를 열람해주세요.</div>
+          <div class="message">수시위험성평가 제출이 완료되었습니다. 금일 수시위험성평가서를 열람해주세요.</div>
         <?php endif; ?>
         <?php if ($error !== ''): ?>
           <div class="error"><?= h($error) ?></div>
@@ -1066,7 +1066,7 @@ if (!$report) {
                             <div>
                               <div class="hazard-title"><?= h($hazard['hazard_name']) ?></div>
                               <div class="hazard-summary">
-                                <span class="summary-chip">위험성평가 <?= h($hazard['unit_title']) ?><?php if (!empty($hazard['unit_code'])): ?> (<?= h($hazard['unit_code']) ?>)<?php endif; ?></span>
+                                <span class="summary-chip">수시위험성평가 <?= h($hazard['unit_title']) ?><?php if (!empty($hazard['unit_code'])): ?> (<?= h($hazard['unit_code']) ?>)<?php endif; ?></span>
                                 <span class="summary-chip">추천 <?= h($hazard['selected_count']) ?>회</span>
                                 <span class="summary-chip">참여 <?= h($hazard['worker_count']) ?>명</span>
                               </div>
@@ -1162,7 +1162,7 @@ if (!$report) {
                     <div class="hazard-summary">
                       <span class="summary-chip">작성자 <?= h($item['user_name'] ?: $item['user_login_id']) ?></span>
                       <span class="summary-chip">계정 <?= h($item['user_login_id']) ?></span>
-                      <span class="summary-chip">위험성평가 <?= h($item['unit_title'] ?: '미지정') ?><?php if (!empty($item['unit_code'])): ?> (<?= h($item['unit_code']) ?>)<?php endif; ?></span>
+                      <span class="summary-chip">수시위험성평가 <?= h($item['unit_title'] ?: '미지정') ?><?php if (!empty($item['unit_code'])): ?> (<?= h($item['unit_code']) ?>)<?php endif; ?></span>
                       <span class="summary-chip">작업명 <?= h($item['task_name']) ?></span>
                       <?php if (!empty($item['task_code'])): ?>
                         <span class="summary-chip">코드 <?= h($item['task_code']) ?></span>

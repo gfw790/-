@@ -225,6 +225,105 @@ function render_safety_standard_buttons_from_units(array $units): string
     return '<span class="unit-multi-lines">' . implode('', $items) . '</span>';
 }
 
+function work_list_unit_type_labels(): array
+{
+    return [
+        'target' => '작업대상',
+        'major_work' => '중대위험작업',
+        'tool' => '공구/장비',
+        'env' => '작업환경',
+    ];
+}
+
+function work_list_normalize_text_list(array $values): array
+{
+    $result = [];
+    $seen = [];
+
+    foreach ($values as $value) {
+        $value = trim((string)$value);
+        if ($value === '' || isset($seen[$value])) {
+            continue;
+        }
+
+        $seen[$value] = true;
+        $result[] = $value;
+    }
+
+    sort($result, SORT_NATURAL);
+    return $result;
+}
+
+function work_list_report_unit_types(array $report): array
+{
+    $types = [];
+    foreach ((array)($report['selected_units'] ?? []) as $unit) {
+        $types[] = (string)($unit['unit_type'] ?? '');
+    }
+
+    return work_list_normalize_text_list($types);
+}
+
+function work_list_report_process_names(array $report, string $unitTypeFilter = ''): array
+{
+    $names = [];
+    foreach ((array)($report['selected_units'] ?? []) as $unit) {
+        $unitType = trim((string)($unit['unit_type'] ?? ''));
+        if ($unitTypeFilter !== '' && $unitType !== $unitTypeFilter) {
+            continue;
+        }
+
+        $names[] = (string)($unit['process_name'] ?? '');
+    }
+
+    return work_list_normalize_text_list($names);
+}
+
+function work_list_collect_type_options(): array
+{
+    return work_list_unit_type_labels();
+}
+
+function work_list_collect_major_options(PDO $pdo, string $unitTypeFilter = ''): array
+{
+    $sql = "
+        SELECT DISTINCT process_name
+        FROM unit_ra_header
+        WHERE use_yn = 'Y'
+          AND process_name IS NOT NULL
+          AND TRIM(process_name) <> ''
+    ";
+    $params = [];
+    if ($unitTypeFilter !== '') {
+        $sql .= " AND unit_type = :unit_type";
+        $params[':unit_type'] = $unitTypeFilter;
+    }
+    $sql .= " ORDER BY process_name ASC";
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    return work_list_normalize_text_list($stmt->fetchAll(PDO::FETCH_COLUMN) ?: []);
+}
+
+function work_list_report_matches_filters(array $report, string $unitTypeFilter, string $majorFilter): bool
+{
+    if ($unitTypeFilter !== '') {
+        $types = work_list_report_unit_types($report);
+        if (!in_array($unitTypeFilter, $types, true)) {
+            return false;
+        }
+    }
+
+    if ($majorFilter !== '') {
+        $processNames = work_list_report_process_names($report, $unitTypeFilter);
+        if (!in_array($majorFilter, $processNames, true)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 function render_completion_badge(bool $isCompleted): string
 {
     $className = $isCompleted ? 'status-badge is-complete' : 'status-badge is-pending';
@@ -239,7 +338,31 @@ function render_completion_badge(bool $isCompleted): string
 
 function render_hazard_completion_badge(array $report): string
 {
+    global $user;
+
+    $viewerLoginId = trim((string)($user['login_id'] ?? ''));
+    $viewerRole = trim((string)($user['role'] ?? ''));
+    $isAdminWorkerTestViewer = $viewerLoginId === 'admin01' || $viewerRole === 'safety_manager';
     $isCompleted = (bool)($report['hazard_review_completed'] ?? false);
+    $reportId = (int)($report['report_id'] ?? 0);
+
+    if ($isAdminWorkerTestViewer && $reportId > 0) {
+        $label = $isCompleted ? '완료' : '대기';
+        $className = $isCompleted
+            ? 'status-badge is-complete status-badge-button'
+            : 'status-badge is-pending status-badge-button';
+
+        return sprintf(
+            '<a class="%s" href="%s">%s</a>',
+            h($className),
+            h(build_page_url('hazard_survey.php', [
+                'report_id' => $reportId,
+                'test_mode' => '1',
+            ])),
+            h($label)
+        );
+    }
+
     if (!$isCompleted) {
         return render_completion_badge(false);
     }
@@ -694,6 +817,8 @@ $reports = $pdo->query("
         wr.use_equipment_yn,
         wr.created_at,
         h.unit_code,
+        h.unit_type,
+        h.process_name,
         {$safeWorkStandardSelect}
         h.unit_title,
         {$hazardWorkerSelectionCountSelect}
@@ -732,6 +857,8 @@ if (!empty($reports) && tableExists($pdo, 'work_report_selected_unit')) {
                 su.unit_ra_id,
                 h.unit_title,
                 h.unit_code,
+                h.unit_type,
+                h.process_name,
                 {$safeWorkStandardBySelectedUnit}
             FROM work_report_selected_unit su
             LEFT JOIN unit_ra_header h
@@ -752,6 +879,8 @@ if (!empty($reports) && tableExists($pdo, 'work_report_selected_unit')) {
                 'unit_ra_id' => (int)($row['unit_ra_id'] ?? 0),
                 'unit_title' => (string)($row['unit_title'] ?? ''),
                 'unit_code' => (string)($row['unit_code'] ?? ''),
+                'unit_type' => (string)($row['unit_type'] ?? ''),
+                'process_name' => (string)($row['process_name'] ?? ''),
                 'safe_work_standard_no' => (string)($row['safe_work_standard_no'] ?? ''),
             ];
         }
@@ -768,6 +897,8 @@ foreach ($reports as &$report) {
             'unit_ra_id' => (int)($report['unit_ra_id'] ?? 0),
             'unit_title' => (string)($report['unit_title'] ?? ''),
             'unit_code' => (string)($report['unit_code'] ?? ''),
+            'unit_type' => (string)($report['unit_type'] ?? ''),
+            'process_name' => (string)($report['process_name'] ?? ''),
             'safe_work_standard_no' => (string)($report['safe_work_standard_no'] ?? ''),
         ];
     }
@@ -784,6 +915,26 @@ foreach ($reports as &$report) {
 unset($report);
 
 $reports = filter_reports_for_user($reports, $user);
+$unitTypeOptions = work_list_collect_type_options();
+$selectedUnitTypeFilter = trim((string)($_GET['filter_type'] ?? ''));
+if ($selectedUnitTypeFilter !== '' && !array_key_exists($selectedUnitTypeFilter, $unitTypeOptions)) {
+    $selectedUnitTypeFilter = '';
+}
+
+$majorOptions = work_list_collect_major_options($pdo, $selectedUnitTypeFilter);
+$selectedMajorFilter = trim((string)($_GET['filter_major'] ?? ''));
+if ($selectedMajorFilter !== '' && !in_array($selectedMajorFilter, $majorOptions, true)) {
+    $selectedMajorFilter = '';
+}
+
+if ($selectedUnitTypeFilter !== '' || $selectedMajorFilter !== '') {
+    $reports = array_values(array_filter(
+        $reports,
+        static fn(array $report): bool => work_list_report_matches_filters($report, $selectedUnitTypeFilter, $selectedMajorFilter)
+    ));
+}
+$hasWorkListFilter = $selectedUnitTypeFilter !== '' || $selectedMajorFilter !== '';
+$filteredReportCount = count($reports);
 
 $hazardParticipantMap = [];
 if (!empty($reports) && tableExists($pdo, 'work_report_worker_hazard_selection')) {
@@ -856,6 +1007,7 @@ foreach ($reports as &$report) {
 }
 unset($report);
 
+$canAccessLegacyListPage = trim((string)($user['name'] ?? '')) === '김남균';
 $workListDescription = '저장된 작업리스트를 확인하고 필요한 항목을 다시 열어볼 수 있습니다.';
 ?>
 <!DOCTYPE html>
@@ -1028,6 +1180,187 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     margin-top: 10px;
     color: var(--text-dim);
     font-size: 12px;
+  }
+  .work-filter-form {
+    display: flex;
+    gap: 10px;
+    align-items: end;
+    flex-wrap: wrap;
+    margin-top: 14px;
+  }
+  .work-filter-field {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 180px;
+    flex: 0 1 220px;
+  }
+  .work-filter-label {
+    color: var(--text-dim);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .work-filter-select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    width: 100%;
+    padding: 11px 42px 11px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--border2);
+    background-color: rgba(255,255,255,0.04);
+    background-image:
+      linear-gradient(45deg, transparent 50%, rgba(245, 166, 35, 0.95) 50%),
+      linear-gradient(135deg, rgba(245, 166, 35, 0.95) 50%, transparent 50%),
+      linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.02));
+    background-position:
+      calc(100% - 20px) calc(50% - 2px),
+      calc(100% - 14px) calc(50% - 2px),
+      0 0;
+    background-size:
+      6px 6px,
+      6px 6px,
+      100% 100%;
+    background-repeat: no-repeat;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+    color: var(--text-hi);
+    font: inherit;
+    line-height: 1.4;
+    cursor: pointer;
+    transition: border-color .15s ease, background-color .15s ease, box-shadow .15s ease;
+  }
+  .work-filter-select:hover {
+    background-color: rgba(255,255,255,0.07);
+    border-color: rgba(245, 166, 35, 0.22);
+  }
+  .work-filter-select:focus {
+    outline: 2px solid rgba(245, 166, 35, 0.25);
+    border-color: rgba(245, 166, 35, 0.45);
+    background-color: rgba(255,255,255,0.08);
+    box-shadow: 0 0 0 4px rgba(245, 166, 35, 0.08);
+  }
+  .work-filter-select option {
+    background: #12203a;
+    color: var(--text-hi);
+  }
+  .work-filter-select::-ms-expand {
+    display: none;
+  }
+  .work-filter-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .work-filter-count {
+    color: var(--text-dim);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .unit-db-search-title {
+    margin-top: 16px;
+    color: var(--text-hi);
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: .02em;
+  }
+  .unit-db-search-note {
+    margin-top: 10px;
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+  .unit-db-result-list {
+    display: grid;
+    gap: 10px;
+  }
+  .unit-db-result-button {
+    width: 100%;
+    text-align: left;
+    border: 1px solid var(--border2);
+    border-radius: 14px;
+    background: rgba(255,255,255,0.04);
+    color: var(--text-hi);
+    padding: 14px 16px;
+    cursor: pointer;
+    font: inherit;
+    transition: background .15s ease, border-color .15s ease, transform .15s ease;
+  }
+  .unit-db-result-button:hover {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(245, 166, 35, 0.4);
+    transform: translateY(-1px);
+  }
+  .unit-db-result-code {
+    color: var(--accent2);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: .04em;
+    margin-bottom: 6px;
+  }
+  .unit-db-result-title {
+    color: var(--text-hi);
+    font-size: 15px;
+    font-weight: 800;
+    margin-bottom: 8px;
+  }
+  .unit-db-result-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .unit-db-result-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    font-size: 12px;
+    line-height: 1.3;
+  }
+  .risk-badge-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+  }
+  .risk-badge-line:last-child {
+    margin-bottom: 0;
+  }
+  .risk-level-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 56px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .02em;
+    border: 1px solid transparent;
+  }
+  .risk-level-badge.is-low {
+    background: rgba(54, 179, 126, 0.16);
+    border-color: rgba(54, 179, 126, 0.36);
+    color: #8ef0ba;
+  }
+  .risk-level-badge.is-medium {
+    background: rgba(245, 166, 35, 0.16);
+    border-color: rgba(245, 166, 35, 0.36);
+    color: #ffd28f;
+  }
+  .risk-level-badge.is-high {
+    background: rgba(214, 69, 65, 0.16);
+    border-color: rgba(214, 69, 65, 0.38);
+    color: #ffb2ae;
+  }
+  .risk-score-text {
+    color: var(--text-hi);
+    font-weight: 700;
   }
   .work-search-results {
     position: absolute;
@@ -1471,6 +1804,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     .panel-head, .mobile-list { padding-left: 14px; padding-right: 14px; }
     .work-search-form { align-items: stretch; }
     .work-search-input { flex-basis: 100%; min-width: 0; }
+    .work-filter-field { flex-basis: 100%; min-width: 0; }
     .table-wrap { display: none; }
     .mobile-list { display: block; }
     .mobile-meta { grid-template-columns: 1fr; gap: 7px; }
@@ -1788,9 +2122,12 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
         <?php if ($isOperator): ?>
           <a class="btn-secondary" href="../safety_log/dashboard.php">안전일지</a>
         <?php endif; ?>
+        <?php if ($canAccessLegacyListPage): ?>
+          <a class="btn-secondary" href="list.html">평가서 등록</a>
+        <?php endif; ?>
         <a class="btn-secondary btn-header-cta" href="../board/index.php">게시판</a>
         <a class="btn-secondary" href="../calendar/index.html">달력</a>
-        <a class="btn-secondary" href="hazard_review.php">위험성평가목록</a>
+        <a class="btn-secondary" href="hazard_review.php">수시위험성평가</a>
         <button type="button" class="btn-secondary" onclick="openPwModal()">비밀번호변경</button>
         <a class="btn-secondary" href="<?= h($entryPage) ?>?logout=1">로그아웃</a>
       </div>
@@ -1815,6 +2152,40 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
           <button type="button" class="btn-secondary" id="standard-search-reset">초기화</button>
         </form>
         <div class="work-search-meta" id="standard-search-meta">작업목록을 건드리지 않고 작업표준서만 검색합니다.</div>
+        <div class="unit-db-search-title">위험성평가서검색</div>
+        <form class="work-filter-form" id="unit-db-filter-form" autocomplete="off">
+          <div class="work-filter-field" style="flex:1 1 260px; min-width:240px;">
+            <label class="work-filter-label" for="unit-db-keyword">검색어</label>
+            <input
+              type="search"
+              id="unit-db-keyword"
+              class="work-search-input"
+              placeholder="평가서명 또는 위험성평가번호 검색"
+            >
+            <div class="work-search-results" id="unit-db-search-results"></div>
+          </div>
+          <div class="work-filter-field">
+            <label class="work-filter-label" for="filter-type">유형</label>
+            <select class="work-filter-select" id="filter-type" name="filter_type">
+              <option value="">전체</option>
+              <?php foreach ($unitTypeOptions as $typeValue => $typeLabel): ?>
+                <option value="<?= h($typeValue) ?>"><?= h($typeLabel) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="work-filter-field">
+            <label class="work-filter-label" for="filter-major">대분류</label>
+            <select class="work-filter-select" id="filter-major" name="filter_major">
+              <option value="">전체</option>
+            </select>
+          </div>
+          <div class="work-filter-actions">
+            <button type="submit" class="btn-secondary" id="unit-db-search-button">조회</button>
+            <button type="button" class="btn-secondary" id="unit-db-filter-reset">초기화</button>
+            <span class="work-filter-count" id="unit-db-filter-count">단위위험성평가서를 조회할 수 있습니다.</span>
+          </div>
+        </form>
+        <div class="unit-db-search-note">작업목록이 아니라 단위위험성평가 DB를 조회합니다. 결과를 누르면 미리보기가 열립니다.</div>
       </div>
 
       <?php if ($successMessage !== ''): ?>
@@ -1825,7 +2196,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
       <?php endif; ?>
 
       <?php if (empty($reports)): ?>
-        <div class="empty">아직 저장된 작업이 없습니다.</div>
+        <div class="empty"><?= $hasWorkListFilter ? '선택한 유형/대분류에 맞는 작업이 없습니다.' : '아직 저장된 작업이 없습니다.' ?></div>
       <?php else: ?>
         <div class="mobile-list">
           <?php foreach ($reports as $report): ?>
@@ -2063,6 +2434,20 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
             <div class="participant-name">참여자 정보가 없습니다.</div>
           </li>
         </ul>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop" id="unit-db-modal" aria-hidden="true">
+    <div class="unit-preview-modal" role="dialog" aria-modal="true" aria-labelledby="unit-db-modal-title">
+      <div class="unit-preview-head">
+        <div>
+          <h2 id="unit-db-modal-title">단위위험성평가서 조회</h2>
+          <p id="unit-db-modal-subtitle">유형과 대분류 조건에 맞는 평가서를 표시합니다.</p>
+        </div>
+        <button type="button" class="modal-close" data-unit-db-modal-close aria-label="닫기">&times;</button>
+      </div>
+      <div class="unit-preview-body" id="unit-db-modal-body">
+        <div class="unit-preview-empty">조회 결과가 여기에 표시됩니다.</div>
       </div>
     </div>
   </div>
@@ -2340,6 +2725,16 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
       const standardSearchMeta = document.getElementById('standard-search-meta');
       const standardSearchResults = document.getElementById('standard-search-results');
       const standardSearchReset = document.getElementById('standard-search-reset');
+      const unitDbFilterForm = document.getElementById('unit-db-filter-form');
+      const unitDbKeywordInput = document.getElementById('unit-db-keyword');
+      const unitDbSearchResults = document.getElementById('unit-db-search-results');
+      const unitDbFilterType = document.getElementById('filter-type');
+      const unitDbFilterMajor = document.getElementById('filter-major');
+      const unitDbFilterReset = document.getElementById('unit-db-filter-reset');
+      const unitDbFilterCount = document.getElementById('unit-db-filter-count');
+      const unitDbModal = document.getElementById('unit-db-modal');
+      const unitDbModalSubtitle = document.getElementById('unit-db-modal-subtitle');
+      const unitDbModalBody = document.getElementById('unit-db-modal-body');
       if (
         !modal
         || !titleNode
@@ -2359,12 +2754,22 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
         || !standardSearchMeta
         || !standardSearchResults
         || !standardSearchReset
+        || !unitDbFilterForm
+        || !unitDbKeywordInput
+        || !unitDbSearchResults
+        || !unitDbFilterType
+        || !unitDbFilterMajor
+        || !unitDbFilterReset
+        || !unitDbFilterCount
+        || !unitDbModal
+        || !unitDbModalSubtitle
+        || !unitDbModalBody
       ) {
         return;
       }
 
       const unitTypeLabels = {
-        target: '작업관련',
+        target: '작업대상',
         major_work: '중대위험작업',
         tool: '공구/장비',
         env: '작업환경',
@@ -2374,8 +2779,12 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
       let safetyRequestToken = 0;
       let previousSafetyBodyOverflow = '';
       let previousHazardParticipantBodyOverflow = '';
+      let previousUnitDbBodyOverflow = '';
       let standardSearchDebounceTimer = 0;
       let standardSearchRequestToken = 0;
+      let unitDbSearchDebounceTimer = 0;
+      let unitDbRecords = [];
+      let unitDbLoadPromise = null;
 
       function escapeHtml(value) {
         return String(value ?? '')
@@ -2486,12 +2895,51 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
           return '<div class="unit-preview-empty">등록된 위험성평가 항목이 없습니다.</div>';
         }
 
+        const renderRiskLine = (label, probability, severity, riskScore) => {
+          const hasValue = probability !== null || severity !== null || riskScore !== null
+            || String(probability ?? '').trim() !== ''
+            || String(severity ?? '').trim() !== ''
+            || String(riskScore ?? '').trim() !== '';
+
+          if (!hasValue) {
+            return '';
+          }
+
+          const p = String(probability ?? '').trim() || '-';
+          const s = String(severity ?? '').trim() || '-';
+          const r = String(riskScore ?? '').trim() || '-';
+          const numericScore = Number.parseInt(String(riskScore ?? '').trim(), 10);
+          let riskLevelClass = 'is-medium';
+          let riskLevelLabel = '중위험';
+          if (Number.isFinite(numericScore)) {
+            if (numericScore <= 6) {
+              riskLevelClass = 'is-low';
+              riskLevelLabel = '저위험';
+            } else if (numericScore >= 15) {
+              riskLevelClass = 'is-high';
+              riskLevelLabel = '고위험';
+            }
+          }
+
+          return `
+            <div class="risk-badge-line">
+              <span class="risk-level-badge ${riskLevelClass}">${escapeHtml(riskLevelLabel)}</span>
+              <span class="risk-score-text"><strong>${escapeHtml(label)}</strong> P ${escapeHtml(p)} / S ${escapeHtml(s)} / R ${escapeHtml(r)}</span>
+            </div>
+          `;
+        };
+
         const rows = items.map((item, index) => {
           const sortNo = String(item.sort_no ?? '').trim() !== '' ? item.sort_no : (index + 1);
           const accidentSummary = [item.accident_type, item.injury_result]
             .map((part) => String(part ?? '').trim())
             .filter(Boolean)
             .join(' / ');
+          const riskSummary = [
+            renderRiskLine('현재', item.likelihood_before, item.severity_before, item.risk_score_before),
+            renderRiskLine('조치후', item.likelihood_current, item.severity_current, item.risk_score_current),
+            renderRiskLine('개선후', item.likelihood_after, item.severity_after, item.risk_score_after),
+          ].filter(Boolean).join('');
 
           return `
             <tr>
@@ -2503,6 +2951,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
                 ${String(item.cause_text ?? '').trim() !== '' ? `<div class="sub-text" style="margin-top:6px">원인/위험상황: ${displayTextBlock(item.cause_text)}</div>` : ''}
               </td>
               <td>${accidentSummary !== '' ? escapeHtml(accidentSummary) : '-'}</td>
+              <td>${riskSummary !== '' ? `<div class="sub-text" style="line-height:1.6">${riskSummary}</div>` : '-'}</td>
               <td>${displayTextBlock(item.current_control_text)}</td>
               <td>${displayTextBlock(item.additional_control_text)}</td>
             </tr>
@@ -2519,6 +2968,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
                   <th>4M분류</th>
                   <th>유해위험요인</th>
                   <th>사고유형/상해결과</th>
+                  <th>위험도</th>
                   <th>현재 조치</th>
                   <th>추가 조치</th>
                 </tr>
@@ -2665,6 +3115,195 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
         hideStandardSearchResults();
         standardSearchResults.innerHTML = '';
         setStandardSearchMeta('작업목록을 건드리지 않고 작업표준서만 검색합니다.');
+      }
+
+      function updateUnitDbFilterCount(message) {
+        unitDbFilterCount.textContent = message;
+      }
+
+      function hideUnitDbSearchResults() {
+        unitDbSearchResults.classList.remove('is-open');
+      }
+
+      function clearUnitDbSearchResults() {
+        hideUnitDbSearchResults();
+        unitDbSearchResults.innerHTML = '';
+      }
+
+      async function ensureUnitDbRecordsLoaded() {
+        if (unitDbLoadPromise) {
+          return unitDbLoadPromise;
+        }
+
+        unitDbLoadPromise = fetch('unit_ra_list_api.php')
+          .then((response) => response.json())
+          .then((json) => {
+            if (!json || !json.success) {
+              throw new Error(json && json.message ? json.message : '단위위험성평가 목록을 불러오지 못했습니다.');
+            }
+
+            unitDbRecords = Array.isArray(json.data) ? json.data : [];
+            return unitDbRecords;
+          })
+          .catch((error) => {
+            unitDbLoadPromise = null;
+            throw error;
+          });
+
+        return unitDbLoadPromise;
+      }
+
+      function updateUnitDbMajorOptions() {
+        const selectedType = String(unitDbFilterType.value || '').trim();
+        const previousValue = String(unitDbFilterMajor.value || '').trim();
+        const names = [...new Set(
+          unitDbRecords
+            .filter((row) => !selectedType || String(row.unit_type || '').trim() === selectedType)
+            .map((row) => String(row.process_name || '').trim())
+            .filter(Boolean)
+        )].sort((left, right) => left.localeCompare(right, 'ko'));
+
+        unitDbFilterMajor.innerHTML = '<option value="">전체</option>'
+          + names.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('');
+
+        if (previousValue && names.includes(previousValue)) {
+          unitDbFilterMajor.value = previousValue;
+        }
+      }
+
+      function filterUnitDbRecords(limit = 8) {
+        const keywordValue = String(unitDbKeywordInput.value || '').trim().toLowerCase();
+        const typeValue = String(unitDbFilterType.value || '').trim();
+        const majorValue = String(unitDbFilterMajor.value || '').trim();
+
+        return unitDbRecords
+          .filter((row) => {
+            const rowCode = String(row.unit_code || '').trim().toLowerCase();
+            const rowTitle = String(row.unit_title || '').trim().toLowerCase();
+            const rowType = String(row.unit_type || '').trim();
+            const rowMajor = String(row.process_name || '').trim();
+            return (!keywordValue || rowCode.includes(keywordValue) || rowTitle.includes(keywordValue))
+              && (!typeValue || rowType === typeValue)
+              && (!majorValue || rowMajor === majorValue);
+          })
+          .slice(0, limit);
+      }
+
+      function renderUnitDbSearchResults(records) {
+        if (!Array.isArray(records) || records.length === 0) {
+          clearUnitDbSearchResults();
+          return;
+        }
+
+        unitDbSearchResults.classList.add('is-open');
+        unitDbSearchResults.innerHTML = records.map((row) => `
+          <button
+            type="button"
+            class="work-search-result-button"
+            data-unit-db-open="${escapeHtml(String(row.unit_ra_id || '0'))}"
+          >
+            <span class="work-search-result-code">${escapeHtml(String(row.unit_code || '-'))}</span>
+            <span class="work-search-result-name">
+              ${escapeHtml(String(row.unit_title || '제목 없음'))}
+              ${String(row.process_name || '').trim() !== '' ? ` · ${escapeHtml(String(row.process_name || '').trim())}` : ''}
+            </span>
+          </button>
+        `).join('');
+      }
+
+      async function updateUnitDbSearchSuggestions() {
+        const keywordValue = String(unitDbKeywordInput.value || '').trim();
+        if (keywordValue === '') {
+          clearUnitDbSearchResults();
+          return;
+        }
+
+        try {
+          await ensureUnitDbRecordsLoaded();
+          updateUnitDbMajorOptions();
+          renderUnitDbSearchResults(filterUnitDbRecords());
+        } catch (error) {
+          clearUnitDbSearchResults();
+        }
+      }
+
+      function renderUnitDbResults(records) {
+        if (!Array.isArray(records) || records.length === 0) {
+          return '<div class="unit-preview-empty">조건에 맞는 단위위험성평가서가 없습니다.</div>';
+        }
+
+        return `
+          <div class="unit-db-result-list">
+            ${records.map((row) => `
+              <button
+                type="button"
+                class="unit-db-result-button"
+                data-unit-db-open="${escapeHtml(String(row.unit_ra_id || '0'))}"
+              >
+                <div class="unit-db-result-code">${escapeHtml(String(row.unit_code || '번호 미등록'))}</div>
+                <div class="unit-db-result-title">${escapeHtml(String(row.unit_title || '제목 없음'))}</div>
+                <div class="unit-db-result-meta">
+                  <span class="unit-db-result-chip">유형 ${escapeHtml(unitTypeLabels[String(row.unit_type || '').trim()] || String(row.unit_type || '-'))}</span>
+                  <span class="unit-db-result-chip">대분류 ${escapeHtml(String(row.process_name || '-'))}</span>
+                  <span class="unit-db-result-chip">항목 ${escapeHtml(String(Number(row.item_count || 0)))}건</span>
+                </div>
+              </button>
+            `).join('')}
+          </div>
+        `;
+      }
+
+      function openUnitDbModal(subtitle, bodyHtml) {
+        closeModal();
+        closeSafetyModal();
+        closeHazardParticipantModal();
+        previousUnitDbBodyOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        unitDbModalSubtitle.textContent = subtitle;
+        unitDbModalBody.innerHTML = bodyHtml;
+        unitDbModal.classList.add('is-open');
+        unitDbModal.setAttribute('aria-hidden', 'false');
+      }
+
+      function closeUnitDbModal() {
+        unitDbModal.classList.remove('is-open');
+        unitDbModal.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = previousUnitDbBodyOverflow;
+      }
+
+      async function submitUnitDbSearch() {
+        const keywordValue = String(unitDbKeywordInput.value || '').trim();
+        const typeValue = String(unitDbFilterType.value || '').trim();
+        const majorValue = String(unitDbFilterMajor.value || '').trim();
+
+        updateUnitDbFilterCount('단위위험성평가 DB를 불러오는 중입니다.');
+        try {
+          await ensureUnitDbRecordsLoaded();
+          updateUnitDbMajorOptions();
+
+          const results = filterUnitDbRecords(Number.MAX_SAFE_INTEGER);
+
+          const subtitleParts = [];
+          if (keywordValue) {
+            subtitleParts.push(`검색어: ${keywordValue}`);
+          }
+          if (typeValue) {
+            subtitleParts.push(`유형: ${unitTypeLabels[typeValue] || typeValue}`);
+          }
+          if (majorValue) {
+            subtitleParts.push(`대분류: ${majorValue}`);
+          }
+          const subtitle = subtitleParts.length > 0
+            ? `${subtitleParts.join(' / ')} · ${results.length}건`
+            : `전체 단위위험성평가서 ${results.length}건`;
+
+          updateUnitDbFilterCount(`단위위험성평가 검색 결과 ${results.length}건`);
+          openUnitDbModal(subtitle, renderUnitDbResults(results));
+        } catch (error) {
+          const message = error instanceof Error ? error.message : '단위위험성평가를 불러오지 못했습니다.';
+          updateUnitDbFilterCount(message);
+          openUnitDbModal('조회 결과를 불러오지 못했습니다.', `<div class="unit-preview-error">${escapeHtml(message)}</div>`);
+        }
       }
 
       async function searchSafetyStandards(query, options = {}) {
@@ -2867,6 +3506,45 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
         searchSafetyStandards(standardSearchInput.value, { autoOpenExact: true });
       });
 
+      unitDbFilterForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        submitUnitDbSearch();
+      });
+
+      unitDbFilterType.addEventListener('change', () => {
+        unitDbFilterMajor.value = '';
+        updateUnitDbMajorOptions();
+        updateUnitDbFilterCount('선택한 유형 기준으로 단위위험성평가서를 조회할 수 있습니다.');
+        updateUnitDbSearchSuggestions();
+      });
+
+      unitDbFilterReset.addEventListener('click', () => {
+        unitDbKeywordInput.value = '';
+        unitDbFilterType.value = '';
+        unitDbFilterMajor.innerHTML = '<option value="">전체</option>';
+        updateUnitDbMajorOptions();
+        updateUnitDbFilterCount('단위위험성평가서를 조회할 수 있습니다.');
+        clearUnitDbSearchResults();
+      });
+
+      unitDbKeywordInput.addEventListener('input', () => {
+        window.clearTimeout(unitDbSearchDebounceTimer);
+        unitDbSearchDebounceTimer = window.setTimeout(() => {
+          updateUnitDbSearchSuggestions();
+        }, 150);
+      });
+
+      unitDbKeywordInput.addEventListener('focus', () => {
+        if (String(unitDbKeywordInput.value || '').trim() === '') {
+          return;
+        }
+        updateUnitDbSearchSuggestions();
+      });
+
+      unitDbFilterMajor.addEventListener('change', () => {
+        updateUnitDbSearchSuggestions();
+      });
+
       standardSearchReset.addEventListener('click', () => {
         clearStandardSearch();
       });
@@ -2907,11 +3585,27 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
         openSafetyModal(targetButton.dataset.searchStandardNo || '');
       });
 
+      unitDbSearchResults.addEventListener('click', (event) => {
+        const targetButton = event.target.closest('[data-unit-db-open]');
+        if (!targetButton) {
+          return;
+        }
+        clearUnitDbSearchResults();
+        const unitRaId = Number(targetButton.dataset.unitDbOpen || 0);
+        if (!Number.isInteger(unitRaId) || unitRaId <= 0) {
+          return;
+        }
+        openModal(unitRaId);
+      });
+
       document.addEventListener('click', (event) => {
         const inlinePreviewButton = event.target.closest('.js-inline-standard-preview');
         if (!inlinePreviewButton) {
           if (!event.target.closest('#standard-search-form')) {
             hideStandardSearchResults();
+          }
+          if (!event.target.closest('#unit-db-filter-form')) {
+            hideUnitDbSearchResults();
           }
           return;
         }
@@ -2936,15 +3630,46 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
         }
       });
 
+      unitDbModal.addEventListener('click', (event) => {
+        if (event.target === unitDbModal || event.target.closest('[data-unit-db-modal-close]')) {
+          closeUnitDbModal();
+          return;
+        }
+
+        const resultButton = event.target.closest('[data-unit-db-open]');
+        if (!resultButton) {
+          return;
+        }
+
+        const unitRaId = Number(resultButton.dataset.unitDbOpen || 0);
+        if (!Number.isInteger(unitRaId) || unitRaId <= 0) {
+          return;
+        }
+
+        closeUnitDbModal();
+        openModal(unitRaId);
+      });
+
       document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape' && hazardParticipantModal.classList.contains('is-open')) {
           closeHazardParticipantModal();
+        } else if (event.key === 'Escape' && unitDbModal.classList.contains('is-open')) {
+          closeUnitDbModal();
         } else if (event.key === 'Escape' && safetyModal.classList.contains('is-open')) {
           closeSafetyModal();
         } else if (event.key === 'Escape' && modal.classList.contains('is-open')) {
           closeModal();
         }
       });
+
+      ensureUnitDbRecordsLoaded()
+        .then(() => {
+          updateUnitDbMajorOptions();
+          updateUnitDbFilterCount(`단위위험성평가서 ${unitDbRecords.length}건을 조회할 수 있습니다.`);
+        })
+        .catch((error) => {
+          updateUnitDbFilterCount(error instanceof Error ? error.message : '단위위험성평가 목록을 불러오지 못했습니다.');
+        });
     })();
 
     async function launchReceiptCropper() {
