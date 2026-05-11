@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>현장 전기 계산기</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, 'Noto Sans KR', sans-serif;
+      background: #f3f5f7;
+      color: #222;
+    }
+    header {
+      background: #1f2937;
+      color: white;
+      padding: 18px 20px;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 22px;
+    }
+    header p {
+      margin: 6px 0 0;
+      color: #d1d5db;
+      font-size: 14px;
+    }
+    main {
+      max-width: 1100px;
+      margin: 20px auto;
+      padding: 0 14px;
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 16px;
+    }
+    .menu, .panel {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    }
+    .menu {
+      padding: 12px;
+      height: fit-content;
+    }
+    .menu button {
+      width: 100%;
+      border: 0;
+      background: #f3f4f6;
+      padding: 12px;
+      margin-bottom: 8px;
+      border-radius: 8px;
+      text-align: left;
+      cursor: pointer;
+      font-size: 15px;
+    }
+    .menu button.active {
+      background: #2563eb;
+      color: white;
+      font-weight: bold;
+    }
+    .panel {
+      padding: 20px;
+    }
+    .formula {
+      background: #eef2ff;
+      border-left: 5px solid #2563eb;
+      padding: 12px;
+      margin: 12px 0 18px;
+      border-radius: 8px;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    label {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 6px;
+      color: #374151;
+      font-weight: bold;
+    }
+    input, select {
+      width: 100%;
+      padding: 11px;
+      border: 1px solid #cfd6df;
+      border-radius: 8px;
+      font-size: 15px;
+    }
+    .actions {
+      margin-top: 18px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .actions button {
+      border: 0;
+      padding: 12px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: bold;
+    }
+    .calc-btn { background: #2563eb; color: white; }
+    .reset-btn { background: #e5e7eb; color: #111827; }
+    .result {
+      margin-top: 18px;
+      padding: 16px;
+      background: #ecfdf5;
+      border-left: 5px solid #10b981;
+      border-radius: 8px;
+      font-size: 18px;
+      font-weight: bold;
+      line-height: 1.7;
+      white-space: pre-line;
+    }
+    .note {
+      margin-top: 12px;
+      font-size: 13px;
+      color: #6b7280;
+      line-height: 1.6;
+    }
+    .term-trigger {
+      border: 0;
+      background: transparent;
+      padding: 0;
+      color: #2563eb;
+      font: inherit;
+      font-weight: bold;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+    .modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(17, 24, 39, 0.55);
+      z-index: 1000;
+    }
+    .modal.open {
+      display: flex;
+    }
+    .modal-card {
+      width: min(100%, 460px);
+      background: white;
+      border-radius: 14px;
+      padding: 22px 20px 18px;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+    }
+    .modal-card h3 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      color: #111827;
+    }
+    .modal-card p {
+      margin: 0 0 10px;
+      line-height: 1.7;
+      color: #374151;
+      font-size: 15px;
+    }
+    .modal-close {
+      margin-top: 8px;
+      border: 0;
+      background: #2563eb;
+      color: white;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+    .modal-link-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid #2563eb;
+      background: white;
+      color: #2563eb;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: bold;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    @media (max-width: 800px) {
+      main { grid-template-columns: 1fr; }
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>현장 전기 계산기</h1>
+  <p>전력, 전류, 차단기, 전선, 전압강하, UPS, 모터, 발전기, 조명, 역률 계산</p>
+</header>
+
+<main>
+  <section class="menu" id="menu"></section>
+  <section class="panel">
+    <h2 id="title"></h2>
+    <div class="formula" id="formula"></div>
+    <div class="grid" id="inputs"></div>
+    <div class="actions">
+      <button class="calc-btn" onclick="calculate()">계산하기</button>
+      <button class="reset-btn" onclick="resetInputs()">초기화</button>
+    </div>
+    <div class="result" id="result">값을 입력하고 계산하기를 누르세요.</div>
+    <div class="note" id="note"></div>
+  </section>
+</main>
+
+<div class="modal" id="power-factor-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="power-factor-modal-title">
+  <div class="modal-card">
+    <h3 id="power-factor-modal-title">역률이란?</h3>
+    <p>역률은 전기가 실제 일하는 비율을 뜻합니다. 값은 보통 0에서 1 사이이며, 1에 가까울수록 같은 전력에서 더 효율적으로 전기를 사용합니다.</p>
+    <p>예를 들어 역률이 낮으면 같은 kW를 내기 위해 더 큰 전류가 필요해서 배선 손실과 설비 부담이 커질 수 있습니다.</p>
+    <div class="modal-actions">
+      <button type="button" class="modal-link-btn" onclick="goToPowerFactorCalculator()">역률 계산으로 이동</button>
+      <button type="button" class="modal-close" onclick="closePowerFactorModal()">닫기</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="active-power-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="active-power-modal-title">
+  <div class="modal-card">
+    <h3 id="active-power-modal-title">유효전력이란?</h3>
+    <p>유효전력은 기기가 실제로 일을 하는 데 쓰이는 전력입니다. 모터를 돌리거나 히터를 가열하는 실제 사용 전력이라고 보면 됩니다.</p>
+    <p>보통 단위는 W 또는 kW를 사용하며, 전기요금이나 설비 부하를 볼 때 가장 직접적으로 확인하는 값입니다.</p>
+    <p>예를 들어 5kW 히터, 7.5kW 펌프 모터, 10kW 전열기처럼 장비 명판에 적힌 kW 값은 실무에서 유효전력으로 보는 경우가 많습니다.</p>
+    <div class="modal-actions">
+      <button type="button" class="modal-close" onclick="closeActivePowerModal()">닫기</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="apparent-power-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="apparent-power-modal-title">
+  <div class="modal-card">
+    <h3 id="apparent-power-modal-title">피상전력이란?</h3>
+    <p>피상전력은 전압과 전류를 기준으로 본 전체 전력 크기입니다. 실제로 일하는 전력과 무효전력을 함께 포함한 값입니다.</p>
+    <p>보통 단위는 VA 또는 kVA를 사용하며, 변압기나 발전기 같은 설비 용량을 검토할 때 자주 기준이 됩니다.</p>
+    <p>예를 들어 분전반 부하합계가 80kW이고 역률이 0.8이면 약 100kVA로 보고, 100kVA 변압기나 발전기 용량 검토에 연결하는 식으로 실무에서 많이 찾습니다.</p>
+    <div class="modal-actions">
+      <button type="button" class="modal-close" onclick="closeApparentPowerModal()">닫기</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const calculators = [
+  {
+    id: 'singlePower',
+    title: '1. 단상 전력 계산',
+    formula: '공식: P = V × I × <button type="button" class="term-trigger" onclick="openPowerFactorModal()">역률</button><br>결과 단위: W, kW',
+    inputs: [
+      { key: 'v', label: '전압 V', value: 220 },
+      { key: 'i', label: '전류 A', value: 10 },
+      { key: 'pf', label: '역률', value: 1 }
+    ],
+    calc: v => {
+      const p = v.v * v.i * v.pf;
+      return `전력 = ${fmt(p)} W\n전력 = ${fmt(p / 1000)} kW`;
+    },
+    note: '히터, 콘센트 부하, 단상 장비 계산에 사용합니다.'
+  },
+  {
+    id: 'threePower',
+    title: '2. 삼상 전력 계산',
+    formula: '공식: P = √3 × V × I × 역률<br>결과 단위: W, kW',
+    inputs: [
+      { key: 'v', label: '선간전압 V', value: 380 },
+      { key: 'i', label: '전류 A', value: 30 },
+      { key: 'pf', label: '역률', value: 0.85 }
+    ],
+    calc: v => {
+      const p = Math.sqrt(3) * v.v * v.i * v.pf;
+      return `전력 = ${fmt(p)} W\n전력 = ${fmt(p / 1000)} kW`;
+    },
+    note: '모터, MCC, 분전반, 동력부하 계산에 가장 많이 사용합니다.'
+  },
+  {
+    id: 'current',
+    title: '3. 전류 계산',
+    formula: '단상: I = P ÷ (V × 역률)<br>삼상: I = P ÷ (√3 × V × 역률)',
+    inputs: [
+      { key: 'phase', label: '구분', type: 'select', options: [{value:'1', text:'단상'}, {value:'3', text:'삼상'}], value: '3' },
+      { key: 'p', label: '전력 kW', value: 10 },
+      { key: 'v', label: '전압 V', value: 380 },
+      { key: 'pf', label: '역률', value: 0.85 }
+    ],
+    calc: v => {
+      const watt = v.p * 1000;
+      const i = v.phase === '1' ? watt / (v.v * v.pf) : watt / (Math.sqrt(3) * v.v * v.pf);
+      return `부하전류 = ${fmt(i)} A`;
+    },
+    note: '차단기와 전선 굵기 선정 전에 먼저 계산하는 값입니다.'
+  },
+  {
+    id: 'ohm',
+    title: '4. 옴의 법칙 계산',
+    formula: 'V = I × R<br>I = V ÷ R<br>R = V ÷ I',
+    inputs: [
+      { key: 'mode', label: '계산할 값', type: 'select', options: [{value:'v', text:'전압 V'}, {value:'i', text:'전류 I'}, {value:'r', text:'저항 R'}], value: 'v' },
+      { key: 'v', label: '전압 V', value: 220 },
+      { key: 'i', label: '전류 A', value: 10 },
+      { key: 'r', label: '저항 Ω', value: 22 }
+    ],
+    calc: v => {
+      if (v.mode === 'v') return `전압 = ${fmt(v.i * v.r)} V`;
+      if (v.mode === 'i') return `전류 = ${fmt(v.v / v.r)} A`;
+      return `저항 = ${fmt(v.v / v.i)} Ω`;
+    },
+    note: '테스터 측정값 검토, 히터 저항, 회로 점검에 사용합니다.'
+  },
+  {
+    id: 'voltageDrop',
+    title: '5. 전압강하 계산',
+    formula: '간이식: ΔV = 계수 × I × L ÷ (K × A)<br>단상 계수 2, 삼상 계수 √3 사용',
+    inputs: [
+      { key: 'phase', label: '구분', type: 'select', options: [{value:'1', text:'단상'}, {value:'3', text:'삼상'}], value: '3' },
+      { key: 'i', label: '전류 A', value: 30 },
+      { key: 'l', label: '거리 m', value: 50 },
+      { key: 'a', label: '전선 단면적 SQ', value: 10 },
+      { key: 'k', label: '도전율 K / 구리 56', value: 56 },
+      { key: 'v', label: '전압 V', value: 380 }
+    ],
+    calc: v => {
+      const factor = v.phase === '1' ? 2 : Math.sqrt(3);
+      const drop = factor * v.i * v.l / (v.k * v.a);
+      const rate = drop / v.v * 100;
+      return `전압강하 = ${fmt(drop)} V\n전압강하율 = ${fmt(rate)} %`;
+    },
+    note: '간이 계산입니다. 실제 설계에서는 케이블 종류, 포설조건, 리액턴스, 기준 허용전압강하를 함께 검토해야 합니다.'
+  },
+  {
+    id: 'breaker',
+    title: '6. 차단기 용량 계산',
+    formula: '권장 차단기 전류 = 부하전류 × 여유율',
+    inputs: [
+      { key: 'i', label: '부하전류 A', value: 40 },
+      { key: 'margin', label: '여유율', value: 1.25 }
+    ],
+    calc: v => {
+      const need = v.i * v.margin;
+      const standard = [15,20,30,40,50,60,75,100,125,150,175,200,225,250,300,350,400,500,600,800,1000];
+      const recommend = standard.find(x => x >= need) || '1000A 초과 별도 검토';
+      return `필요 차단기 전류 = ${fmt(need)} A\n권장 표준 차단기 = ${recommend}`;
+    },
+    note: '모터, 기동전류, 케이블 허용전류, 보호협조를 반드시 같이 확인해야 합니다.'
+  },
+  {
+    id: 'cable',
+    title: '7. 전선 굵기 간이 추천',
+    formula: '부하전류 기준으로 CV 케이블 SQ를 간이 추천합니다.',
+    inputs: [
+      { key: 'i', label: '부하전류 A', value: 50 }
+    ],
+    calc: v => {
+      const table = [
+        {a: 20, sq: '2.5SQ'}, {a: 30, sq: '4SQ'}, {a: 40, sq: '6SQ'},
+        {a: 55, sq: '10SQ'}, {a: 75, sq: '16SQ'}, {a: 100, sq: '25SQ'},
+        {a: 130, sq: '35SQ'}, {a: 150, sq: '50SQ'}, {a: 200, sq: '70SQ'},
+        {a: 250, sq: '95SQ'}, {a: 300, sq: '120SQ'}, {a: 350, sq: '150SQ'},
+        {a: 400, sq: '185SQ'}, {a: 500, sq: '240SQ'}
+      ];
+      const found = table.find(x => x.a >= v.i);
+      return found ? `간이 추천 전선 굵기 = ${found.sq}` : '500A 초과는 별도 검토 필요';
+    },
+    note: '실제 선정은 KEC 기준, 포설방식, 집합계수, 주위온도, 전압강하를 반영해야 합니다.'
+  },
+  {
+    id: 'ups',
+    title: '8. UPS / 배터리 사용시간 계산',
+    formula: '사용시간 h = 배터리전압 V × 용량 Ah × 효율 ÷ 부하 W',
+    inputs: [
+      { key: 'v', label: '배터리 전압 V', value: 12 },
+      { key: 'ah', label: '배터리 용량 Ah', value: 100 },
+      { key: 'w', label: '부하 W', value: 200 },
+      { key: 'eff', label: '효율', value: 0.8 }
+    ],
+    calc: v => {
+      const h = v.v * v.ah * v.eff / v.w;
+      return `예상 사용시간 = ${fmt(h)} 시간\n예상 사용시간 = ${fmt(h * 60)} 분`;
+    },
+    note: '실제 UPS는 방전율, 노후도, 온도, 인버터 효율 때문에 계산값보다 짧을 수 있습니다.'
+  },
+  {
+    id: 'motor',
+    title: '9. 모터 전류 계산',
+    formula: 'I = P ÷ (√3 × V × 역률 × 효율)',
+    inputs: [
+      { key: 'kw', label: '모터 용량 kW', value: 3.7 },
+      { key: 'v', label: '전압 V', value: 380 },
+      { key: 'pf', label: '역률', value: 0.85 },
+      { key: 'eff', label: '효율', value: 0.9 }
+    ],
+    calc: v => {
+      const i = v.kw * 1000 / (Math.sqrt(3) * v.v * v.pf * v.eff);
+      return `모터 정격전류 예상값 = ${fmt(i)} A`;
+    },
+    note: '명판 전류가 있으면 명판 전류를 우선합니다. 이 값은 예비 검토용입니다.'
+  },
+  {
+    id: 'generator',
+    title: '10. 발전기 용량 계산',
+    formula: '발전기 용량 kVA = 부하 kW ÷ 역률 × 여유율',
+    inputs: [
+      { key: 'kw', label: '부하 kW', value: 30 },
+      { key: 'pf', label: '역률', value: 0.8 },
+      { key: 'margin', label: '여유율', value: 1.25 }
+    ],
+    calc: v => {
+      const kva = v.kw / v.pf * v.margin;
+      return `권장 발전기 용량 = ${fmt(kva)} kVA`;
+    },
+    note: '모터 기동부하가 있으면 기동전류 때문에 더 크게 잡아야 합니다.'
+  },
+  {
+    id: 'lighting',
+    title: '11. 조명 부하 계산',
+    formula: '총 부하 W = 등기구 W × 수량<br>전류 A = 총 부하 W ÷ 전압 V',
+    inputs: [
+      { key: 'w', label: '등기구 1개 소비전력 W', value: 40 },
+      { key: 'count', label: '수량', value: 20 },
+      { key: 'v', label: '전압 V', value: 220 }
+    ],
+    calc: v => {
+      const total = v.w * v.count;
+      const i = total / v.v;
+      return `총 조명부하 = ${fmt(total)} W\n총 조명부하 = ${fmt(total / 1000)} kW\n예상 전류 = ${fmt(i)} A`;
+    },
+    note: '조명 회로 분기, 스위치 용량, 차단기 검토에 사용합니다.'
+  },
+  {
+    id: 'powerFactor',
+    title: '12. 역률 계산',
+    formula: '역률 = <button type="button" class="term-trigger" onclick="openActivePowerModal()">유효전력</button> kW ÷ <button type="button" class="term-trigger" onclick="openApparentPowerModal()">피상전력</button> kVA',
+    inputs: [
+      { key: 'kw', label: '유효전력 kW', value: 80 },
+      { key: 'kva', label: '피상전력 kVA', value: 100 }
+    ],
+    calc: v => {
+      const pf = v.kw / v.kva;
+      return `역률 = ${fmt(pf)}\n역률 = ${fmt(pf * 100)} %`;
+    },
+    note: '역률이 낮으면 전류와 손실이 증가합니다. 콘덴서 용량 검토 시 사용합니다.'
+  }
+];
+
+let currentId = calculators[0].id;
+
+function fmt(num) {
+  if (!isFinite(num)) return '계산 불가';
+  return Number(num).toLocaleString('ko-KR', { maximumFractionDigits: 3 });
+}
+
+function openPowerFactorModal() {
+  const modal = document.getElementById('power-factor-modal');
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden', 'false');
+}
+
+function closePowerFactorModal() {
+  const modal = document.getElementById('power-factor-modal');
+  modal.classList.remove('open');
+  modal.setAttribute('aria-hidden', 'true');
+}
+
+function goToPowerFactorCalculator() {
+  closePowerFactorModal();
+  selectCalc('powerFactor');
+}
+
+function openActivePowerModal() {
+  const modal = document.getElementById('active-power-modal');
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden', 'false');
+}
+
+function closeActivePowerModal() {
+  const modal = document.getElementById('active-power-modal');
+  modal.classList.remove('open');
+  modal.setAttribute('aria-hidden', 'true');
+}
+
+function openApparentPowerModal() {
+  const modal = document.getElementById('apparent-power-modal');
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden', 'false');
+}
+
+function closeApparentPowerModal() {
+  const modal = document.getElementById('apparent-power-modal');
+  modal.classList.remove('open');
+  modal.setAttribute('aria-hidden', 'true');
+}
+
+function renderMenu() {
+  const menu = document.getElementById('menu');
+  menu.innerHTML = calculators.map(c => `<button class="${c.id === currentId ? 'active' : ''}" onclick="selectCalc('${c.id}')">${c.title}</button>`).join('');
+}
+
+function selectCalc(id) {
+  currentId = id;
+  renderMenu();
+  renderCalculator();
+}
+
+function renderCalculator() {
+  const calc = calculators.find(c => c.id === currentId);
+  document.getElementById('title').textContent = calc.title;
+  document.getElementById('formula').innerHTML = calc.formula;
+  document.getElementById('note').textContent = calc.note;
+  document.getElementById('result').textContent = '값을 입력하고 계산하기를 누르세요.';
+
+  document.getElementById('inputs').innerHTML = calc.inputs.map(input => {
+    if (input.type === 'select') {
+      return `<div><label>${input.label}</label><select id="${input.key}">${input.options.map(o => `<option value="${o.value}" ${o.value === input.value ? 'selected' : ''}>${o.text}</option>`).join('')}</select></div>`;
+    }
+    return `<div><label>${input.label}</label><input id="${input.key}" type="number" step="any" value="${input.value}"></div>`;
+  }).join('');
+}
+
+function getValues(calc) {
+  const values = {};
+  for (const input of calc.inputs) {
+    const el = document.getElementById(input.key);
+    values[input.key] = input.type === 'select' ? el.value : Number(el.value);
+  }
+  return values;
+}
+
+function calculate() {
+  const calc = calculators.find(c => c.id === currentId);
+  const values = getValues(calc);
+  const result = calc.calc(values);
+  document.getElementById('result').textContent = result;
+}
+
+function resetInputs() {
+  renderCalculator();
+}
+
+document.getElementById('power-factor-modal').addEventListener('click', event => {
+  if (event.target.id === 'power-factor-modal') {
+    closePowerFactorModal();
+  }
+});
+
+document.getElementById('active-power-modal').addEventListener('click', event => {
+  if (event.target.id === 'active-power-modal') {
+    closeActivePowerModal();
+  }
+});
+
+document.getElementById('apparent-power-modal').addEventListener('click', event => {
+  if (event.target.id === 'apparent-power-modal') {
+    closeApparentPowerModal();
+  }
+});
+
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape') {
+    closePowerFactorModal();
+    closeActivePowerModal();
+    closeApparentPowerModal();
+  }
+});
+
+renderMenu();
+renderCalculator();
+</script>
+</body>
+</html>
