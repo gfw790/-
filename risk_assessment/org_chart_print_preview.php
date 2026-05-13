@@ -61,7 +61,7 @@ foreach (auth_read_teams() as $teamName) {
 
     // 경영지원 팀은 모든 role 포함, 다른 팀은 manager/leader/worker만
     $isAdminTeam = auth_team_key($teamName) === auth_team_key('경영지원');
-    $managerRoles = $isAdminTeam ? ['manager', 'safety_manager', 'leader', 'worker'] : ['manager'];
+    $managerRoles = $isAdminTeam ? ['manager', 'safety_manager', 'leader', 'worker', 'administrator', 'admin'] : ['manager'];
     $leaderRoles = $isAdminTeam ? ['leader', 'safety_manager'] : ['leader'];
     $workerRoles = ['worker'];
 
