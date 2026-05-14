@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>사진 이어붙이기</title>
+    <style>
+        :root {
+            --bg: #eef3f7;
+            --panel: #ffffff;
+            --line: #cdd8e3;
+            --text: #132238;
+            --muted: #64748b;
+            --accent: #1d4ed8;
+            --accent-weak: #dbeafe;
+            --danger: #b91c1c;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Malgun Gothic", sans-serif;
+            color: var(--text);
+            background:
+                radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 24%),
+                linear-gradient(180deg, #f7fafc 0%, var(--bg) 100%);
+        }
+
+        .page {
+            width: min(1180px, calc(100vw - 32px));
+            margin: 24px auto 40px;
+            display: grid;
+            grid-template-columns: 380px minmax(0, 1fr);
+            gap: 18px;
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+            padding: 18px;
+        }
+
+        h1 {
+            margin: 0 0 8px;
+            font-size: 28px;
+        }
+
+        .lead {
+            margin: 0 0 18px;
+            color: var(--muted);
+            line-height: 1.6;
+            font-size: 14px;
+        }
+
+        .drop-zone {
+            border: 2px dashed #93c5fd;
+            border-radius: 16px;
+            background: linear-gradient(180deg, #eff6ff 0%, #f8fbff 100%);
+            padding: 22px 16px;
+            text-align: center;
+            transition: 0.2s ease;
+        }
+
+        .drop-zone.dragover {
+            border-color: var(--accent);
+            background: #dbeafe;
+            transform: translateY(-1px);
+        }
+
+        .drop-zone strong {
+            display: block;
+            font-size: 17px;
+            margin-bottom: 6px;
+        }
+
+        .drop-zone p {
+            margin: 0 0 14px;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .actions,
+        .option-row,
+        .item-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .option-grid {
+            display: grid;
+            gap: 12px;
+            margin: 18px 0;
+        }
+
+        label {
+            display: block;
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+
+        input[type="number"],
+        select {
+            width: 100%;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 14px;
+            background: #fff;
+        }
+
+        button {
+            border: 0;
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 14px;
+            cursor: pointer;
+            background: var(--accent);
+            color: #fff;
+        }
+
+        button.secondary {
+            background: #e2e8f0;
+            color: #0f172a;
+        }
+
+        button.danger {
+            background: var(--danger);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .item-list {
+            margin-top: 18px;
+            display: grid;
+            gap: 10px;
+            max-height: 420px;
+            overflow: auto;
+            padding-right: 2px;
+        }
+
+        .item-card {
+            display: grid;
+            grid-template-columns: 82px minmax(0, 1fr);
+            gap: 12px;
+            padding: 10px;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            background: #fbfdff;
+        }
+
+        .item-card img {
+            width: 82px;
+            height: 82px;
+            object-fit: cover;
+            border-radius: 10px;
+            background: #e2e8f0;
+        }
+
+        .item-title {
+            margin: 0 0 6px;
+            font-size: 14px;
+            word-break: break-all;
+        }
+
+        .item-meta {
+            margin: 0 0 8px;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .preview-panel {
+            min-height: 760px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .preview-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: flex-start;
+            margin-bottom: 14px;
+        }
+
+        .preview-title {
+            margin: 0;
+            font-size: 20px;
+        }
+
+        .status {
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .canvas-wrap {
+            flex: 1;
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            background:
+                linear-gradient(45deg, #eef2f7 25%, transparent 25%, transparent 75%, #eef2f7 75%, #eef2f7),
+                linear-gradient(45deg, #eef2f7 25%, transparent 25%, transparent 75%, #eef2f7 75%, #eef2f7);
+            background-size: 24px 24px;
+            background-position: 0 0, 12px 12px;
+            overflow: auto;
+            padding: 16px;
+        }
+
+        canvas {
+            display: block;
+            width: min(100%, var(--canvas-width, 100%));
+            height: auto;
+            margin: 0 auto;
+            background: #fff;
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+        }
+
+        .empty-preview {
+            min-height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.7;
+            padding: 48px 16px;
+        }
+
+        .footer-note {
+            margin-top: 12px;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        @media (max-width: 980px) {
+            .page {
+                grid-template-columns: 1fr;
+            }
+
+            .preview-panel {
+                min-height: 540px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <section class="panel">
+            <h1>사진 이어붙이기</h1>
+            <p class="lead">여러 장의 사진을 위에서 아래로 길게 한 장으로 합칩니다. 순서를 바꾼 뒤 바로 미리보기하고 PNG로 저장할 수 있습니다.</p>
+
+            <div id="dropZone" class="drop-zone">
+                <strong>사진을 끌어다 놓거나 선택하세요</strong>
+                <p>JPG, PNG, WEBP 파일을 여러 장 한 번에 넣을 수 있습니다.</p>
+                <button type="button" id="pickFilesButton">사진 선택</button>
+                <input id="fileInput" class="file-input" type="file" accept="image/*" multiple>
+            </div>
+
+            <div class="option-grid">
+                <div>
+                    <label for="widthMode">가로 기준</label>
+                    <select id="widthMode">
+                        <option value="max">가장 넓은 사진 기준</option>
+                        <option value="first">첫 번째 사진 기준</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="imageGap">사진 사이 여백(px)</label>
+                    <input id="imageGap" type="number" min="0" max="200" step="1" value="0">
+                </div>
+                <div>
+                    <label for="backgroundColor">배경색</label>
+                    <select id="backgroundColor">
+                        <option value="#ffffff">흰색</option>
+                        <option value="#f8fafc">밝은 회색</option>
+                        <option value="#000000">검정</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="jpegQuality">JPEG 품질</label>
+                    <select id="jpegQuality">
+                        <option value="0.92">92% 고품질</option>
+                        <option value="0.85" selected>85% 권장</option>
+                        <option value="0.75">75% 용량절감</option>
+                        <option value="0.65">65% 더 작게</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="actions">
+                <button type="button" id="mergeButton">이어붙이기</button>
+                <button type="button" class="secondary" id="downloadButton" disabled>PNG 저장</button>
+                <button type="button" class="secondary" id="downloadJpegButton" disabled>JPEG 저장</button>
+                <button type="button" class="danger" id="clearButton">전체 비우기</button>
+            </div>
+
+            <div id="itemList" class="item-list"></div>
+        </section>
+
+        <section class="panel preview-panel">
+            <div class="preview-header">
+                <div>
+                    <h2 class="preview-title">결과 미리보기</h2>
+                    <div id="statusText" class="status">사진을 선택하면 미리보기를 만들 수 있습니다.</div>
+                </div>
+            </div>
+
+            <div class="canvas-wrap">
+                <div id="emptyPreview" class="empty-preview">아직 합쳐진 결과가 없습니다.<br>왼쪽에서 사진을 추가한 뒤 <strong>이어붙이기</strong>를 눌러 주세요.</div>
+                <canvas id="resultCanvas" hidden></canvas>
+            </div>
+
+            <p class="footer-note">사진 순서는 왼쪽 목록에서 위아래로 조정할 수 있습니다. 브라우저에서만 처리되므로 서버에 업로드되지 않습니다.</p>
+        </section>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const pickFilesButton = document.getElementById('pickFilesButton');
+        const dropZone = document.getElementById('dropZone');
+        const itemList = document.getElementById('itemList');
+        const mergeButton = document.getElementById('mergeButton');
+        const downloadButton = document.getElementById('downloadButton');
+        const downloadJpegButton = document.getElementById('downloadJpegButton');
+        const clearButton = document.getElementById('clearButton');
+        const widthMode = document.getElementById('widthMode');
+        const imageGap = document.getElementById('imageGap');
+        const backgroundColor = document.getElementById('backgroundColor');
+        const jpegQuality = document.getElementById('jpegQuality');
+        const resultCanvas = document.getElementById('resultCanvas');
+        const emptyPreview = document.getElementById('emptyPreview');
+        const statusText = document.getElementById('statusText');
+
+        const imageItems = [];
+
+        function formatBytes(bytes) {
+            const size = Number(bytes) || 0;
+            if (size < 1024) {
+                return size + ' B';
+            }
+            if (size < 1024 * 1024) {
+                return (size / 1024).toFixed(1) + ' KB';
+            }
+            return (size / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        function loadImageFromFile(file) {
+            return new Promise(function (resolve, reject) {
+                const reader = new FileReader();
+                reader.onload = function () {
+                    const image = new Image();
+                    image.onload = function () {
+                        resolve({
+                            id: 'img-' + Date.now() + '-' + Math.random().toString(16).slice(2),
+                            file: file,
+                            name: file.name,
+                            size: file.size,
+                            width: image.naturalWidth,
+                            height: image.naturalHeight,
+                            src: reader.result,
+                            image: image
+                        });
+                    };
+                    image.onerror = function () {
+                        reject(new Error('image_load_failed'));
+                    };
+                    image.src = reader.result;
+                };
+                reader.onerror = function () {
+                    reject(new Error('file_read_failed'));
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function renderItemList() {
+            itemList.innerHTML = '';
+
+            if (!imageItems.length) {
+                const empty = document.createElement('div');
+                empty.className = 'item-card';
+                empty.innerHTML = '<div></div><div><p class="item-title">선택된 사진이 없습니다.</p><p class="item-meta">사진을 추가하면 여기에서 순서를 조정할 수 있습니다.</p></div>';
+                itemList.appendChild(empty);
+                return;
+            }
+
+            imageItems.forEach(function (item, index) {
+                const card = document.createElement('div');
+                card.className = 'item-card';
+
+                const preview = document.createElement('img');
+                preview.src = item.src;
+                preview.alt = item.name;
+
+                const content = document.createElement('div');
+                const title = document.createElement('p');
+                title.className = 'item-title';
+                title.textContent = (index + 1) + '. ' + item.name;
+
+                const meta = document.createElement('p');
+                meta.className = 'item-meta';
+                meta.textContent = item.width + ' x ' + item.height + ' / ' + formatBytes(item.size);
+
+                const actions = document.createElement('div');
+                actions.className = 'item-actions';
+
+                const upButton = document.createElement('button');
+                upButton.type = 'button';
+                upButton.className = 'secondary';
+                upButton.textContent = '위로';
+                upButton.disabled = index === 0;
+                upButton.addEventListener('click', function () {
+                    if (index === 0) {
+                        return;
+                    }
+                    const temp = imageItems[index - 1];
+                    imageItems[index - 1] = imageItems[index];
+                    imageItems[index] = temp;
+                    renderItemList();
+                });
+
+                const downButton = document.createElement('button');
+                downButton.type = 'button';
+                downButton.className = 'secondary';
+                downButton.textContent = '아래로';
+                downButton.disabled = index === imageItems.length - 1;
+                downButton.addEventListener('click', function () {
+                    if (index >= imageItems.length - 1) {
+                        return;
+                    }
+                    const temp = imageItems[index + 1];
+                    imageItems[index + 1] = imageItems[index];
+                    imageItems[index] = temp;
+                    renderItemList();
+                });
+
+                const removeButton = document.createElement('button');
+                removeButton.type = 'button';
+                removeButton.className = 'danger';
+                removeButton.textContent = '삭제';
+                removeButton.addEventListener('click', function () {
+                    imageItems.splice(index, 1);
+                    renderItemList();
+                    if (!imageItems.length) {
+                        resetPreview();
+                    }
+                });
+
+                actions.appendChild(upButton);
+                actions.appendChild(downButton);
+                actions.appendChild(removeButton);
+                content.appendChild(title);
+                content.appendChild(meta);
+                content.appendChild(actions);
+                card.appendChild(preview);
+                card.appendChild(content);
+                itemList.appendChild(card);
+            });
+        }
+
+        function resetPreview() {
+            resultCanvas.hidden = true;
+            emptyPreview.hidden = false;
+            downloadButton.disabled = true;
+            downloadJpegButton.disabled = true;
+            statusText.textContent = '사진을 선택하면 미리보기를 만들 수 있습니다.';
+        }
+
+        async function appendFiles(fileList) {
+            const files = Array.from(fileList || []).filter(function (file) {
+                return file && file.type && file.type.indexOf('image/') === 0;
+            });
+
+            if (!files.length) {
+                window.alert('이미지 파일만 선택할 수 있습니다.');
+                return;
+            }
+
+            statusText.textContent = '사진을 불러오는 중입니다...';
+
+            try {
+                const loadedItems = [];
+                for (const file of files) {
+                    loadedItems.push(await loadImageFromFile(file));
+                }
+                loadedItems.forEach(function (item) {
+                    imageItems.push(item);
+                });
+                renderItemList();
+                statusText.textContent = imageItems.length + '장의 사진이 준비되었습니다.';
+            } catch (error) {
+                window.alert('사진을 읽는 중 오류가 발생했습니다.');
+                statusText.textContent = '사진을 선택하면 미리보기를 만들 수 있습니다.';
+            }
+        }
+
+        function getTargetWidth() {
+            if (!imageItems.length) {
+                return 0;
+            }
+
+            if (widthMode.value === 'first') {
+                return imageItems[0].width;
+            }
+
+            return imageItems.reduce(function (maxWidth, item) {
+                return Math.max(maxWidth, item.width);
+            }, 0);
+        }
+
+        function mergeImages() {
+            if (!imageItems.length) {
+                window.alert('먼저 사진을 선택해 주세요.');
+                return;
+            }
+
+            const gap = Math.max(0, parseInt(imageGap.value, 10) || 0);
+            const targetWidth = getTargetWidth();
+            const fillColor = backgroundColor.value || '#ffffff';
+
+            if (!targetWidth) {
+                return;
+            }
+
+            const resizedHeights = imageItems.map(function (item) {
+                return Math.round((item.height * targetWidth) / item.width);
+            });
+
+            const totalHeight = resizedHeights.reduce(function (sum, height) {
+                return sum + height;
+            }, 0) + (gap * Math.max(0, imageItems.length - 1));
+
+            resultCanvas.width = targetWidth;
+            resultCanvas.height = totalHeight;
+
+            const context = resultCanvas.getContext('2d');
+            context.fillStyle = fillColor;
+            context.fillRect(0, 0, targetWidth, totalHeight);
+
+            let offsetY = 0;
+            imageItems.forEach(function (item, index) {
+                const drawHeight = resizedHeights[index];
+                context.drawImage(item.image, 0, offsetY, targetWidth, drawHeight);
+                offsetY += drawHeight + gap;
+            });
+
+            resultCanvas.hidden = false;
+            emptyPreview.hidden = true;
+            resultCanvas.style.setProperty('--canvas-width', Math.min(targetWidth, 760) + 'px');
+            downloadButton.disabled = false;
+            downloadJpegButton.disabled = false;
+            statusText.textContent = '완료: ' + targetWidth + ' x ' + totalHeight + ' PNG 또는 JPEG로 저장할 수 있습니다.';
+        }
+
+        function downloadMergedImage() {
+            if (resultCanvas.hidden) {
+                return;
+            }
+            const link = document.createElement('a');
+            link.href = resultCanvas.toDataURL('image/png');
+            link.download = 'stitched-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.png';
+            link.click();
+        }
+
+        function downloadMergedJpeg() {
+            if (resultCanvas.hidden) {
+                return;
+            }
+            const quality = Math.max(0.1, Math.min(1, parseFloat(jpegQuality.value) || 0.85));
+            const link = document.createElement('a');
+            link.href = resultCanvas.toDataURL('image/jpeg', quality);
+            link.download = 'stitched-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.jpg';
+            link.click();
+        }
+
+        pickFilesButton.addEventListener('click', function () {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', function () {
+            appendFiles(fileInput.files);
+            fileInput.value = '';
+        });
+
+        ['dragenter', 'dragover'].forEach(function (eventName) {
+            dropZone.addEventListener(eventName, function (event) {
+                event.preventDefault();
+                dropZone.classList.add('dragover');
+            });
+        });
+
+        ['dragleave', 'drop'].forEach(function (eventName) {
+            dropZone.addEventListener(eventName, function (event) {
+                event.preventDefault();
+                dropZone.classList.remove('dragover');
+            });
+        });
+
+        dropZone.addEventListener('drop', function (event) {
+            appendFiles(event.dataTransfer.files);
+        });
+
+        mergeButton.addEventListener('click', mergeImages);
+        downloadButton.addEventListener('click', downloadMergedImage);
+        downloadJpegButton.addEventListener('click', downloadMergedJpeg);
+        clearButton.addEventListener('click', function () {
+            imageItems.length = 0;
+            renderItemList();
+            resetPreview();
+        });
+
+        renderItemList();
+        resetPreview();
+    </script>
+</body>
+</html>
