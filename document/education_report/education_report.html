@@ -1336,6 +1336,21 @@
             });
         }
 
+        function resolvePoolEditorTargetId() {
+            const editorSelect = document.getElementById('education-pool-editor-select');
+            const editorId = String((editorSelect && editorSelect.value) || '').trim();
+            if (editorId) {
+                return editorId;
+            }
+
+            const checkedIds = readSelectedPoolIdsFromPanel().filter(Boolean);
+            if (checkedIds.length === 1) {
+                return checkedIds[0];
+            }
+
+            return '';
+        }
+
         function updatePoolUsageHint() {
             const usage = document.getElementById('education-pool-usage');
             if (!usage) {
@@ -1797,7 +1812,17 @@
             updatePoolUsageHint();
 
             document.querySelectorAll('.education-pool-check').forEach(function (checkbox) {
-                checkbox.addEventListener('change', updatePoolUsageHint);
+                checkbox.addEventListener('change', function () {
+                    updatePoolUsageHint();
+                    const checkedIds = readSelectedPoolIdsFromPanel().filter(Boolean);
+                    if (checkedIds.length === 1) {
+                        fillPoolEditor(checkedIds[0]);
+                        return;
+                    }
+                    if (checkedIds.length === 0) {
+                        fillPoolEditor('');
+                    }
+                });
             });
 
             editorSelect.addEventListener('change', function () {
@@ -1922,15 +1947,20 @@
 
             document.getElementById('education-pool-update').addEventListener('click', async function () {
                 try {
-                    const editorId = document.getElementById('education-pool-editor-select').value || '';
+                    const editorSelect = document.getElementById('education-pool-editor-select');
+                    const editorId = resolvePoolEditorTargetId();
                     if (!editorId) {
-                        window.alert('수정할 항목을 먼저 선택해 주세요.');
+                        window.alert('수정할 항목 1개를 먼저 선택해 주세요.');
+                        return;
+                    }
+                    const currentSelectedIds = readSelectedPoolIdsFromPanel().filter(Boolean);
+                    if (!String((editorSelect && editorSelect.value) || '').trim() && currentSelectedIds.length > 1) {
+                        window.alert('여러 항목이 체크되어 있습니다. 수정할 항목 1개만 선택해 주세요.');
                         return;
                     }
                     const groupInput = document.getElementById('education-pool-group-select');
                     const titleInput = document.getElementById('education-pool-title');
                     const contentInput = document.getElementById('education-pool-content');
-                    const currentSelectedIds = readSelectedPoolIdsFromPanel();
                     const result = await postContentPool('save_item', {
                         id: editorId,
                         group: groupInput.value || '',
@@ -1951,15 +1981,21 @@
 
             document.getElementById('education-pool-delete').addEventListener('click', async function () {
                 try {
-                    const editorId = document.getElementById('education-pool-editor-select').value || '';
+                    const editorSelect = document.getElementById('education-pool-editor-select');
+                    const editorId = resolvePoolEditorTargetId();
                     if (!editorId) {
-                        window.alert('삭제할 항목을 먼저 선택해 주세요.');
+                        window.alert('삭제할 항목 1개를 먼저 선택해 주세요.');
+                        return;
+                    }
+                    const checkedIds = readSelectedPoolIdsFromPanel().filter(Boolean);
+                    if (!String((editorSelect && editorSelect.value) || '').trim() && checkedIds.length > 1) {
+                        window.alert('여러 항목이 체크되어 있습니다. 삭제할 항목 1개만 선택해 주세요.');
                         return;
                     }
                     if (!window.confirm('선택한 교육내용 항목을 삭제할까요?')) {
                         return;
                     }
-                    const beforeIds = readSelectedPoolIdsFromPanel().filter(function (id) { return id !== editorId; });
+                    const beforeIds = checkedIds.filter(function (id) { return id !== editorId; });
                     const result = await postContentPool('delete_item', { id: editorId });
                     currentPoolGroups = result.groups;
                     currentPoolItems = result.items;

@@ -750,6 +750,7 @@ if ($requestMethod === 'POST' && ($_POST['action'] ?? '') === 'login') {
 $user = auth_current_user();
 $userRole = (string)($user['role'] ?? '');
 $isAdmin = auth_is_admin($user);
+$canAccessMyGearTest = trim((string)($user['name'] ?? '')) === '김남균';
 $canManage = auth_can_manage($user);
 $canLead = auth_can_lead($user);
 $isWorker = auth_is_worker($user);
@@ -3080,6 +3081,9 @@ function type_label(string $type): string
           <?php endif; ?>
           <?php if ($isElectricalManager || $isOperatorViewGasSchedule): ?>
             <a class="btn-secondary" href="schedule.php?view_team=가스팀">가스팀근무표</a>
+          <?php endif; ?>
+          <?php if ($canAccessMyGearTest): ?>
+            <a class="btn-secondary" href="/safety_gear/my_gear.php">나의 보호구</a>
           <?php endif; ?>
           <a class="btn-secondary" href="<?= h($boardPageUrl) ?>">게시판</a>
           <a class="btn-secondary" href="../calendar/index.html">달력</a>

@@ -21,8 +21,9 @@ fputcsv($out, [
     '관리키',
     '식별방식',
     '식별값',
-    '보호구종류',
-    '품명/모델',
+    '보호구 종류',
+    '품명',
+    '모델',
     '구매처',
     '구매가격',
     '구매일',
@@ -31,7 +32,7 @@ fputcsv($out, [
     '지급팀',
     '지급일시',
     '메모',
-    '최종수정일시'
+    '최종수정일시',
 ]);
 
 foreach ($items as $item) {
@@ -40,7 +41,8 @@ foreach ($items as $item) {
         $item['identifier_type'] ?? '',
         $item['identifier_value'] ?? '',
         $item['gear_type'] ?? '',
-        $item['product_name'] ?? '',
+        $item['item_name'] ?? '',
+        $item['model_name'] ?? '',
         $item['purchase_vendor'] ?? '',
         $item['purchase_price'] ?? '',
         $item['purchased_at'] ?? '',

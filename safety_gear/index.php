@@ -1,5 +1,44 @@
 <?php
 declare(strict_types=1);
+
+require_once __DIR__ . '/../risk_assessment/auth.php';
+
+$user = auth_current_user();
+if (!is_array($user)) {
+    header('Location: /risk_assessment/task_select.php');
+    exit;
+}
+
+if (!auth_can_manage($user)) {
+    http_response_code(403);
+    ?>
+    <!DOCTYPE html>
+    <html lang="ko">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>보호구관리</title>
+        <style>
+            body { font-family: "Malgun Gothic", sans-serif; background:#f3f7fb; color:#122033; margin:0; padding:32px; }
+            .panel { max-width:720px; margin:0 auto; background:#fff; border:1px solid #d7e0ea; border-radius:20px; padding:24px; }
+            .actions { margin-top:16px; display:flex; gap:10px; flex-wrap:wrap; }
+            .button { display:inline-flex; align-items:center; justify-content:center; padding:10px 14px; border-radius:12px; background:#0f766e; color:#fff; text-decoration:none; }
+            .button.secondary { background:#e2e8f0; color:#0f172a; }
+        </style>
+    </head>
+    <body>
+        <div class="panel">
+            <h1>보호구관리</h1>
+            <p>이 페이지는 안전관리자 또는 관리권한 사용자만 접근할 수 있습니다.</p>
+            <div class="actions">
+                <a class="button secondary" href="/risk_assessment/work_list.php">작업목록으로 돌아가기</a>
+            </div>
+        </div>
+    </body>
+    </html>
+    <?php
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="ko">
@@ -185,6 +224,14 @@ declare(strict_types=1);
             padding: 10px 12px;
         }
 
+        .bulk-box {
+            margin-top: 18px;
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            background: #f8fafc;
+            padding: 14px;
+        }
+
         .history-meta, .recent-meta {
             font-size: 12px;
             color: var(--muted);
@@ -236,6 +283,9 @@ declare(strict_types=1);
 <body>
     <div class="page">
         <section class="panel">
+            <div class="row" style="justify-content:flex-end; margin-bottom:8px;">
+                <a class="btn-secondary" href="/risk_assessment/work_list.php">작업목록</a>
+            </div>
             <h1>안전보호구 관리</h1>
             <p class="lead">바코드 또는 QR 코드를 스캔해 등록하고, 보호구 종류·구매처·구매가격·지급자·상태·이력을 함께 관리합니다. 구조는 RFID/NFC 확장도 가능한 형태로 열어 두었습니다.</p>
 
@@ -276,8 +326,12 @@ declare(strict_types=1);
                     <input id="gear_type" type="text" placeholder="예: 안전모, 안전벨트, 방진마스크">
                 </div>
                 <div class="field">
-                    <label for="product_name">품명/모델</label>
-                    <input id="product_name" type="text" placeholder="예: K2 안전모 화이트">
+                    <label for="item_name">품명</label>
+                    <input id="item_name" type="text" placeholder="예: 안전모">
+                </div>
+                <div class="field">
+                    <label for="model_name">모델</label>
+                    <input id="model_name" type="text" placeholder="예: K2 화이트">
                 </div>
                 <div class="field">
                     <label for="purchase_vendor">구매처</label>
@@ -296,8 +350,11 @@ declare(strict_types=1);
                     <select id="status">
                         <option value="사용 가능">사용 가능</option>
                         <option value="지급됨">지급됨</option>
+                        <option value="확인 필요">확인 필요</option>
                         <option value="점검 필요">점검 필요</option>
                         <option value="수리 중">수리 중</option>
+                        <option value="반납">반납</option>
+                        <option value="교체">교체</option>
                         <option value="폐기">폐기</option>
                     </select>
                 </div>
@@ -329,7 +386,10 @@ declare(strict_types=1);
                 <button id="saveButton" type="button">저장</button>
                 <button id="newButton" type="button" class="secondary">신규 입력</button>
                 <button id="findButton" type="button" class="secondary">식별값 조회</button>
+                <button id="initialIssueButton" type="button" class="ghost">초기 지급 등록</button>
                 <button id="deleteButton" type="button" class="danger">삭제</button>
+                <a href="/safety_gear/report.php" class="button secondary">이력서 조회/출력</a>
+                <a href="/safety_gear/receipt_batch_print.php" class="button secondary">개인별 확인서 일괄출력</a>
                 <label class="hint" style="display:flex; align-items:center; gap:6px; margin-left:4px;">
                     <input id="continuousMode" type="checkbox">
                     연속 등록 모드
@@ -372,6 +432,19 @@ declare(strict_types=1);
                 </div>
             </div>
             <div id="historyList" class="history-list"></div>
+
+            <div class="bulk-box">
+                <h3>기존 지급품 일괄 등록</h3>
+                <p class="hint" style="margin:8px 0 12px;">현재 입력한 보호구 기본정보와 지급자 정보를 기준으로, 식별값만 여러 줄로 넣어 한 번에 `지급됨` 상태로 등록합니다.</p>
+                <div class="field">
+                    <label for="bulk_identifiers">식별값 목록</label>
+                    <textarea id="bulk_identifiers" placeholder="한 줄에 하나씩 입력&#10;BARCODE-001&#10;BARCODE-002&#10;BARCODE-003"></textarea>
+                </div>
+                <div class="row" style="margin-top:10px;">
+                    <button id="bulkInitialIssueButton" type="button" class="ghost">기존 지급품 일괄 등록</button>
+                    <button id="bulkClearButton" type="button" class="secondary">입력 비우기</button>
+                </div>
+            </div>
         </section>
 
         <aside class="panel">
@@ -420,7 +493,8 @@ declare(strict_types=1);
             identifierType: document.getElementById('identifier_type'),
             identifierValue: document.getElementById('identifier_value'),
             gearType: document.getElementById('gear_type'),
-            productName: document.getElementById('product_name'),
+            itemName: document.getElementById('item_name'),
+            modelName: document.getElementById('model_name'),
             purchaseVendor: document.getElementById('purchase_vendor'),
             purchasePrice: document.getElementById('purchase_price'),
             purchasedAt: document.getElementById('purchased_at'),
@@ -441,7 +515,8 @@ declare(strict_types=1);
             qrEmpty: document.getElementById('qrEmpty'),
             scannerVideo: document.getElementById('scannerVideo'),
             searchInput: document.getElementById('searchInput'),
-            continuousMode: document.getElementById('continuousMode')
+            continuousMode: document.getElementById('continuousMode'),
+            bulkIdentifiers: document.getElementById('bulk_identifiers')
         };
 
         function setStatus(message, isError) {
@@ -551,7 +626,8 @@ declare(strict_types=1);
             fields.identifierType.value = 'barcode';
             fields.identifierValue.value = '';
             fields.gearType.value = '';
-            fields.productName.value = '';
+            fields.itemName.value = '';
+            fields.modelName.value = '';
             fields.purchaseVendor.value = '';
             fields.purchasePrice.value = '';
             fields.purchasedAt.value = '';
@@ -587,7 +663,8 @@ declare(strict_types=1);
             fields.identifierType.value = entry.identifier_type || 'barcode';
             fields.identifierValue.value = entry.identifier_value || '';
             fields.gearType.value = entry.gear_type || '';
-            fields.productName.value = entry.product_name || '';
+            fields.itemName.value = entry.item_name || '';
+            fields.modelName.value = entry.model_name || '';
             fields.purchaseVendor.value = entry.purchase_vendor || '';
             fields.purchasePrice.value = entry.purchase_price || '';
             fields.purchasedAt.value = entry.purchased_at || '';
@@ -611,7 +688,8 @@ declare(strict_types=1);
                 return;
             }
             fields.gearType.value = entry.gear_type || '';
-            fields.productName.value = entry.product_name || '';
+            fields.itemName.value = entry.item_name || '';
+            fields.modelName.value = entry.model_name || '';
             fields.purchaseVendor.value = entry.purchase_vendor || '';
             fields.purchasePrice.value = entry.purchase_price || '';
             fields.status.value = entry.status || '사용 가능';
@@ -671,7 +749,8 @@ declare(strict_types=1);
                 identifier_type: fields.identifierType.value,
                 identifier_value: fields.identifierValue.value.trim(),
                 gear_type: fields.gearType.value.trim(),
-                product_name: fields.productName.value.trim(),
+                item_name: fields.itemName.value.trim(),
+                model_name: fields.modelName.value.trim(),
                 purchase_vendor: fields.purchaseVendor.value.trim(),
                 purchase_price: fields.purchasePrice.value.trim(),
                 purchased_at: fields.purchasedAt.value,
@@ -695,6 +774,52 @@ declare(strict_types=1);
             }
             fillForm(payload.item || null);
             setStatus(payload.message || '저장되었습니다.', false);
+        }
+
+        async function runInitialIssue() {
+            if (!state.currentItemId) {
+                setStatus('초기 지급 처리할 항목을 먼저 불러와 주세요.', true);
+                return;
+            }
+
+            const payload = await apiRequest({
+                action: 'initial_issue',
+                id: state.currentItemId,
+                assigned_employee_id: fields.assignedEmployeeId.value,
+                assigned_employee_name: fields.assignedEmployeeName.value.trim(),
+                assigned_team: fields.assignedTeam.value.trim(),
+                assigned_at: fields.assignedAt.value ? fields.assignedAt.value.replace('T', ' ') + ':00' : '',
+                history_note: '시스템 도입 전 지급 완료된 품목을 초기 등록'
+            }, 'POST');
+
+            state.items = Array.isArray(payload.items) ? payload.items : [];
+            fillForm(payload.item || null);
+            renderRecentList();
+            setStatus(payload.message || '초기 지급 등록이 완료되었습니다.', false);
+        }
+
+        async function runBulkInitialIssue() {
+            const payload = await apiRequest({
+                action: 'bulk_initial_issue',
+                identifier_type: fields.identifierType.value,
+                identifiers: fields.bulkIdentifiers.value,
+                gear_type: fields.gearType.value.trim(),
+                item_name: fields.itemName.value.trim(),
+                model_name: fields.modelName.value.trim(),
+                purchase_vendor: fields.purchaseVendor.value.trim(),
+                purchase_price: fields.purchasePrice.value.trim(),
+                purchased_at: fields.purchasedAt.value,
+                notes: fields.notes.value.trim(),
+                assigned_employee_id: fields.assignedEmployeeId.value,
+                assigned_employee_name: fields.assignedEmployeeName.value.trim(),
+                assigned_team: fields.assignedTeam.value.trim(),
+                assigned_at: fields.assignedAt.value ? fields.assignedAt.value.replace('T', ' ') + ':00' : ''
+            }, 'POST');
+
+            state.items = Array.isArray(payload.items) ? payload.items : [];
+            renderRecentList();
+            fields.bulkIdentifiers.value = '';
+            setStatus(payload.message || '기존 지급품 일괄 등록이 완료되었습니다.', false);
         }
 
         async function findByIdentifier() {
@@ -764,7 +889,8 @@ declare(strict_types=1);
                 template_id: state.currentTemplateId,
                 template_name: fields.templateName.value.trim(),
                 gear_type: fields.gearType.value.trim(),
-                product_name: fields.productName.value.trim(),
+                item_name: fields.itemName.value.trim(),
+                model_name: fields.modelName.value.trim(),
                 purchase_vendor: fields.purchaseVendor.value.trim(),
                 purchase_price: fields.purchasePrice.value.trim(),
                 status: fields.status.value,
@@ -940,6 +1066,14 @@ declare(strict_types=1);
             }
         });
 
+        document.getElementById('initialIssueButton').addEventListener('click', async function () {
+            try {
+                await runInitialIssue();
+            } catch (error) {
+                setStatus(error.message || '초기 지급 등록 중 오류가 발생했습니다.', true);
+            }
+        });
+
         document.getElementById('deleteButton').addEventListener('click', async function () {
             try {
                 await deleteCurrentItem();
@@ -974,6 +1108,16 @@ declare(strict_types=1);
 
         document.getElementById('searchResetButton').addEventListener('click', resetSearch);
         document.getElementById('exportButton').addEventListener('click', downloadExport);
+        document.getElementById('bulkInitialIssueButton').addEventListener('click', async function () {
+            try {
+                await runBulkInitialIssue();
+            } catch (error) {
+                setStatus(error.message || '기존 지급품 일괄 등록 중 오류가 발생했습니다.', true);
+            }
+        });
+        document.getElementById('bulkClearButton').addEventListener('click', function () {
+            fields.bulkIdentifiers.value = '';
+        });
         document.getElementById('saveTemplateButton').addEventListener('click', async function () {
             try {
                 await saveTemplate();
