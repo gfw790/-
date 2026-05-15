@@ -8,6 +8,8 @@ const RECEIPT_COMPANY_NAME = '(주)현대기전';
 const RECEIPT_SITE_NAME = '옥계면 한라시멘트';
 const RECEIPT_PLEDGE_TEXT = '지급받은 보호구를 작업 중 항상 착용하겠으며, 미착용으로 인한 불이익은 본인에게 있음을 확인합니다.';
 const RECEIPT_PLEDGE_TEXT_RU = 'Я подтверждаю, что получил(а) указанные средства индивидуальной защиты, обязуюсь постоянно использовать их во время работы и понимаю, что ответственность за последствия неиспользования возлагается на меня.';
+const RECEIPT_PLEDGE_TEXT_UZ = 'Men ko‘rsatilgan shaxsiy himoya vositalarini olganimni tasdiqlayman, ish vaqtida ularni doimo taqib yurishga majbur ekanligimni va taqmaslik oqibatlari uchun javobgarlik o‘zimda bo‘lishini tushunaman.';
+const RECEIPT_PLEDGE_TEXT_KY = 'Мен көрсөтүлгөн жеке коргонуу каражаттарын алганымды ырастайм, иш учурунда аларды дайыма тагынууга милдеттүү экенимди жана тагынбагандыктын кесепеттери үчүн жоопкерчилик өзүмө жүктөлөрүн түшүнөм.';
 
 function h(string $value): string
 {
@@ -115,12 +117,115 @@ function receipt_parse_manual_items(string $raw, string $defaultDate): array
 
 function receipt_manual_locale(string $value): string
 {
-    return sg_normalize_text($value) === 'ru' ? 'ru' : 'ko';
+    $value = sg_normalize_text($value);
+    return in_array($value, ['ru', 'uz', 'ky'], true) ? $value : 'ko';
 }
 
-function receipt_is_russian_daily(array $state): bool
+function receipt_locale_note(string $locale): string
 {
-    return ($state['mode'] ?? '') === 'daily' && ($state['manual_locale'] ?? 'ko') === 'ru';
+    if ($locale === 'ru') {
+        return '러시아어 병기를 선택하면 확인서 제목, 주요 항목, 서약 문구, 서명란이 한국어와 러시아어로 함께 출력됩니다.';
+    }
+    if ($locale === 'uz') {
+        return '우즈베크어 병기를 선택하면 확인서 제목, 주요 항목, 서약 문구, 서명란이 한국어와 우즈베크어로 함께 출력됩니다.';
+    }
+    if ($locale === 'ky') {
+        return '키르기스어 병기를 선택하면 확인서 제목, 주요 항목, 서약 문구, 서명란이 한국어와 키르기스어로 함께 출력됩니다.';
+    }
+    return '';
+}
+
+function receipt_translation_set(string $locale): array
+{
+    $ru = [
+        'company' => 'Компания',
+        'site' => 'Объект',
+        'document_no' => 'Номер документа',
+        'written_at' => 'Дата оформления',
+        'title' => 'Подтверждение выдачи СИЗ',
+        'subtitle' => 'Для иностранного ежедневного работника',
+        'team' => 'Подразделение',
+        'position' => 'Должность',
+        'name' => 'Имя',
+        'issued_date' => 'Дата выдачи',
+        'items_title' => 'Выданные СИЗ',
+        'gear_name' => 'Наименование СИЗ',
+        'model' => 'Характеристика / модель',
+        'quantity' => 'Количество',
+        'pledge_title' => 'Обязательство работника',
+        'sign_title' => 'Собственноручная подпись получателя',
+        'sign' => 'Подпись',
+        'sign_date' => 'Дата подписи',
+        'manager_title' => 'Подтверждение ответственного за безопасность',
+        'manager_method' => 'Способ проверки: проверен оригинал собственноручной подписи',
+        'manager_name' => 'Проверил',
+        'manager_date' => 'Дата проверки',
+        'note' => 'Примечание: данный документ используется для подтверждения выдачи СИЗ и обязательства работника.',
+    ];
+
+    $uz = [
+        'company' => 'Kompaniya',
+        'site' => 'Obyekt',
+        'document_no' => 'Hujjat raqami',
+        'written_at' => 'Rasmiylashtirilgan sana',
+        'title' => 'ShHV topshirilganligini tasdiqlash',
+        'subtitle' => 'Chet ellik kunlik ishchi uchun',
+        'team' => 'Bo‘lim',
+        'position' => 'Lavozim',
+        'name' => 'F.I.Sh.',
+        'issued_date' => 'Berilgan sana',
+        'items_title' => 'Berilgan ShHV ro‘yxati',
+        'gear_name' => 'ShHV nomi',
+        'model' => 'Turi / modeli',
+        'quantity' => 'Soni',
+        'pledge_title' => 'Ishchining majburiyati',
+        'sign_title' => 'Qabul qiluvchining imzosi',
+        'sign' => 'Imzo',
+        'sign_date' => 'Imzo sanasi',
+        'manager_title' => 'Xavfsizlik mas’ulining tasdig‘i',
+        'manager_method' => 'Tekshiruv usuli: asl qo‘l imzosi tekshirildi',
+        'manager_name' => 'Tekshirgan',
+        'manager_date' => 'Tekshiruv sanasi',
+        'note' => 'Izoh: ushbu hujjat ShHV topshirilganini va ishchining majburiyatini hujjatlashtirish uchun ishlatiladi.',
+    ];
+
+    $ky = [
+        'company' => 'Компания',
+        'site' => 'Объект',
+        'document_no' => 'Документ номери',
+        'written_at' => 'Түзүлгөн күнү',
+        'title' => 'ЖКК берилгенин тастыктоо',
+        'subtitle' => 'Чет өлкөлүк күндүк жумушчу үчүн',
+        'team' => 'Бөлүм',
+        'position' => 'Кызматы',
+        'name' => 'Аты-жөнү',
+        'issued_date' => 'Берилген күнү',
+        'items_title' => 'Берилген ЖКК тизмеси',
+        'gear_name' => 'ЖКК аталышы',
+        'model' => 'Түрү / модели',
+        'quantity' => 'Саны',
+        'pledge_title' => 'Жумушчунун милдеттенмеси',
+        'sign_title' => 'Алуучунун кол тамгасы',
+        'sign' => 'Кол тамга',
+        'sign_date' => 'Кол коюлган күн',
+        'manager_title' => 'Коопсуздук жооптуусунун ырастоосу',
+        'manager_method' => 'Текшерүү ыкмасы: кол тамганын түп нускасы текшерилди',
+        'manager_name' => 'Текшерген',
+        'manager_date' => 'Текшерилген күн',
+        'note' => 'Эскертүү: бул документ ЖКК берилгенин жана жумушчунун милдеттенмесин документтештирүү үчүн колдонулат.',
+    ];
+
+    if ($locale === 'ru') {
+        return $ru;
+    }
+    if ($locale === 'uz') {
+        return $uz;
+    }
+    if ($locale === 'ky') {
+        return $ky;
+    }
+
+    return [];
 }
 
 function receipt_pledge_text_by_locale(string $locale): string
@@ -128,75 +233,122 @@ function receipt_pledge_text_by_locale(string $locale): string
     if ($locale === 'ru') {
         return RECEIPT_PLEDGE_TEXT . "\n\n" . RECEIPT_PLEDGE_TEXT_RU;
     }
+    if ($locale === 'uz') {
+        return RECEIPT_PLEDGE_TEXT . "\n\n" . RECEIPT_PLEDGE_TEXT_UZ;
+    }
+    if ($locale === 'ky') {
+        return RECEIPT_PLEDGE_TEXT . "\n\n" . RECEIPT_PLEDGE_TEXT_KY;
+    }
 
     return RECEIPT_PLEDGE_TEXT;
 }
 
-function receipt_label(string $ko, string $ru, bool $showRu): string
+function receipt_label_html(string $ko, string $translated, string $locale = 'ko'): string
 {
-    return $showRu ? ($ko . ' / ' . $ru) : $ko;
-}
-
-function receipt_label_html(string $ko, string $ru, bool $showRu): string
-{
-    if (!$showRu) {
+    if ($locale === 'ko' || $translated === '') {
         return h($ko);
     }
 
-    return '<span class="ko-small">' . h($ko) . '</span> <span class="ru-main">' . h($ru) . '</span>';
+    return '<span class="ko-small">' . h($ko) . '</span> <span class="ru-main">' . h($translated) . '</span>';
 }
 
-function receipt_pledge_html(string $ko, string $ru, bool $showRu): string
+function receipt_pledge_html(string $ko, string $translated, string $locale = 'ko'): string
 {
-    if (!$showRu) {
+    if ($locale === 'ko' || $translated === '') {
         return nl2br(h($ko));
     }
 
-    return '<div class="ko-small block-gap">' . nl2br(h($ko)) . '</div><div class="ru-main">' . nl2br(h($ru)) . '</div>';
+    return '<div class="ko-small block-gap">' . nl2br(h($ko)) . '</div><div class="ru-main">' . nl2br(h($translated)) . '</div>';
 }
 
-function receipt_gear_name_ru(string $ko): string
+function receipt_gear_translation_map(string $locale): array
 {
-    $map = [
-        '보호구' => 'СИЗ',
-        '안전모' => 'Защитная каска',
-        '안전화' => 'Защитная обувь',
-        '안전대' => 'Страховочная привязь',
-        '안전벨트' => 'Страховочный пояс',
-        '안전조끼' => 'Сигнальный жилет',
-        '신호수조끼' => 'Жилет сигнальщика',
-        '경광봉' => 'Сигнальный жезл',
-        '보안경' => 'Защитные очки',
-        '방진마스크' => 'Противопылевая маска',
-        '방독마스크' => 'Противогазовая маска',
-        '귀마개' => 'Беруши',
-        '귀덮개' => 'Защитные наушники',
-        '장갑' => 'Защитные перчатки',
-        '절연장갑' => 'Диэлектрические перчатки',
-        '각반' => 'Защитные гамаши',
-        '안면보호구' => 'Защитный щиток',
-        '추락방지대' => 'Система защиты от падения',
-        '용접면' => 'Сварочный щиток',
-        '우의' => 'Защитный дождевик',
+    $maps = [
+        'ru' => [
+            '보호구' => 'СИЗ',
+            '안전모' => 'Защитная каска',
+            '안전화' => 'Защитная обувь',
+            '안전대' => 'Страховочная привязь',
+            '안전벨트' => 'Страховочный пояс',
+            '안전조끼' => 'Сигнальный жилет',
+            '신호수조끼' => 'Жилет сигнальщика',
+            '경광봉' => 'Сигнальный жезл',
+            '보안경' => 'Защитные очки',
+            '방진마스크' => 'Противопылевая маска',
+            '방독마스크' => 'Противогазовая маска',
+            '귀마개' => 'Беруши',
+            '귀덮개' => 'Защитные наушники',
+            '장갑' => 'Защитные перчатки',
+            '절연장갑' => 'Диэлектрические перчатки',
+            '각반' => 'Защитные гамаши',
+            '안면보호구' => 'Защитный щиток',
+            '추락방지대' => 'Система защиты от падения',
+            '용접면' => 'Сварочный щиток',
+            '우의' => 'Защитный дождевик',
+        ],
+        'uz' => [
+            '보호구' => 'ShHV',
+            '안전모' => 'Himoya kaskasi',
+            '안전화' => 'Himoya oyoq kiyimi',
+            '안전대' => 'Sug‘urta belbog‘i',
+            '안전벨트' => 'Xavfsizlik kamari',
+            '안전조끼' => 'Signal jileti',
+            '신호수조끼' => 'Signalchi jileti',
+            '경광봉' => 'Signal tayoqchasi',
+            '보안경' => 'Himoya ko‘zoynagi',
+            '방진마스크' => 'Changdan himoya niqobi',
+            '방독마스크' => 'Gazdan himoya niqobi',
+            '귀마개' => 'Quloq tiqini',
+            '귀덮개' => 'Quloqchin',
+            '장갑' => 'Himoya qo‘lqopi',
+            '절연장갑' => 'Dielektrik qo‘lqop',
+            '각반' => 'Himoya oyoq qoplamasi',
+            '안면보호구' => 'Yuzni himoya qiluvchi niqob',
+            '추락방지대' => 'Yiqilishdan saqlash moslamasi',
+            '용접면' => 'Payvandchi niqobi',
+            '우의' => 'Himoya yomg‘irpo‘shi',
+        ],
+        'ky' => [
+            '보호구' => 'ЖКК',
+            '안전모' => 'Коргоочу каска',
+            '안전화' => 'Коргоочу бут кийим',
+            '안전대' => 'Коопсуздук куру',
+            '안전벨트' => 'Коопсуздук куру',
+            '안전조끼' => 'Сигналдык жилет',
+            '신호수조끼' => 'Белги берүүчүнүн жилети',
+            '경광봉' => 'Сигналдык таякча',
+            '보안경' => 'Коргоочу көз айнек',
+            '방진마스크' => 'Чаңдан коргоочу маска',
+            '방독마스크' => 'Газдан коргоочу маска',
+            '귀마개' => 'Кулак тыгыч',
+            '귀덮개' => 'Кулакчын',
+            '장갑' => 'Коргоочу мээлей',
+            '절연장갑' => 'Диэлектрик мээлей',
+            '각반' => 'Коргоочу бут кап',
+            '안면보호구' => 'Бетти коргоочу калкан',
+            '추락방지대' => 'Кулап кетүүдөн сактоочу шайман',
+            '용접면' => 'Ширетүүчү калкан',
+            '우의' => 'Коргоочу жамгыр кийим',
+        ],
     ];
 
-    $normalized = sg_normalize_text($ko);
-    return $map[$normalized] ?? '';
+    return $maps[$locale] ?? [];
 }
 
-function receipt_gear_label_html(string $ko, bool $showRu): string
+function receipt_gear_label_html(string $ko, string $locale = 'ko'): string
 {
     $ko = receipt_value($ko, '');
-    if (!$showRu || $ko === '') {
+    if ($locale === 'ko' || $ko === '') {
         return h(receipt_value($ko));
     }
 
-    $ru = receipt_gear_name_ru($ko);
-    if ($ru === '') {
+    $map = receipt_gear_translation_map($locale);
+    $translated = $map[sg_normalize_text($ko)] ?? '';
+    if ($translated === '') {
         return h($ko);
     }
 
-    return receipt_label_html($ko, $ru, true);
+    return receipt_label_html($ko, $translated, $locale);
 }
 
 function receipt_status_label(string $status): string
@@ -223,8 +375,8 @@ function receipt_build_state(PDO $pdo, array $source): array
         (array)($source['employee_id'] ?? [])
     ))));
 
-    $manualTeam = sg_normalize_text($source['manual_team'] ?? RECEIPT_SITE_NAME);
-    $manualPosition = sg_normalize_text($source['manual_position'] ?? '일용근로자');
+    $manualTeam = sg_normalize_text($source['manual_team'] ?? '');
+    $manualPosition = sg_normalize_text($source['manual_position'] ?? '');
     $manualDate = sg_normalize_text($source['manual_date'] ?? date('Y-m-d'));
     $manualLocale = receipt_manual_locale((string)($source['manual_locale'] ?? 'ko'));
     $manualPresetId = sg_normalize_text($source['manual_preset_id'] ?? '');
@@ -433,6 +585,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             receipt_redirect(['notice' => '첨부파일을 저장했습니다.']);
         }
+
+        if ($action === 'delete_receipt') {
+            $receiptId = max(0, (int)($_POST['receipt_id'] ?? 0));
+            if ($receiptId <= 0) {
+                throw new RuntimeException('삭제할 확인서 ID가 올바르지 않습니다.');
+            }
+
+            sg_delete_receipt($pdo, $receiptId);
+            receipt_redirect(['notice' => '확인서를 삭제했습니다.']);
+        }
     } catch (Throwable $e) {
         receipt_redirect(receipt_query_from_state($postState, ['error' => $e->getMessage()]));
     }
@@ -455,7 +617,8 @@ $savedReceipts = sg_fetch_receipts($pdo, 80);
 $receiptPresets = sg_fetch_receipt_presets($pdo);
 $noticeMessage = sg_normalize_text($_GET['notice'] ?? '');
 $errorMessage = sg_normalize_text($_GET['error'] ?? '');
-$showRu = receipt_is_russian_daily($state);
+$sheetLocale = $mode === 'daily' ? $manualLocale : 'ko';
+$translations = receipt_translation_set($sheetLocale);
 ?>
 <!DOCTYPE html>
 <html lang="ko">
@@ -480,11 +643,11 @@ $showRu = receipt_is_russian_daily($state);
             margin: 0;
             font-family: "Malgun Gothic", sans-serif;
             color: var(--text);
-            background: radial-gradient(circle at top right, rgba(20,184,166,0.12), transparent 22%), linear-gradient(180deg, #f8fbfd 0%, var(--bg) 100%);
+            background: radial-gradient(circle at top right, rgba(20, 184, 166, 0.12), transparent 22%), linear-gradient(180deg, #f8fbfd 0%, var(--bg) 100%);
         }
         .page { width: min(1280px, calc(100vw - 24px)); margin: 18px auto 28px; display: grid; gap: 18px; }
         .panel, .sheet { background: var(--panel); border: 1px solid var(--line); border-radius: 20px; box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08); padding: 18px; }
-        .sheet { width: 210mm; min-height: 297mm; margin: 0 auto; padding: 14mm 14mm 16mm; border-radius: 0; }
+        .sheet { width: 210mm; min-height: 297mm; margin: 0 auto; padding: 12mm 14mm 12mm; border-radius: 0; }
         .sheet + .sheet { margin-top: 16px; }
         h1, h2, h3 { margin: 0; }
         .lead { margin: 8px 0 0; color: var(--muted); line-height: 1.6; font-size: 14px; }
@@ -493,10 +656,7 @@ $showRu = receipt_is_russian_daily($state);
         .flash.error { background: var(--danger-soft); color: var(--danger); }
         .actions, .employee-grid, .mode-row, .inline-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
         .actions, .mode-row { margin-top: 16px; }
-        .button, button {
-            display: inline-flex; align-items: center; justify-content: center; padding: 10px 14px;
-            border-radius: 12px; border: 0; cursor: pointer; background: var(--accent); color: #fff; text-decoration: none; font: inherit;
-        }
+        .button, button { display: inline-flex; align-items: center; justify-content: center; padding: 10px 14px; border-radius: 12px; border: 0; cursor: pointer; background: var(--accent); color: #fff; text-decoration: none; font: inherit; }
         .button.secondary, button.secondary { background: #e2e8f0; color: #0f172a; }
         .employee-grid { margin-top: 16px; }
         .employee-option { width: calc(33.333% - 7px); min-width: 260px; border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; background: #f8fafc; }
@@ -521,13 +681,13 @@ $showRu = receipt_is_russian_daily($state);
         table { width: 100%; border-collapse: collapse; margin-top: 12px; }
         th, td { border: 1px solid #222; padding: 8px 10px; font-size: 13px; line-height: 1.5; text-align: left; vertical-align: top; }
         th { background: #f8fafc; width: 120px; }
-        .section-title { margin-top: 18px; font-size: 16px; font-weight: 700; }
-        .pledge-box { margin-top: 10px; border: 1px solid #222; padding: 12px 14px; line-height: 1.8; font-size: 14px; white-space: pre-line; }
-        .sign-area { margin-top: 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-        .sign-box { border: 1px solid #222; min-height: 120px; padding: 12px; }
+        .section-title { margin-top: 14px; font-size: 16px; font-weight: 700; }
+        .pledge-box { margin-top: 8px; border: 1px solid #222; padding: 10px 12px; line-height: 1.65; font-size: 13px; white-space: pre-line; }
+        .sign-area { margin-top: 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .sign-box { border: 1px solid #222; min-height: 102px; padding: 10px; }
         .sign-box h3 { font-size: 14px; margin-bottom: 10px; }
-        .sign-line { margin-top: 34px; text-align: right; font-size: 14px; }
-        .note { margin-top: 14px; color: #475569; font-size: 12px; line-height: 1.7; }
+        .sign-line { margin-top: 24px; text-align: right; font-size: 13px; }
+        .note { margin-top: 10px; color: #475569; font-size: 11px; line-height: 1.55; }
         .empty { padding: 24px 18px; border: 1px dashed var(--line); border-radius: 16px; color: var(--muted); text-align: center; line-height: 1.8; margin-top: 14px; }
         .receipt-list { display: grid; gap: 14px; margin-top: 16px; }
         .receipt-card { border: 1px solid var(--line); border-radius: 18px; padding: 16px; background: #f8fbfd; }
@@ -602,6 +762,8 @@ $showRu = receipt_is_russian_daily($state);
                             <select id="manual_locale" name="manual_locale">
                                 <option value="ko"<?= $manualLocale === 'ko' ? ' selected' : '' ?>>한국어</option>
                                 <option value="ru"<?= $manualLocale === 'ru' ? ' selected' : '' ?>>한국어 + 러시아어 병기</option>
+                                <option value="uz"<?= $manualLocale === 'uz' ? ' selected' : '' ?>>한국어 + 우즈베크어 병기</option>
+                                <option value="ky"<?= $manualLocale === 'ky' ? ' selected' : '' ?>>한국어 + 키르기스어 병기</option>
                             </select>
                         </div>
                         <div class="field">
@@ -614,6 +776,10 @@ $showRu = receipt_is_russian_daily($state);
                                         <?= h(receipt_value($preset['preset_name'] ?? 'preset')) ?>
                                         <?php if (sg_normalize_text($preset['locale_code'] ?? 'ko') === 'ru'): ?>
                                             / RU
+                                        <?php elseif (sg_normalize_text($preset['locale_code'] ?? 'ko') === 'uz'): ?>
+                                            / UZ
+                                        <?php elseif (sg_normalize_text($preset['locale_code'] ?? 'ko') === 'ky'): ?>
+                                            / KY
                                         <?php endif; ?>
                                     </option>
                                 <?php endforeach; ?>
@@ -626,7 +792,7 @@ $showRu = receipt_is_russian_daily($state);
                         <div class="field span-4">
                             <label for="manual_names">일용근로자 성명 목록</label>
                             <textarea id="manual_names" name="manual_names"><?= h($manualNamesRaw) ?></textarea>
-                            <div class="hint">한 줄에 한 명씩 입력해 주세요. 러시아 이름도 그대로 입력하면 됩니다.</div>
+                            <div class="hint">한 줄에 한 명씩 입력해 주세요. 외국인 이름도 그대로 입력하면 됩니다.</div>
                         </div>
                         <div class="field span-4">
                             <label for="manual_items">공통 지급 보호구 목록</label>
@@ -634,8 +800,8 @@ $showRu = receipt_is_russian_daily($state);
                             <div class="hint">한 줄 형식: `보호구명칭|품명|모델명|수량|지급일자` 예: `안전모|안전모|K2 화이트|1|<?= h(date('Y-m-d')) ?>`</div>
                         </div>
                     </div>
-                    <?php if ($manualLocale === 'ru'): ?>
-                        <div class="locale-note">러시아어 병기를 선택하면 확인서 제목, 주요 항목, 서약 문구, 서명란이 한국어와 러시아어로 함께 출력됩니다.</div>
+                    <?php if ($manualLocale !== 'ko'): ?>
+                        <div class="locale-note"><?= h(receipt_locale_note($manualLocale)) ?></div>
                     <?php endif; ?>
                     <input type="hidden" name="print" value="1">
                 <?php else: ?>
@@ -671,7 +837,7 @@ $showRu = receipt_is_russian_daily($state);
                     <?= receipt_hidden_inputs($state) ?>
                     <input type="hidden" name="action" value="save_manual_preset">
                     <div class="inline-actions">
-                        <input type="text" name="manual_preset_name" value="<?= h($manualPresetName) ?>" placeholder="예: 러시아 일용 기본 지급세트" style="min-width: 280px; border:1px solid var(--line); border-radius:12px; padding:10px 12px; font:inherit;">
+                        <input type="text" name="manual_preset_name" value="<?= h($manualPresetName) ?>" placeholder="예: 키르기스 일용 기본 지급세트" style="min-width: 280px; border:1px solid var(--line); border-radius:12px; padding:10px 12px; font:inherit;">
                         <button type="submit" class="secondary">현재 목록 preset 저장</button>
                         <span class="hint">현재 `공통 지급 보호구 목록`과 언어 설정을 이름으로 저장해 두고 다시 불러올 수 있습니다.</span>
                     </div>
@@ -700,63 +866,60 @@ $showRu = receipt_is_russian_daily($state);
             <?php
             $assignedItems = (array)($group['assigned_items'] ?? []);
             $documentNo = receipt_document_no($group, $index + 1, $mode === 'daily' ? 'DGR' : 'SGR');
-            $documentDate = $mode === 'daily'
-                ? ($manualDate !== '' ? $manualDate : date('Y-m-d'))
-                : receipt_signature_date($assignedItems);
-            $rows = $mode === 'daily'
-                ? (array)($group['manual_rows'] ?? [])
-                : receipt_aggregate_items($assignedItems);
-            $sheetShowRu = $showRu;
-            $pledgeText = receipt_pledge_text_by_locale($sheetShowRu ? 'ru' : 'ko');
+            $documentDate = $mode === 'daily' ? ($manualDate !== '' ? $manualDate : date('Y-m-d')) : receipt_signature_date($assignedItems);
+            $rows = $mode === 'daily' ? (array)($group['manual_rows'] ?? []) : receipt_aggregate_items($assignedItems);
+            $sheetLocale = $mode === 'daily' ? $manualLocale : 'ko';
+            $t = receipt_translation_set($sheetLocale);
+            $pledgeTranslated = $sheetLocale === 'ru' ? RECEIPT_PLEDGE_TEXT_RU : ($sheetLocale === 'uz' ? RECEIPT_PLEDGE_TEXT_UZ : ($sheetLocale === 'ky' ? RECEIPT_PLEDGE_TEXT_KY : ''));
             ?>
             <section class="sheet">
                 <div class="doc-head">
                     <div class="doc-meta">
-                        <?= receipt_label_html('사업장명', 'Компания', $sheetShowRu) ?>: <?= h(RECEIPT_COMPANY_NAME) ?><br>
-                        <?= receipt_label_html('현장명', 'Объект', $sheetShowRu) ?>: <?= h(RECEIPT_SITE_NAME) ?>
+                        <?= receipt_label_html('사업장명', $t['company'] ?? '', $sheetLocale) ?>: <?= h(RECEIPT_COMPANY_NAME) ?><br>
+                        <?= receipt_label_html('현장명', $t['site'] ?? '', $sheetLocale) ?>: <?= h(RECEIPT_SITE_NAME) ?>
                     </div>
                     <div class="doc-meta" style="text-align:right;">
-                        <?= receipt_label_html('문서번호', 'Номер документа', $sheetShowRu) ?>: <?= h($documentNo) ?><br>
-                        <?= receipt_label_html('작성일', 'Дата оформления', $sheetShowRu) ?>: <?= h($documentDate) ?>
+                        <?= receipt_label_html('문서번호', $t['document_no'] ?? '', $sheetLocale) ?>: <?= h($documentNo) ?><br>
+                        <?= receipt_label_html('작성일', $t['written_at'] ?? '', $sheetLocale) ?>: <?= h($documentDate) ?>
                     </div>
                 </div>
 
-                <div class="doc-title"><?= receipt_label_html('보호구 지급 확인서', 'Подтверждение выдачи СИЗ', $sheetShowRu) ?></div>
-                <?php if ($sheetShowRu): ?>
-                    <div class="doc-subtitle">Для иностранного ежедневного работника</div>
+                <div class="doc-title"><?= receipt_label_html('보호구 지급 확인서', $t['title'] ?? '', $sheetLocale) ?></div>
+                <?php if ($sheetLocale !== 'ko' && !empty($t['subtitle'])): ?>
+                    <div class="doc-subtitle"><?= h($t['subtitle']) ?></div>
                 <?php endif; ?>
 
                 <table>
                     <tr>
-                        <th><?= receipt_label_html('소속', 'Подразделение', $sheetShowRu) ?></th>
+                        <th><?= receipt_label_html('소속', $t['team'] ?? '', $sheetLocale) ?></th>
                         <td><?= h(receipt_value($group['employee_team'] ?? '')) ?></td>
-                        <th><?= receipt_label_html('직급', 'Должность', $sheetShowRu) ?></th>
+                        <th><?= receipt_label_html('직급', $t['position'] ?? '', $sheetLocale) ?></th>
                         <td><?= h(receipt_value($group['employee_position'] ?? '')) ?></td>
                     </tr>
                     <tr>
-                        <th><?= receipt_label_html('성명', 'Имя', $sheetShowRu) ?></th>
+                        <th><?= receipt_label_html('성명', $t['name'] ?? '', $sheetLocale) ?></th>
                         <td><?= h(receipt_value($group['employee_name'] ?? '')) ?></td>
-                        <th><?= receipt_label_html('지급 일자', 'Дата выдачи', $sheetShowRu) ?></th>
+                        <th><?= receipt_label_html('지급 일자', $t['issued_date'] ?? '', $sheetLocale) ?></th>
                         <td><?= h($documentDate) ?></td>
                     </tr>
                 </table>
 
-                <div class="section-title"><?= receipt_label_html('지급 보호구 상세', 'Выданные СИЗ', $sheetShowRu) ?></div>
+                <div class="section-title"><?= receipt_label_html('지급 보호구 상세', $t['items_title'] ?? '', $sheetLocale) ?></div>
                 <table>
                     <thead>
                         <tr>
                             <th style="width:48px;">No.</th>
-                            <th><?= receipt_label_html('보호구 명칭', 'Наименование СИЗ', $sheetShowRu) ?></th>
-                            <th><?= receipt_label_html('규격 / 모델명', 'Характеристика / модель', $sheetShowRu) ?></th>
-                            <th style="width:88px;"><?= receipt_label_html('지급 수량', 'Количество', $sheetShowRu) ?></th>
-                            <th style="width:120px;"><?= receipt_label_html('지급 일자', 'Дата выдачи', $sheetShowRu) ?></th>
+                            <th><?= receipt_label_html('보호구 명칭', $t['gear_name'] ?? '', $sheetLocale) ?></th>
+                            <th><?= receipt_label_html('규격 / 모델명', $t['model'] ?? '', $sheetLocale) ?></th>
+                            <th style="width:88px;"><?= receipt_label_html('지급 수량', $t['quantity'] ?? '', $sheetLocale) ?></th>
+                            <th style="width:120px;"><?= receipt_label_html('지급 일자', $t['issued_date'] ?? '', $sheetLocale) ?></th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($rows as $rowIndex => $row): ?>
                             <tr>
                                 <td><?= $rowIndex + 1 ?></td>
-                                <td><?= receipt_gear_label_html((string)($row['gear_label'] ?? ''), $sheetShowRu) ?></td>
+                                <td><?= receipt_gear_label_html((string)($row['gear_label'] ?? ''), $sheetLocale) ?></td>
                                 <td>
                                     <?= h(receipt_value($row['item_name'] ?? '')) ?>
                                     <?php if (sg_normalize_text($row['model_name'] ?? '') !== ''): ?>
@@ -770,30 +933,24 @@ $showRu = receipt_is_russian_daily($state);
                     </tbody>
                 </table>
 
-                <div class="section-title"><?= receipt_label_html('근로자 준수 서약', 'Обязательство работника', $sheetShowRu) ?></div>
-                <div class="pledge-box"><?= receipt_pledge_html(RECEIPT_PLEDGE_TEXT, RECEIPT_PLEDGE_TEXT_RU, $sheetShowRu) ?></div>
+                <div class="section-title"><?= receipt_label_html('근로자 준수 서약', $t['pledge_title'] ?? '', $sheetLocale) ?></div>
+                <div class="pledge-box"><?= receipt_pledge_html(RECEIPT_PLEDGE_TEXT, $pledgeTranslated, $sheetLocale) ?></div>
 
                 <div class="sign-area">
                     <div class="sign-box">
-                        <h3><?= receipt_label_html('수령자 자필 서명', 'Собственноручная подпись получателя', $sheetShowRu) ?></h3>
-                        <div class="sign-line"><?= receipt_label_html('서명', 'Подпись', $sheetShowRu) ?>: ____________________</div>
-                        <div class="sign-line" style="margin-top:18px;"><?= receipt_label_html('서명일', 'Дата подписи', $sheetShowRu) ?>: ____________________</div>
+                        <h3><?= receipt_label_html('수령자 자필 서명', $t['sign_title'] ?? '', $sheetLocale) ?></h3>
+                        <div class="sign-line"><?= receipt_label_html('서명', $t['sign'] ?? '', $sheetLocale) ?>: ____________________</div>
+                        <div class="sign-line" style="margin-top:18px;"><?= receipt_label_html('서명일', $t['sign_date'] ?? '', $sheetLocale) ?>: ____________________</div>
                     </div>
                     <div class="sign-box">
-                        <h3><?= receipt_label_html('안전관리자 확인', 'Подтверждение ответственного за безопасность', $sheetShowRu) ?></h3>
-                        <div><?= receipt_label_html('확인방법: 자필서명 원본 확인', 'Способ проверки: проверен оригинал собственноручной подписи', $sheetShowRu) ?></div>
-                        <div class="sign-line"><?= receipt_label_html('확인자', 'Проверил', $sheetShowRu) ?>: ____________________</div>
-                        <div class="sign-line" style="margin-top:18px;"><?= receipt_label_html('확인일', 'Дата проверки', $sheetShowRu) ?>: ____________________</div>
+                        <h3><?= receipt_label_html('안전관리자 확인', $t['manager_title'] ?? '', $sheetLocale) ?></h3>
+                        <div><?= receipt_label_html('확인방법: 자필서명 원본 확인', $t['manager_method'] ?? '', $sheetLocale) ?></div>
+                        <div class="sign-line"><?= receipt_label_html('확인자', $t['manager_name'] ?? '', $sheetLocale) ?>: ____________________</div>
+                        <div class="sign-line" style="margin-top:18px;"><?= receipt_label_html('확인일', $t['manager_date'] ?? '', $sheetLocale) ?>: ____________________</div>
                     </div>
                 </div>
 
-                <div class="note">
-                    <?= receipt_label_html(
-                        '비고: 본 확인서는 보호구 지급 사실과 근로자 준수 서약을 문서화하기 위한 용도입니다.',
-                        'Примечание: данный документ используется для подтверждения выдачи СИЗ и обязательства работника.',
-                        $sheetShowRu
-                    ) ?>
-                </div>
+                <div class="note"><?= receipt_label_html('비고: 본 확인서는 보호구 지급 사실과 근로자 준수 서약을 문서화하기 위한 용도입니다.', $t['note'] ?? '', $sheetLocale) ?></div>
             </section>
         <?php endforeach; ?>
 
@@ -894,6 +1051,7 @@ $showRu = receipt_is_russian_daily($state);
                                         <div class="inline-actions">
                                             <button type="submit" name="action" value="attach_receipt" class="secondary">첨부만 저장</button>
                                             <button type="submit" name="action" value="confirm_receipt"><?= $status === 'confirmed' ? '확인 완료 갱신' : '확인 완료 처리' ?></button>
+                                            <button type="submit" name="action" value="delete_receipt" class="secondary" onclick="return window.confirm('이 확인서를 삭제할까요? 중복 저장분 정리용입니다.');">삭제</button>
                                         </div>
                                         <div class="hint">확인 완료 처리는 첨부파일이 있는 상태에서만 가능합니다. 새 파일을 같이 올리면 첨부 저장 후 즉시 확인 완료됩니다.</div>
                                     </form>

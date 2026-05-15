@@ -1338,6 +1338,12 @@ function sg_confirm_receipt(PDO $pdo, int $receiptId, array $confirmer, string $
     ]);
 }
 
+function sg_delete_receipt(PDO $pdo, int $receiptId): void
+{
+    $stmt = $pdo->prepare("DELETE FROM safety_gear_receipt WHERE receipt_id = :receipt_id");
+    $stmt->execute([':receipt_id' => $receiptId]);
+}
+
 function sg_fetch_receipt_presets(PDO $pdo): array
 {
     $stmt = $pdo->query("
