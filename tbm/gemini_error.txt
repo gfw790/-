@@ -440,3 +440,7 @@
 [2026-05-14T00:00:47+09:00] [retrying] prompt updated for attempt 2
 [2026-05-14T00:01:00+09:00] [attempt 2] AI 출력 검증 실패: 퀴즈 3개 총 글자 수가 892자입니다. 545~820자여야 합니다.
 [2026-05-14T00:01:00+09:00] [retrying] prompt updated for attempt 3
+[2026-05-16T00:00:41+09:00] [attempt 1] AI 출력 검증 실패: 사고내용 및 원인 길이가 255자입니다. 220~250자여야 합니다.
+[2026-05-16T00:00:41+09:00] [retrying] prompt updated for attempt 2
+[2026-05-16T00:00:54+09:00] [attempt 2] AI 출력 검증 실패: 퀴즈 3개 총 글자 수가 1071자입니다. 545~820자여야 합니다.
+[2026-05-16T00:00:54+09:00] [retrying] prompt updated for attempt 3

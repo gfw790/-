@@ -14,6 +14,24 @@ function sg_normalize_price($value): string
     return $text === null ? '' : trim($text);
 }
 
+function sg_build_product_name(string $itemName, string $specName = '', string $modelName = '', string $fallback = ''): string
+{
+    $parts = array_values(array_filter([
+        sg_normalize_text($itemName),
+        sg_normalize_text($specName),
+        sg_normalize_text($modelName),
+    ], static function (string $value): bool {
+        return $value !== '';
+    }));
+
+    $combined = implode(' / ', $parts);
+    if ($combined !== '') {
+        return $combined;
+    }
+
+    return sg_normalize_text($fallback);
+}
+
 function sg_current_timestamp(): string
 {
     return date('Y-m-d H:i:s');
@@ -73,7 +91,10 @@ function sg_ensure_tables(PDO $pdo): void
             identifier_value VARCHAR(255) NOT NULL,
             gear_type VARCHAR(120) NOT NULL,
             item_name VARCHAR(255) NOT NULL DEFAULT '',
+            spec_name VARCHAR(255) NOT NULL DEFAULT '',
             model_name VARCHAR(255) NOT NULL DEFAULT '',
+            kcs_cert_no VARCHAR(255) NOT NULL DEFAULT '',
+            manufacturer_name VARCHAR(255) NOT NULL DEFAULT '',
             product_name VARCHAR(255) NOT NULL DEFAULT '',
             purchase_vendor VARCHAR(255) NOT NULL DEFAULT '',
             purchase_price DECIMAL(12,2) DEFAULT NULL,
@@ -112,7 +133,10 @@ function sg_ensure_tables(PDO $pdo): void
             template_name VARCHAR(160) NOT NULL,
             gear_type VARCHAR(120) NOT NULL,
             item_name VARCHAR(255) NOT NULL DEFAULT '',
+            spec_name VARCHAR(255) NOT NULL DEFAULT '',
             model_name VARCHAR(255) NOT NULL DEFAULT '',
+            kcs_cert_no VARCHAR(255) NOT NULL DEFAULT '',
+            manufacturer_name VARCHAR(255) NOT NULL DEFAULT '',
             product_name VARCHAR(255) NOT NULL DEFAULT '',
             purchase_vendor VARCHAR(255) NOT NULL DEFAULT '',
             purchase_price DECIMAL(12,2) DEFAULT NULL,
@@ -123,6 +147,18 @@ function sg_ensure_tables(PDO $pdo): void
             PRIMARY KEY (template_id),
             UNIQUE KEY uq_safety_gear_template_name (template_name),
             KEY idx_safety_gear_template_updated_at (updated_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS safety_gear_type (
+            type_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            type_name VARCHAR(120) NOT NULL,
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NOT NULL,
+            PRIMARY KEY (type_id),
+            UNIQUE KEY uq_safety_gear_type_name (type_name),
+            KEY idx_safety_gear_type_updated_at (updated_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
 
@@ -222,6 +258,7 @@ function sg_ensure_tables(PDO $pdo): void
             gear_label VARCHAR(160) NOT NULL DEFAULT '',
             item_name VARCHAR(255) NOT NULL DEFAULT '',
             model_name VARCHAR(255) NOT NULL DEFAULT '',
+            detail_text TEXT NULL,
             quantity INT NOT NULL DEFAULT 1,
             assigned_date DATE NOT NULL,
             PRIMARY KEY (receipt_item_id),
@@ -254,8 +291,17 @@ function sg_ensure_tables(PDO $pdo): void
     if (!sg_column_exists($pdo, 'safety_gear_item', 'item_name')) {
         $pdo->exec("ALTER TABLE safety_gear_item ADD COLUMN item_name VARCHAR(255) NOT NULL DEFAULT '' AFTER gear_type");
     }
+    if (!sg_column_exists($pdo, 'safety_gear_item', 'spec_name')) {
+        $pdo->exec("ALTER TABLE safety_gear_item ADD COLUMN spec_name VARCHAR(255) NOT NULL DEFAULT '' AFTER item_name");
+    }
     if (!sg_column_exists($pdo, 'safety_gear_item', 'model_name')) {
-        $pdo->exec("ALTER TABLE safety_gear_item ADD COLUMN model_name VARCHAR(255) NOT NULL DEFAULT '' AFTER item_name");
+        $pdo->exec("ALTER TABLE safety_gear_item ADD COLUMN model_name VARCHAR(255) NOT NULL DEFAULT '' AFTER spec_name");
+    }
+    if (!sg_column_exists($pdo, 'safety_gear_item', 'kcs_cert_no')) {
+        $pdo->exec("ALTER TABLE safety_gear_item ADD COLUMN kcs_cert_no VARCHAR(255) NOT NULL DEFAULT '' AFTER model_name");
+    }
+    if (!sg_column_exists($pdo, 'safety_gear_item', 'manufacturer_name')) {
+        $pdo->exec("ALTER TABLE safety_gear_item ADD COLUMN manufacturer_name VARCHAR(255) NOT NULL DEFAULT '' AFTER kcs_cert_no");
     }
     if (!sg_column_exists($pdo, 'safety_gear_item', 'assigned_employee_name')) {
         $pdo->exec("ALTER TABLE safety_gear_item ADD COLUMN assigned_employee_name VARCHAR(120) NOT NULL DEFAULT '' AFTER assigned_employee_id");
@@ -278,12 +324,165 @@ function sg_ensure_tables(PDO $pdo): void
     if (!sg_column_exists($pdo, 'safety_gear_template', 'item_name')) {
         $pdo->exec("ALTER TABLE safety_gear_template ADD COLUMN item_name VARCHAR(255) NOT NULL DEFAULT '' AFTER gear_type");
     }
+    if (!sg_column_exists($pdo, 'safety_gear_template', 'spec_name')) {
+        $pdo->exec("ALTER TABLE safety_gear_template ADD COLUMN spec_name VARCHAR(255) NOT NULL DEFAULT '' AFTER item_name");
+    }
     if (!sg_column_exists($pdo, 'safety_gear_template', 'model_name')) {
-        $pdo->exec("ALTER TABLE safety_gear_template ADD COLUMN model_name VARCHAR(255) NOT NULL DEFAULT '' AFTER item_name");
+        $pdo->exec("ALTER TABLE safety_gear_template ADD COLUMN model_name VARCHAR(255) NOT NULL DEFAULT '' AFTER spec_name");
+    }
+    if (!sg_column_exists($pdo, 'safety_gear_template', 'kcs_cert_no')) {
+        $pdo->exec("ALTER TABLE safety_gear_template ADD COLUMN kcs_cert_no VARCHAR(255) NOT NULL DEFAULT '' AFTER model_name");
+    }
+    if (!sg_column_exists($pdo, 'safety_gear_template', 'manufacturer_name')) {
+        $pdo->exec("ALTER TABLE safety_gear_template ADD COLUMN manufacturer_name VARCHAR(255) NOT NULL DEFAULT '' AFTER kcs_cert_no");
+    }
+    if (!sg_column_exists($pdo, 'safety_gear_receipt_item', 'detail_text')) {
+        $pdo->exec("ALTER TABLE safety_gear_receipt_item ADD COLUMN detail_text TEXT NULL AFTER model_name");
     }
 
     $pdo->exec("UPDATE safety_gear_item SET item_name = product_name WHERE item_name = '' AND product_name <> ''");
     $pdo->exec("UPDATE safety_gear_template SET item_name = product_name WHERE item_name = '' AND product_name <> ''");
+
+    sg_seed_default_gear_types($pdo);
+}
+
+function sg_default_gear_types(): array
+{
+    return [
+        '안전모',
+        '안전화',
+        '안전대',
+        '안전조끼',
+        '신호수조끼',
+        '경광봉',
+        '방진마스크',
+        '보안경',
+        '장갑',
+    ];
+}
+
+function sg_save_gear_type(PDO $pdo, string $typeName): void
+{
+    $typeName = sg_normalize_text($typeName);
+    if ($typeName === '') {
+        return;
+    }
+
+    $now = sg_current_timestamp();
+    $stmt = $pdo->prepare("
+        INSERT INTO safety_gear_type (type_name, created_at, updated_at)
+        VALUES (:type_name, :created_at, :updated_at)
+        ON DUPLICATE KEY UPDATE
+            type_name = VALUES(type_name),
+            updated_at = VALUES(updated_at)
+    ");
+    $stmt->execute([
+        ':type_name' => $typeName,
+        ':created_at' => $now,
+        ':updated_at' => $now,
+    ]);
+}
+
+function sg_seed_default_gear_types(PDO $pdo): void
+{
+    foreach (sg_default_gear_types() as $typeName) {
+        sg_save_gear_type($pdo, $typeName);
+    }
+}
+
+function sg_fetch_gear_types(PDO $pdo): array
+{
+    $types = [];
+
+    $stmt = $pdo->query("
+        SELECT type_id, type_name
+        FROM safety_gear_type
+        ORDER BY type_name ASC, type_id ASC
+    ");
+    foreach ($stmt->fetchAll() ?: [] as $row) {
+        $typeName = sg_normalize_text($row['type_name'] ?? '');
+        if ($typeName === '') {
+            continue;
+        }
+        $types[$typeName] = [
+            'id' => (string)($row['type_id'] ?? ''),
+            'name' => $typeName,
+            'in_use' => false,
+        ];
+    }
+
+    $sources = [
+        "SELECT DISTINCT gear_type AS type_name FROM safety_gear_item WHERE gear_type <> ''",
+        "SELECT DISTINCT gear_type AS type_name FROM safety_gear_template WHERE gear_type <> ''",
+    ];
+
+    foreach ($sources as $sql) {
+        $sourceStmt = $pdo->query($sql);
+        foreach ($sourceStmt->fetchAll() ?: [] as $row) {
+            $typeName = sg_normalize_text($row['type_name'] ?? '');
+            if ($typeName === '') {
+                continue;
+            }
+            if (!isset($types[$typeName])) {
+                $types[$typeName] = [
+                    'id' => '',
+                    'name' => $typeName,
+                    'in_use' => true,
+                ];
+            } else {
+                $types[$typeName]['in_use'] = true;
+            }
+        }
+    }
+
+    ksort($types, SORT_NATURAL);
+    return array_values($types);
+}
+
+function sg_delete_gear_type(PDO $pdo, string $typeId, string $typeName = ''): bool
+{
+    $normalizedId = sg_normalize_text($typeId);
+    $normalizedName = sg_normalize_text($typeName);
+
+    if ($normalizedId === '' && $normalizedName === '') {
+        return false;
+    }
+
+    if ($normalizedId !== '') {
+        $stmt = $pdo->prepare("DELETE FROM safety_gear_type WHERE type_id = :type_id");
+        $stmt->execute([':type_id' => (int)$normalizedId]);
+        return $stmt->rowCount() > 0;
+    }
+
+    $stmt = $pdo->prepare("DELETE FROM safety_gear_type WHERE type_name = :type_name");
+    $stmt->execute([':type_name' => $normalizedName]);
+    return $stmt->rowCount() > 0;
+}
+
+function sg_build_receipt_detail_text(array $item): string
+{
+    $parts = array_values(array_filter([
+        sg_normalize_text($item['item_name'] ?? ''),
+        sg_normalize_text($item['spec_name'] ?? ''),
+        sg_normalize_text($item['model_name'] ?? ''),
+        sg_normalize_text($item['manufacturer_name'] ?? ''),
+        sg_normalize_text($item['kcs_cert_no'] ?? ''),
+    ], static function (string $value): bool {
+        return $value !== '';
+    }));
+
+    if (!empty($parts)) {
+        return implode(' / ', $parts);
+    }
+
+    $fallback = array_values(array_filter([
+        sg_normalize_text($item['item_name'] ?? ''),
+        sg_normalize_text($item['model_name'] ?? ''),
+    ], static function (string $value): bool {
+        return $value !== '';
+    }));
+
+    return implode(' / ', $fallback);
 }
 
 function sg_test_user_name(): string
@@ -538,7 +737,7 @@ function sg_fetch_my_items(PDO $pdo, array $user, string $statusFilter = 'active
     $employeeId = sg_normalize_text($employee['id'] ?? '');
 
     $sql = "
-        SELECT gear_uid, identifier_type, identifier_value, gear_type, item_name, model_name, product_name,
+        SELECT gear_uid, identifier_type, identifier_value, gear_type, item_name, spec_name, model_name, kcs_cert_no, product_name,
                purchase_vendor, purchase_price, purchased_at, status_label, notes,
                assigned_employee_id, assigned_employee_name, assigned_team, assigned_at,
                created_at, updated_at
@@ -718,15 +917,15 @@ function sg_map_item_row(PDO $pdo, array $row): array
 {
     $gearUid = sg_normalize_text($row['gear_uid'] ?? '');
     $itemName = sg_normalize_text($row['item_name'] ?? '');
+    $specName = sg_normalize_text($row['spec_name'] ?? '');
     $modelName = sg_normalize_text($row['model_name'] ?? '');
+    $kcsCertNo = sg_normalize_text($row['kcs_cert_no'] ?? '');
+    $manufacturerName = sg_normalize_text($row['manufacturer_name'] ?? '');
     $legacyProductName = sg_normalize_text($row['product_name'] ?? '');
     if ($itemName === '' && $legacyProductName !== '') {
         $itemName = $legacyProductName;
     }
-    $combinedProductName = trim($itemName . ($modelName !== '' ? ' / ' . $modelName : ''));
-    if ($combinedProductName === '') {
-        $combinedProductName = $legacyProductName;
-    }
+    $combinedProductName = sg_build_product_name($itemName, $specName, $modelName, $legacyProductName);
 
     return [
         'id' => $gearUid,
@@ -734,7 +933,10 @@ function sg_map_item_row(PDO $pdo, array $row): array
         'identifier_value' => sg_normalize_text($row['identifier_value'] ?? ''),
         'gear_type' => sg_normalize_text($row['gear_type'] ?? ''),
         'item_name' => $itemName,
+        'spec_name' => $specName,
         'model_name' => $modelName,
+        'kcs_cert_no' => $kcsCertNo,
+        'manufacturer_name' => $manufacturerName,
         'product_name' => $combinedProductName,
         'purchase_vendor' => sg_normalize_text($row['purchase_vendor'] ?? ''),
         'purchase_price' => isset($row['purchase_price']) && $row['purchase_price'] !== null ? rtrim(rtrim((string)$row['purchase_price'], '0'), '.') : '',
@@ -754,7 +956,7 @@ function sg_map_item_row(PDO $pdo, array $row): array
 function sg_fetch_all_items(PDO $pdo, string $query = ''): array
 {
     $sql = "
-        SELECT gear_uid, identifier_type, identifier_value, gear_type, item_name, model_name, product_name,
+        SELECT gear_uid, identifier_type, identifier_value, gear_type, item_name, spec_name, model_name, kcs_cert_no, manufacturer_name, product_name,
                purchase_vendor, purchase_price, purchased_at, status_label, notes,
                assigned_employee_id, assigned_employee_name, assigned_team, assigned_at,
                created_at, updated_at
@@ -768,7 +970,10 @@ function sg_fetch_all_items(PDO $pdo, string $query = ''): array
             WHERE identifier_value LIKE :q
                OR gear_type LIKE :q
                OR item_name LIKE :q
+               OR spec_name LIKE :q
                OR model_name LIKE :q
+               OR kcs_cert_no LIKE :q
+               OR manufacturer_name LIKE :q
                OR product_name LIKE :q
                OR purchase_vendor LIKE :q
                OR status_label LIKE :q
@@ -860,7 +1065,7 @@ function sg_fetch_assigned_items_grouped_by_employee(PDO $pdo, array $employeeId
 function sg_fetch_item_by_uid(PDO $pdo, string $gearUid): ?array
 {
     $stmt = $pdo->prepare("
-        SELECT gear_uid, identifier_type, identifier_value, gear_type, item_name, model_name, product_name,
+        SELECT gear_uid, identifier_type, identifier_value, gear_type, item_name, spec_name, model_name, kcs_cert_no, manufacturer_name, product_name,
                purchase_vendor, purchase_price, purchased_at, status_label, notes,
                assigned_employee_id, assigned_employee_name, assigned_team, assigned_at,
                created_at, updated_at
@@ -877,7 +1082,7 @@ function sg_fetch_item_by_uid(PDO $pdo, string $gearUid): ?array
 function sg_fetch_item_by_identifier(PDO $pdo, string $identifierValue): ?array
 {
     $stmt = $pdo->prepare("
-        SELECT gear_uid, identifier_type, identifier_value, gear_type, item_name, model_name, product_name,
+        SELECT gear_uid, identifier_type, identifier_value, gear_type, item_name, spec_name, model_name, kcs_cert_no, manufacturer_name, product_name,
                purchase_vendor, purchase_price, purchased_at, status_label, notes,
                assigned_employee_id, assigned_employee_name, assigned_team, assigned_at,
                created_at, updated_at
@@ -958,22 +1163,25 @@ function sg_fetch_employee_options(): array
 function sg_map_template_row(array $row): array
 {
     $itemName = sg_normalize_text($row['item_name'] ?? '');
+    $specName = sg_normalize_text($row['spec_name'] ?? '');
     $modelName = sg_normalize_text($row['model_name'] ?? '');
+    $kcsCertNo = sg_normalize_text($row['kcs_cert_no'] ?? '');
+    $manufacturerName = sg_normalize_text($row['manufacturer_name'] ?? '');
     $legacyProductName = sg_normalize_text($row['product_name'] ?? '');
     if ($itemName === '' && $legacyProductName !== '') {
         $itemName = $legacyProductName;
     }
-    $combinedProductName = trim($itemName . ($modelName !== '' ? ' / ' . $modelName : ''));
-    if ($combinedProductName === '') {
-        $combinedProductName = $legacyProductName;
-    }
+    $combinedProductName = sg_build_product_name($itemName, $specName, $modelName, $legacyProductName);
 
     return [
         'id' => (string)($row['template_id'] ?? ''),
         'template_name' => sg_normalize_text($row['template_name'] ?? ''),
         'gear_type' => sg_normalize_text($row['gear_type'] ?? ''),
         'item_name' => $itemName,
+        'spec_name' => $specName,
         'model_name' => $modelName,
+        'kcs_cert_no' => $kcsCertNo,
+        'manufacturer_name' => $manufacturerName,
         'product_name' => $combinedProductName,
         'purchase_vendor' => sg_normalize_text($row['purchase_vendor'] ?? ''),
         'purchase_price' => isset($row['purchase_price']) && $row['purchase_price'] !== null ? rtrim(rtrim((string)$row['purchase_price'], '0'), '.') : '',
@@ -987,7 +1195,7 @@ function sg_map_template_row(array $row): array
 function sg_fetch_templates(PDO $pdo): array
 {
     $stmt = $pdo->query("
-        SELECT template_id, template_name, gear_type, item_name, model_name, product_name, purchase_vendor,
+        SELECT template_id, template_name, gear_type, item_name, spec_name, model_name, kcs_cert_no, manufacturer_name, product_name, purchase_vendor,
                purchase_price, status_label, notes, created_at, updated_at
         FROM safety_gear_template
         ORDER BY updated_at DESC, template_id DESC
@@ -1003,7 +1211,7 @@ function sg_fetch_template_by_id(PDO $pdo, string $templateId): ?array
     }
 
     $stmt = $pdo->prepare("
-        SELECT template_id, template_name, gear_type, item_name, model_name, product_name, purchase_vendor,
+        SELECT template_id, template_name, gear_type, item_name, spec_name, model_name, kcs_cert_no, manufacturer_name, product_name, purchase_vendor,
                purchase_price, status_label, notes, created_at, updated_at
         FROM safety_gear_template
         WHERE template_id = :template_id
@@ -1047,7 +1255,7 @@ function sg_fetch_employee_history_report(PDO $pdo, string $employeeId = '', str
 
     $sql = "
         SELECT h.history_id, h.gear_uid, h.history_type, h.history_note, h.employee_id, h.employee_name, h.employee_team, h.created_at,
-               i.identifier_type, i.identifier_value, i.gear_type, i.item_name, i.model_name, i.product_name, i.status_label
+               i.identifier_type, i.identifier_value, i.gear_type, i.item_name, i.spec_name, i.model_name, i.kcs_cert_no, i.product_name, i.status_label
         FROM safety_gear_history h
         JOIN safety_gear_item i ON i.gear_uid = h.gear_uid
         WHERE 1=1
@@ -1093,7 +1301,7 @@ function sg_fetch_item_history_report(
 
     $sql = "
         SELECT h.history_id, h.gear_uid, h.history_type, h.history_note, h.employee_id, h.employee_name, h.employee_team, h.created_at,
-               i.identifier_type, i.identifier_value, i.gear_type, i.item_name, i.model_name, i.product_name, i.status_label
+               i.identifier_type, i.identifier_value, i.gear_type, i.item_name, i.spec_name, i.model_name, i.kcs_cert_no, i.product_name, i.status_label
         FROM safety_gear_history h
         JOIN safety_gear_item i ON i.gear_uid = h.gear_uid
         WHERE 1=1
@@ -1224,9 +1432,9 @@ function sg_create_receipt(PDO $pdo, array $header, array $items, array $creator
 
     $itemStmt = $pdo->prepare("
         INSERT INTO safety_gear_receipt_item (
-            receipt_id, gear_label, item_name, model_name, quantity, assigned_date
+            receipt_id, gear_label, item_name, model_name, detail_text, quantity, assigned_date
         ) VALUES (
-            :receipt_id, :gear_label, :item_name, :model_name, :quantity, :assigned_date
+            :receipt_id, :gear_label, :item_name, :model_name, :detail_text, :quantity, :assigned_date
         )
     ");
     foreach ($items as $item) {
@@ -1235,6 +1443,7 @@ function sg_create_receipt(PDO $pdo, array $header, array $items, array $creator
             ':gear_label' => sg_normalize_text($item['gear_label'] ?? ''),
             ':item_name' => sg_normalize_text($item['item_name'] ?? ''),
             ':model_name' => sg_normalize_text($item['model_name'] ?? ''),
+            ':detail_text' => sg_normalize_text($item['detail_text'] ?? sg_build_receipt_detail_text($item)),
             ':quantity' => max(1, (int)($item['quantity'] ?? 1)),
             ':assigned_date' => sg_normalize_text($item['assigned_date'] ?? date('Y-m-d')),
         ]);
@@ -1246,7 +1455,7 @@ function sg_create_receipt(PDO $pdo, array $header, array $items, array $creator
 function sg_fetch_receipt_items(PDO $pdo, int $receiptId): array
 {
     $stmt = $pdo->prepare("
-        SELECT gear_label, item_name, model_name, quantity, assigned_date
+        SELECT gear_label, item_name, model_name, detail_text, quantity, assigned_date
         FROM safety_gear_receipt_item
         WHERE receipt_id = :receipt_id
         ORDER BY receipt_item_id ASC

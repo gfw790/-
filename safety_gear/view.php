@@ -222,7 +222,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https'
             <section class="panel">
                 <div class="empty">
                     요청한 보호구 정보를 찾지 못했습니다.<br>
-                    NFC 또는 QR에 저장된 주소가 올바른지 확인해 주세요.
+                    NFC 또는 QR에 저장한 주소가 올바른지 확인해 주세요.
                     <div class="actions" style="justify-content:center;">
                         <a class="button secondary" href="/safety_gear/index.php">관리 페이지로 이동</a>
                     </div>
@@ -235,6 +235,9 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https'
                     <h1><?= h(detail_value($item, 'gear_type')) ?></h1>
                     <p class="lead">
                         <?= h(detail_value($item, 'item_name')) ?>
+                        <?php if (detail_value($item, 'spec_name', '') !== ''): ?>
+                            / <?= h(detail_value($item, 'spec_name')) ?>
+                        <?php endif; ?>
                         <?php if (detail_value($item, 'model_name', '') !== ''): ?>
                             / <?= h(detail_value($item, 'model_name')) ?>
                         <?php endif; ?>
@@ -265,8 +268,20 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https'
                         <div class="value"><?= h(detail_value($item, 'item_name')) ?></div>
                     </div>
                     <div class="card">
+                        <span class="label">규격</span>
+                        <div class="value"><?= h(detail_value($item, 'spec_name')) ?></div>
+                    </div>
+                    <div class="card">
                         <span class="label">모델</span>
                         <div class="value"><?= h(detail_value($item, 'model_name')) ?></div>
+                    </div>
+                    <div class="card">
+                        <span class="label">KCS 안전인증번호</span>
+                        <div class="value"><?= h(detail_value($item, 'kcs_cert_no')) ?></div>
+                    </div>
+                    <div class="card">
+                        <span class="label">제조사</span>
+                        <div class="value"><?= h(detail_value($item, 'manufacturer_name')) ?></div>
                     </div>
                     <div class="card">
                         <span class="label">구매처</span>

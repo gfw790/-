@@ -33,6 +33,10 @@ if ($action === 'templates') {
     respond(['ok' => true, 'templates' => sg_fetch_templates($pdo)]);
 }
 
+if ($action === 'gear_types') {
+    respond(['ok' => true, 'gear_types' => sg_fetch_gear_types($pdo)]);
+}
+
 if ($action === 'get') {
     $id = sg_normalize_text($_GET['id'] ?? '');
     $item = $id !== '' ? sg_fetch_item_by_uid($pdo, $id) : null;
@@ -64,6 +68,49 @@ if ($action === 'create_internal_key') {
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     respond(['ok' => false, 'message' => '지원하지 않는 요청입니다.'], 405);
+}
+
+if ($action === 'save_gear_type') {
+    $typeName = sg_normalize_text($_POST['type_name'] ?? '');
+    if ($typeName === '') {
+        respond(['ok' => false, 'message' => '보호구 종류명을 입력해 주세요.'], 400);
+    }
+
+    try {
+        sg_save_gear_type($pdo, $typeName);
+    } catch (Throwable $e) {
+        respond(['ok' => false, 'message' => '보호구 종류 저장 중 오류가 발생했습니다: ' . $e->getMessage()], 500);
+    }
+
+    respond([
+        'ok' => true,
+        'message' => '보호구 종류가 저장되었습니다.',
+        'gear_types' => sg_fetch_gear_types($pdo),
+    ]);
+}
+
+if ($action === 'delete_gear_type') {
+    $typeId = sg_normalize_text($_POST['type_id'] ?? '');
+    $typeName = sg_normalize_text($_POST['type_name'] ?? '');
+    if ($typeId === '' && $typeName === '') {
+        respond(['ok' => false, 'message' => '삭제할 보호구 종류를 선택해 주세요.'], 400);
+    }
+
+    try {
+        $deleted = sg_delete_gear_type($pdo, $typeId, $typeName);
+    } catch (Throwable $e) {
+        respond(['ok' => false, 'message' => '보호구 종류 삭제 중 오류가 발생했습니다: ' . $e->getMessage()], 500);
+    }
+
+    if (!$deleted) {
+        respond(['ok' => false, 'message' => '삭제할 보호구 종류를 찾지 못했습니다.'], 404);
+    }
+
+    respond([
+        'ok' => true,
+        'message' => '보호구 종류가 삭제되었습니다.',
+        'gear_types' => sg_fetch_gear_types($pdo),
+    ]);
 }
 
 if ($action === 'initial_issue') {
@@ -128,7 +175,10 @@ if ($action === 'bulk_initial_issue') {
     $rawIdentifiers = (string)($_POST['identifiers'] ?? '');
     $gearType = sg_normalize_text($_POST['gear_type'] ?? '');
     $itemName = sg_normalize_text($_POST['item_name'] ?? '');
+    $specName = sg_normalize_text($_POST['spec_name'] ?? '');
     $modelName = sg_normalize_text($_POST['model_name'] ?? '');
+    $kcsCertNo = sg_normalize_text($_POST['kcs_cert_no'] ?? '');
+    $manufacturerName = sg_normalize_text($_POST['manufacturer_name'] ?? '');
     $purchaseVendor = sg_normalize_text($_POST['purchase_vendor'] ?? '');
     $purchasePrice = sg_normalize_price($_POST['purchase_price'] ?? '');
     $purchasedAt = sg_normalize_text($_POST['purchased_at'] ?? '');
@@ -141,6 +191,7 @@ if ($action === 'bulk_initial_issue') {
     if ($gearType === '') {
         respond(['ok' => false, 'message' => '보호구 종류를 먼저 입력해 주세요.'], 400);
     }
+    sg_save_gear_type($pdo, $gearType);
 
     $identifiers = array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', $rawIdentifiers) ?: [])));
     if (empty($identifiers)) {
@@ -158,12 +209,12 @@ if ($action === 'bulk_initial_issue') {
 
         $insertStmt = $pdo->prepare("
             INSERT INTO safety_gear_item (
-                gear_uid, identifier_type, identifier_value, gear_type, item_name, model_name, product_name,
+                gear_uid, identifier_type, identifier_value, gear_type, item_name, spec_name, model_name, kcs_cert_no, manufacturer_name, product_name,
                 purchase_vendor, purchase_price, purchased_at, status_label, notes,
                 assigned_employee_id, assigned_employee_name, assigned_team, assigned_at,
                 created_at, updated_at
             ) VALUES (
-                :gear_uid, :identifier_type, :identifier_value, :gear_type, :item_name, :model_name, :product_name,
+                :gear_uid, :identifier_type, :identifier_value, :gear_type, :item_name, :spec_name, :model_name, :kcs_cert_no, :manufacturer_name, :product_name,
                 :purchase_vendor, :purchase_price, :purchased_at, :status_label, :notes,
                 :assigned_employee_id, :assigned_employee_name, :assigned_team, :assigned_at,
                 :created_at, :updated_at
@@ -184,8 +235,11 @@ if ($action === 'bulk_initial_issue') {
                 ':identifier_value' => $identifierValue,
                 ':gear_type' => $gearType,
                 ':item_name' => $itemName,
+                ':spec_name' => $specName,
                 ':model_name' => $modelName,
-                ':product_name' => trim($itemName . ($modelName !== '' ? ' / ' . $modelName : '')),
+                ':kcs_cert_no' => $kcsCertNo,
+                ':manufacturer_name' => $manufacturerName,
+                ':product_name' => sg_build_product_name($itemName, $specName, $modelName),
                 ':purchase_vendor' => $purchaseVendor,
                 ':purchase_price' => $purchasePriceValue,
                 ':purchased_at' => $purchasedAtValue,
@@ -238,7 +292,10 @@ if ($action === 'save_template') {
     $templateName = sg_normalize_text($_POST['template_name'] ?? '');
     $gearType = sg_normalize_text($_POST['gear_type'] ?? '');
     $itemName = sg_normalize_text($_POST['item_name'] ?? '');
+    $specName = sg_normalize_text($_POST['spec_name'] ?? '');
     $modelName = sg_normalize_text($_POST['model_name'] ?? '');
+    $kcsCertNo = sg_normalize_text($_POST['kcs_cert_no'] ?? '');
+    $manufacturerName = sg_normalize_text($_POST['manufacturer_name'] ?? '');
     $purchaseVendor = sg_normalize_text($_POST['purchase_vendor'] ?? '');
     $purchasePrice = sg_normalize_price($_POST['purchase_price'] ?? '');
     $statusLabel = sg_normalize_text($_POST['status'] ?? '');
@@ -250,6 +307,7 @@ if ($action === 'save_template') {
     if ($gearType === '') {
         respond(['ok' => false, 'message' => '보호구 종류를 입력해 주세요.'], 400);
     }
+    sg_save_gear_type($pdo, $gearType);
     if (sg_template_name_exists($pdo, $templateName, $templateId)) {
         respond(['ok' => false, 'message' => '같은 이름의 템플릿이 이미 있습니다.'], 409);
     }
@@ -264,7 +322,10 @@ if ($action === 'save_template') {
                 SET template_name = :template_name,
                     gear_type = :gear_type,
                     item_name = :item_name,
+                    spec_name = :spec_name,
                     model_name = :model_name,
+                    kcs_cert_no = :kcs_cert_no,
+                    manufacturer_name = :manufacturer_name,
                     product_name = :product_name,
                     purchase_vendor = :purchase_vendor,
                     purchase_price = :purchase_price,
@@ -277,8 +338,11 @@ if ($action === 'save_template') {
                 ':template_name' => $templateName,
                 ':gear_type' => $gearType,
                 ':item_name' => $itemName,
+                ':spec_name' => $specName,
                 ':model_name' => $modelName,
-                ':product_name' => trim($itemName . ($modelName !== '' ? ' / ' . $modelName : '')),
+                ':kcs_cert_no' => $kcsCertNo,
+                ':manufacturer_name' => $manufacturerName,
+                ':product_name' => sg_build_product_name($itemName, $specName, $modelName),
                 ':purchase_vendor' => $purchaseVendor,
                 ':purchase_price' => $purchasePriceValue,
                 ':status_label' => $statusLabel,
@@ -289,10 +353,10 @@ if ($action === 'save_template') {
         } else {
             $stmt = $pdo->prepare("
                 INSERT INTO safety_gear_template (
-                    template_name, gear_type, item_name, model_name, product_name, purchase_vendor, purchase_price,
+                    template_name, gear_type, item_name, spec_name, model_name, kcs_cert_no, manufacturer_name, product_name, purchase_vendor, purchase_price,
                     status_label, notes, created_at, updated_at
                 ) VALUES (
-                    :template_name, :gear_type, :item_name, :model_name, :product_name, :purchase_vendor, :purchase_price,
+                    :template_name, :gear_type, :item_name, :spec_name, :model_name, :kcs_cert_no, :manufacturer_name, :product_name, :purchase_vendor, :purchase_price,
                     :status_label, :notes, :created_at, :updated_at
                 )
             ");
@@ -300,8 +364,11 @@ if ($action === 'save_template') {
                 ':template_name' => $templateName,
                 ':gear_type' => $gearType,
                 ':item_name' => $itemName,
+                ':spec_name' => $specName,
                 ':model_name' => $modelName,
-                ':product_name' => trim($itemName . ($modelName !== '' ? ' / ' . $modelName : '')),
+                ':kcs_cert_no' => $kcsCertNo,
+                ':manufacturer_name' => $manufacturerName,
+                ':product_name' => sg_build_product_name($itemName, $specName, $modelName),
                 ':purchase_vendor' => $purchaseVendor,
                 ':purchase_price' => $purchasePriceValue,
                 ':status_label' => $statusLabel,
@@ -347,7 +414,10 @@ if ($action === 'save_item') {
     $identifierValue = sg_normalize_text($_POST['identifier_value'] ?? '');
     $gearType = sg_normalize_text($_POST['gear_type'] ?? '');
     $itemName = sg_normalize_text($_POST['item_name'] ?? '');
+    $specName = sg_normalize_text($_POST['spec_name'] ?? '');
     $modelName = sg_normalize_text($_POST['model_name'] ?? '');
+    $kcsCertNo = sg_normalize_text($_POST['kcs_cert_no'] ?? '');
+    $manufacturerName = sg_normalize_text($_POST['manufacturer_name'] ?? '');
     $purchaseVendor = sg_normalize_text($_POST['purchase_vendor'] ?? '');
     $purchasePrice = sg_normalize_price($_POST['purchase_price'] ?? '');
     $purchasedAt = sg_normalize_text($_POST['purchased_at'] ?? '');
@@ -367,6 +437,7 @@ if ($action === 'save_item') {
     if ($gearType === '') {
         respond(['ok' => false, 'message' => '보호구 종류를 입력해 주세요.'], 400);
     }
+    sg_save_gear_type($pdo, $gearType);
     if (sg_identifier_exists($pdo, $identifierValue, $id)) {
         respond(['ok' => false, 'message' => '이미 등록된 식별값입니다.'], 409);
     }
@@ -387,7 +458,10 @@ if ($action === 'save_item') {
                     identifier_value = :identifier_value,
                     gear_type = :gear_type,
                     item_name = :item_name,
+                    spec_name = :spec_name,
                     model_name = :model_name,
+                    kcs_cert_no = :kcs_cert_no,
+                    manufacturer_name = :manufacturer_name,
                     product_name = :product_name,
                     purchase_vendor = :purchase_vendor,
                     purchase_price = :purchase_price,
@@ -406,8 +480,11 @@ if ($action === 'save_item') {
                 ':identifier_value' => $identifierValue,
                 ':gear_type' => $gearType,
                 ':item_name' => $itemName,
+                ':spec_name' => $specName,
                 ':model_name' => $modelName,
-                ':product_name' => trim($itemName . ($modelName !== '' ? ' / ' . $modelName : '')),
+                ':kcs_cert_no' => $kcsCertNo,
+                ':manufacturer_name' => $manufacturerName,
+                ':product_name' => sg_build_product_name($itemName, $specName, $modelName),
                 ':purchase_vendor' => $purchaseVendor,
                 ':purchase_price' => $purchasePriceValue,
                 ':purchased_at' => $purchasedAtValue,
@@ -424,12 +501,12 @@ if ($action === 'save_item') {
             $id = sg_make_item_id();
             $stmt = $pdo->prepare("
                 INSERT INTO safety_gear_item (
-                    gear_uid, identifier_type, identifier_value, gear_type, item_name, model_name, product_name,
+                    gear_uid, identifier_type, identifier_value, gear_type, item_name, spec_name, model_name, kcs_cert_no, manufacturer_name, product_name,
                     purchase_vendor, purchase_price, purchased_at, status_label, notes,
                     assigned_employee_id, assigned_employee_name, assigned_team, assigned_at,
                     created_at, updated_at
                 ) VALUES (
-                    :gear_uid, :identifier_type, :identifier_value, :gear_type, :item_name, :model_name, :product_name,
+                    :gear_uid, :identifier_type, :identifier_value, :gear_type, :item_name, :spec_name, :model_name, :kcs_cert_no, :manufacturer_name, :product_name,
                     :purchase_vendor, :purchase_price, :purchased_at, :status_label, :notes,
                     :assigned_employee_id, :assigned_employee_name, :assigned_team, :assigned_at,
                     :created_at, :updated_at
@@ -441,8 +518,11 @@ if ($action === 'save_item') {
                 ':identifier_value' => $identifierValue,
                 ':gear_type' => $gearType,
                 ':item_name' => $itemName,
+                ':spec_name' => $specName,
                 ':model_name' => $modelName,
-                ':product_name' => trim($itemName . ($modelName !== '' ? ' / ' . $modelName : '')),
+                ':kcs_cert_no' => $kcsCertNo,
+                ':manufacturer_name' => $manufacturerName,
+                ':product_name' => sg_build_product_name($itemName, $specName, $modelName),
                 ':purchase_vendor' => $purchaseVendor,
                 ':purchase_price' => $purchasePriceValue,
                 ':purchased_at' => $purchasedAtValue,

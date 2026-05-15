@@ -476,10 +476,160 @@ if (!auth_can_manage($user)) {
         const apiEndpoint = 'api.php';
         const exportEndpoint = 'export.php';
         const qrEndpoint = 'qr.php';
+
+        function ensureGearTypeField() {
+            const original = document.getElementById('gear_type');
+            if (!original) {
+                return null;
+            }
+            if (original.tagName === 'SELECT') {
+                return original;
+            }
+
+            const select = document.createElement('select');
+            select.id = 'gear_type';
+            select.innerHTML = '<option value="">보호구 종류 선택</option>';
+
+            if (original.value) {
+                const option = document.createElement('option');
+                option.value = original.value;
+                option.textContent = original.value;
+                select.appendChild(option);
+                select.value = original.value;
+            }
+
+            original.parentNode.replaceChild(select, original);
+
+            const field = select.closest('.field');
+            if (field && !document.getElementById('gearTypeTools')) {
+                const tools = document.createElement('div');
+                tools.id = 'gearTypeTools';
+                tools.className = 'row';
+                tools.style.marginTop = '6px';
+                tools.innerHTML =
+                    '<input id="gear_type_new_name" class="grow" type="text" placeholder="새 보호구 종류 입력">' +
+                    '<button id="addGearTypeButton" type="button" class="ghost">목록 추가</button>' +
+                    '<button id="deleteGearTypeButton" type="button" class="secondary">선택 삭제</button>';
+                field.appendChild(tools);
+            }
+
+            return select;
+        }
+
+        ensureGearTypeField();
+
+        function ensureSpecField() {
+            let specInput = document.getElementById('spec_name');
+            if (specInput) {
+                specInput.setAttribute('list', 'spec_name_list');
+                if (!document.getElementById('spec_name_list')) {
+                    const existingList = document.createElement('datalist');
+                    existingList.id = 'spec_name_list';
+                    specInput.parentNode.appendChild(existingList);
+                }
+                return specInput;
+            }
+
+            const modelField = document.getElementById('model_name') ? document.getElementById('model_name').closest('.field') : null;
+            if (!modelField || !modelField.parentNode) {
+                return null;
+            }
+
+            const specField = document.createElement('div');
+            specField.className = 'field';
+
+            const specLabel = document.createElement('label');
+            specLabel.setAttribute('for', 'spec_name');
+            specLabel.textContent = '규격';
+
+            specInput = document.createElement('input');
+            specInput.id = 'spec_name';
+            specInput.type = 'text';
+            specInput.setAttribute('list', 'spec_name_list');
+            specInput.placeholder = '예: ABS, 6인치, 전체식';
+
+            const specList = document.createElement('datalist');
+            specList.id = 'spec_name_list';
+
+            specField.appendChild(specLabel);
+            specField.appendChild(specInput);
+            specField.appendChild(specList);
+            modelField.parentNode.insertBefore(specField, modelField);
+
+            return specInput;
+        }
+
+        ensureSpecField();
+
+        function ensureKcsField() {
+            let kcsInput = document.getElementById('kcs_cert_no');
+            if (kcsInput) {
+                return kcsInput;
+            }
+
+            const purchaseVendorField = document.getElementById('purchase_vendor') ? document.getElementById('purchase_vendor').closest('.field') : null;
+            if (!purchaseVendorField || !purchaseVendorField.parentNode) {
+                return null;
+            }
+
+            const kcsField = document.createElement('div');
+            kcsField.className = 'field';
+
+            const kcsLabel = document.createElement('label');
+            kcsLabel.setAttribute('for', 'kcs_cert_no');
+            kcsLabel.textContent = 'KCS 안전인증번호';
+
+            kcsInput = document.createElement('input');
+            kcsInput.id = 'kcs_cert_no';
+            kcsInput.type = 'text';
+            kcsInput.placeholder = '예: KCS-2026-000123';
+
+            kcsField.appendChild(kcsLabel);
+            kcsField.appendChild(kcsInput);
+            purchaseVendorField.parentNode.insertBefore(kcsField, purchaseVendorField);
+
+            return kcsInput;
+        }
+
+        ensureKcsField();
+
+        function ensureManufacturerField() {
+            let manufacturerInput = document.getElementById('manufacturer_name');
+            if (manufacturerInput) {
+                return manufacturerInput;
+            }
+
+            const purchaseVendorField = document.getElementById('purchase_vendor') ? document.getElementById('purchase_vendor').closest('.field') : null;
+            if (!purchaseVendorField || !purchaseVendorField.parentNode) {
+                return null;
+            }
+
+            const manufacturerField = document.createElement('div');
+            manufacturerField.className = 'field';
+
+            const manufacturerLabel = document.createElement('label');
+            manufacturerLabel.setAttribute('for', 'manufacturer_name');
+            manufacturerLabel.textContent = '제조사';
+
+            manufacturerInput = document.createElement('input');
+            manufacturerInput.id = 'manufacturer_name';
+            manufacturerInput.type = 'text';
+            manufacturerInput.placeholder = '예: K2, 3M, 유한킴벌리';
+
+            manufacturerField.appendChild(manufacturerLabel);
+            manufacturerField.appendChild(manufacturerInput);
+            purchaseVendorField.parentNode.insertBefore(manufacturerField, purchaseVendorField);
+
+            return manufacturerInput;
+        }
+
+        ensureManufacturerField();
+
         const state = {
             items: [],
             employees: [],
             templates: [],
+            gearTypes: [],
             currentItemId: '',
             currentTemplateId: '',
             stream: null,
@@ -493,8 +643,14 @@ if (!auth_can_manage($user)) {
             identifierType: document.getElementById('identifier_type'),
             identifierValue: document.getElementById('identifier_value'),
             gearType: document.getElementById('gear_type'),
+            gearTypeNewName: document.getElementById('gear_type_new_name'),
+            addGearTypeButton: document.getElementById('addGearTypeButton'),
+            deleteGearTypeButton: document.getElementById('deleteGearTypeButton'),
             itemName: document.getElementById('item_name'),
+            specName: document.getElementById('spec_name'),
             modelName: document.getElementById('model_name'),
+            kcsCertNo: document.getElementById('kcs_cert_no'),
+            manufacturerName: document.getElementById('manufacturer_name'),
             purchaseVendor: document.getElementById('purchase_vendor'),
             purchasePrice: document.getElementById('purchase_price'),
             purchasedAt: document.getElementById('purchased_at'),
@@ -603,6 +759,83 @@ if (!auth_can_manage($user)) {
             }
         }
 
+        function renderGearTypes() {
+            const select = fields.gearType;
+            const currentValue = String(select.value || '').trim();
+            select.innerHTML = '<option value="">보호구 종류 선택</option>';
+
+            state.gearTypes.forEach(function (type) {
+                const option = document.createElement('option');
+                option.value = type.name || '';
+                option.textContent = type.name || '';
+                option.dataset.id = type.id || '';
+                option.dataset.inUse = type.in_use ? '1' : '0';
+                select.appendChild(option);
+            });
+
+            if (currentValue) {
+                const hasOption = state.gearTypes.some(function (type) {
+                    return String(type.name || '') === currentValue;
+                });
+                if (!hasOption) {
+                    const option = document.createElement('option');
+                    option.value = currentValue;
+                    option.textContent = currentValue;
+                    option.dataset.id = '';
+                    option.dataset.inUse = '1';
+                    select.appendChild(option);
+                }
+                select.value = currentValue;
+            }
+        }
+
+        function renderSpecOptions() {
+            const dataList = document.getElementById('spec_name_list');
+            if (!dataList) {
+                return;
+            }
+
+            const currentValue = String(fields.specName.value || '').trim();
+            const candidates = new Set();
+
+            state.items.forEach(function (item) {
+                const specName = String(item.spec_name || '').trim();
+                const modelName = String(item.model_name || '').trim();
+                if (specName) {
+                    candidates.add(specName);
+                }
+                if (modelName) {
+                    candidates.add(modelName);
+                }
+            });
+
+            state.templates.forEach(function (template) {
+                const specName = String(template.spec_name || '').trim();
+                const modelName = String(template.model_name || '').trim();
+                if (specName) {
+                    candidates.add(specName);
+                }
+                if (modelName) {
+                    candidates.add(modelName);
+                }
+            });
+
+            const sorted = Array.from(candidates).sort(function (a, b) {
+                return a.localeCompare(b, 'ko');
+            });
+
+            dataList.innerHTML = '';
+            sorted.forEach(function (value) {
+                const option = document.createElement('option');
+                option.value = value;
+                dataList.appendChild(option);
+            });
+
+            if (currentValue) {
+                fields.specName.value = currentValue;
+            }
+        }
+
         function renderHistory(history) {
             fields.historyList.innerHTML = '';
             const items = Array.isArray(history) ? history : [];
@@ -627,7 +860,10 @@ if (!auth_can_manage($user)) {
             fields.identifierValue.value = '';
             fields.gearType.value = '';
             fields.itemName.value = '';
+            fields.specName.value = '';
             fields.modelName.value = '';
+            fields.kcsCertNo.value = '';
+            fields.manufacturerName.value = '';
             fields.purchaseVendor.value = '';
             fields.purchasePrice.value = '';
             fields.purchasedAt.value = '';
@@ -664,7 +900,10 @@ if (!auth_can_manage($user)) {
             fields.identifierValue.value = entry.identifier_value || '';
             fields.gearType.value = entry.gear_type || '';
             fields.itemName.value = entry.item_name || '';
+            fields.specName.value = entry.spec_name || '';
             fields.modelName.value = entry.model_name || '';
+            fields.kcsCertNo.value = entry.kcs_cert_no || '';
+            fields.manufacturerName.value = entry.manufacturer_name || '';
             fields.purchaseVendor.value = entry.purchase_vendor || '';
             fields.purchasePrice.value = entry.purchase_price || '';
             fields.purchasedAt.value = entry.purchased_at || '';
@@ -689,7 +928,10 @@ if (!auth_can_manage($user)) {
             }
             fields.gearType.value = entry.gear_type || '';
             fields.itemName.value = entry.item_name || '';
+            fields.specName.value = entry.spec_name || '';
             fields.modelName.value = entry.model_name || '';
+            fields.kcsCertNo.value = entry.kcs_cert_no || '';
+            fields.manufacturerName.value = entry.manufacturer_name || '';
             fields.purchaseVendor.value = entry.purchase_vendor || '';
             fields.purchasePrice.value = entry.purchase_price || '';
             fields.status.value = entry.status || '사용 가능';
@@ -734,12 +976,20 @@ if (!auth_can_manage($user)) {
             const payload = await apiRequest({ action: 'templates' });
             state.templates = Array.isArray(payload.templates) ? payload.templates : [];
             renderTemplates();
+            renderSpecOptions();
+        }
+
+        async function loadGearTypes() {
+            const payload = await apiRequest({ action: 'gear_types' });
+            state.gearTypes = Array.isArray(payload.gear_types) ? payload.gear_types : [];
+            renderGearTypes();
         }
 
         async function loadItems() {
             const payload = await apiRequest({ action: 'list', q: state.searchQuery });
             state.items = Array.isArray(payload.items) ? payload.items : [];
             renderRecentList();
+            renderSpecOptions();
         }
 
         function buildSaveParams() {
@@ -750,7 +1000,10 @@ if (!auth_can_manage($user)) {
                 identifier_value: fields.identifierValue.value.trim(),
                 gear_type: fields.gearType.value.trim(),
                 item_name: fields.itemName.value.trim(),
+                spec_name: fields.specName.value.trim(),
                 model_name: fields.modelName.value.trim(),
+                kcs_cert_no: fields.kcsCertNo.value.trim(),
+                manufacturer_name: fields.manufacturerName.value.trim(),
                 purchase_vendor: fields.purchaseVendor.value.trim(),
                 purchase_price: fields.purchasePrice.value.trim(),
                 purchased_at: fields.purchasedAt.value,
@@ -805,7 +1058,10 @@ if (!auth_can_manage($user)) {
                 identifiers: fields.bulkIdentifiers.value,
                 gear_type: fields.gearType.value.trim(),
                 item_name: fields.itemName.value.trim(),
+                spec_name: fields.specName.value.trim(),
                 model_name: fields.modelName.value.trim(),
+                kcs_cert_no: fields.kcsCertNo.value.trim(),
+                manufacturer_name: fields.manufacturerName.value.trim(),
                 purchase_vendor: fields.purchaseVendor.value.trim(),
                 purchase_price: fields.purchasePrice.value.trim(),
                 purchased_at: fields.purchasedAt.value,
@@ -890,7 +1146,10 @@ if (!auth_can_manage($user)) {
                 template_name: fields.templateName.value.trim(),
                 gear_type: fields.gearType.value.trim(),
                 item_name: fields.itemName.value.trim(),
+                spec_name: fields.specName.value.trim(),
                 model_name: fields.modelName.value.trim(),
+                kcs_cert_no: fields.kcsCertNo.value.trim(),
+                manufacturer_name: fields.manufacturerName.value.trim(),
                 purchase_vendor: fields.purchaseVendor.value.trim(),
                 purchase_price: fields.purchasePrice.value.trim(),
                 status: fields.status.value,
@@ -904,6 +1163,52 @@ if (!auth_can_manage($user)) {
             state.currentTemplateId = savedTemplate ? savedTemplate.id : '';
             renderTemplates();
             setStatus(payload.message || '템플릿이 저장되었습니다.', false);
+        }
+
+        async function saveGearType() {
+            const typeName = String(fields.gearTypeNewName.value || '').trim();
+            if (!typeName) {
+                setStatus('새 보호구 종류명을 입력해 주세요.', true);
+                fields.gearTypeNewName.focus();
+                return;
+            }
+
+            const payload = await apiRequest({
+                action: 'save_gear_type',
+                type_name: typeName
+            }, 'POST');
+
+            state.gearTypes = Array.isArray(payload.gear_types) ? payload.gear_types : [];
+            renderGearTypes();
+            fields.gearType.value = typeName;
+            fields.gearTypeNewName.value = '';
+            setStatus(payload.message || '보호구 종류가 저장되었습니다.', false);
+        }
+
+        async function deleteGearType() {
+            const selected = fields.gearType.options[fields.gearType.selectedIndex];
+            const typeName = String(fields.gearType.value || '').trim();
+            const typeId = selected ? String(selected.dataset.id || '') : '';
+
+            if (!typeName) {
+                setStatus('삭제할 보호구 종류를 먼저 선택해 주세요.', true);
+                return;
+            }
+
+            if (!window.confirm('선택한 보호구 종류를 목록에서 삭제할까요?')) {
+                return;
+            }
+
+            const payload = await apiRequest({
+                action: 'delete_gear_type',
+                type_id: typeId,
+                type_name: typeName
+            }, 'POST');
+
+            state.gearTypes = Array.isArray(payload.gear_types) ? payload.gear_types : [];
+            fields.gearType.value = '';
+            renderGearTypes();
+            setStatus(payload.message || '보호구 종류가 삭제되었습니다.', false);
         }
 
         async function deleteTemplate() {
@@ -1125,6 +1430,20 @@ if (!auth_can_manage($user)) {
                 setStatus(error.message || '템플릿 저장 중 오류가 발생했습니다.', true);
             }
         });
+        fields.addGearTypeButton.addEventListener('click', async function () {
+            try {
+                await saveGearType();
+            } catch (error) {
+                setStatus(error.message || '보호구 종류 저장을 처리하지 못했습니다.', true);
+            }
+        });
+        fields.deleteGearTypeButton.addEventListener('click', async function () {
+            try {
+                await deleteGearType();
+            } catch (error) {
+                setStatus(error.message || '보호구 종류 삭제를 처리하지 못했습니다.', true);
+            }
+        });
         document.getElementById('deleteTemplateButton').addEventListener('click', async function () {
             try {
                 await deleteTemplate();
@@ -1161,6 +1480,7 @@ if (!auth_can_manage($user)) {
             clearForm();
             try {
                 await loadEmployees();
+                await loadGearTypes();
                 await loadTemplates();
                 await loadItems();
                 setStatus('준비되었습니다. 스캔하거나 식별값을 입력해 주세요.', false);
@@ -1171,3 +1491,4 @@ if (!auth_can_manage($user)) {
     </script>
 </body>
 </html>
+
