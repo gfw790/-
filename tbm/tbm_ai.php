@@ -2568,6 +2568,9 @@ function tbm_ai_build_csi_article(array $listItem, array $detail): array
     $damageText = implode(' / ', array_values(array_unique($damageParts)));
 
     $bodyParts = [];
+    if ($accidentDate !== '') {
+        $bodyParts[] = '사고일시: ' . $accidentDate;
+    }
     if ($locationText !== '') {
         $bodyParts[] = '사고위치: ' . $locationText;
     }
@@ -3179,9 +3182,12 @@ function tbm_ai_build_csi_prompt(string $targetDate, array $article): string
 {
     $articleTitle = trim((string)($article['article_title'] ?? ''));
     $articleBody  = trim((string)($article['article_body'] ?? ''));
-    $articleBody  = mb_substr($articleBody, 0, 900, 'UTF-8');
     $articleUrl   = trim((string)($article['article_url'] ?? ''));
     $articleAccidentDate = trim((string)($article['accident_date'] ?? ''));
+    if ($articleAccidentDate !== '' && !str_contains($articleBody, $articleAccidentDate)) {
+        $articleBody = '사고일시: ' . $articleAccidentDate . "\n" . $articleBody;
+    }
+    $articleBody  = mb_substr($articleBody, 0, 900, 'UTF-8');
 
     return <<<PROMPT
 다음은 CSI 사고사례 상세 자료입니다.
