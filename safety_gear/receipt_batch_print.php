@@ -114,7 +114,11 @@ function receipt_parse_manual_items(string $raw, string $defaultDate): array
         $items[] = [
             'gear_label' => $gearLabel !== '' ? $gearLabel : ($itemName !== '' ? $itemName : '보호구'),
             'item_name' => $itemName,
+            'spec_name' => '',
             'model_name' => $modelName,
+            'manufacturer_name' => '',
+            'kcs_cert_no' => '',
+            'detail_text' => trim($itemName . ($modelName !== '' ? ' / ' . $modelName : '')),
             'quantity' => $quantity,
             'assigned_date' => $assignedDate !== '' ? $assignedDate : $defaultDate,
         ];
@@ -357,6 +361,45 @@ function receipt_gear_label_html(string $ko, string $locale = 'ko'): string
     }
 
     return receipt_label_html($ko, $translated, $locale);
+}
+
+function receipt_detail_lines(array $item): array
+{
+    $lines = [];
+    $fieldMap = [
+        '품명' => sg_normalize_text($item['item_name'] ?? ''),
+        '규격' => sg_normalize_text($item['spec_name'] ?? ''),
+        '모델명' => sg_normalize_text($item['model_name'] ?? ''),
+        '제조사' => sg_normalize_text($item['manufacturer_name'] ?? ''),
+        'KCS 안전인증번호' => sg_normalize_text($item['kcs_cert_no'] ?? ''),
+    ];
+
+    foreach ($fieldMap as $label => $value) {
+        if ($value !== '') {
+            $lines[] = ['label' => $label, 'value' => $value];
+        }
+    }
+
+    if (!empty($lines)) {
+        return $lines;
+    }
+
+    $detailText = sg_normalize_text($item['detail_text'] ?? '');
+    if ($detailText !== '') {
+        return [['label' => '세부내역', 'value' => $detailText]];
+    }
+
+    return [['label' => '세부내역', 'value' => '-']];
+}
+
+function receipt_detail_html(array $item): string
+{
+    $parts = [];
+    foreach (receipt_detail_lines($item) as $line) {
+        $parts[] = '<div class="detail-line"><span class="detail-label">' . h($line['label']) . '</span>: ' . h($line['value']) . '</div>';
+    }
+
+    return implode('', $parts);
 }
 
 function receipt_status_label(string $status): string
@@ -709,6 +752,8 @@ $translations = receipt_translation_set($sheetLocale);
         .sub-panel { border: 1px solid var(--line); border-radius: 14px; padding: 14px; background: #fff; }
         .mini-table { width: 100%; margin-top: 10px; }
         .mini-table th, .mini-table td { font-size: 12px; padding: 7px 8px; }
+        .detail-line + .detail-line { margin-top: 3px; }
+        .detail-label { display: inline-block; min-width: 92px; font-weight: 700; color: #334155; }
         .attachment-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; color: var(--accent); text-decoration: none; font-weight: 700; }
         .attachment-link:hover { text-decoration: underline; }
         @media (max-width: 980px) {
@@ -919,10 +964,10 @@ $translations = receipt_translation_set($sheetLocale);
                             <th style="width:48px;">No.</th>
                             <th><?= receipt_label_html('보호구 명칭', $t['gear_name'] ?? '', $sheetLocale) ?></th>
                             <th><?= receipt_label_html('품명', '', $sheetLocale) ?></th>
-                            <th><?= receipt_label_html('규격/사양', '', $sheetLocale) ?></th>
+                            <th><?= receipt_label_html('규격', '', $sheetLocale) ?></th>
                             <th><?= receipt_label_html('모델명', '', $sheetLocale) ?></th>
-                            <th><?= receipt_label_html('제조자', '', $sheetLocale) ?></th>
-                            <th><?= receipt_label_html('KCS 인증번호', '', $sheetLocale) ?></th>
+                            <th><?= receipt_label_html('제조사', '', $sheetLocale) ?></th>
+                            <th><?= receipt_label_html('KCS 안전인증번호', '', $sheetLocale) ?></th>
                             <th style="width:88px;"><?= receipt_label_html('지급 수량', $t['quantity'] ?? '', $sheetLocale) ?></th>
                             <th style="width:120px;"><?= receipt_label_html('지급 일자', $t['issued_date'] ?? '', $sheetLocale) ?></th>
                         </tr>
@@ -1009,7 +1054,11 @@ $translations = receipt_translation_set($sheetLocale);
                                             <tr>
                                                 <th style="width:52px;">No.</th>
                                                 <th>보호구 명칭</th>
-                                                <th>품명 / 모델</th>
+                                                <th>품명</th>
+                                                <th>규격</th>
+                                                <th>모델명</th>
+                                                <th>제조사</th>
+                                                <th>KCS 안전인증번호</th>
                                                 <th style="width:72px;">수량</th>
                                                 <th style="width:110px;">지급일</th>
                                             </tr>
@@ -1019,12 +1068,11 @@ $translations = receipt_translation_set($sheetLocale);
                                                 <tr>
                                                     <td><?= $rowIndex + 1 ?></td>
                                                     <td><?= h(receipt_value($item['gear_label'] ?? '')) ?></td>
-                                                    <td>
-                                                        <?= h(receipt_value($item['item_name'] ?? '')) ?>
-                                                        <?php if (sg_normalize_text($item['model_name'] ?? '') !== ''): ?>
-                                                            / <?= h(receipt_value($item['model_name'] ?? '')) ?>
-                                                        <?php endif; ?>
-                                                    </td>
+                                                    <td><?= h(receipt_value($item['item_name'] ?? '')) ?></td>
+                                                    <td><?= h(receipt_value($item['spec_name'] ?? '')) ?></td>
+                                                    <td><?= h(receipt_value($item['model_name'] ?? '')) ?></td>
+                                                    <td><?= h(receipt_value($item['manufacturer_name'] ?? '')) ?></td>
+                                                    <td><?= h(receipt_value($item['kcs_cert_no'] ?? '')) ?></td>
                                                     <td><?= (int)($item['quantity'] ?? 0) ?></td>
                                                     <td><?= h(receipt_value($item['assigned_date'] ?? '')) ?></td>
                                                 </tr>

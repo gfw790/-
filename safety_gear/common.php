@@ -257,7 +257,10 @@ function sg_ensure_tables(PDO $pdo): void
             receipt_id BIGINT UNSIGNED NOT NULL,
             gear_label VARCHAR(160) NOT NULL DEFAULT '',
             item_name VARCHAR(255) NOT NULL DEFAULT '',
+            spec_name VARCHAR(255) NOT NULL DEFAULT '',
             model_name VARCHAR(255) NOT NULL DEFAULT '',
+            manufacturer_name VARCHAR(255) NOT NULL DEFAULT '',
+            kcs_cert_no VARCHAR(255) NOT NULL DEFAULT '',
             detail_text TEXT NULL,
             quantity INT NOT NULL DEFAULT 1,
             assigned_date DATE NOT NULL,
@@ -338,6 +341,15 @@ function sg_ensure_tables(PDO $pdo): void
     }
     if (!sg_column_exists($pdo, 'safety_gear_receipt_item', 'detail_text')) {
         $pdo->exec("ALTER TABLE safety_gear_receipt_item ADD COLUMN detail_text TEXT NULL AFTER model_name");
+    }
+    if (!sg_column_exists($pdo, 'safety_gear_receipt_item', 'spec_name')) {
+        $pdo->exec("ALTER TABLE safety_gear_receipt_item ADD COLUMN spec_name VARCHAR(255) NOT NULL DEFAULT '' AFTER item_name");
+    }
+    if (!sg_column_exists($pdo, 'safety_gear_receipt_item', 'manufacturer_name')) {
+        $pdo->exec("ALTER TABLE safety_gear_receipt_item ADD COLUMN manufacturer_name VARCHAR(255) NOT NULL DEFAULT '' AFTER model_name");
+    }
+    if (!sg_column_exists($pdo, 'safety_gear_receipt_item', 'kcs_cert_no')) {
+        $pdo->exec("ALTER TABLE safety_gear_receipt_item ADD COLUMN kcs_cert_no VARCHAR(255) NOT NULL DEFAULT '' AFTER manufacturer_name");
     }
 
     $pdo->exec("UPDATE safety_gear_item SET item_name = product_name WHERE item_name = '' AND product_name <> ''");
@@ -1432,9 +1444,9 @@ function sg_create_receipt(PDO $pdo, array $header, array $items, array $creator
 
     $itemStmt = $pdo->prepare("
         INSERT INTO safety_gear_receipt_item (
-            receipt_id, gear_label, item_name, model_name, detail_text, quantity, assigned_date
+            receipt_id, gear_label, item_name, spec_name, model_name, manufacturer_name, kcs_cert_no, detail_text, quantity, assigned_date
         ) VALUES (
-            :receipt_id, :gear_label, :item_name, :model_name, :detail_text, :quantity, :assigned_date
+            :receipt_id, :gear_label, :item_name, :spec_name, :model_name, :manufacturer_name, :kcs_cert_no, :detail_text, :quantity, :assigned_date
         )
     ");
     foreach ($items as $item) {
@@ -1442,7 +1454,10 @@ function sg_create_receipt(PDO $pdo, array $header, array $items, array $creator
             ':receipt_id' => $receiptId,
             ':gear_label' => sg_normalize_text($item['gear_label'] ?? ''),
             ':item_name' => sg_normalize_text($item['item_name'] ?? ''),
+            ':spec_name' => sg_normalize_text($item['spec_name'] ?? ''),
             ':model_name' => sg_normalize_text($item['model_name'] ?? ''),
+            ':manufacturer_name' => sg_normalize_text($item['manufacturer_name'] ?? ''),
+            ':kcs_cert_no' => sg_normalize_text($item['kcs_cert_no'] ?? ''),
             ':detail_text' => sg_normalize_text($item['detail_text'] ?? sg_build_receipt_detail_text($item)),
             ':quantity' => max(1, (int)($item['quantity'] ?? 1)),
             ':assigned_date' => sg_normalize_text($item['assigned_date'] ?? date('Y-m-d')),
@@ -1455,7 +1470,7 @@ function sg_create_receipt(PDO $pdo, array $header, array $items, array $creator
 function sg_fetch_receipt_items(PDO $pdo, int $receiptId): array
 {
     $stmt = $pdo->prepare("
-        SELECT gear_label, item_name, model_name, detail_text, quantity, assigned_date
+        SELECT gear_label, item_name, spec_name, model_name, manufacturer_name, kcs_cert_no, detail_text, quantity, assigned_date
         FROM safety_gear_receipt_item
         WHERE receipt_id = :receipt_id
         ORDER BY receipt_item_id ASC
