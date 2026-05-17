@@ -383,7 +383,10 @@ if ($mode === 'item' && $gearUid !== '') {
                                 <tr>
                                     <th>보호구 종류</th>
                                     <th>품명</th>
+                                    <th>규격/사양</th>
                                     <th>모델</th>
+                                    <th>KCS 인증번호</th>
+                                    <th>제조자</th>
                                     <th>식별값</th>
                                     <th>상태</th>
                                     <th>지급일시</th>
@@ -395,7 +398,10 @@ if ($mode === 'item' && $gearUid !== '') {
                                     <tr>
                                         <td><?= h(report_value($item['gear_type'] ?? '')) ?></td>
                                         <td><?= h(report_value($item['item_name'] ?? '')) ?></td>
+                                        <td><?= h(report_value($item['spec_name'] ?? '')) ?></td>
                                         <td><?= h(report_value($item['model_name'] ?? '')) ?></td>
+                                        <td><?= h(report_value($item['kcs_cert_no'] ?? '')) ?></td>
+                                        <td><?= h(report_value($item['manufacturer_name'] ?? '')) ?></td>
                                         <td><?= h(report_value($item['identifier_value'] ?? '')) ?></td>
                                         <td><?= h(report_value($item['status'] ?? '')) ?></td>
                                         <td><?= h(report_value($item['assigned_at'] ?? '')) ?></td>
@@ -417,7 +423,10 @@ if ($mode === 'item' && $gearUid !== '') {
                                     <th>이력 종류</th>
                                     <th>보호구 종류</th>
                                     <th>품명</th>
+                                    <th>규격/사양</th>
                                     <th>모델</th>
+                                    <th>KCS 인증번호</th>
+                                    <th>제조자</th>
                                     <th>식별값</th>
                                     <th>상태</th>
                                     <th>내용</th>
@@ -430,7 +439,10 @@ if ($mode === 'item' && $gearUid !== '') {
                                         <td><?= h(report_value($row['history_type'] ?? '')) ?></td>
                                         <td><?= h(report_value($row['gear_type'] ?? '')) ?></td>
                                         <td><?= h(report_value($row['item_name'] ?? '')) ?></td>
+                                        <td><?= h(report_value($row['spec_name'] ?? '')) ?></td>
                                         <td><?= h(report_value($row['model_name'] ?? '')) ?></td>
+                                        <td><?= h(report_value($row['kcs_cert_no'] ?? '')) ?></td>
+                                        <td><?= h(report_value($row['manufacturer_name'] ?? '')) ?></td>
                                         <td><?= h(report_value($row['identifier_value'] ?? '')) ?></td>
                                         <td><?= h(report_value($row['status_label'] ?? '')) ?></td>
                                         <td><?= nl2br(h(report_value($row['history_note'] ?? ''))) ?></td>
@@ -551,7 +563,11 @@ if ($mode === 'item' && $gearUid !== '') {
                                     <th>일시</th>
                                     <th>이력 종류</th>
                                     <th>품명</th>
+                                    <th>규격/사양</th>
                                     <th>모델</th>
+                                    <th>KCS 인증번호</th>
+                                    <th>제조자</th>
+                                    <th>식별값</th>
                                     <th>지급 대상자</th>
                                     <th>지급팀</th>
                                     <th>상태</th>
@@ -564,7 +580,11 @@ if ($mode === 'item' && $gearUid !== '') {
                                         <td><?= h(report_value($row['created_at'] ?? '')) ?></td>
                                         <td><?= h(report_value($row['history_type'] ?? '')) ?></td>
                                         <td><?= h(report_value($row['item_name'] ?? '')) ?></td>
+                                        <td><?= h(report_value($row['spec_name'] ?? '')) ?></td>
                                         <td><?= h(report_value($row['model_name'] ?? '')) ?></td>
+                                        <td><?= h(report_value($row['kcs_cert_no'] ?? '')) ?></td>
+                                        <td><?= h(report_value($row['manufacturer_name'] ?? '')) ?></td>
+                                        <td><?= h(report_value($row['identifier_value'] ?? '')) ?></td>
                                         <td><?= h(report_value($row['employee_name'] ?? '')) ?></td>
                                         <td><?= h(report_value($row['employee_team'] ?? '')) ?></td>
                                         <td><?= h(report_value($row['status_label'] ?? '')) ?></td>

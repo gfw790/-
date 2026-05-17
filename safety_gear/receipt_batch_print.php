@@ -52,15 +52,23 @@ function receipt_aggregate_items(array $items): array
     foreach ($items as $item) {
         $gearType = sg_normalize_text($item['gear_type'] ?? '');
         $itemName = sg_normalize_text($item['item_name'] ?? '');
+        $specName = sg_normalize_text($item['spec_name'] ?? '');
         $modelName = sg_normalize_text($item['model_name'] ?? '');
+        $manufacturerName = sg_normalize_text($item['manufacturer_name'] ?? '');
+        $kcsCertNo = sg_normalize_text($item['kcs_cert_no'] ?? '');
+        $detailText = sg_normalize_text($item['detail_text'] ?? sg_build_receipt_detail_text($item));
         $assignedDate = substr(sg_normalize_text($item['assigned_at'] ?? ''), 0, 10);
-        $key = implode('|', [$gearType, $itemName, $modelName, $assignedDate]);
+        $key = implode('|', [$gearType, $itemName, $specName, $modelName, $manufacturerName, $kcsCertNo, $detailText, $assignedDate]);
 
         if (!isset($rows[$key])) {
             $rows[$key] = [
                 'gear_label' => trim($gearType !== '' ? $gearType : $itemName),
                 'item_name' => $itemName,
+                'spec_name' => $specName,
                 'model_name' => $modelName,
+                'manufacturer_name' => $manufacturerName,
+                'kcs_cert_no' => $kcsCertNo,
+                'detail_text' => $detailText,
                 'quantity' => 0,
                 'assigned_date' => $assignedDate !== '' ? $assignedDate : date('Y-m-d'),
             ];
@@ -910,7 +918,11 @@ $translations = receipt_translation_set($sheetLocale);
                         <tr>
                             <th style="width:48px;">No.</th>
                             <th><?= receipt_label_html('보호구 명칭', $t['gear_name'] ?? '', $sheetLocale) ?></th>
-                            <th><?= receipt_label_html('규격 / 모델명', $t['model'] ?? '', $sheetLocale) ?></th>
+                            <th><?= receipt_label_html('품명', '', $sheetLocale) ?></th>
+                            <th><?= receipt_label_html('규격/사양', '', $sheetLocale) ?></th>
+                            <th><?= receipt_label_html('모델명', '', $sheetLocale) ?></th>
+                            <th><?= receipt_label_html('제조자', '', $sheetLocale) ?></th>
+                            <th><?= receipt_label_html('KCS 인증번호', '', $sheetLocale) ?></th>
                             <th style="width:88px;"><?= receipt_label_html('지급 수량', $t['quantity'] ?? '', $sheetLocale) ?></th>
                             <th style="width:120px;"><?= receipt_label_html('지급 일자', $t['issued_date'] ?? '', $sheetLocale) ?></th>
                         </tr>
@@ -920,12 +932,11 @@ $translations = receipt_translation_set($sheetLocale);
                             <tr>
                                 <td><?= $rowIndex + 1 ?></td>
                                 <td><?= receipt_gear_label_html((string)($row['gear_label'] ?? ''), $sheetLocale) ?></td>
-                                <td>
-                                    <?= h(receipt_value($row['item_name'] ?? '')) ?>
-                                    <?php if (sg_normalize_text($row['model_name'] ?? '') !== ''): ?>
-                                        / <?= h(receipt_value($row['model_name'] ?? '')) ?>
-                                    <?php endif; ?>
-                                </td>
+                                <td><?= h(receipt_value($row['item_name'] ?? '')) ?></td>
+                                <td><?= h(receipt_value($row['spec_name'] ?? '')) ?></td>
+                                <td><?= h(receipt_value($row['model_name'] ?? '')) ?></td>
+                                <td><?= h(receipt_value($row['manufacturer_name'] ?? '')) ?></td>
+                                <td><?= h(receipt_value($row['kcs_cert_no'] ?? '')) ?></td>
                                 <td><?= (int)($row['quantity'] ?? 0) ?></td>
                                 <td><?= h(receipt_value($row['assigned_date'] ?? '')) ?></td>
                             </tr>

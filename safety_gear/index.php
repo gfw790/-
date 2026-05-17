@@ -339,7 +339,7 @@ if (!auth_can_manage($user)) {
                 </div>
                 <div class="field">
                     <label for="purchase_price">구매가격</label>
-                    <input id="purchase_price" type="number" min="0" step="1" placeholder="예: 15000">
+                    <input id="purchase_price" type="text" placeholder="예: 15000" inputmode="numeric">
                 </div>
                 <div class="field">
                     <label for="purchased_at">구매일</label>
@@ -721,6 +721,18 @@ if (!auth_can_manage($user)) {
             return raw.slice(0, 16).replace(' ', 'T');
         }
 
+        function formatNumberWithComma(num) {
+            const str = String(num || '').replace(/,/g, '').trim();
+            if (!str || isNaN(str)) {
+                return '';
+            }
+            return Math.floor(Number(str)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        }
+
+        function removeCommas(str) {
+            return String(str || '').replace(/,/g, '').trim();
+        }
+
         function updateQrPreview() {
             const value = String(fields.identifierValue.value || '').trim();
             if (!value) {
@@ -905,7 +917,7 @@ if (!auth_can_manage($user)) {
             fields.kcsCertNo.value = entry.kcs_cert_no || '';
             fields.manufacturerName.value = entry.manufacturer_name || '';
             fields.purchaseVendor.value = entry.purchase_vendor || '';
-            fields.purchasePrice.value = entry.purchase_price || '';
+            fields.purchasePrice.value = formatNumberWithComma(entry.purchase_price || '');
             fields.purchasedAt.value = entry.purchased_at || '';
             fields.status.value = entry.status || '사용 가능';
             fields.assignedEmployeeId.value = entry.assigned_employee_id || '';
@@ -933,7 +945,7 @@ if (!auth_can_manage($user)) {
             fields.kcsCertNo.value = entry.kcs_cert_no || '';
             fields.manufacturerName.value = entry.manufacturer_name || '';
             fields.purchaseVendor.value = entry.purchase_vendor || '';
-            fields.purchasePrice.value = entry.purchase_price || '';
+            fields.purchasePrice.value = formatNumberWithComma(entry.purchase_price || '');
             fields.status.value = entry.status || '사용 가능';
             fields.notes.value = entry.notes || '';
         }
@@ -1005,7 +1017,7 @@ if (!auth_can_manage($user)) {
                 kcs_cert_no: fields.kcsCertNo.value.trim(),
                 manufacturer_name: fields.manufacturerName.value.trim(),
                 purchase_vendor: fields.purchaseVendor.value.trim(),
-                purchase_price: fields.purchasePrice.value.trim(),
+                purchase_price: removeCommas(fields.purchasePrice.value),
                 purchased_at: fields.purchasedAt.value,
                 status: fields.status.value,
                 assigned_employee_id: fields.assignedEmployeeId.value,
@@ -1063,7 +1075,7 @@ if (!auth_can_manage($user)) {
                 kcs_cert_no: fields.kcsCertNo.value.trim(),
                 manufacturer_name: fields.manufacturerName.value.trim(),
                 purchase_vendor: fields.purchaseVendor.value.trim(),
-                purchase_price: fields.purchasePrice.value.trim(),
+                purchase_price: removeCommas(fields.purchasePrice.value),
                 purchased_at: fields.purchasedAt.value,
                 notes: fields.notes.value.trim(),
                 assigned_employee_id: fields.assignedEmployeeId.value,
@@ -1151,7 +1163,7 @@ if (!auth_can_manage($user)) {
                 kcs_cert_no: fields.kcsCertNo.value.trim(),
                 manufacturer_name: fields.manufacturerName.value.trim(),
                 purchase_vendor: fields.purchaseVendor.value.trim(),
-                purchase_price: fields.purchasePrice.value.trim(),
+                purchase_price: removeCommas(fields.purchasePrice.value),
                 status: fields.status.value,
                 notes: fields.notes.value.trim()
             }, 'POST');
@@ -1333,6 +1345,21 @@ if (!auth_can_manage($user)) {
         }
 
         fields.identifierValue.addEventListener('input', updateQrPreview);
+        fields.purchasePrice.addEventListener('input', function () {
+            const cursorPos = this.selectionStart;
+            const oldValue = this.value;
+            const digitsOnly = this.value.replace(/[^\d]/g, '');
+            this.value = digitsOnly ? formatNumberWithComma(digitsOnly) : '';
+            
+            const newLength = this.value.length;
+            const oldLength = oldValue.length;
+            const diff = newLength - oldLength;
+            
+            if (oldValue.length > 0) {
+                const newPos = Math.max(0, cursorPos + diff);
+                this.setSelectionRange(newPos, newPos);
+            }
+        });
         fields.assignedEmployeeId.addEventListener('change', function () {
             const selected = this.options[this.selectedIndex];
             if (!selected || !this.value) {
