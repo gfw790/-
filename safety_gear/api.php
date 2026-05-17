@@ -3,10 +3,16 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/common.php';
 
+ini_set('display_errors', '0');
+ob_start();
+
 header('Content-Type: application/json; charset=UTF-8');
 
 function respond(array $payload, int $status = 200): void
 {
+    if (ob_get_length() > 0) {
+        ob_clean();
+    }
     http_response_code($status);
     echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
     exit;
@@ -59,10 +65,11 @@ if ($action === 'find') {
 }
 
 if ($action === 'create_internal_key') {
+    $purchasedAt = sg_normalize_text($_GET['purchased_at'] ?? '');
     respond([
         'ok' => true,
         'identifier_type' => 'internal',
-        'identifier_value' => sg_make_internal_identifier(),
+        'identifier_value' => sg_make_unique_internal_identifier($pdo, $purchasedAt),
     ]);
 }
 
@@ -287,6 +294,97 @@ if ($action === 'bulk_initial_issue') {
     ]);
 }
 
+if ($action === 'bulk_receive_stock') {
+    $quantity = (int)($_POST['quantity'] ?? 0);
+    $gearType = sg_normalize_text($_POST['gear_type'] ?? '');
+    $itemName = sg_normalize_text($_POST['item_name'] ?? '');
+    $specName = sg_normalize_text($_POST['spec_name'] ?? '');
+    $modelName = sg_normalize_text($_POST['model_name'] ?? '');
+    $kcsCertNo = sg_normalize_text($_POST['kcs_cert_no'] ?? '');
+    $manufacturerName = sg_normalize_text($_POST['manufacturer_name'] ?? '');
+    $purchaseVendor = sg_normalize_text($_POST['purchase_vendor'] ?? '');
+    $purchasePrice = sg_normalize_price($_POST['purchase_price'] ?? '');
+    $purchasedAt = sg_normalize_text($_POST['purchased_at'] ?? '');
+    $notes = sg_normalize_text($_POST['notes'] ?? '');
+    $statusLabel = sg_normalize_text($_POST['status'] ?? '');
+
+    if ($quantity <= 0) {
+        respond(['ok' => false, 'message' => '입고 수량을 1개 이상 입력해 주세요.'], 400);
+    }
+    if ($gearType === '') {
+        respond(['ok' => false, 'message' => '보호구 종류를 먼저 입력해 주세요.'], 400);
+    }
+
+    sg_save_gear_type($pdo, $gearType);
+
+    $purchasePriceValue = $purchasePrice !== '' ? (float)$purchasePrice : null;
+    $purchasedAtValue = $purchasedAt !== '' ? $purchasedAt : null;
+    $statusToSave = $statusLabel !== '' ? $statusLabel : '사용 가능';
+    $createdIdentifiers = [];
+
+    try {
+        $pdo->beginTransaction();
+
+        $insertStmt = $pdo->prepare("
+            INSERT INTO safety_gear_item (
+                gear_uid, identifier_type, identifier_value, gear_type, item_name, spec_name, model_name, kcs_cert_no, manufacturer_name, product_name,
+                purchase_vendor, purchase_price, purchased_at, status_label, notes,
+                assigned_employee_id, assigned_employee_name, assigned_team, assigned_at,
+                created_at, updated_at
+            ) VALUES (
+                :gear_uid, :identifier_type, :identifier_value, :gear_type, :item_name, :spec_name, :model_name, :kcs_cert_no, :manufacturer_name, :product_name,
+                :purchase_vendor, :purchase_price, :purchased_at, :status_label, :notes,
+                NULL, '', '', NULL,
+                :created_at, :updated_at
+            )
+        ");
+
+        for ($index = 0; $index < $quantity; $index++) {
+            $gearUid = sg_make_item_id();
+            $identifierValue = sg_make_unique_internal_identifier($pdo, $purchasedAt);
+            $now = sg_current_timestamp();
+
+            $insertStmt->execute([
+                ':gear_uid' => $gearUid,
+                ':identifier_type' => 'internal',
+                ':identifier_value' => $identifierValue,
+                ':gear_type' => $gearType,
+                ':item_name' => $itemName,
+                ':spec_name' => $specName,
+                ':model_name' => $modelName,
+                ':kcs_cert_no' => $kcsCertNo,
+                ':manufacturer_name' => $manufacturerName,
+                ':product_name' => sg_build_product_name($itemName, $specName, $modelName),
+                ':purchase_vendor' => $purchaseVendor,
+                ':purchase_price' => $purchasePriceValue,
+                ':purchased_at' => $purchasedAtValue,
+                ':status_label' => $statusToSave,
+                ':notes' => $notes,
+                ':created_at' => $now,
+                ':updated_at' => $now,
+            ]);
+
+            sg_add_history($pdo, $gearUid, '등록', '수량 기준 입고 등록', []);
+            $createdIdentifiers[] = $identifierValue;
+        }
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        respond(['ok' => false, 'message' => '입고 수량 일괄 등록 중 오류가 발생했습니다: ' . $e->getMessage()], 500);
+    }
+
+    respond([
+        'ok' => true,
+        'message' => '입고 등록 완료: ' . count($createdIdentifiers) . '건 생성',
+        'created_count' => count($createdIdentifiers),
+        'created_identifiers' => $createdIdentifiers,
+        'items' => sg_fetch_all_items($pdo),
+    ]);
+}
+
 if ($action === 'save_template') {
     $templateId = sg_normalize_text($_POST['template_id'] ?? '');
     $templateName = sg_normalize_text($_POST['template_name'] ?? '');
@@ -430,6 +528,9 @@ if ($action === 'save_item') {
 
     if ($identifierType === '') {
         respond(['ok' => false, 'message' => '식별 방식이 필요합니다.'], 400);
+    }
+    if ($identifierValue === '' && $identifierType === 'internal') {
+        $identifierValue = sg_make_unique_internal_identifier($pdo, $purchasedAt);
     }
     if ($identifierValue === '') {
         respond(['ok' => false, 'message' => '식별값이 필요합니다.'], 400);

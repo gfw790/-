@@ -46,13 +46,39 @@ function sg_make_item_id(): string
     }
 }
 
-function sg_make_internal_identifier(): string
+function sg_make_internal_identifier(string $baseDate = ''): string
 {
+    $normalizedDate = preg_replace('/[^0-9]/', '', $baseDate);
+    $datePart = is_string($normalizedDate) && strlen($normalizedDate) >= 8
+        ? substr($normalizedDate, 0, 8)
+        : date('Ymd');
+
     try {
-        return 'SG-' . date('YmdHis') . '-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6));
+        return 'SG-' . $datePart . '-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6));
     } catch (Throwable $e) {
-        return 'SG-' . date('YmdHis') . '-' . mt_rand(100000, 999999);
+        return 'SG-' . $datePart . '-' . mt_rand(100000, 999999);
     }
+}
+
+function sg_make_unique_internal_identifier(PDO $pdo, string $baseDate = '', int $maxAttempts = 20): string
+{
+    for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
+        $candidate = sg_make_internal_identifier($baseDate);
+        if (!sg_identifier_exists($pdo, $candidate)) {
+            return $candidate;
+        }
+    }
+
+    $normalizedDate = preg_replace('/[^0-9]/', '', $baseDate);
+    $datePart = is_string($normalizedDate) && strlen($normalizedDate) >= 8
+        ? substr($normalizedDate, 0, 8)
+        : date('Ymd');
+
+    do {
+        $candidate = 'SG-' . $datePart . '-' . strtoupper(substr(md5(uniqid('', true)), 0, 8));
+    } while (sg_identifier_exists($pdo, $candidate));
+
+    return $candidate;
 }
 
 function sg_get_pdo(): PDO
@@ -978,21 +1004,33 @@ function sg_fetch_all_items(PDO $pdo, string $query = ''): array
     $query = sg_normalize_text($query);
 
     if ($query !== '') {
+        $likeValue = '%' . $query . '%';
+        $searchColumns = [
+            'identifier_value',
+            'gear_type',
+            'item_name',
+            'spec_name',
+            'model_name',
+            'kcs_cert_no',
+            'manufacturer_name',
+            'product_name',
+            'purchase_vendor',
+            'status_label',
+            'assigned_employee_name',
+            'assigned_team',
+        ];
+        $whereParts = [];
+
+        foreach ($searchColumns as $index => $columnName) {
+            $paramKey = ':q' . $index;
+            $whereParts[] = $columnName . ' LIKE ' . $paramKey;
+            $params[$paramKey] = $likeValue;
+        }
+
         $sql .= "
-            WHERE identifier_value LIKE :q
-               OR gear_type LIKE :q
-               OR item_name LIKE :q
-               OR spec_name LIKE :q
-               OR model_name LIKE :q
-               OR kcs_cert_no LIKE :q
-               OR manufacturer_name LIKE :q
-               OR product_name LIKE :q
-               OR purchase_vendor LIKE :q
-               OR status_label LIKE :q
-               OR assigned_employee_name LIKE :q
-               OR assigned_team LIKE :q
+            WHERE " . implode("
+               OR ", $whereParts) . "
         ";
-        $params[':q'] = '%' . $query . '%';
     }
 
     $sql .= " ORDER BY updated_at DESC, item_id DESC";

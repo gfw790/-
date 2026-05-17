@@ -370,6 +370,9 @@ if (!auth_can_manage($user)) {
                 </div>
                 <div class="field">
                     <label for="assigned_at">지급일시</label>
+                    <select id="assigned_team_select" style="margin-top:6px;">
+                        <option value="">팀 선택</option>
+                    </select>
                     <input id="assigned_at" type="datetime-local">
                 </div>
                 <div class="field">
@@ -390,6 +393,7 @@ if (!auth_can_manage($user)) {
                 <button id="deleteButton" type="button" class="danger">삭제</button>
                 <a href="/safety_gear/report.php" class="button secondary">이력서 조회/출력</a>
                 <a href="/safety_gear/receipt_batch_print.php" class="button secondary">개인별 확인서 일괄출력</a>
+                <a href="/safety_gear/status.php" class="button secondary">안전보호구 현황</a>
                 <label class="hint" style="display:flex; align-items:center; gap:6px; margin-left:4px;">
                     <input id="continuousMode" type="checkbox">
                     연속 등록 모드
@@ -432,6 +436,18 @@ if (!auth_can_manage($user)) {
                 </div>
             </div>
             <div id="historyList" class="history-list"></div>
+
+            <div class="bulk-box">
+                <h3>입고 수량 일괄 등록</h3>
+                <p class="hint" style="margin:8px 0 12px;">현재 입력한 보호구 기본정보를 기준으로, 수량만큼 내부코드를 자동 생성해 한 번에 입고 등록합니다.</p>
+                <div class="field">
+                    <label for="bulk_quantity">입고 수량</label>
+                    <input id="bulk_quantity" type="number" min="1" step="1" value="1" placeholder="예: 10">
+                </div>
+                <div class="row" style="margin-top:10px;">
+                    <button id="bulkReceiveButton" type="button" class="ghost">입고 수량 일괄 등록</button>
+                </div>
+            </div>
 
             <div class="bulk-box">
                 <h3>기존 지급품 일괄 등록</h3>
@@ -658,6 +674,7 @@ if (!auth_can_manage($user)) {
             assignedEmployeeId: document.getElementById('assigned_employee_id'),
             assignedEmployeeName: document.getElementById('assigned_employee_name'),
             assignedTeam: document.getElementById('assigned_team'),
+            assignedTeamSelect: document.getElementById('assigned_team_select'),
             assignedAt: document.getElementById('assigned_at'),
             notes: document.getElementById('notes'),
             historyType: document.getElementById('history_type'),
@@ -672,7 +689,8 @@ if (!auth_can_manage($user)) {
             scannerVideo: document.getElementById('scannerVideo'),
             searchInput: document.getElementById('searchInput'),
             continuousMode: document.getElementById('continuousMode'),
-            bulkIdentifiers: document.getElementById('bulk_identifiers')
+            bulkIdentifiers: document.getElementById('bulk_identifiers'),
+            bulkQuantity: document.getElementById('bulk_quantity')
         };
 
         function setStatus(message, isError) {
@@ -756,6 +774,48 @@ if (!auth_can_manage($user)) {
                 option.dataset.team = employee.team || '';
                 select.appendChild(option);
             });
+        }
+
+        function ensureAssignedTeamSelectPlacement() {
+            if (!fields.assignedTeamSelect || !fields.assignedTeam || !fields.assignedTeam.parentNode) {
+                return;
+            }
+            if (fields.assignedTeam.nextElementSibling !== fields.assignedTeamSelect) {
+                fields.assignedTeam.parentNode.insertBefore(fields.assignedTeamSelect, fields.assignedTeam.nextSibling);
+            }
+        }
+
+        function renderAssignedTeams() {
+            if (!fields.assignedTeamSelect) {
+                return;
+            }
+
+            const currentValue = String(fields.assignedTeam.value || '').trim();
+            const teams = [];
+            const seen = new Set();
+
+            state.employees.forEach(function (employee) {
+                const teamName = String(employee.team || '').trim();
+                if (!teamName || seen.has(teamName)) {
+                    return;
+                }
+                seen.add(teamName);
+                teams.push(teamName);
+            });
+
+            teams.sort(function (a, b) {
+                return a.localeCompare(b, 'ko');
+            });
+
+            fields.assignedTeamSelect.innerHTML = '<option value="">팀 선택</option>';
+            teams.forEach(function (teamName) {
+                const option = document.createElement('option');
+                option.value = teamName;
+                option.textContent = teamName;
+                fields.assignedTeamSelect.appendChild(option);
+            });
+
+            fields.assignedTeamSelect.value = seen.has(currentValue) ? currentValue : '';
         }
 
         function renderTemplates() {
@@ -883,6 +943,9 @@ if (!auth_can_manage($user)) {
             fields.assignedEmployeeId.value = '';
             fields.assignedEmployeeName.value = '';
             fields.assignedTeam.value = '';
+            if (fields.assignedTeamSelect) {
+                fields.assignedTeamSelect.value = '';
+            }
             fields.assignedAt.value = '';
             fields.notes.value = '';
             fields.historyNote.value = '';
@@ -897,6 +960,9 @@ if (!auth_can_manage($user)) {
             fields.assignedEmployeeId.value = '';
             fields.assignedEmployeeName.value = '';
             fields.assignedTeam.value = '';
+            if (fields.assignedTeamSelect) {
+                fields.assignedTeamSelect.value = '';
+            }
             fields.assignedAt.value = '';
             fields.historyNote.value = '';
             fields.currentItemBadge.textContent = '연속 등록 대기';
@@ -923,6 +989,9 @@ if (!auth_can_manage($user)) {
             fields.assignedEmployeeId.value = entry.assigned_employee_id || '';
             fields.assignedEmployeeName.value = entry.assigned_employee_name || '';
             fields.assignedTeam.value = entry.assigned_team || '';
+            if (fields.assignedTeamSelect) {
+                fields.assignedTeamSelect.value = entry.assigned_team || '';
+            }
             fields.assignedAt.value = formatDatetimeLocal(entry.assigned_at || '');
             fields.notes.value = entry.notes || '';
             fields.currentItemBadge.textContent = state.currentItemId ? '등록 항목 수정 모드' : '신규 등록 모드';
@@ -951,15 +1020,20 @@ if (!auth_can_manage($user)) {
         }
 
         function renderRecentList() {
+            const visibleItems = state.searchQuery ? state.items.slice() : state.items.filter(function (item) {
+                return String(item.status || '').trim() !== '지급됨';
+            });
             fields.recentList.innerHTML = '';
+            fields.recentCount.textContent = '총 ' + visibleItems.length + '건';
             fields.recentCount.textContent = '총 ' + state.items.length + '건';
 
-            if (!state.items.length) {
+            fields.recentCount.textContent = '총 ' + visibleItems.length + '건';
+            if (!visibleItems.length) {
                 fields.recentList.innerHTML = '<div class="recent-item"><div class="recent-title">등록된 보호구가 없습니다.</div><div class="recent-meta">첫 항목을 등록해 주세요.</div></div>';
                 return;
             }
 
-            state.items.forEach(function (item) {
+            visibleItems.forEach(function (item) {
                 const node = document.createElement('div');
                 node.className = 'recent-item';
                 node.innerHTML =
@@ -970,6 +1044,7 @@ if (!auth_can_manage($user)) {
                     '지급자: ' + escapeHtml(item.assigned_employee_name || '-') + '<br>' +
                     '상태: ' + escapeHtml(item.status || '-') +
                     '</div>';
+                node.querySelector('.recent-meta').insertAdjacentHTML('afterbegin', '구매일: ' + escapeHtml(item.purchased_at || '-') + '<br>');
                 node.addEventListener('click', function () {
                     fillForm(item);
                     setStatus('항목을 불러왔습니다.', false);
@@ -982,6 +1057,8 @@ if (!auth_can_manage($user)) {
             const payload = await apiRequest({ action: 'employees' });
             state.employees = Array.isArray(payload.employees) ? payload.employees : [];
             renderEmployees();
+            ensureAssignedTeamSelectPlacement();
+            renderAssignedTeams();
         }
 
         async function loadTemplates() {
@@ -1002,6 +1079,12 @@ if (!auth_can_manage($user)) {
             state.items = Array.isArray(payload.items) ? payload.items : [];
             renderRecentList();
             renderSpecOptions();
+        }
+
+        async function loadItemById(itemId) {
+            const payload = await apiRequest({ action: 'get', id: itemId });
+            fillForm(payload.item || null);
+            setStatus('항목을 불러왔습니다.', false);
         }
 
         function buildSaveParams() {
@@ -1088,6 +1171,34 @@ if (!auth_can_manage($user)) {
             renderRecentList();
             fields.bulkIdentifiers.value = '';
             setStatus(payload.message || '기존 지급품 일괄 등록이 완료되었습니다.', false);
+        }
+
+        async function runBulkStockReceive() {
+            const payload = await apiRequest({
+                action: 'bulk_receive_stock',
+                quantity: fields.bulkQuantity.value,
+                gear_type: fields.gearType.value.trim(),
+                item_name: fields.itemName.value.trim(),
+                spec_name: fields.specName.value.trim(),
+                model_name: fields.modelName.value.trim(),
+                kcs_cert_no: fields.kcsCertNo.value.trim(),
+                manufacturer_name: fields.manufacturerName.value.trim(),
+                purchase_vendor: fields.purchaseVendor.value.trim(),
+                purchase_price: removeCommas(fields.purchasePrice.value),
+                purchased_at: fields.purchasedAt.value,
+                status: fields.status.value,
+                notes: fields.notes.value.trim()
+            }, 'POST');
+
+            state.items = Array.isArray(payload.items) ? payload.items : [];
+            renderRecentList();
+            fields.bulkQuantity.value = '1';
+            fields.identifierType.value = 'internal';
+            fields.identifierValue.value = Array.isArray(payload.created_identifiers) && payload.created_identifiers.length
+                ? payload.created_identifiers[0]
+                : '';
+            updateQrPreview();
+            setStatus(payload.message || '입고 수량 일괄 등록이 완료되었습니다.', false);
         }
 
         async function findByIdentifier() {
@@ -1245,7 +1356,10 @@ if (!auth_can_manage($user)) {
         }
 
         async function createInternalKey() {
-            const payload = await apiRequest({ action: 'create_internal_key' });
+            const payload = await apiRequest({
+                action: 'create_internal_key',
+                purchased_at: fields.purchasedAt.value
+            });
             fields.identifierType.value = payload.identifier_type || 'internal';
             fields.identifierValue.value = payload.identifier_value || '';
             updateQrPreview();
@@ -1363,16 +1477,40 @@ if (!auth_can_manage($user)) {
         fields.assignedEmployeeId.addEventListener('change', function () {
             const selected = this.options[this.selectedIndex];
             if (!selected || !this.value) {
-                fields.assignedEmployeeName.value = '';
-                fields.assignedTeam.value = '';
                 return;
             }
             fields.assignedEmployeeName.value = selected.dataset.name || '';
             fields.assignedTeam.value = selected.dataset.team || '';
+            fields.status.value = '지급됨';
             if (!fields.assignedAt.value) {
                 fields.assignedAt.value = new Date().toISOString().slice(0, 16);
             }
         });
+
+        function applyManualAssigneeState() {
+            const hasManualAssignee = String(fields.assignedEmployeeName.value || '').trim() !== ''
+                || String(fields.assignedTeam.value || '').trim() !== '';
+            if (!hasManualAssignee) {
+                return;
+            }
+            fields.assignedEmployeeId.value = '';
+            fields.status.value = '지급됨';
+            if (!fields.assignedAt.value) {
+                fields.assignedAt.value = new Date().toISOString().slice(0, 16);
+            }
+        }
+
+        fields.assignedEmployeeName.addEventListener('input', applyManualAssigneeState);
+        fields.assignedTeam.addEventListener('input', applyManualAssigneeState);
+        if (fields.assignedTeamSelect) {
+            fields.assignedTeamSelect.addEventListener('change', function () {
+                if (!this.value) {
+                    return;
+                }
+                fields.assignedTeam.value = this.value;
+                applyManualAssigneeState();
+            });
+        }
 
         document.getElementById('saveButton').addEventListener('click', async function () {
             try {
@@ -1447,6 +1585,13 @@ if (!auth_can_manage($user)) {
                 setStatus(error.message || '기존 지급품 일괄 등록 중 오류가 발생했습니다.', true);
             }
         });
+        document.getElementById('bulkReceiveButton').addEventListener('click', async function () {
+            try {
+                await runBulkStockReceive();
+            } catch (error) {
+                setStatus(error.message || '입고 수량 일괄 등록 중 오류가 발생했습니다.', true);
+            }
+        });
         document.getElementById('bulkClearButton').addEventListener('click', function () {
             fields.bulkIdentifiers.value = '';
         });
@@ -1510,6 +1655,12 @@ if (!auth_can_manage($user)) {
                 await loadGearTypes();
                 await loadTemplates();
                 await loadItems();
+                const params = new URLSearchParams(window.location.search);
+                const gearUid = String(params.get('gear_uid') || '').trim();
+                if (gearUid) {
+                    await loadItemById(gearUid);
+                    return;
+                }
                 setStatus('준비되었습니다. 스캔하거나 식별값을 입력해 주세요.', false);
             } catch (error) {
                 setStatus(error.message || '초기 데이터를 불러오지 못했습니다.', true);
@@ -1518,4 +1669,3 @@ if (!auth_can_manage($user)) {
     </script>
 </body>
 </html>
-
