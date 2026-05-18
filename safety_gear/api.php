@@ -6,23 +6,30 @@ require_once __DIR__ . '/common.php';
 ini_set('display_errors', '0');
 ob_start();
 
-header('Content-Type: application/json; charset=UTF-8');
+if (!headers_sent()) {
+    header('Content-Type: application/json; charset=UTF-8');
+}
 
 function respond(array $payload, int $status = 200): void
 {
     if (ob_get_length() > 0) {
         ob_clean();
     }
-    http_response_code($status);
+    if (!headers_sent()) {
+        http_response_code($status);
+    }
     echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
     exit;
 }
 
+$pdo = null;
 try {
     $pdo = sg_get_pdo();
 } catch (Throwable $e) {
     respond(['ok' => false, 'message' => 'DB 연결에 실패했습니다: ' . $e->getMessage()], 500);
 }
+
+assert($pdo instanceof PDO);
 
 $action = sg_normalize_text($_REQUEST['action'] ?? 'list');
 
@@ -103,6 +110,7 @@ if ($action === 'delete_gear_type') {
         respond(['ok' => false, 'message' => '삭제할 보호구 종류를 선택해 주세요.'], 400);
     }
 
+    $deleted = false;
     try {
         $deleted = sg_delete_gear_type($pdo, $typeId, $typeName);
     } catch (Throwable $e) {

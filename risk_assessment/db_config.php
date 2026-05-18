@@ -8,6 +8,7 @@ define('DB_CHARSET', 'utf8mb4');
 
 function getDB(): PDO
 {
+    /** @var PDO|null $pdo */
     static $pdo = null;
     if ($pdo === null) {
         $dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=' . DB_CHARSET;

@@ -83,6 +83,7 @@ function sg_make_unique_internal_identifier(PDO $pdo, string $baseDate = '', int
 
 function sg_get_pdo(): PDO
 {
+    /** @var PDO|null $pdo */
     static $pdo = null;
     if ($pdo === null) {
         $pdo = getDB();

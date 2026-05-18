@@ -92,6 +92,7 @@ function status_json_attr($value): string
 }
 
 $pdo = sg_get_pdo();
+assert($pdo instanceof PDO);
 $viewMode = sg_normalize_text($_GET['view'] ?? 'employee');
 $teamFilter = sg_normalize_text($_GET['team'] ?? '');
 $typeFilter = sg_normalize_text($_GET['gear_type'] ?? '');
@@ -218,6 +219,7 @@ foreach ($allItems as $item) {
                     'employee_name' => $assignedEmployeeName,
                     'employee_team' => sg_normalize_text($item['assigned_team'] ?? ''),
                     'assigned_at' => $assignedAt,
+                    'purchased_at' => sg_normalize_text($item['purchased_at'] ?? ''),
                     'identifier_value' => sg_normalize_text($item['identifier_value'] ?? ''),
                 ];
             }
@@ -892,6 +894,13 @@ foreach ($employeeRows as $row) {
                             '지급일시: ' + escapeHtml(person.assigned_at || '-') + '<br>' +
                             '식별값: ' + escapeHtml(person.identifier_value || '-') +
                             '</div>';
+                        const meta = item.querySelector('.modal-meta');
+                        if (meta) {
+                            meta.insertAdjacentHTML(
+                                'afterbegin',
+                                '구매일시: ' + escapeHtml(person.purchased_at || '-') + '<br>'
+                            );
+                        }
                         if (person.gear_uid) {
                             item.addEventListener('click', function () {
                                 window.location.href = '/safety_gear/index.php?gear_uid=' + encodeURIComponent(person.gear_uid);
