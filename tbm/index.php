@@ -52,7 +52,7 @@ $tbmCleanName = static function(string $name): string {
 
 // ── 팀별 인명부 구성 (risk_assessment auth 기반) ─────────────────────────
 $teamMembers = [];
-$allTeams = auth_read_teams(); // ['공사팀-전기','공사팀-모터','가스팀','제조팀','안전관리', ...]
+$allTeams = auth_read_active_teams(); // ['공사팀-전기','공사팀-모터','가스팀','제조팀','안전관리', ...]
 
 foreach ($allTeams as $raTeam) {
     $displayName = tbm_normalize_display_team_name($raTeam);

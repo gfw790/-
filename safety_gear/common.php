@@ -88,6 +88,8 @@ function sg_get_pdo(): PDO
     if ($pdo === null) {
         $pdo = getDB();
         sg_ensure_tables($pdo);
+        sg_backfill_missing_receive_history($pdo);
+        sg_backfill_missing_issue_history($pdo);
     }
     return $pdo;
 }
@@ -558,6 +560,86 @@ function sg_status_label_is_hidden(string $status): bool
     return in_array(sg_normalize_text($status), sg_hidden_statuses(), true);
 }
 
+function sg_history_type_to_status_label(string $historyType): string
+{
+    $normalizedType = sg_normalize_text($historyType);
+    $map = [
+        '입고' => '사용 가능',
+        '지급' => '지급됨',
+        '회수' => '반납',
+        '점검' => '점검 필요',
+        '수리' => '수리 중',
+        '폐기' => '폐기',
+    ];
+
+    return $map[$normalizedType] ?? '';
+}
+
+function sg_history_effective_timestamp(array $item, array $historyEntry): string
+{
+    $historyType = sg_normalize_text($historyEntry['type'] ?? '');
+    $historyNote = sg_normalize_text($historyEntry['note'] ?? '');
+    $historyTimestamp = sg_normalize_text($historyEntry['timestamp'] ?? '');
+    $purchasedAt = sg_normalize_text($item['purchased_at'] ?? '');
+    $assignedAt = sg_normalize_text($item['assigned_at'] ?? '');
+
+    if ($historyType === '지급'
+        && str_contains($historyNote, '시스템 도입 전 지급 완료된 품목')
+        && $assignedAt !== '') {
+        return $assignedAt;
+    }
+
+    if (($historyType === '입고' || ($historyType === '등록'
+        && (str_contains($historyNote, '수량 기준 입고 등록') || str_contains($historyNote, '최초 등록') || str_contains($historyNote, '기존 지급품 초기 등록'))))
+        && $purchasedAt !== '') {
+        return $purchasedAt;
+    }
+
+    return $historyTimestamp;
+}
+
+function sg_is_legacy_registration_history(array $historyEntry): bool
+{
+    $historyType = sg_normalize_text($historyEntry['type'] ?? '');
+    $historyNote = sg_normalize_text($historyEntry['note'] ?? '');
+    if ($historyType !== '등록') {
+        return false;
+    }
+
+    return str_contains($historyNote, '최초 등록')
+        || str_contains($historyNote, '수량 기준 입고 등록')
+        || str_contains($historyNote, '기존 지급품 초기 등록');
+}
+
+function sg_resolve_item_status(array $item, array $history): string
+{
+    $resolvedStatus = sg_normalize_text($item['status_label'] ?? '');
+    $resolvedTimestamp = '';
+
+    foreach ($history as $entry) {
+        if (!is_array($entry)) {
+            continue;
+        }
+
+        $entryStatus = sg_history_type_to_status_label((string)($entry['type'] ?? ''));
+        if ($entryStatus === '') {
+            continue;
+        }
+
+        $entryTimestamp = sg_history_effective_timestamp($item, $entry);
+        if ($entryTimestamp === '') {
+            continue;
+        }
+
+        if ($resolvedTimestamp === '' || strcmp($entryTimestamp, $resolvedTimestamp) >= 0) {
+            $resolvedTimestamp = $entryTimestamp;
+            $resolvedStatus = $entryStatus;
+        }
+    }
+
+    return $resolvedStatus;
+}
+
 function sg_find_employee_option_for_user(array $user): ?array
 {
     $userName = sg_normalize_text($user['name'] ?? '');
@@ -930,26 +1012,50 @@ function sg_update_user_item_status(PDO $pdo, array $user, array $gearUids, stri
     return $count;
 }
 
-function sg_fetch_history(PDO $pdo, string $gearUid): array
+function sg_fetch_history(PDO $pdo, string $gearUid, array $item = []): array
 {
     $stmt = $pdo->prepare("
-        SELECT created_at, history_type, history_note, employee_id, employee_name, employee_team
+        SELECT created_at, history_id, history_type, history_note, employee_id, employee_name, employee_team
         FROM safety_gear_history
         WHERE gear_uid = :gear_uid
-        ORDER BY created_at DESC, history_id DESC
+        ORDER BY created_at ASC, history_id ASC
     ");
     $stmt->execute([':gear_uid' => $gearUid]);
 
-    return array_map(static function (array $row): array {
-        return [
+    $entries = array_map(static function (array $row) use ($item): array {
+        $entry = [
             'timestamp' => sg_normalize_text($row['created_at'] ?? ''),
             'type' => sg_normalize_text($row['history_type'] ?? ''),
             'note' => sg_normalize_text($row['history_note'] ?? ''),
             'employee_id' => isset($row['employee_id']) && $row['employee_id'] !== null ? (string)$row['employee_id'] : '',
             'employee_name' => sg_normalize_text($row['employee_name'] ?? ''),
             'employee_team' => sg_normalize_text($row['employee_team'] ?? ''),
+            'history_id' => isset($row['history_id']) ? (int)$row['history_id'] : 0,
         ];
+        $entry['effective_timestamp'] = sg_history_effective_timestamp($item, $entry);
+
+        return $entry;
     }, $stmt->fetchAll() ?: []);
+
+    $entries = array_values(array_filter($entries, static fn(array $entry): bool => !sg_is_legacy_registration_history($entry)));
+
+    usort($entries, static function (array $a, array $b): int {
+        $timeCompare = strcmp(
+            sg_normalize_text($a['effective_timestamp'] ?? ''),
+            sg_normalize_text($b['effective_timestamp'] ?? '')
+        );
+        if ($timeCompare !== 0) {
+            return $timeCompare;
+        }
+
+        return ((int)($a['history_id'] ?? 0)) <=> ((int)($b['history_id'] ?? 0));
+    });
+
+    return array_map(static function (array $entry): array {
+        $entry['timestamp'] = sg_normalize_text($entry['effective_timestamp'] ?? $entry['timestamp'] ?? '');
+        unset($entry['effective_timestamp']);
+        return $entry;
+    }, $entries);
 }
 
 function sg_map_item_row(PDO $pdo, array $row): array
@@ -965,6 +1071,8 @@ function sg_map_item_row(PDO $pdo, array $row): array
         $itemName = $legacyProductName;
     }
     $combinedProductName = sg_build_product_name($itemName, $specName, $modelName, $legacyProductName);
+    $history = $gearUid !== '' ? sg_fetch_history($pdo, $gearUid, $row) : [];
+    $resolvedStatus = sg_resolve_item_status($row, $history);
 
     return [
         'id' => $gearUid,
@@ -980,7 +1088,7 @@ function sg_map_item_row(PDO $pdo, array $row): array
         'purchase_vendor' => sg_normalize_text($row['purchase_vendor'] ?? ''),
         'purchase_price' => isset($row['purchase_price']) && $row['purchase_price'] !== null ? rtrim(rtrim((string)$row['purchase_price'], '0'), '.') : '',
         'purchased_at' => sg_normalize_text($row['purchased_at'] ?? ''),
-        'status' => sg_normalize_text($row['status_label'] ?? ''),
+        'status' => $resolvedStatus,
         'notes' => sg_normalize_text($row['notes'] ?? ''),
         'assigned_employee_id' => isset($row['assigned_employee_id']) && $row['assigned_employee_id'] !== null ? (string)$row['assigned_employee_id'] : '',
         'assigned_employee_name' => sg_normalize_text($row['assigned_employee_name'] ?? ''),
@@ -988,7 +1096,7 @@ function sg_map_item_row(PDO $pdo, array $row): array
         'assigned_at' => sg_normalize_text($row['assigned_at'] ?? ''),
         'created_at' => sg_normalize_text($row['created_at'] ?? ''),
         'updated_at' => sg_normalize_text($row['updated_at'] ?? ''),
-        'history' => $gearUid !== '' ? sg_fetch_history($pdo, $gearUid) : [],
+        'history' => $history,
     ];
 }
 
@@ -1060,6 +1168,9 @@ function sg_fetch_assigned_items_grouped_by_employee(PDO $pdo, array $employeeId
         $status = sg_normalize_text($item['status'] ?? '');
 
         if ($employeeId === '' && $employeeName === '') {
+            continue;
+        }
+        if ($status === '폐기') {
             continue;
         }
         if (!$includeHidden && sg_status_label_is_hidden($status)) {
@@ -1164,6 +1275,13 @@ function sg_identifier_exists(PDO $pdo, string $identifierValue, string $exclude
 
 function sg_add_history(PDO $pdo, string $gearUid, string $type, string $note, array $meta = []): void
 {
+    $historyCreatedAt = sg_normalize_text($meta['created_at'] ?? '');
+    if ($historyCreatedAt === '') {
+        $historyCreatedAt = sg_current_timestamp();
+    } elseif (preg_match('/^\d{4}-\d{2}-\d{2}$/', $historyCreatedAt) === 1) {
+        $historyCreatedAt .= ' 00:00:00';
+    }
+
     $stmt = $pdo->prepare("
         INSERT INTO safety_gear_history (
             gear_uid, history_type, history_note, employee_id, employee_name, employee_team, created_at
@@ -1178,8 +1296,110 @@ function sg_add_history(PDO $pdo, string $gearUid, string $type, string $note, a
         ':employee_id' => isset($meta['employee_id']) && $meta['employee_id'] !== '' ? (int)$meta['employee_id'] : null,
         ':employee_name' => sg_normalize_text($meta['employee_name'] ?? ''),
         ':employee_team' => sg_normalize_text($meta['employee_team'] ?? ''),
-        ':created_at' => sg_current_timestamp(),
+        ':created_at' => $historyCreatedAt,
     ]);
+}
+
+function sg_backfill_missing_receive_history(PDO $pdo): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+
+    $stmt = $pdo->query("
+        SELECT i.gear_uid, i.purchased_at, i.purchase_vendor, i.assigned_employee_id, i.assigned_employee_name, i.assigned_team
+        FROM safety_gear_item i
+        WHERE i.purchased_at IS NOT NULL
+          AND i.purchased_at <> ''
+    ");
+    $rows = $stmt->fetchAll() ?: [];
+
+    foreach ($rows as $row) {
+        $gearUid = sg_normalize_text($row['gear_uid'] ?? '');
+        $purchasedAt = sg_normalize_text($row['purchased_at'] ?? '');
+        if ($gearUid === '' || $purchasedAt === '') {
+            continue;
+        }
+
+        $history = sg_fetch_history($pdo, $gearUid, $row);
+        $hasReceiveHistory = false;
+        foreach ($history as $historyEntry) {
+            $historyType = sg_normalize_text($historyEntry['type'] ?? '');
+            if ($historyType === '입고') {
+                $hasReceiveHistory = true;
+                break;
+            }
+        }
+
+        if ($hasReceiveHistory) {
+            continue;
+        }
+
+        sg_add_history($pdo, $gearUid, '입고', '입고', [
+            'employee_id' => sg_normalize_text($row['assigned_employee_id'] ?? ''),
+            'employee_name' => sg_normalize_text($row['assigned_employee_name'] ?? ''),
+            'employee_team' => sg_normalize_text($row['assigned_team'] ?? ''),
+            'created_at' => $purchasedAt,
+        ]);
+    }
+}
+
+function sg_backfill_missing_issue_history(PDO $pdo): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+
+    $stmt = $pdo->query("
+        SELECT i.gear_uid, i.assigned_employee_id, i.assigned_employee_name, i.assigned_team, i.assigned_at
+        FROM safety_gear_item i
+        WHERE i.assigned_at IS NOT NULL
+          AND i.assigned_at <> ''
+    ");
+    $rows = $stmt->fetchAll() ?: [];
+
+    foreach ($rows as $row) {
+        $gearUid = sg_normalize_text($row['gear_uid'] ?? '');
+        if ($gearUid === '') {
+            continue;
+        }
+        $assignedAt = sg_normalize_text($row['assigned_at'] ?? '');
+        $assignedDate = substr($assignedAt, 0, 10);
+        if ($assignedDate === '') {
+            continue;
+        }
+
+        $hasMatchingIssueHistory = false;
+        $history = sg_fetch_history($pdo, $gearUid, $row);
+        foreach ($history as $historyEntry) {
+            $historyType = sg_normalize_text($historyEntry['type'] ?? '');
+            $historyNote = sg_normalize_text($historyEntry['note'] ?? '');
+            $historyDate = substr(sg_history_effective_timestamp($row, $historyEntry), 0, 10);
+            if ($historyType === '지급'
+                && !str_contains($historyNote, '시스템 도입 전 지급 완료된 품목')
+                && $historyDate === $assignedDate) {
+                $hasMatchingIssueHistory = true;
+                break;
+            }
+        }
+        if ($hasMatchingIssueHistory) {
+            continue;
+        }
+
+        $employeeName = sg_normalize_text($row['assigned_employee_name'] ?? '');
+        $historyNote = $employeeName !== '' ? $employeeName . ' 지급' : '지급';
+
+        sg_add_history($pdo, $gearUid, '지급', $historyNote, [
+            'employee_id' => sg_normalize_text($row['assigned_employee_id'] ?? ''),
+            'employee_name' => $employeeName,
+            'employee_team' => sg_normalize_text($row['assigned_team'] ?? ''),
+            'created_at' => $assignedAt,
+        ]);
+    }
 }
 
 function sg_fetch_employee_options(): array

@@ -345,18 +345,9 @@ if (!auth_can_manage($user)) {
                     <label for="purchased_at">구매일</label>
                     <input id="purchased_at" type="date">
                 </div>
-                <div class="field">
+<div class="field">
                     <label for="status">상태</label>
-                    <select id="status">
-                        <option value="사용 가능">사용 가능</option>
-                        <option value="지급됨">지급됨</option>
-                        <option value="확인 필요">확인 필요</option>
-                        <option value="점검 필요">점검 필요</option>
-                        <option value="수리 중">수리 중</option>
-                        <option value="반납">반납</option>
-                        <option value="교체">교체</option>
-                        <option value="폐기">폐기</option>
-                    </select>
+                    <input id="status" type="text" readonly>
                 </div>
                 <div class="field">
                     <label for="assigned_employee_id">지급자</label>
@@ -427,11 +418,16 @@ if (!auth_can_manage($user)) {
                         <option value="비고">비고</option>
                     </select>
                 </div>
+                <div class="field">
+                    <label for="history_at">이력 날짜</label>
+                    <input id="history_at" type="date">
+                </div>
                 <div class="field full">
                     <label for="history_note">이력 내용</label>
                     <div class="row">
                         <input id="history_note" class="grow" type="text" placeholder="예: 홍길동 지급, 외관 점검 완료">
                         <button id="addHistoryButton" type="button" class="ghost">이력 추가</button>
+                        <button id="cancelHistoryEditButton" type="button" class="secondary" hidden>수정 취소</button>
                     </div>
                 </div>
             </div>
@@ -648,6 +644,7 @@ if (!auth_can_manage($user)) {
             gearTypes: [],
             currentItemId: '',
             currentTemplateId: '',
+            currentHistoryId: 0,
             stream: null,
             scanTimer: null,
             searchQuery: ''
@@ -678,7 +675,10 @@ if (!auth_can_manage($user)) {
             assignedAt: document.getElementById('assigned_at'),
             notes: document.getElementById('notes'),
             historyType: document.getElementById('history_type'),
+            historyAt: document.getElementById('history_at'),
             historyNote: document.getElementById('history_note'),
+            addHistoryButton: document.getElementById('addHistoryButton'),
+            cancelHistoryEditButton: document.getElementById('cancelHistoryEditButton'),
             statusBox: document.getElementById('statusBox'),
             historyList: document.getElementById('historyList'),
             recentList: document.getElementById('recentList'),
@@ -737,6 +737,10 @@ if (!auth_can_manage($user)) {
                 return '';
             }
             return raw.slice(0, 10);
+        }
+
+        function getTodayDate() {
+            return new Date().toISOString().slice(0, 10);
         }
 
         function formatNumberWithComma(num) {
@@ -921,9 +925,39 @@ if (!auth_can_manage($user)) {
                 element.className = 'history-item';
                 element.innerHTML =
                     '<div class="history-meta">' + escapeHtml(entry.timestamp || '') + ' / ' + escapeHtml(entry.type || '') + '</div>' +
-                    '<div>' + escapeHtml(entry.note || '') + '</div>';
+                    '<div>' + escapeHtml(entry.note || '') + '</div>' +
+                    '<div class="row" style="margin-top:8px;"><button type="button" class="secondary history-edit-button">수정</button></div>';
+                const editButton = element.querySelector('.history-edit-button');
+                if (editButton) {
+                    editButton.addEventListener('click', function () {
+                        startHistoryEdit(entry);
+                    });
+                }
                 fields.historyList.appendChild(element);
             });
+        }
+
+        function resetHistoryForm() {
+            state.currentHistoryId = 0;
+            fields.historyType.value = '입고';
+            fields.historyAt.value = getTodayDate();
+            fields.historyNote.value = '';
+            fields.addHistoryButton.textContent = '이력 추가';
+            fields.cancelHistoryEditButton.hidden = true;
+        }
+
+        function startHistoryEdit(entry) {
+            if (!entry || !entry.history_id) {
+                return;
+            }
+
+            state.currentHistoryId = Number(entry.history_id) || 0;
+            fields.historyType.value = entry.type || '입고';
+            fields.historyAt.value = formatDateOnly(entry.timestamp || '') || getTodayDate();
+            fields.historyNote.value = entry.note || '';
+            fields.addHistoryButton.textContent = '이력 수정 저장';
+            fields.cancelHistoryEditButton.hidden = false;
+            fields.historyNote.focus();
         }
 
         function clearForm() {
@@ -948,7 +982,7 @@ if (!auth_can_manage($user)) {
             }
             fields.assignedAt.value = '';
             fields.notes.value = '';
-            fields.historyNote.value = '';
+            resetHistoryForm();
             fields.currentItemBadge.textContent = '신규 등록 모드';
             renderHistory([]);
             updateQrPreview();
@@ -964,7 +998,7 @@ if (!auth_can_manage($user)) {
                 fields.assignedTeamSelect.value = '';
             }
             fields.assignedAt.value = '';
-            fields.historyNote.value = '';
+            resetHistoryForm();
             fields.currentItemBadge.textContent = '연속 등록 대기';
             renderHistory([]);
             updateQrPreview();
@@ -994,6 +1028,7 @@ if (!auth_can_manage($user)) {
             }
             fields.assignedAt.value = formatDateOnly(entry.assigned_at || '');
             fields.notes.value = entry.notes || '';
+            resetHistoryForm();
             fields.currentItemBadge.textContent = state.currentItemId ? '등록 항목 수정 모드' : '신규 등록 모드';
             renderHistory(entry.history || []);
             updateQrPreview();
@@ -1102,7 +1137,6 @@ if (!auth_can_manage($user)) {
                 purchase_vendor: fields.purchaseVendor.value.trim(),
                 purchase_price: removeCommas(fields.purchasePrice.value),
                 purchased_at: fields.purchasedAt.value,
-                status: fields.status.value,
                 assigned_employee_id: fields.assignedEmployeeId.value,
                 assigned_employee_name: fields.assignedEmployeeName.value.trim(),
                 assigned_team: fields.assignedTeam.value.trim(),
@@ -1186,7 +1220,6 @@ if (!auth_can_manage($user)) {
                 purchase_vendor: fields.purchaseVendor.value.trim(),
                 purchase_price: removeCommas(fields.purchasePrice.value),
                 purchased_at: fields.purchasedAt.value,
-                status: fields.status.value,
                 notes: fields.notes.value.trim()
             }, 'POST');
 
@@ -1228,18 +1261,22 @@ if (!auth_can_manage($user)) {
                 return;
             }
 
+            const isEditingHistory = state.currentHistoryId > 0;
             const payload = await apiRequest({
-                action: 'add_history',
+                action: isEditingHistory ? 'update_history' : 'add_history',
                 id: state.currentItemId,
+                history_id: isEditingHistory ? state.currentHistoryId : '',
                 history_type: fields.historyType.value,
-                history_note: fields.historyNote.value.trim()
+                history_at: fields.historyAt.value || '',
+                history_note: fields.historyNote.value.trim(),
+                status: fields.status.value
             }, 'POST');
 
             state.items = Array.isArray(payload.items) ? payload.items : [];
             fillForm(payload.item || null);
             renderRecentList();
-            fields.historyNote.value = '';
-            setStatus(payload.message || '이력이 추가되었습니다.', false);
+            resetHistoryForm();
+            setStatus(payload.message || (isEditingHistory ? '이력이 수정되었습니다.' : '이력이 추가되었습니다.'), false);
         }
 
         async function deleteCurrentItem() {
@@ -1481,7 +1518,6 @@ if (!auth_can_manage($user)) {
             }
             fields.assignedEmployeeName.value = selected.dataset.name || '';
             fields.assignedTeam.value = selected.dataset.team || '';
-            fields.status.value = '지급됨';
             if (!fields.assignedAt.value) {
                 fields.assignedAt.value = new Date().toISOString().slice(0, 10);
             }
@@ -1494,7 +1530,6 @@ if (!auth_can_manage($user)) {
                 return;
             }
             fields.assignedEmployeeId.value = '';
-            fields.status.value = '지급됨';
             if (!fields.assignedAt.value) {
                 fields.assignedAt.value = new Date().toISOString().slice(0, 10);
             }
@@ -1502,7 +1537,20 @@ if (!auth_can_manage($user)) {
 
         fields.assignedEmployeeName.addEventListener('input', applyManualAssigneeState);
         fields.assignedTeam.addEventListener('input', applyManualAssigneeState);
-        if (fields.assignedTeamSelect) {
+        fields.historyType.addEventListener('change', function () {
+            const historyStatusMap = {
+                '??': '?? ??',
+                '??': '???',
+                '??': '??',
+                '??': '?? ??',
+                '??': '?? ?',
+                '??': '??'
+            };
+            if (historyStatusMap[this.value]) {
+                fields.status.value = historyStatusMap[this.value];
+            }
+        });
+                if (fields.assignedTeamSelect) {
             fields.assignedTeamSelect.addEventListener('change', function () {
                 if (!this.value) {
                     return;
@@ -1552,12 +1600,17 @@ if (!auth_can_manage($user)) {
             }
         });
 
-        document.getElementById('addHistoryButton').addEventListener('click', async function () {
+        fields.addHistoryButton.addEventListener('click', async function () {
             try {
                 await addHistory();
             } catch (error) {
                 setStatus(error.message || '이력 추가 중 오류가 발생했습니다.', true);
             }
+        });
+
+        fields.cancelHistoryEditButton.addEventListener('click', function () {
+            resetHistoryForm();
+            setStatus('이력 수정이 취소되었습니다.', false);
         });
 
         document.getElementById('generateInternalKeyButton').addEventListener('click', async function () {

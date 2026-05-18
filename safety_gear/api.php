@@ -267,10 +267,11 @@ if ($action === 'bulk_initial_issue') {
                 ':created_at' => $now,
                 ':updated_at' => $now,
             ]);
-            sg_add_history($pdo, $gearUid, '등록', '기존 지급품 초기 등록', [
+            sg_add_history($pdo, $gearUid, '입고', '입고', [
                 'employee_id' => $assignedEmployeeId,
                 'employee_name' => $assignedEmployeeName,
                 'employee_team' => $assignedTeam,
+                'created_at' => $purchasedAtValue ?? '',
             ]);
             sg_add_history($pdo, $gearUid, '지급', '시스템 도입 전 지급 완료된 품목을 초기 등록', [
                 'employee_id' => $assignedEmployeeId,
@@ -314,7 +315,6 @@ if ($action === 'bulk_receive_stock') {
     $purchasePrice = sg_normalize_price($_POST['purchase_price'] ?? '');
     $purchasedAt = sg_normalize_text($_POST['purchased_at'] ?? '');
     $notes = sg_normalize_text($_POST['notes'] ?? '');
-    $statusLabel = sg_normalize_text($_POST['status'] ?? '');
 
     if ($quantity <= 0) {
         respond(['ok' => false, 'message' => '입고 수량을 1개 이상 입력해 주세요.'], 400);
@@ -327,7 +327,7 @@ if ($action === 'bulk_receive_stock') {
 
     $purchasePriceValue = $purchasePrice !== '' ? (float)$purchasePrice : null;
     $purchasedAtValue = $purchasedAt !== '' ? $purchasedAt : null;
-    $statusToSave = $statusLabel !== '' ? $statusLabel : '사용 가능';
+    $statusToSave = '사용 가능';
     $createdIdentifiers = [];
 
     try {
@@ -372,7 +372,9 @@ if ($action === 'bulk_receive_stock') {
                 ':updated_at' => $now,
             ]);
 
-            sg_add_history($pdo, $gearUid, '등록', '수량 기준 입고 등록', []);
+            sg_add_history($pdo, $gearUid, '입고', '입고', [
+                'created_at' => $purchasedAtValue ?? '',
+            ]);
             $createdIdentifiers[] = $identifierValue;
         }
 
@@ -404,7 +406,6 @@ if ($action === 'save_template') {
     $manufacturerName = sg_normalize_text($_POST['manufacturer_name'] ?? '');
     $purchaseVendor = sg_normalize_text($_POST['purchase_vendor'] ?? '');
     $purchasePrice = sg_normalize_price($_POST['purchase_price'] ?? '');
-    $statusLabel = sg_normalize_text($_POST['status'] ?? '');
     $notes = sg_normalize_text($_POST['notes'] ?? '');
 
     if ($templateName === '') {
@@ -557,10 +558,38 @@ if ($action === 'save_item') {
     $assignedAtValue = $assignedAt !== '' ? $assignedAt : null;
     $assignedEmployeeIdValue = $assignedEmployeeId !== '' ? (int)$assignedEmployeeId : null;
 
+$existingItem = $id !== '' ? sg_fetch_item_by_uid($pdo, $id) : null;
+    $statusToSave = $existingItem !== null
+        ? sg_normalize_text($existingItem['status'] ?? '')
+        : '사용 가능';
+    $previousAssignedEmployeeId = sg_normalize_text($existingItem['assigned_employee_id'] ?? '');
+    $previousAssignedEmployeeName = sg_normalize_text($existingItem['assigned_employee_name'] ?? '');
+    $previousAssignedTeam = sg_normalize_text($existingItem['assigned_team'] ?? '');
+    $previousAssignedAt = sg_normalize_text($existingItem['assigned_at'] ?? '');
+    $previousAssignedDate = substr($previousAssignedAt, 0, 10);
+    $currentAssignedDate = substr((string)($assignedAtValue ?? ''), 0, 10);
+    $hasAssignedPerson = $assignedEmployeeId !== '' || $assignedEmployeeName !== '';
+    $assignmentChanged = $hasAssignedPerson && (
+        $previousAssignedEmployeeId !== $assignedEmployeeId
+        || $previousAssignedEmployeeName !== $assignedEmployeeName
+        || $previousAssignedTeam !== $assignedTeam
+        || $previousAssignedDate !== $currentAssignedDate
+    );
+    $hasMatchingIssueHistory = false;
+    foreach ((array)($existingItem['history'] ?? []) as $historyEntry) {
+        $historyType = sg_normalize_text($historyEntry['type'] ?? '');
+        $historyDate = substr(sg_normalize_text($historyEntry['timestamp'] ?? ''), 0, 10);
+        if ($historyType === '지급' && $historyDate !== '' && $historyDate === $currentAssignedDate) {
+            $hasMatchingIssueHistory = true;
+            break;
+        }
+    }
+    $shouldAddAssignmentHistory = $hasAssignedPerson && ($assignmentChanged || !$hasMatchingIssueHistory);
+
     try {
         $pdo->beginTransaction();
 
-        if ($id !== '' && sg_fetch_item_by_uid($pdo, $id) !== null) {
+        if ($existingItem !== null) {
             $stmt = $pdo->prepare("
                 UPDATE safety_gear_item
                 SET identifier_type = :identifier_type,
@@ -597,7 +626,7 @@ if ($action === 'save_item') {
                 ':purchase_vendor' => $purchaseVendor,
                 ':purchase_price' => $purchasePriceValue,
                 ':purchased_at' => $purchasedAtValue,
-                ':status_label' => $statusLabel,
+                ':status_label' => $statusToSave,
                 ':notes' => $notes,
                 ':assigned_employee_id' => $assignedEmployeeIdValue,
                 ':assigned_employee_name' => $assignedEmployeeName,
@@ -635,7 +664,7 @@ if ($action === 'save_item') {
                 ':purchase_vendor' => $purchaseVendor,
                 ':purchase_price' => $purchasePriceValue,
                 ':purchased_at' => $purchasedAtValue,
-                ':status_label' => $statusLabel,
+                ':status_label' => $statusToSave,
                 ':notes' => $notes,
                 ':assigned_employee_id' => $assignedEmployeeIdValue,
                 ':assigned_employee_name' => $assignedEmployeeName,
@@ -644,10 +673,35 @@ if ($action === 'save_item') {
                 ':created_at' => $now,
                 ':updated_at' => $now,
             ]);
-            sg_add_history($pdo, $id, '등록', '최초 등록', [
+            sg_add_history($pdo, $id, '입고', '입고', [
                 'employee_id' => $assignedEmployeeId,
                 'employee_name' => $assignedEmployeeName,
                 'employee_team' => $assignedTeam,
+                'created_at' => $purchasedAtValue ?? '',
+            ]);
+            $assignmentChanged = $hasAssignedPerson;
+        }
+
+        if ($shouldAddAssignmentHistory) {
+            $historyNote = $assignedEmployeeName !== ''
+                ? $assignedEmployeeName . ' 지급'
+                : '지급';
+            sg_add_history($pdo, $id, '지급', $historyNote, [
+                'employee_id' => $assignedEmployeeId,
+                'employee_name' => $assignedEmployeeName,
+                'employee_team' => $assignedTeam,
+                'created_at' => $assignedAtValue ?? '',
+            ]);
+            $statusUpdateStmt = $pdo->prepare("
+                UPDATE safety_gear_item
+                SET status_label = :status_label,
+                    updated_at = :updated_at
+                WHERE gear_uid = :gear_uid
+            ");
+            $statusUpdateStmt->execute([
+                ':status_label' => '지급됨',
+                ':updated_at' => sg_current_timestamp(),
+                ':gear_uid' => $id,
             ]);
         }
 
@@ -671,6 +725,9 @@ if ($action === 'add_history') {
     $id = sg_normalize_text($_POST['id'] ?? '');
     $type = sg_normalize_text($_POST['history_type'] ?? '');
     $note = sg_normalize_text($_POST['history_note'] ?? '');
+    $historyAt = sg_normalize_text($_POST['history_at'] ?? '');
+    $statusLabel = sg_normalize_text($_POST['status'] ?? '');
+    $historyStatusLabel = sg_history_type_to_status_label($type);
 
     if ($id === '' || $type === '') {
         respond(['ok' => false, 'message' => '이력 정보를 입력해 주세요.'], 400);
@@ -685,12 +742,23 @@ if ($action === 'add_history') {
             'employee_id' => sg_normalize_text($_POST['assigned_employee_id'] ?? ''),
             'employee_name' => sg_normalize_text($_POST['assigned_employee_name'] ?? ''),
             'employee_team' => sg_normalize_text($_POST['assigned_team'] ?? ''),
+            'created_at' => $historyAt,
         ]);
-        $stmt = $pdo->prepare("UPDATE safety_gear_item SET updated_at = :updated_at WHERE gear_uid = :gear_uid");
-        $stmt->execute([
+        $params = [
             ':updated_at' => sg_current_timestamp(),
             ':gear_uid' => $id,
-        ]);
+        ];
+        $sql = "UPDATE safety_gear_item SET updated_at = :updated_at";
+        if ($historyStatusLabel !== '') {
+            $sql .= ", status_label = :status_label";
+            $params[':status_label'] = $historyStatusLabel;
+        } elseif ($statusLabel !== '') {
+            $sql .= ", status_label = :status_label";
+            $params[':status_label'] = $statusLabel;
+        }
+        $sql .= " WHERE gear_uid = :gear_uid";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
         $pdo->commit();
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) {
@@ -702,6 +770,95 @@ if ($action === 'add_history') {
     respond([
         'ok' => true,
         'message' => '이력이 추가되었습니다.',
+        'item' => sg_fetch_item_by_uid($pdo, $id),
+        'items' => sg_fetch_all_items($pdo),
+    ]);
+}
+
+if ($action === 'update_history') {
+    $id = sg_normalize_text($_POST['id'] ?? '');
+    $historyId = (int)($_POST['history_id'] ?? 0);
+    $type = sg_normalize_text($_POST['history_type'] ?? '');
+    $note = sg_normalize_text($_POST['history_note'] ?? '');
+    $historyAt = sg_normalize_text($_POST['history_at'] ?? '');
+
+    if ($id === '' || $historyId <= 0 || $type === '') {
+        respond(['ok' => false, 'message' => '수정할 이력 정보를 확인해 주세요.'], 400);
+    }
+
+    $item = sg_fetch_item_by_uid($pdo, $id);
+    if ($item === null) {
+        respond(['ok' => false, 'message' => '항목을 찾지 못했습니다.'], 404);
+    }
+
+    $historyStmt = $pdo->prepare("
+        SELECT history_id
+        FROM safety_gear_history
+        WHERE history_id = :history_id
+          AND gear_uid = :gear_uid
+        LIMIT 1
+    ");
+    $historyStmt->execute([
+        ':history_id' => $historyId,
+        ':gear_uid' => $id,
+    ]);
+    if (!$historyStmt->fetch()) {
+        respond(['ok' => false, 'message' => '수정할 이력을 찾지 못했습니다.'], 404);
+    }
+
+    $historyCreatedAt = $historyAt !== '' ? $historyAt : sg_current_timestamp();
+    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $historyCreatedAt) === 1) {
+        $historyCreatedAt .= ' 00:00:00';
+    }
+
+    try {
+        $pdo->beginTransaction();
+
+        $updateStmt = $pdo->prepare("
+            UPDATE safety_gear_history
+            SET history_type = :history_type,
+                history_note = :history_note,
+                created_at = :created_at
+            WHERE history_id = :history_id
+              AND gear_uid = :gear_uid
+        ");
+        $updateStmt->execute([
+            ':history_type' => $type,
+            ':history_note' => $note,
+            ':created_at' => $historyCreatedAt,
+            ':history_id' => $historyId,
+            ':gear_uid' => $id,
+        ]);
+
+        $refreshedItem = sg_fetch_item_by_uid($pdo, $id);
+        if ($refreshedItem === null) {
+            throw new RuntimeException('항목 정보를 다시 불러오지 못했습니다.');
+        }
+
+        $resolvedStatus = sg_resolve_item_status($refreshedItem, $refreshedItem['history'] ?? []);
+        $statusStmt = $pdo->prepare("
+            UPDATE safety_gear_item
+            SET status_label = :status_label,
+                updated_at = :updated_at
+            WHERE gear_uid = :gear_uid
+        ");
+        $statusStmt->execute([
+            ':status_label' => $resolvedStatus !== '' ? $resolvedStatus : sg_normalize_text($refreshedItem['status'] ?? ''),
+            ':updated_at' => sg_current_timestamp(),
+            ':gear_uid' => $id,
+        ]);
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        respond(['ok' => false, 'message' => '이력 수정 중 오류가 발생했습니다: ' . $e->getMessage()], 500);
+    }
+
+    respond([
+        'ok' => true,
+        'message' => '이력이 수정되었습니다.',
         'item' => sg_fetch_item_by_uid($pdo, $id),
         'items' => sg_fetch_all_items($pdo),
     ]);

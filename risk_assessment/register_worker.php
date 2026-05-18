@@ -176,6 +176,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = $message;
             }
         }
+    } elseif ($action === 'toggle_team_active') {
+        $toggleTeamName = auth_normalize_team_name((string)($_POST['team_name'] ?? ''));
+        $shouldActivate = (string)($_POST['team_active'] ?? '0') === '1';
+        if (!$canManageTeams) {
+            $error = '팀 상태를 변경할 권한이 없습니다.';
+        } else {
+            [$ok, $message] = auth_set_team_active($toggleTeamName, $shouldActivate);
+            if ($ok) {
+                $success = $message;
+                $teams = auth_read_teams();
+            } else {
+                $error = $message;
+            }
+        }
     } else {
         $form['name'] = trim((string)($_POST['name'] ?? ''));
         $form['login_id'] = trim((string)($_POST['login_id'] ?? ''));
@@ -203,6 +217,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $storedAccounts = auth_read_stored_accounts();
 uksort($storedAccounts, static fn(string $left, string $right): int => strnatcasecmp($left, $right));
 $teams = auth_read_teams();
+$teamStatuses = auth_read_team_statuses();
 $roleOptions = auth_allowed_roles();
 $teamCounts = auth_team_member_counts();
 foreach ($teams as $teamName) {
@@ -907,15 +922,22 @@ function h($value): string
                     <?php foreach ($teams as $teamName): ?>
                       <?php $memberCount = (int)($teamCounts[$teamName] ?? 0); ?>
                       <?php $supervisorTeam = auth_get_team_supervisor($teamName); ?>
+                      <?php $isTeamActive = array_key_exists($teamName, $teamStatuses) ? (bool)$teamStatuses[$teamName] : true; ?>
                       <div class="team-pill">
                         <div class="team-pill-header">
                           <span><?= h($teamName) ?></span>
-                          <small><?= $memberCount ?>명</small>
+                          <small><?= $memberCount ?>명 / <?= $isTeamActive ? '활성' : '비활성' ?></small>
                         </div>
                         <?php $isProtectedTeam = auth_is_protected_team_name($teamName); ?>
                         <?php if ($supervisorTeam !== ''): ?>
                           <div class="team-pill-supervisor">관리감독팀: <?= h($supervisorTeam) ?></div>
                         <?php endif; ?>
+                        <form method="post">
+                          <input type="hidden" name="action" value="toggle_team_active">
+                          <input type="hidden" name="team_name" value="<?= h($teamName) ?>">
+                          <input type="hidden" name="team_active" value="<?= $isTeamActive ? '0' : '1' ?>">
+                          <button class="btn-secondary btn-inline" type="submit"><?= $isTeamActive ? '비활성으로 변경' : '활성으로 변경' ?></button>
+                        </form>
                         <form method="post">
                           <input type="hidden" name="action" value="rename_team">
                           <input type="hidden" name="rename_team_name" value="<?= h($teamName) ?>">

@@ -14,6 +14,11 @@ function auth_team_store_path(): string
     return __DIR__ . '/auth_teams.json';
 }
 
+function auth_team_status_store_path(): string
+{
+    return __DIR__ . '/auth_team_statuses.json';
+}
+
 function auth_team_supervisor_store_path(): string
 {
     return __DIR__ . '/auth_team_supervisors.json';
@@ -217,6 +222,108 @@ function auth_write_teams(array $teams): bool
     }
 
     return file_put_contents(auth_team_store_path(), $json, LOCK_EX) !== false;
+}
+
+function auth_read_team_statuses(): array
+{
+    $path = auth_team_status_store_path();
+    if (!is_file($path)) {
+        return [];
+    }
+
+    $contents = file_get_contents($path);
+    if ($contents === false || trim($contents) === '') {
+        return [];
+    }
+
+    $decoded = json_decode($contents, true);
+    if (!is_array($decoded)) {
+        return [];
+    }
+
+    $statuses = [];
+    foreach ($decoded as $teamName => $active) {
+        if (!is_string($teamName)) {
+            continue;
+        }
+
+        $normalizedTeam = auth_normalize_team_name($teamName);
+        if ($normalizedTeam === '') {
+            continue;
+        }
+
+        $statuses[$normalizedTeam] = (bool)$active;
+    }
+
+    return $statuses;
+}
+
+function auth_write_team_statuses(array $statuses): bool
+{
+    $payload = [];
+    foreach ($statuses as $teamName => $active) {
+        if (!is_string($teamName)) {
+            continue;
+        }
+
+        $normalizedTeam = auth_normalize_team_name($teamName);
+        if ($normalizedTeam === '') {
+            continue;
+        }
+
+        $payload[$normalizedTeam] = (bool)$active;
+    }
+
+    ksort($payload, SORT_NATURAL | SORT_FLAG_CASE);
+    $json = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false) {
+        return false;
+    }
+
+    return file_put_contents(auth_team_status_store_path(), $json, LOCK_EX) !== false;
+}
+
+function auth_is_team_active(string $teamName): bool
+{
+    $normalizedTeam = auth_normalize_team_name($teamName);
+    if ($normalizedTeam === '') {
+        return false;
+    }
+
+    $statuses = auth_read_team_statuses();
+    if (array_key_exists($normalizedTeam, $statuses)) {
+        return (bool)$statuses[$normalizedTeam];
+    }
+
+    return true;
+}
+
+function auth_set_team_active(string $teamName, bool $active): array
+{
+    $normalizedTeam = auth_normalize_team_name($teamName);
+    if ($normalizedTeam === '') {
+        return [false, '팀을 선택해주세요.'];
+    }
+
+    if (!auth_team_exists($normalizedTeam)) {
+        return [false, '존재하지 않는 팀입니다.'];
+    }
+
+    $statuses = auth_read_team_statuses();
+    $statuses[$normalizedTeam] = $active;
+    if (!auth_write_team_statuses($statuses)) {
+        return [false, '팀 활성 상태를 저장하지 못했습니다.'];
+    }
+
+    return [true, $active ? '팀이 활성화되었습니다.' : '팀이 비활성화되었습니다.'];
+}
+
+function auth_read_active_teams(): array
+{
+    return array_values(array_filter(
+        auth_read_teams(),
+        static fn($teamName) => auth_is_team_active((string)$teamName)
+    ));
 }
 
 function auth_team_exists(string $teamName): bool
@@ -429,10 +536,17 @@ function auth_add_team(string $teamName, string $teamSupervisor = ''): array
     }
 
     $teams = auth_read_teams();
+    $originalTeams = $teams;
     $teams[] = $teamName;
 
     if (!auth_write_teams($teams)) {
         return [false, '팀 정보를 저장하지 못했습니다.'];
+    }
+
+    [$statusSaved, $statusMessage] = auth_set_team_active($teamName, true);
+    if (!$statusSaved) {
+        auth_write_teams($originalTeams);
+        return [false, $statusMessage];
     }
 
     if ($teamSupervisor !== '' && !auth_set_team_supervisor($teamName, $teamSupervisor)) {
@@ -561,6 +675,9 @@ function auth_delete_team(string $teamName): array
     }
 
     auth_remove_team_supervisor($teamName);
+    $statuses = auth_read_team_statuses();
+    unset($statuses[$teamName]);
+    auth_write_team_statuses($statuses);
 
     return [true, '팀이 삭제되었습니다.'];
 }
@@ -682,6 +799,22 @@ function auth_rename_team(string $currentTeamName, string $newTeamName): array
         $updatedSupervisors[$normalizedTeam] = $normalizedSupervisor;
     }
 
+    $statuses = auth_read_team_statuses();
+    $originalStatuses = $statuses;
+    $updatedStatuses = [];
+    foreach ($statuses as $teamName => $active) {
+        $normalizedTeam = auth_normalize_team_name((string)$teamName);
+        if ($normalizedTeam === '') {
+            continue;
+        }
+
+        if (auth_team_key($normalizedTeam) === auth_team_key($currentTeamName)) {
+            $normalizedTeam = $newTeamName;
+        }
+
+        $updatedStatuses[$normalizedTeam] = (bool)$active;
+    }
+
     foreach ($updatedSupervisors as $teamName => $supervisorTeam) {
         if (auth_team_key($teamName) === auth_team_key($supervisorTeam)) {
             return [false, '팀 이름 변경 후 관리감독팀 연결이 자기 자신을 가리키게 됩니다.'];
@@ -708,8 +841,16 @@ function auth_rename_team(string $currentTeamName, string $newTeamName): array
         return [false, '관리감독팀 연결 정보를 저장하지 못했습니다.'];
     }
 
+    if (!auth_write_team_statuses($updatedStatuses)) {
+        auth_write_team_supervisors($originalSupervisors);
+        auth_write_stored_accounts($originalStoredAccounts);
+        auth_write_teams($teams);
+        return [false, '팀 활성 상태를 저장하지 못했습니다.'];
+    }
+
     [$synced, $syncMessage] = auth_sync_team_name_in_work_reports($currentTeamName, $newTeamName);
     if (!$synced) {
+        auth_write_team_statuses($originalStatuses);
         auth_write_team_supervisors($originalSupervisors);
         auth_write_stored_accounts($originalStoredAccounts);
         auth_write_teams($teams);

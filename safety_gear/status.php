@@ -81,6 +81,26 @@ function status_sort_dates(array $dates): array
     return $result;
 }
 
+function status_sort_item_entries(array $entries): array
+{
+    usort($entries, static function (array $a, array $b): int {
+        $dateCompare = strcmp(
+            status_date_only($a['assigned_at'] ?? '', ''),
+            status_date_only($b['assigned_at'] ?? '', '')
+        );
+        if ($dateCompare !== 0) {
+            return $dateCompare;
+        }
+
+        return strcmp(
+            sg_normalize_text($a['gear_uid'] ?? ''),
+            sg_normalize_text($b['gear_uid'] ?? '')
+        );
+    });
+
+    return $entries;
+}
+
 function status_json_attr($value): string
 {
     $json = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -140,7 +160,10 @@ foreach ($employeeGroups as $group) {
 
         $assignedAt = sg_normalize_text($item['assigned_at'] ?? '');
         if ($assignedAt !== '') {
-            $cells[$gearType][] = $assignedAt;
+            $cells[$gearType][] = [
+                'assigned_at' => $assignedAt,
+                'gear_uid' => sg_normalize_text($item['id'] ?? ''),
+            ];
         }
     }
 
@@ -185,6 +208,8 @@ foreach ($allItems as $item) {
             'returned_count' => 0,
             'disposed_count' => 0,
             'purchase_dates' => [],
+            'purchase_counts_by_date' => [],
+            'purchased_items_by_date' => [],
             'issued_dates' => [],
             'issued_people_by_date' => [],
         ];
@@ -192,14 +217,33 @@ foreach ($allItems as $item) {
 
     $inventoryMap[$rowKey]['total_count']++;
 
-    $purchasedAt = sg_normalize_text($item['purchased_at'] ?? '');
-    if ($purchasedAt !== '') {
-        $inventoryMap[$rowKey]['purchase_dates'][] = $purchasedAt;
-    }
-
     $assignedEmployeeName = sg_normalize_text($item['assigned_employee_name'] ?? '');
     $assignedAt = sg_normalize_text($item['assigned_at'] ?? '');
     $status = sg_normalize_text($item['status'] ?? '');
+
+    $purchasedAt = sg_normalize_text($item['purchased_at'] ?? '');
+    if ($purchasedAt !== '') {
+        $inventoryMap[$rowKey]['purchase_dates'][] = $purchasedAt;
+        $purchaseDateKey = status_date_only($purchasedAt, '');
+        if ($purchaseDateKey !== '') {
+            if (!isset($inventoryMap[$rowKey]['purchase_counts_by_date'][$purchaseDateKey])) {
+                $inventoryMap[$rowKey]['purchase_counts_by_date'][$purchaseDateKey] = 0;
+            }
+            $inventoryMap[$rowKey]['purchase_counts_by_date'][$purchaseDateKey]++;
+            if (!isset($inventoryMap[$rowKey]['purchased_items_by_date'][$purchaseDateKey])) {
+                $inventoryMap[$rowKey]['purchased_items_by_date'][$purchaseDateKey] = [];
+            }
+            $inventoryMap[$rowKey]['purchased_items_by_date'][$purchaseDateKey][] = [
+                'gear_uid' => sg_normalize_text($item['id'] ?? ''),
+                'purchase_vendor' => sg_normalize_text($item['purchase_vendor'] ?? ''),
+                'assigned_employee_name' => $assignedEmployeeName,
+                'assigned_team' => sg_normalize_text($item['assigned_team'] ?? ''),
+                'assigned_at' => $assignedAt,
+                'status' => $status,
+                'identifier_value' => sg_normalize_text($item['identifier_value'] ?? ''),
+            ];
+        }
+    }
     $isHiddenStatus = sg_status_label_is_hidden($status);
     $isDisposed = ($status === '폐기');
     $isReturned = ($status === '반납');
@@ -623,6 +667,48 @@ foreach ($employeeRows as $row) {
             line-height: 1.7;
         }
 
+        .modal-table-wrap {
+            margin-top: 16px;
+            overflow: auto;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+        }
+
+        .modal-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 640px;
+            background: #fff;
+        }
+
+        .modal-table th,
+        .modal-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--line);
+            text-align: left;
+            font-size: 13px;
+            vertical-align: top;
+        }
+
+        .modal-table th {
+            background: #f8fafc;
+            color: #334155;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .modal-table tbody tr:last-child td {
+            border-bottom: 0;
+        }
+
+        .modal-table tbody tr.clickable {
+            cursor: pointer;
+        }
+
+        .modal-table tbody tr.clickable:hover td {
+            background: #eefcf8;
+        }
+
         @media (max-width: 980px) {
             .summary-grid,
             .filter-form {
@@ -735,6 +821,7 @@ foreach ($employeeRows as $row) {
                                     <th>보호구 종류</th>
                                     <th>수량</th>
                                     <th>입고일</th>
+                                    <th>입고수량</th>
                                     <th>지급일</th>
                                     <th>지급수량</th>
                                     <th>회수수량</th>
@@ -760,6 +847,27 @@ foreach ($employeeRows as $row) {
                                         <td><?= h(status_value($row['gear_type'] ?? '')) ?></td>
                                         <td><?= (int)($row['total_count'] ?? 0) ?></td>
                                         <td><?= h(!empty($purchaseDates) ? implode(', ', $purchaseDates) : '-') ?></td>
+                                        <td>
+                                            <?php if (empty($purchaseDates)): ?>
+                                                <span class="muted">-</span>
+                                            <?php else: ?>
+                                                <div class="date-stack">
+                                                    <?php foreach ($purchaseDates as $purchaseDate): ?>
+                                                        <?php
+                                                        $purchaseCount = (int)($row['purchase_counts_by_date'][$purchaseDate] ?? 0);
+                                                        $purchasedItems = array_values((array)($row['purchased_items_by_date'][$purchaseDate] ?? []));
+                                                        ?>
+                                                        <button
+                                                            type="button"
+                                                            class="date-chip button-chip purchase-count-button"
+                                                            data-product-label="<?= h($productLabel !== '' ? $productLabel : '미분류 품목') ?>"
+                                                            data-purchase-date="<?= h($purchaseDate) ?>"
+                                                            data-purchased-items="<?= status_json_attr($purchasedItems) ?>"
+                                                        ><?= h($purchaseDate . ' (' . $purchaseCount . ')') ?></button>
+                                                    <?php endforeach; ?>
+                                                </div>
+                                            <?php endif; ?>
+                                        </td>
                                         <td>
                                             <?php if (empty($issuedDates)): ?>
                                                 <span class="muted">-</span>
@@ -816,14 +924,26 @@ foreach ($employeeRows as $row) {
                                             <div class="person-team"><?= h(status_value($row['employee_team'] ?? '소속 미지정')) ?></div>
                                         </td>
                                         <?php foreach ($gearTypes as $gearType): ?>
-                                            <?php $dates = status_sort_dates((array)($row['cells'][$gearType] ?? [])); ?>
+                                            <?php $entries = status_sort_item_entries((array)($row['cells'][$gearType] ?? [])); ?>
                                             <td>
-                                                <?php if (empty($dates)): ?>
+                                                <?php if (empty($entries)): ?>
                                                     <span class="muted">-</span>
                                                 <?php else: ?>
                                                     <div class="date-stack">
-                                                        <?php foreach ($dates as $date): ?>
-                                                            <span class="date-chip"><?= h($date) ?></span>
+                                                        <?php foreach ($entries as $entry): ?>
+                                                            <?php
+                                                            $assignedDate = status_date_only($entry['assigned_at'] ?? '', '-');
+                                                            $entryGearUid = sg_normalize_text($entry['gear_uid'] ?? '');
+                                                            ?>
+                                                            <?php if ($entryGearUid !== ''): ?>
+                                                                <button
+                                                                    type="button"
+                                                                    class="date-chip button-chip"
+                                                                    onclick="window.location.href='/safety_gear/index.php?gear_uid=<?= h(rawurlencode($entryGearUid)) ?>'"
+                                                                ><?= h($assignedDate) ?></button>
+                                                            <?php else: ?>
+                                                                <span class="date-chip"><?= h($assignedDate) ?></span>
+                                                            <?php endif; ?>
                                                         <?php endforeach; ?>
                                                     </div>
                                                 <?php endif; ?>
@@ -849,6 +969,31 @@ foreach ($employeeRows as $row) {
                 <button type="button" class="modal-close" id="issuedPeopleModalClose">닫기</button>
             </div>
             <div id="issuedPeopleModalList" class="modal-list"></div>
+        </div>
+    </div>
+    <div id="purchaseDetailModal" class="modal-backdrop" hidden>
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="purchaseDetailModalTitle">
+            <div class="modal-head">
+                <div>
+                    <div id="purchaseDetailModalTitle" class="modal-title">입고 상세</div>
+                    <div id="purchaseDetailModalSubtitle" class="modal-subtitle"></div>
+                </div>
+                <button type="button" class="modal-close" id="purchaseDetailModalClose">닫기</button>
+            </div>
+            <div class="modal-table-wrap">
+                <table class="modal-table">
+                    <thead>
+                        <tr>
+                            <th>구매처</th>
+                            <th>지급 대상</th>
+                            <th>지급일</th>
+                            <th>상태</th>
+                            <th>식별값</th>
+                        </tr>
+                    </thead>
+                    <tbody id="purchaseDetailModalBody"></tbody>
+                </table>
+            </div>
         </div>
     </div>
     <script>
@@ -927,6 +1072,102 @@ foreach ($employeeRows as $row) {
                         button.dataset.productLabel || '미분류 품목',
                         button.dataset.issuedDate || '',
                         issuedPeople
+                    );
+                });
+            });
+
+            modalClose.addEventListener('click', closeModal);
+            modal.addEventListener('click', function (event) {
+                if (event.target === modal) {
+                    closeModal();
+                }
+            });
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape' && !modal.hidden) {
+                    closeModal();
+                }
+            });
+        })();
+
+        (function () {
+            const modal = document.getElementById('purchaseDetailModal');
+            const modalClose = document.getElementById('purchaseDetailModalClose');
+            const modalSubtitle = document.getElementById('purchaseDetailModalSubtitle');
+            const modalBody = document.getElementById('purchaseDetailModalBody');
+            const buttons = Array.from(document.querySelectorAll('.purchase-count-button'));
+
+            if (!modal || !modalClose || !modalSubtitle || !modalBody || !buttons.length) {
+                return;
+            }
+
+            function escapeHtml(value) {
+                return String(value || '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
+
+            function closeModal() {
+                modal.classList.remove('open');
+                modal.hidden = true;
+            }
+
+            function buildRecipientLabel(item) {
+                const employeeName = String(item.assigned_employee_name || '').trim();
+                const teamName = String(item.assigned_team || '').trim();
+                if (!employeeName && !teamName) {
+                    return '미지급';
+                }
+
+                return teamName ? employeeName + ' (' + teamName + ')' : employeeName;
+            }
+
+            function openModal(productLabel, purchaseDate, items) {
+                modalSubtitle.textContent = productLabel + ' / ' + purchaseDate;
+                modalBody.innerHTML = '';
+
+                if (!Array.isArray(items) || !items.length) {
+                    modalBody.innerHTML = '<tr><td colspan="5">입고 상세 정보가 없습니다.</td></tr>';
+                } else {
+                    items.forEach(function (item) {
+                        const row = document.createElement('tr');
+                        if (item.gear_uid) {
+                            row.className = 'clickable';
+                        }
+                        row.innerHTML =
+                            '<td>' + escapeHtml(item.purchase_vendor || '-') + '</td>' +
+                            '<td>' + escapeHtml(buildRecipientLabel(item)) + '</td>' +
+                            '<td>' + escapeHtml(item.assigned_at || '-') + '</td>' +
+                            '<td>' + escapeHtml(item.status || '-') + '</td>' +
+                            '<td>' + escapeHtml(item.identifier_value || '-') + '</td>';
+                        if (item.gear_uid) {
+                            row.addEventListener('click', function () {
+                                window.location.href = '/safety_gear/index.php?gear_uid=' + encodeURIComponent(item.gear_uid);
+                            });
+                        }
+                        modalBody.appendChild(row);
+                    });
+                }
+
+                modal.hidden = false;
+                modal.classList.add('open');
+            }
+
+            buttons.forEach(function (button) {
+                button.addEventListener('click', function () {
+                    let items = [];
+                    try {
+                        items = JSON.parse(button.dataset.purchasedItems || '[]');
+                    } catch (error) {
+                        items = [];
+                    }
+
+                    openModal(
+                        button.dataset.productLabel || '미분류 품목',
+                        button.dataset.purchaseDate || '',
+                        items
                     );
                 });
             });

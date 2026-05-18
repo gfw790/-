@@ -234,7 +234,7 @@ function tbm_attendee_names_for_team(string $teamName, array $excludeNames = ['ì
     }
 
     $names = [];
-    foreach (auth_read_teams() as $rawTeamName) {
+    foreach (auth_read_active_teams() as $rawTeamName) {
         $displayName = tbm_normalize_display_team_name($rawTeamName);
         if ($displayName !== $teamName) {
             continue;
