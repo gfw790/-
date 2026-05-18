@@ -369,11 +369,11 @@ if (!auth_can_manage($user)) {
                     <input id="assigned_team" type="text" placeholder="직원 선택 시 자동 입력">
                 </div>
                 <div class="field">
-                    <label for="assigned_at">지급일시</label>
+                    <label for="assigned_at">지급일</label>
                     <select id="assigned_team_select" style="margin-top:6px;">
                         <option value="">팀 선택</option>
                     </select>
-                    <input id="assigned_at" type="datetime-local">
+                    <input id="assigned_at" type="date">
                 </div>
                 <div class="field">
                     <label for="assigned_employee_name">지급자명</label>
@@ -731,12 +731,12 @@ if (!auth_can_manage($user)) {
                 .replace(/'/g, '&#039;');
         }
 
-        function formatDatetimeLocal(value) {
+        function formatDateOnly(value) {
             const raw = String(value || '').trim();
             if (!raw) {
                 return '';
             }
-            return raw.slice(0, 16).replace(' ', 'T');
+            return raw.slice(0, 10);
         }
 
         function formatNumberWithComma(num) {
@@ -992,7 +992,7 @@ if (!auth_can_manage($user)) {
             if (fields.assignedTeamSelect) {
                 fields.assignedTeamSelect.value = entry.assigned_team || '';
             }
-            fields.assignedAt.value = formatDatetimeLocal(entry.assigned_at || '');
+            fields.assignedAt.value = formatDateOnly(entry.assigned_at || '');
             fields.notes.value = entry.notes || '';
             fields.currentItemBadge.textContent = state.currentItemId ? '등록 항목 수정 모드' : '신규 등록 모드';
             renderHistory(entry.history || []);
@@ -1106,7 +1106,7 @@ if (!auth_can_manage($user)) {
                 assigned_employee_id: fields.assignedEmployeeId.value,
                 assigned_employee_name: fields.assignedEmployeeName.value.trim(),
                 assigned_team: fields.assignedTeam.value.trim(),
-                assigned_at: fields.assignedAt.value ? fields.assignedAt.value.replace('T', ' ') + ':00' : '',
+                assigned_at: fields.assignedAt.value || '',
                 notes: fields.notes.value.trim()
             };
         }
@@ -1136,7 +1136,7 @@ if (!auth_can_manage($user)) {
                 assigned_employee_id: fields.assignedEmployeeId.value,
                 assigned_employee_name: fields.assignedEmployeeName.value.trim(),
                 assigned_team: fields.assignedTeam.value.trim(),
-                assigned_at: fields.assignedAt.value ? fields.assignedAt.value.replace('T', ' ') + ':00' : '',
+                assigned_at: fields.assignedAt.value || '',
                 history_note: '시스템 도입 전 지급 완료된 품목을 초기 등록'
             }, 'POST');
 
@@ -1164,7 +1164,7 @@ if (!auth_can_manage($user)) {
                 assigned_employee_id: fields.assignedEmployeeId.value,
                 assigned_employee_name: fields.assignedEmployeeName.value.trim(),
                 assigned_team: fields.assignedTeam.value.trim(),
-                assigned_at: fields.assignedAt.value ? fields.assignedAt.value.replace('T', ' ') + ':00' : ''
+                assigned_at: fields.assignedAt.value || ''
             }, 'POST');
 
             state.items = Array.isArray(payload.items) ? payload.items : [];
@@ -1483,7 +1483,7 @@ if (!auth_can_manage($user)) {
             fields.assignedTeam.value = selected.dataset.team || '';
             fields.status.value = '지급됨';
             if (!fields.assignedAt.value) {
-                fields.assignedAt.value = new Date().toISOString().slice(0, 16);
+                fields.assignedAt.value = new Date().toISOString().slice(0, 10);
             }
         });
 
@@ -1496,7 +1496,7 @@ if (!auth_can_manage($user)) {
             fields.assignedEmployeeId.value = '';
             fields.status.value = '지급됨';
             if (!fields.assignedAt.value) {
-                fields.assignedAt.value = new Date().toISOString().slice(0, 16);
+                fields.assignedAt.value = new Date().toISOString().slice(0, 10);
             }
         }
 
