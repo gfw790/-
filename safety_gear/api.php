@@ -406,6 +406,7 @@ if ($action === 'save_template') {
     $manufacturerName = sg_normalize_text($_POST['manufacturer_name'] ?? '');
     $purchaseVendor = sg_normalize_text($_POST['purchase_vendor'] ?? '');
     $purchasePrice = sg_normalize_price($_POST['purchase_price'] ?? '');
+    $statusLabel = sg_normalize_text($_POST['status'] ?? '');
     $notes = sg_normalize_text($_POST['notes'] ?? '');
 
     if ($templateName === '') {
@@ -535,6 +536,13 @@ if ($action === 'save_item') {
     $assignedTeam = sg_normalize_text($_POST['assigned_team'] ?? '');
     $assignedAt = sg_normalize_text($_POST['assigned_at'] ?? '');
 
+    // If assignee name is cleared in the form, treat it as full unassignment.
+    if ($assignedEmployeeName === '') {
+        $assignedEmployeeId = '';
+        $assignedTeam = '';
+        $assignedAt = '';
+    }
+
     if ($identifierType === '') {
         respond(['ok' => false, 'message' => '식별 방식이 필요합니다.'], 400);
     }
@@ -569,6 +577,16 @@ $existingItem = $id !== '' ? sg_fetch_item_by_uid($pdo, $id) : null;
     $previousAssignedDate = substr($previousAssignedAt, 0, 10);
     $currentAssignedDate = substr((string)($assignedAtValue ?? ''), 0, 10);
     $hasAssignedPerson = $assignedEmployeeId !== '' || $assignedEmployeeName !== '';
+    $hadAssignedPerson = $previousAssignedEmployeeId !== '' || $previousAssignedEmployeeName !== '' || $previousAssignedTeam !== '';
+    $hasIssueHistory = false;
+    foreach ((array)($existingItem['history'] ?? []) as $historyEntry) {
+        $historyType = str_replace(' ', '', sg_normalize_text($historyEntry['type'] ?? ''));
+        if ($historyType === '지급' || mb_strpos($historyType, '지급') !== false) {
+            $hasIssueHistory = true;
+            break;
+        }
+    }
+    $shouldClearIssueHistory = $existingItem !== null && !$hasAssignedPerson && ($hadAssignedPerson || $hasIssueHistory);
     $assignmentChanged = $hasAssignedPerson && (
         $previousAssignedEmployeeId !== $assignedEmployeeId
         || $previousAssignedEmployeeName !== $assignedEmployeeName
@@ -700,6 +718,55 @@ $existingItem = $id !== '' ? sg_fetch_item_by_uid($pdo, $id) : null;
             ");
             $statusUpdateStmt->execute([
                 ':status_label' => '지급됨',
+                ':updated_at' => sg_current_timestamp(),
+                ':gear_uid' => $id,
+            ]);
+        } elseif ($shouldClearIssueHistory) {
+            $deleteIssueHistoryStmt = $pdo->prepare("
+                DELETE FROM safety_gear_history
+                WHERE gear_uid = :gear_uid
+                  AND (
+                        REPLACE(TRIM(history_type), ' ', '') = :history_type
+                     OR REPLACE(TRIM(history_type), ' ', '') LIKE :history_like
+                     OR REPLACE(TRIM(history_type), ' ', '') = '개인서명'
+                  )
+            ");
+            $deleteIssueHistoryStmt->execute([
+                ':gear_uid' => $id,
+                ':history_type' => '지급',
+                ':history_like' => '%지급%',
+            ]);
+
+            $cleanupHistoryStmt = $pdo->prepare("
+                DELETE FROM safety_gear_history
+                WHERE gear_uid = :gear_uid
+                  AND (
+                        REPLACE(TRIM(history_type), ' ', '') = '지급'
+                     OR REPLACE(TRIM(history_type), ' ', '') LIKE '%지급%'
+                     OR REPLACE(TRIM(history_type), ' ', '') = '개인서명'
+                  )
+            ");
+            $cleanupHistoryStmt->execute([
+                ':gear_uid' => $id,
+            ]);
+
+            $deleteAllHistoryStmt = $pdo->prepare("
+                DELETE FROM safety_gear_history
+                WHERE gear_uid = :gear_uid
+            ");
+            $deleteAllHistoryStmt->execute([
+                ':gear_uid' => $id,
+            ]);
+
+            $refreshedItem = sg_fetch_item_by_uid($pdo, $id);
+            if ($refreshedItem === null) {
+                throw new RuntimeException('항목 정보를 다시 불러오지 못했습니다.');
+            }
+
+            $resolvedStatus = sg_resolve_item_status($refreshedItem, $refreshedItem['history'] ?? []);
+            $statusUpdateStmt = $pdo->prepare("\n                UPDATE safety_gear_item\n                SET status_label = :status_label,\n                    updated_at = :updated_at\n                WHERE gear_uid = :gear_uid\n            ");
+            $statusUpdateStmt->execute([
+                ':status_label' => $resolvedStatus !== '' ? $resolvedStatus : '사용 가능',
                 ':updated_at' => sg_current_timestamp(),
                 ':gear_uid' => $id,
             ]);
@@ -859,6 +926,55 @@ if ($action === 'update_history') {
     respond([
         'ok' => true,
         'message' => '이력이 수정되었습니다.',
+        'item' => sg_fetch_item_by_uid($pdo, $id),
+        'items' => sg_fetch_all_items($pdo),
+    ]);
+}
+
+if ($action === 'clear_item_history') {
+    $id = sg_normalize_text($_POST['id'] ?? '');
+    if ($id === '') {
+        respond(['ok' => false, 'message' => '이력을 삭제할 항목이 필요합니다.'], 400);
+    }
+
+    $item = sg_fetch_item_by_uid($pdo, $id);
+    if ($item === null) {
+        respond(['ok' => false, 'message' => '항목을 찾지 못했습니다.'], 404);
+    }
+
+    try {
+        $pdo->beginTransaction();
+
+        $deleteStmt = $pdo->prepare("\n            DELETE FROM safety_gear_history\n            WHERE gear_uid = :gear_uid\n              AND history_type <> :keep_history_type\n        ");
+        $deleteStmt->execute([
+            ':gear_uid' => $id,
+            ':keep_history_type' => '입고',
+        ]);
+
+        $refreshedItem = sg_fetch_item_by_uid($pdo, $id);
+        if ($refreshedItem === null) {
+            throw new RuntimeException('항목 정보를 다시 불러오지 못했습니다.');
+        }
+
+        $resolvedStatus = sg_resolve_item_status($refreshedItem, $refreshedItem['history'] ?? []);
+        $statusStmt = $pdo->prepare("\n            UPDATE safety_gear_item\n            SET status_label = :status_label,\n                updated_at = :updated_at\n            WHERE gear_uid = :gear_uid\n        ");
+        $statusStmt->execute([
+            ':status_label' => $resolvedStatus !== '' ? $resolvedStatus : sg_normalize_text($refreshedItem['status'] ?? ''),
+            ':updated_at' => sg_current_timestamp(),
+            ':gear_uid' => $id,
+        ]);
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        respond(['ok' => false, 'message' => '이력 전체 삭제 중 오류가 발생했습니다: ' . $e->getMessage()], 500);
+    }
+
+    respond([
+        'ok' => true,
+        'message' => '구매 이력(입고)만 남기고 나머지 이력이 삭제되었습니다.',
         'item' => sg_fetch_item_by_uid($pdo, $id),
         'items' => sg_fetch_all_items($pdo),
     ]);

@@ -368,7 +368,10 @@ if (!auth_can_manage($user)) {
                 </div>
                 <div class="field">
                     <label for="assigned_employee_name">지급자명</label>
-                    <input id="assigned_employee_name" type="text" placeholder="직원 선택 시 자동 입력">
+                    <div class="row">
+                        <input id="assigned_employee_name" class="grow" type="text" placeholder="직원 선택 시 자동 입력">
+                        <button id="clearAssigneeButton" type="button" class="secondary">지급자 삭제</button>
+                    </div>
                 </div>
                 <div class="field full">
                     <label for="notes">메모</label>
@@ -670,6 +673,7 @@ if (!auth_can_manage($user)) {
             status: document.getElementById('status'),
             assignedEmployeeId: document.getElementById('assigned_employee_id'),
             assignedEmployeeName: document.getElementById('assigned_employee_name'),
+            clearAssigneeButton: document.getElementById('clearAssigneeButton'),
             assignedTeam: document.getElementById('assigned_team'),
             assignedTeamSelect: document.getElementById('assigned_team_select'),
             assignedAt: document.getElementById('assigned_at'),
@@ -1511,20 +1515,41 @@ if (!auth_can_manage($user)) {
                 this.setSelectionRange(newPos, newPos);
             }
         });
+
+        function clearAssigneeSelection() {
+            fields.assignedEmployeeId.value = '';
+            fields.assignedEmployeeName.value = '';
+            fields.assignedTeam.value = '';
+            fields.assignedAt.value = '';
+            if (fields.assignedTeamSelect) {
+                fields.assignedTeamSelect.value = '';
+            }
+        }
+
         fields.assignedEmployeeId.addEventListener('change', function () {
             const selected = this.options[this.selectedIndex];
             if (!selected || !this.value) {
+                clearAssigneeSelection();
                 return;
             }
             fields.assignedEmployeeName.value = selected.dataset.name || '';
             fields.assignedTeam.value = selected.dataset.team || '';
+            if (fields.assignedTeamSelect) {
+                fields.assignedTeamSelect.value = fields.assignedTeam.value || '';
+            }
             if (!fields.assignedAt.value) {
                 fields.assignedAt.value = new Date().toISOString().slice(0, 10);
             }
         });
 
         function applyManualAssigneeState() {
-            const hasManualAssignee = String(fields.assignedEmployeeName.value || '').trim() !== ''
+            const hasManualAssigneeName = String(fields.assignedEmployeeName.value || '').trim() !== '';
+            if (!hasManualAssigneeName) {
+                clearAssigneeSelection();
+                return;
+            }
+
+            const hasManualAssignee = hasManualAssigneeName
                 || String(fields.assignedTeam.value || '').trim() !== '';
             if (!hasManualAssignee) {
                 return;
@@ -1537,6 +1562,10 @@ if (!auth_can_manage($user)) {
 
         fields.assignedEmployeeName.addEventListener('input', applyManualAssigneeState);
         fields.assignedTeam.addEventListener('input', applyManualAssigneeState);
+        fields.clearAssigneeButton.addEventListener('click', function () {
+            clearAssigneeSelection();
+            setStatus('지급자 정보가 비워졌습니다. 저장하면 물품은 유지되고 지급자만 삭제됩니다.', false);
+        });
         fields.historyType.addEventListener('change', function () {
             const historyStatusMap = {
                 '??': '?? ??',
