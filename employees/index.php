@@ -57,6 +57,10 @@ foreach ([
 ] as $col) {
     try { $pdo->exec("ALTER TABLE employees ADD COLUMN {$col} TEXT"); } catch (PDOException) {}
 }
+try { $pdo->exec("ALTER TABLE employees ADD COLUMN employment_status TEXT NOT NULL DEFAULT 'active'"); } catch (PDOException) {}
+try { $pdo->exec("ALTER TABLE employees ADD COLUMN retired_at TEXT"); } catch (PDOException) {}
+try { $pdo->exec("ALTER TABLE employees ADD COLUMN retired_reason TEXT"); } catch (PDOException) {}
+try { $pdo->exec("ALTER TABLE employees ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1"); } catch (PDOException) {}
 
 $teams = auth_read_teams();
 
@@ -103,14 +107,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $pdo->prepare("
                 INSERT INTO employees
                     (employee_no, name, team, position, job_title, phone, email, join_date, birth_date, address, emergency_contact, emergency_contact_relation, memo,
-                     height, weight, shoe_size, blood_type,
+                     height, weight, shoe_size, blood_type, employment_status, retired_at, retired_reason, is_active,
                      uniform_winter_top, uniform_winter_bottom, uniform_spring_top, uniform_spring_bottom, uniform_summer_top, uniform_summer_bottom, uniform_shortsleeve,
                      uniform_heat_top, uniform_heat_bottom)
                 VALUES
                     (:no, :name, :team, :pos, :jt, :phone, :email, :join, :birth, :addr, :emgc, :emgcrel, :memo,
-                     :height, :weight, :shoe, :blood,
+                     :height, :weight, :shoe, :blood, :employment_status, :retired_at, :retired_reason, :is_active,
                      :uwt, :uwb, :ust, :usb, :uht, :uhb, :uss, :uhtop, :uhbot)
             ");
+            $employmentStatus = trim((string)($_POST['employment_status'] ?? 'active')) === 'retired' ? 'retired' : 'active';
+            $retiredAt = trim((string)($_POST['retired_at'] ?? ''));
+            $retiredReason = trim((string)($_POST['retired_reason'] ?? ''));
             $stmt->execute([
                 ':no'    => trim((string)($_POST['employee_no'] ?? '')),
                 ':name'  => $name,
@@ -129,6 +136,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':weight' => trim((string)($_POST['weight'] ?? '')),
                 ':shoe'   => trim((string)($_POST['shoe_size'] ?? '')),
                 ':blood'  => trim((string)($_POST['blood_type'] ?? '')),
+                ':employment_status' => $employmentStatus,
+                ':retired_at' => $employmentStatus === 'retired' ? $retiredAt : '',
+                ':retired_reason' => $employmentStatus === 'retired' ? $retiredReason : '',
+                ':is_active' => $employmentStatus === 'retired' ? 0 : 1,
                 ':uwt'    => trim((string)($_POST['uniform_winter_top'] ?? '')),
                 ':uwb'    => trim((string)($_POST['uniform_winter_bottom'] ?? '')),
                 ':ust'    => trim((string)($_POST['uniform_spring_top'] ?? '')),
@@ -153,6 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     employee_no=:no, name=:name, team=:team, position=:pos, job_title=:jt,
                     phone=:phone, email=:email, join_date=:join, birth_date=:birth,
                     address=:addr, emergency_contact=:emgc, emergency_contact_relation=:emgcrel, memo=:memo,
+                    employment_status=:employment_status, retired_at=:retired_at, retired_reason=:retired_reason, is_active=:is_active,
                     height=:height, weight=:weight, shoe_size=:shoe, blood_type=:blood,
                     uniform_winter_top=:uwt, uniform_winter_bottom=:uwb,
                     uniform_spring_top=:ust, uniform_spring_bottom=:usb,
@@ -161,6 +173,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     updated_at=datetime('now','localtime')
                 WHERE id=:id
             ");
+            $employmentStatus = trim((string)($_POST['employment_status'] ?? 'active')) === 'retired' ? 'retired' : 'active';
+            $retiredAt = trim((string)($_POST['retired_at'] ?? ''));
+            $retiredReason = trim((string)($_POST['retired_reason'] ?? ''));
             $stmt->execute([
                 ':id'    => $id,
                 ':no'    => trim((string)($_POST['employee_no'] ?? '')),
@@ -176,6 +191,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':emgc'   => trim((string)($_POST['emergency_contact'] ?? '')),
                 ':emgcrel'=> trim((string)($_POST['emergency_contact_relation'] ?? '')),
                 ':memo'   => trim((string)($_POST['memo'] ?? '')),
+                ':employment_status' => $employmentStatus,
+                ':retired_at' => $employmentStatus === 'retired' ? $retiredAt : '',
+                ':retired_reason' => $employmentStatus === 'retired' ? $retiredReason : '',
+                ':is_active' => $employmentStatus === 'retired' ? 0 : 1,
                 ':height' => trim((string)($_POST['height'] ?? '')),
                 ':weight' => trim((string)($_POST['weight'] ?? '')),
                 ':shoe'   => trim((string)($_POST['shoe_size'] ?? '')),
@@ -199,12 +218,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->prepare("DELETE FROM employees WHERE id=:id")->execute([':id' => $id]);
             $success = '직원 정보가 삭제되었습니다.';
         }
+    } elseif ($action === 'retire') {
+        $id = (int)($_POST['id'] ?? 0);
+        if ($id > 0) {
+            $pdo->prepare("
+                UPDATE employees
+                SET employment_status = 'retired',
+                    is_active = 0,
+                    retired_at = :retired_at,
+                    retired_reason = :retired_reason,
+                    updated_at = datetime('now','localtime')
+                WHERE id = :id
+            ")->execute([
+                ':id' => $id,
+                ':retired_at' => trim((string)($_POST['retired_at'] ?? date('Y-m-d'))),
+                ':retired_reason' => trim((string)($_POST['retired_reason'] ?? '')),
+            ]);
+            $success = '퇴사 처리되었습니다.';
+        }
+    } elseif ($action === 'restore') {
+        $id = (int)($_POST['id'] ?? 0);
+        if ($id > 0) {
+            $pdo->prepare("
+                UPDATE employees
+                SET employment_status = 'active',
+                    is_active = 1,
+                    retired_at = '',
+                    retired_reason = '',
+                    updated_at = datetime('now','localtime')
+                WHERE id = :id
+            ")->execute([':id' => $id]);
+            $success = '복직 처리되었습니다.';
+        }
     }
 }
 
 // ── 검색/목록 ────────────────────────────────────────────────
 $search    = trim((string)($_GET['q'] ?? ''));
 $filterTeam = trim((string)($_GET['team'] ?? ''));
+$statusFilter = trim((string)($_GET['employment'] ?? 'active'));
+if (!in_array($statusFilter, ['all', 'active', 'retired'], true)) {
+    $statusFilter = 'active';
+}
 
 $where  = [];
 $params = [];
@@ -215,6 +270,11 @@ if ($search !== '') {
 if ($filterTeam !== '') {
     $where[]             = "team = :team";
     $params[':team']     = $filterTeam;
+}
+if ($statusFilter === 'active') {
+    $where[] = "COALESCE(is_active, 1) = 1 AND COALESCE(employment_status, 'active') = 'active'";
+} elseif ($statusFilter === 'retired') {
+    $where[] = "(COALESCE(is_active, 1) = 0 OR COALESCE(employment_status, 'active') = 'retired')";
 }
 
 $teamOrder = "CASE
@@ -268,6 +328,19 @@ if (isset($_GET['edit'])) {
 
 function h(string $v): string { return htmlspecialchars($v, ENT_QUOTES, 'UTF-8'); }
 function display_name(string $name): string { return h(preg_replace('/\s*\(.*?\)\s*$/', '', $name)); }
+function employment_badge(array $emp): string {
+    $status = trim((string)($emp['employment_status'] ?? ''));
+    $isActive = (int)($emp['is_active'] ?? 1) === 1;
+    $retiredAt = trim((string)($emp['retired_at'] ?? ''));
+    if ($status === 'retired' || !$isActive) {
+        $label = '퇴사';
+        if ($retiredAt !== '') {
+            $label .= ' / ' . $retiredAt;
+        }
+        return '<span style="display:inline-block;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:700;color:#9f1239;background:#ffe4e6;white-space:nowrap">' . h($label) . '</span>';
+    }
+    return '<span style="display:inline-block;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:700;color:#166534;background:#dcfce7;white-space:nowrap">재직중</span>';
+}
 
 function team_badge(string $team): string {
     $map = [
@@ -505,6 +578,22 @@ function team_badge(string $team): string {
             <input type="date" name="join_date" value="<?= h((string)($editTarget['join_date'] ?? '')) ?>">
           </div>
           <div class="field">
+            <label>재직상태</label>
+            <?php $employmentStatusValue = (string)($editTarget['employment_status'] ?? 'active'); ?>
+            <select name="employment_status">
+              <option value="active"<?= $employmentStatusValue !== 'retired' ? ' selected' : '' ?>>재직중</option>
+              <option value="retired"<?= $employmentStatusValue === 'retired' ? ' selected' : '' ?>>퇴사</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>퇴사일</label>
+            <input type="date" name="retired_at" value="<?= h((string)($editTarget['retired_at'] ?? '')) ?>">
+          </div>
+          <div class="field">
+            <label>퇴사사유</label>
+            <input type="text" name="retired_reason" value="<?= h((string)($editTarget['retired_reason'] ?? '')) ?>" placeholder="예: 계약만료, 자진퇴사">
+          </div>
+          <div class="field">
             <label>생년월일</label>
             <input type="date" name="birth_date" value="<?= h((string)($editTarget['birth_date'] ?? '')) ?>">
           </div>
@@ -607,8 +696,13 @@ function team_badge(string $team): string {
             <option value="<?= h((string)$t) ?>" <?= $filterTeam === (string)$t ? 'selected' : '' ?>><?= h((string)$t) ?></option>
           <?php endforeach; ?>
         </select>
+        <select name="employment">
+          <option value="active"<?= $statusFilter === 'active' ? ' selected' : '' ?>>재직중</option>
+          <option value="retired"<?= $statusFilter === 'retired' ? ' selected' : '' ?>>퇴사</option>
+          <option value="all"<?= $statusFilter === 'all' ? ' selected' : '' ?>>전체</option>
+        </select>
         <button type="submit" class="btn btn-primary">검색</button>
-        <?php if ($search !== '' || $filterTeam !== ''): ?>
+        <?php if ($search !== '' || $filterTeam !== '' || $statusFilter !== 'active'): ?>
           <a href="?" class="btn btn-secondary">초기화</a>
         <?php endif; ?>
         <span class="count-badge">총 <?= count($employees) ?>명</span>
@@ -617,6 +711,7 @@ function team_badge(string $team): string {
         <table>
           <thead>
             <tr>
+              <th>재직상태</th>
               <th>사원번호</th>
               <th>이름</th>
               <th>소속팀</th>
@@ -643,6 +738,7 @@ function team_badge(string $team): string {
                   <td><?= h((string)($emp['job_title'] ?? '')) ?></td>
                   <td><?= h((string)($emp['phone'] ?? '')) ?></td>
                   <td><?= h((string)($emp['email'] ?? '')) ?></td>
+                  <td><?= employment_badge($emp) ?></td>
                   <td><?= h((string)($emp['join_date'] ?? '')) ?></td>
                   <td><?= h((string)($emp['emergency_contact'] ?? '')) ?></td>
                   <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="<?= h((string)($emp['memo'] ?? '')) ?>"><?= h((string)($emp['memo'] ?? '')) ?></td>

@@ -107,18 +107,42 @@ function receipt_parse_manual_items(string $raw, string $defaultDate): array
         $parts = array_map('trim', explode('|', $line));
         $gearLabel = (string)($parts[0] ?? '');
         $itemName = (string)($parts[1] ?? '');
-        $modelName = (string)($parts[2] ?? '');
-        $quantity = max(1, (int)($parts[3] ?? 1));
-        $assignedDate = sg_normalize_text($parts[4] ?? '');
+        $specName = '';
+        $modelName = '';
+        $manufacturerName = '';
+        $kcsCertNo = '';
+        $quantity = 1;
+        $assignedDate = '';
+
+        if (count($parts) >= 8) {
+            $specName = (string)($parts[2] ?? '');
+            $modelName = (string)($parts[3] ?? '');
+            $manufacturerName = (string)($parts[4] ?? '');
+            $kcsCertNo = (string)($parts[5] ?? '');
+            $quantity = max(1, (int)($parts[6] ?? 1));
+            $assignedDate = sg_normalize_text($parts[7] ?? '');
+        } else {
+            $modelName = (string)($parts[2] ?? '');
+            $quantity = max(1, (int)($parts[3] ?? 1));
+            $assignedDate = sg_normalize_text($parts[4] ?? '');
+        }
+
+        $detailParts = array_values(array_filter([
+            $itemName,
+            $specName !== '' ? '규격 ' . $specName : '',
+            $modelName !== '' ? '모델 ' . $modelName : '',
+            $manufacturerName !== '' ? '제조사 ' . $manufacturerName : '',
+            $kcsCertNo !== '' ? 'KCS ' . $kcsCertNo : '',
+        ], static fn(string $value): bool => $value !== ''));
 
         $items[] = [
             'gear_label' => $gearLabel !== '' ? $gearLabel : ($itemName !== '' ? $itemName : '보호구'),
             'item_name' => $itemName,
-            'spec_name' => '',
+            'spec_name' => $specName,
             'model_name' => $modelName,
-            'manufacturer_name' => '',
-            'kcs_cert_no' => '',
-            'detail_text' => trim($itemName . ($modelName !== '' ? ' / ' . $modelName : '')),
+            'manufacturer_name' => $manufacturerName,
+            'kcs_cert_no' => $kcsCertNo,
+            'detail_text' => implode(' / ', $detailParts),
             'quantity' => $quantity,
             'assigned_date' => $assignedDate !== '' ? $assignedDate : $defaultDate,
         ];
@@ -145,6 +169,11 @@ function receipt_locale_note(string $locale): string
         return '키르기스어 병기를 선택하면 확인서 제목, 주요 항목, 서약 문구, 서명란이 한국어와 키르기스어로 함께 출력됩니다.';
     }
     return '';
+}
+
+function receipt_use_compact_item_columns(string $locale): bool
+{
+    return $locale === 'ky';
 }
 
 function receipt_translation_set(string $locale): array
@@ -803,7 +832,7 @@ $translations = receipt_translation_set($sheetLocale);
                             <input id="manual_team" type="text" name="manual_team" value="<?= h($manualTeam) ?>">
                         </div>
                         <div class="field">
-                            <label for="manual_position">직급</label>
+                            <label for="manual_position">직무</label>
                             <input id="manual_position" type="text" name="manual_position" value="<?= h($manualPosition) ?>">
                         </div>
                         <div class="field">
@@ -850,6 +879,7 @@ $translations = receipt_translation_set($sheetLocale);
                         <div class="field span-4">
                             <label for="manual_items">공통 지급 보호구 목록</label>
                             <textarea id="manual_items" name="manual_items"><?= h($manualItemsRaw) ?></textarea>
+                            <div class="hint">한 줄 형식: `보호구명|품명|규격|모델명|제조사|KCS인증번호|수량|지급일` 예: `안전모|안전모 K2 화이트|ABS|K2-2026|K2|KCS-2026-000123|1|<?= h(date('Y-m-d')) ?>`</div>
                             <div class="hint">한 줄 형식: `보호구명칭|품명|모델명|수량|지급일자` 예: `안전모|안전모|K2 화이트|1|<?= h(date('Y-m-d')) ?>`</div>
                         </div>
                     </div>
@@ -871,7 +901,7 @@ $translations = receipt_translation_set($sheetLocale);
                                         <div class="employee-name"><?= h(receipt_value($group['employee_name'] ?? '')) ?></div>
                                         <div class="employee-meta">
                                             소속: <?= h(receipt_value($group['employee_team'] ?? '')) ?><br>
-                                            직급: <?= h(receipt_value($group['employee_position'] ?? '')) ?><br>
+                                            직무: <?= h(receipt_value($group['employee_position'] ?? '')) ?><br>
                                             현재 지급 보호구 <?= count((array)($group['assigned_items'] ?? [])) ?>건
                                         </div>
                                     </span>
@@ -922,6 +952,7 @@ $translations = receipt_translation_set($sheetLocale);
             $documentDate = $mode === 'daily' ? ($manualDate !== '' ? $manualDate : date('Y-m-d')) : receipt_signature_date($assignedItems);
             $rows = $mode === 'daily' ? (array)($group['manual_rows'] ?? []) : receipt_aggregate_items($assignedItems);
             $sheetLocale = $mode === 'daily' ? $manualLocale : 'ko';
+            $compactItemColumns = receipt_use_compact_item_columns($sheetLocale);
             $t = receipt_translation_set($sheetLocale);
             $pledgeTranslated = $sheetLocale === 'ru' ? RECEIPT_PLEDGE_TEXT_RU : ($sheetLocale === 'uz' ? RECEIPT_PLEDGE_TEXT_UZ : ($sheetLocale === 'ky' ? RECEIPT_PLEDGE_TEXT_KY : ''));
             ?>
@@ -946,7 +977,7 @@ $translations = receipt_translation_set($sheetLocale);
                     <tr>
                         <th><?= receipt_label_html('소속', $t['team'] ?? '', $sheetLocale) ?></th>
                         <td><?= h(receipt_value($group['employee_team'] ?? '')) ?></td>
-                        <th><?= receipt_label_html('직급', $t['position'] ?? '', $sheetLocale) ?></th>
+                        <th><?= receipt_label_html('직무', $t['position'] ?? '', $sheetLocale) ?></th>
                         <td><?= h(receipt_value($group['employee_position'] ?? '')) ?></td>
                     </tr>
                     <tr>
@@ -966,8 +997,10 @@ $translations = receipt_translation_set($sheetLocale);
                             <th><?= receipt_label_html('품명', '', $sheetLocale) ?></th>
                             <th><?= receipt_label_html('규격', '', $sheetLocale) ?></th>
                             <th><?= receipt_label_html('모델명', '', $sheetLocale) ?></th>
-                            <th><?= receipt_label_html('제조사', '', $sheetLocale) ?></th>
-                            <th><?= receipt_label_html('KCS 안전인증번호', '', $sheetLocale) ?></th>
+                            <?php if (!$compactItemColumns): ?>
+                                <th><?= receipt_label_html('제조사', '', $sheetLocale) ?></th>
+                                <th><?= receipt_label_html('KCS 안전인증번호', '', $sheetLocale) ?></th>
+                            <?php endif; ?>
                             <th style="width:88px;"><?= receipt_label_html('지급 수량', $t['quantity'] ?? '', $sheetLocale) ?></th>
                             <th style="width:120px;"><?= receipt_label_html('지급 일자', $t['issued_date'] ?? '', $sheetLocale) ?></th>
                         </tr>
@@ -980,8 +1013,10 @@ $translations = receipt_translation_set($sheetLocale);
                                 <td><?= h(receipt_value($row['item_name'] ?? '')) ?></td>
                                 <td><?= h(receipt_value($row['spec_name'] ?? '')) ?></td>
                                 <td><?= h(receipt_value($row['model_name'] ?? '')) ?></td>
-                                <td><?= h(receipt_value($row['manufacturer_name'] ?? '')) ?></td>
-                                <td><?= h(receipt_value($row['kcs_cert_no'] ?? '')) ?></td>
+                                <?php if (!$compactItemColumns): ?>
+                                    <td><?= h(receipt_value($row['manufacturer_name'] ?? '')) ?></td>
+                                    <td><?= h(receipt_value($row['kcs_cert_no'] ?? '')) ?></td>
+                                <?php endif; ?>
                                 <td><?= (int)($row['quantity'] ?? 0) ?></td>
                                 <td><?= h(receipt_value($row['assigned_date'] ?? '')) ?></td>
                             </tr>
@@ -1031,7 +1066,7 @@ $translations = receipt_translation_set($sheetLocale);
                                     <div class="receipt-title"><?= h(receipt_value($receipt['document_no'] ?? '')) ?></div>
                                     <div class="receipt-meta">
                                         성명: <?= h(receipt_value($receipt['worker_name'] ?? '')) ?><br>
-                                        소속: <?= h(receipt_value($receipt['worker_team'] ?? '')) ?> / 직급: <?= h(receipt_value($receipt['worker_position'] ?? '')) ?><br>
+                                        소속: <?= h(receipt_value($receipt['worker_team'] ?? '')) ?> / 직무: <?= h(receipt_value($receipt['worker_position'] ?? '')) ?><br>
                                         발급일: <?= h(receipt_value($receipt['issue_date'] ?? '')) ?> / 저장일시: <?= h(receipt_value($receipt['created_at'] ?? '')) ?>
                                     </div>
                                 </div>

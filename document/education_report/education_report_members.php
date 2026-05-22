@@ -13,14 +13,54 @@ function json_out(array $payload, int $status = 200): void
 function normalize_name(string $name): string
 {
     $name = trim($name);
-    // Remove parenthesized notes and whitespace for loose matching across systems.
     $name = preg_replace('/\([^)]*\)/u', '', $name) ?? $name;
     $name = preg_replace('/\s+/u', '', $name) ?? $name;
     return trim($name);
 }
 
-// Always exclude these names from education report attendee output.
-$hardExcludedNames = ['윤장희'];
+function extract_names_from_tbm_output_html(string $html): array
+{
+    if ($html === '') {
+        return [];
+    }
+
+    if (!preg_match('/<table class="tbm-dyn-table tbm-dyn-row"[^>]*>.*?<\/table>/si', $html, $tableMatch)) {
+        return [];
+    }
+
+    if (!preg_match_all('/<td>(.*?)<\/td>/si', $tableMatch[0], $cellMatches)) {
+        return [];
+    }
+
+    $names = [];
+    $seen = [];
+    foreach ($cellMatches[1] as $index => $cellHtml) {
+        if ($index % 2 === 1) {
+            continue;
+        }
+
+        $value = html_entity_decode(strip_tags((string)$cellHtml), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $value = trim($value);
+        if ($value === '') {
+            continue;
+        }
+        if (in_array($value, ['이름', '성명'], true)) {
+            continue;
+        }
+
+        $key = normalize_name($value);
+        if ($key === '' || isset($seen[$key])) {
+            continue;
+        }
+
+        $seen[$key] = true;
+        $names[] = $value;
+    }
+
+    return $names;
+}
+
+$hardExcludedNames = ['소장님', '김종훈', '조한봉'];
 
 $date = trim((string)($_GET['date'] ?? date('Y-m-d')));
 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
@@ -28,6 +68,7 @@ if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
 }
 
 $requestedFile = trim((string)($_GET['file'] ?? ''));
+$requestedTeam = trim((string)($_GET['team'] ?? '공사팀'));
 
 try {
     require_once __DIR__ . '/../../tbm/tbm_db.php';
@@ -40,26 +81,56 @@ try {
     if ($requestedFile !== '') {
         $normalizedFile = tbm_normalize_output_relative_path($requestedFile);
         if ($normalizedFile !== '') {
-            $docStmt = $tbmPdo->prepare(
-                'SELECT id, team, output_filename
-                   FROM tbm_documents
-                  WHERE output_filename = :output_filename
-                  ORDER BY id DESC
-                  LIMIT 1'
-            );
-            $docParams = [':output_filename' => $normalizedFile];
+            if ($requestedTeam !== '') {
+                $docStmt = $tbmPdo->prepare(
+                    'SELECT id, team, output_filename
+                       FROM tbm_documents
+                      WHERE output_filename = :output_filename
+                        AND team = :team
+                      ORDER BY id DESC
+                      LIMIT 1'
+                );
+                $docParams = [
+                    ':output_filename' => $normalizedFile,
+                    ':team' => $requestedTeam,
+                ];
+            } else {
+                $docStmt = $tbmPdo->prepare(
+                    'SELECT id, team, output_filename
+                       FROM tbm_documents
+                      WHERE output_filename = :output_filename
+                      ORDER BY id DESC
+                      LIMIT 1'
+                );
+                $docParams = [':output_filename' => $normalizedFile];
+            }
         }
     }
 
     if ($docStmt === null) {
-        $docStmt = $tbmPdo->prepare(
-            'SELECT id, team, output_filename
-               FROM tbm_documents
-              WHERE doc_date = :doc_date
-              ORDER BY id DESC
-              LIMIT 1'
-        );
-        $docParams = [':doc_date' => $date];
+        if ($requestedTeam !== '') {
+            $docStmt = $tbmPdo->prepare(
+                'SELECT id, team, output_filename
+                   FROM tbm_documents
+                  WHERE doc_date = :doc_date
+                    AND team = :team
+                  ORDER BY id DESC
+                  LIMIT 1'
+            );
+            $docParams = [
+                ':doc_date' => $date,
+                ':team' => $requestedTeam,
+            ];
+        } else {
+            $docStmt = $tbmPdo->prepare(
+                'SELECT id, team, output_filename
+                   FROM tbm_documents
+                  WHERE doc_date = :doc_date
+                  ORDER BY id DESC
+                  LIMIT 1'
+            );
+            $docParams = [':doc_date' => $date];
+        }
     }
 
     $docStmt->execute($docParams);
@@ -69,6 +140,7 @@ try {
         json_out([
             'ok' => true,
             'date' => $date,
+            'team' => $requestedTeam,
             'count' => 0,
             'names' => [],
         ]);
@@ -91,15 +163,16 @@ try {
         if ($name === '') {
             continue;
         }
+
         $key = normalize_name($name);
         if ($key === '' || isset($seen[$key])) {
             continue;
         }
+
         $seen[$key] = true;
         $orderedNames[] = $name;
     }
 
-    // If output HTML exists, prefer the names actually rendered in today's TBM output.
     $outputFilename = trim((string)($doc['output_filename'] ?? ''));
     if ($outputFilename !== '') {
         $safeRelPath = str_replace(['\\', '..'], ['/', ''], $outputFilename);
@@ -107,12 +180,7 @@ try {
         if (is_file($outputPath)) {
             $html = (string)file_get_contents($outputPath);
             if ($html !== '') {
-                $fromOutput = [];
-                foreach ($orderedNames as $name) {
-                    if (mb_strpos($html, $name) !== false) {
-                        $fromOutput[] = $name;
-                    }
-                }
+                $fromOutput = extract_names_from_tbm_output_html($html);
                 if ($fromOutput !== []) {
                     $orderedNames = $fromOutput;
                 }
@@ -124,38 +192,15 @@ try {
         json_out([
             'ok' => true,
             'date' => $date,
+            'team' => $requestedTeam,
+            'doc_id' => (int)$doc['id'],
+            'doc_team' => (string)($doc['team'] ?? ''),
+            'source_file' => (string)($doc['output_filename'] ?? ''),
             'count' => 0,
             'names' => [],
         ]);
     }
 
-    $employeeDbPath = __DIR__ . '/../../employees/employees.db';
-    $excludedByTeam = [];
-
-    if (is_file($employeeDbPath)) {
-        $employeePdo = new PDO('sqlite:' . $employeeDbPath);
-        $employeePdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-        $placeholders = implode(',', array_fill(0, count($orderedNames), '?'));
-        $empStmt = $employeePdo->prepare(
-            "SELECT name, team FROM employees WHERE name IN ($placeholders)"
-        );
-        $empStmt->execute($orderedNames);
-        $empRows = $empStmt->fetchAll(PDO::FETCH_ASSOC);
-
-        foreach ($empRows as $emp) {
-            $team = trim((string)($emp['team'] ?? ''));
-            if ($team !== '공사팀-모터') {
-                continue;
-            }
-            $empNameKey = normalize_name((string)($emp['name'] ?? ''));
-            if ($empNameKey !== '') {
-                $excludedByTeam[$empNameKey] = true;
-            }
-        }
-    }
-
-    $filtered = [];
     $hardExcludedKeys = [];
     foreach ($hardExcludedNames as $excludedName) {
         $excludedKey = normalize_name((string)$excludedName);
@@ -164,11 +209,9 @@ try {
         }
     }
 
+    $filtered = [];
     foreach ($orderedNames as $name) {
         $nameKey = normalize_name($name);
-        if ($nameKey !== '' && isset($excludedByTeam[$nameKey])) {
-            continue;
-        }
         if ($nameKey !== '' && isset($hardExcludedKeys[$nameKey])) {
             continue;
         }
@@ -178,6 +221,7 @@ try {
     json_out([
         'ok' => true,
         'date' => $date,
+        'team' => $requestedTeam,
         'doc_id' => (int)$doc['id'],
         'doc_team' => (string)($doc['team'] ?? ''),
         'source_file' => (string)($doc['output_filename'] ?? ''),

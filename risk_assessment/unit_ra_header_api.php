@@ -87,6 +87,24 @@ function ensure_unit_ra_header_safe_work_standard_no(PDO $pdo): void
     }
 }
 
+function ensure_unit_ra_header_report_title_type(PDO $pdo): void
+{
+    $columnExists = (int)$pdo->query("
+        SELECT COUNT(*)
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'unit_ra_header'
+          AND COLUMN_NAME = 'report_title_type'
+    ")->fetchColumn() > 0;
+
+    if (!$columnExists) {
+        $pdo->exec("
+            ALTER TABLE unit_ra_header
+            ADD COLUMN report_title_type VARCHAR(20) NOT NULL DEFAULT 'regular' AFTER unit_title
+        ");
+    }
+}
+
 function text_length(string $value): int
 {
     return function_exists('mb_strlen')
@@ -1743,11 +1761,13 @@ if ($action === 'detail') {
     try {
         $pdo = getDB();
         ensure_unit_ra_header_safe_work_standard_no($pdo);
+        ensure_unit_ra_header_report_title_type($pdo);
         $stmt = $pdo->prepare("
             SELECT
                 unit_ra_id,
                 unit_type,
                 unit_title,
+                report_title_type,
                 unit_code,
                 process_name,
                 use_yn,
@@ -1787,12 +1807,14 @@ if ($action === 'preview') {
     try {
         $pdo = getDB();
         ensure_unit_ra_header_safe_work_standard_no($pdo);
+        ensure_unit_ra_header_report_title_type($pdo);
 
         $headerStmt = $pdo->prepare("
             SELECT
                 unit_ra_id,
                 unit_type,
                 unit_title,
+                report_title_type,
                 unit_code,
                 process_name,
                 use_yn,
@@ -1884,10 +1906,17 @@ if ($action === 'save' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         echo json_encode(['success'=>false,'message'=>'평가유형이 올바르지 않습니다.'], JSON_UNESCAPED_UNICODE);
         exit;
     }
+    $reportTitleType = isset($body['report_title_type']) ? trim((string)$body['report_title_type']) : 'regular';
+    $validReportTitleTypes = ['regular', 'occasional'];
+    if (!in_array($reportTitleType, $validReportTitleTypes, true)) {
+        echo json_encode(['success'=>false,'message'=>'평가서 제목 구분이 올바르지 않습니다.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
 
     try {
         $pdo = getDB();
         ensure_unit_ra_header_safe_work_standard_no($pdo);
+        ensure_unit_ra_header_report_title_type($pdo);
         $unitRaId = isset($body['unit_ra_id']) ? (int)$body['unit_ra_id'] : 0;
         $isEdit = $unitRaId > 0;
 
@@ -1915,6 +1944,7 @@ if ($action === 'save' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $params = [
             ':unit_type'    => $body['unit_type'],
             ':unit_title'   => $body['unit_title'],
+            ':report_title_type' => $reportTitleType,
             ':unit_code'    => $unitCode !== '' ? $unitCode : null,
             ':process_name' => $body['process_name'] ?? null,
             ':use_yn'       => $body['use_yn']       ?? 'Y',
@@ -1945,6 +1975,7 @@ if ($action === 'save' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 UPDATE unit_ra_header
                 SET unit_type = :unit_type,
                     unit_title = :unit_title,
+                    report_title_type = :report_title_type,
                     unit_code = :unit_code,
                     process_name = :process_name,
                     use_yn = :use_yn,
@@ -1962,11 +1993,11 @@ if ($action === 'save' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $sql = "
                 INSERT INTO unit_ra_header
-                    (unit_type, unit_title, unit_code, process_name,
+                    (unit_type, unit_title, report_title_type, unit_code, process_name,
                      use_yn, sort_no, safe_work_standard_no, remark, created_by, evaluator_name,
                      created_at, updated_at)
                 VALUES
-                    (:unit_type, :unit_title, :unit_code, :process_name,
+                    (:unit_type, :unit_title, :report_title_type, :unit_code, :process_name,
                      :use_yn, :sort_no, :safe_work_standard_no, :remark, :created_by, :evaluator_name,
                      NOW(), NOW())
             ";
@@ -1997,6 +2028,7 @@ if ($action === 'save' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 'unit_title'  => $body['unit_title'],
                 'unit_code'   => $unitCode,
                 'unit_type'   => $body['unit_type'],
+                'report_title_type' => $reportTitleType,
                 'safe_work_standard_no' => $body['safe_work_standard_no'] ?? null,
                 'process_name'=> $body['process_name'] ?? '',
             ],

@@ -65,7 +65,7 @@ function hazard_review_user_can_view_report(array $user, array $report): bool
     return $userLoginId !== '' && (string)($report['user_login_id'] ?? '') === $userLoginId;
 }
 
-  function hazard_review_resolve_role_people(array $report): array
+function hazard_review_resolve_role_people(array $report): array
   {
     $teamName = hazard_review_report_team_context($report);
     $reportRole = auth_normalize_role((string)($report['role_code'] ?? ''));
@@ -125,6 +125,49 @@ function hazard_review_user_can_view_report(array $user, array $report): bool
     ];
   }
 
+function hazard_review_allowed_periods(): array
+{
+    return [
+        'current_month' => '현재월',
+        'last_3_months' => '지난 3개월',
+        'all' => '전체',
+    ];
+}
+
+function hazard_review_normalize_period(?string $period): string
+{
+    $allowed = hazard_review_allowed_periods();
+    $period = trim((string)$period);
+    return array_key_exists($period, $allowed) ? $period : 'current_month';
+}
+
+function hazard_review_period_bounds(string $period, DateTimeImmutable $today): ?array
+{
+    return match ($period) {
+        'current_month' => [
+            'start' => $today->modify('first day of this month')->setTime(0, 0, 0),
+            'end' => $today->modify('first day of next month')->setTime(0, 0, 0),
+        ],
+        'last_3_months' => [
+            'start' => $today->modify('first day of -2 months')->setTime(0, 0, 0),
+            'end' => $today->modify('first day of next month')->setTime(0, 0, 0),
+        ],
+        default => null,
+    };
+}
+
+function hazard_review_build_list_url(string $period, int $reportId, bool $submitted): string
+{
+    $params = ['period' => $period];
+    if ($reportId > 0) {
+        $params['report_id'] = $reportId;
+    }
+    if ($submitted) {
+        $params['submitted'] = '1';
+    }
+    return 'hazard_review.php?' . http_build_query($params);
+}
+
 $user = auth_current_user();
 if ($user === null) {
     header('Location: task_select.php');
@@ -136,6 +179,18 @@ ensureWorkerHazardSelectionTable($pdo);
 
 $reportId = isset($_GET['report_id']) ? (int)$_GET['report_id'] : 0;
 $submitted = isset($_GET['submitted']) && $_GET['submitted'] === '1';
+$today = new DateTimeImmutable('now', new DateTimeZone('Asia/Seoul'));
+$selectedPeriod = hazard_review_normalize_period($_GET['period'] ?? 'current_month');
+$periodLabels = hazard_review_allowed_periods();
+$selectedPeriodLabel = $periodLabels[$selectedPeriod] ?? $periodLabels['current_month'];
+$periodBounds = hazard_review_period_bounds($selectedPeriod, $today);
+$periodDescription = match ($selectedPeriod) {
+    'current_month' => $today->format('Y년 n월') . ' 자료만 표시',
+    'last_3_months' => $periodBounds !== null
+        ? $periodBounds['start']->format('Y-m-d') . ' ~ ' . $periodBounds['end']->modify('-1 day')->format('Y-m-d')
+        : '',
+    default => '전체 기간 자료 표시',
+};
 $error = '';
 $report = null;
 
@@ -177,12 +232,12 @@ if ($reportId > 0) {
     }
 }
 
-$reportListStmt = $pdo->query("
+$reportListSql = "
     SELECT
         wr.report_id,
-    wr.role_code,
+        wr.role_code,
         wr.user_login_id,
-    wr.user_name,
+        wr.user_name,
         wr.team_name,
         wr.work_date,
         wr.work_title,
@@ -195,16 +250,29 @@ $reportListStmt = $pdo->query("
     FROM work_report wr
     LEFT JOIN work_report_worker_hazard_selection ws
         ON ws.report_id = wr.report_id
+";
+$reportListParams = [];
+if ($periodBounds !== null) {
+    $reportListSql .= "
+    WHERE wr.work_date >= :period_start
+      AND wr.work_date < :period_end
+";
+    $reportListParams[':period_start'] = $periodBounds['start']->format('Y-m-d');
+    $reportListParams[':period_end'] = $periodBounds['end']->format('Y-m-d');
+}
+$reportListSql .= "
     GROUP BY wr.report_id, wr.work_date, wr.work_title
     ORDER BY wr.work_date DESC, wr.report_id DESC
-");
+";
+$reportListStmt = $pdo->prepare($reportListSql);
+$reportListStmt->execute($reportListParams);
 $reportList = $reportListStmt->fetchAll() ?: [];
 $reportList = array_values(array_filter(
     $reportList,
     static fn(array $listReport) => hazard_review_user_can_view_report($user, $listReport)
 ));
 
-$todayKey = date('Y-m-d');
+$todayKey = $today->format('Y-m-d');
 $teamCounts = [];
 $totalParticipants = 0;
 $reportsWithParticipants = 0;
@@ -462,6 +530,28 @@ foreach ($participantRows as $participantRow) {
     flex-wrap: wrap;
     gap: 8px;
   }
+  .period-filter-list {
+    margin-top: 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .period-filter-label {
+    color: var(--text-dim);
+    font-size: 12px;
+    font-weight: 700;
+    margin-right: 2px;
+  }
+  .period-filter-link {
+    text-decoration: none;
+  }
+  .period-summary {
+    margin-bottom: 12px;
+    color: var(--text-dim);
+    font-size: 12px;
+    line-height: 1.5;
+  }
   .team-mini-item {
     display: inline-flex;
     align-items: center;
@@ -651,6 +741,7 @@ foreach ($participantRows as $participantRow) {
         <?php else: ?>
           <section>
             <div class="section-title">수시위험성평가 목록</div>
+            <div class="period-summary">기본 표시 범위: <strong style="color:var(--text-hi)"><?= h($selectedPeriodLabel) ?></strong> · <?= h($periodDescription) ?></div>
             <div class="stats-grid">
               <div class="stat-card">
                 <div class="stat-label">총 평가 건수</div>
@@ -679,6 +770,16 @@ foreach ($participantRows as $participantRow) {
                 <div class="stat-value"><?= number_format($averageParticipants, 1) ?></div>
                 <div class="stat-sub"><?= h($topTeamName) ?> 최다(<?= number_format($topTeamCount) ?>건)</div>
               </div>
+            </div>
+
+            <div class="period-filter-list">
+              <span class="period-filter-label">기간 보기</span>
+              <?php foreach ($periodLabels as $periodKey => $periodLabel): ?>
+                <a
+                  class="team-mini-item period-filter-link <?= $selectedPeriod === $periodKey ? 'is-active' : '' ?>"
+                  href="<?= h(hazard_review_build_list_url($periodKey, $reportId, $submitted)) ?>"
+                ><?= h($periodLabel) ?></a>
+              <?php endforeach; ?>
             </div>
 
             <?php if (!empty($topTeams)): ?>

@@ -1411,9 +1411,15 @@ function sg_fetch_employee_options(): array
 
     $pdo = new PDO('sqlite:' . $dbPath);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    try { $pdo->exec("ALTER TABLE employees ADD COLUMN employment_status TEXT NOT NULL DEFAULT 'active'"); } catch (PDOException) {}
+    try { $pdo->exec("ALTER TABLE employees ADD COLUMN retired_at TEXT"); } catch (PDOException) {}
+    try { $pdo->exec("ALTER TABLE employees ADD COLUMN retired_reason TEXT"); } catch (PDOException) {}
+    try { $pdo->exec("ALTER TABLE employees ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1"); } catch (PDOException) {}
     $stmt = $pdo->query("
         SELECT id, employee_no, name, team, position
         FROM employees
+        WHERE COALESCE(is_active, 1) = 1
+          AND COALESCE(employment_status, 'active') = 'active'
         ORDER BY
             CASE WHEN team IS NULL OR team = '' THEN 1 ELSE 0 END,
             team ASC,

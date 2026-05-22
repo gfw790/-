@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS `unit_ra_header` (
   `unit_ra_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `unit_code` VARCHAR(50) NULL,
   `unit_title` VARCHAR(255) NOT NULL,
+  `report_title_type` VARCHAR(20) NOT NULL DEFAULT 'regular',
   `unit_type` ENUM('target', 'major_work', 'tool', 'env') NOT NULL DEFAULT 'major_work',
   `process_name` VARCHAR(255) NULL,
   `evaluator_name` VARCHAR(100) NULL,

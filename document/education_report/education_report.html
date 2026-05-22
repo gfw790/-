@@ -2679,8 +2679,10 @@
             }
 
             const file = params.get('file') || '';
+            const team = params.get('team') || '공사팀';
             const query = new URLSearchParams();
             query.set('date', date);
+            query.set('team', team);
             if (file) {
                 query.set('file', file);
             }

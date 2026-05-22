@@ -3,6 +3,24 @@ require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/lib/hazard_4m.php';
 
+function ensure_unit_ra_header_report_title_type(PDO $pdo): void
+{
+    $columnExists = (int)$pdo->query("
+        SELECT COUNT(*)
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'unit_ra_header'
+          AND COLUMN_NAME = 'report_title_type'
+    ")->fetchColumn() > 0;
+
+    if (!$columnExists) {
+        $pdo->exec("
+            ALTER TABLE unit_ra_header
+            ADD COLUMN report_title_type VARCHAR(20) NOT NULL DEFAULT 'regular' AFTER unit_title
+        ");
+    }
+}
+
 function h($value): string
 {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
@@ -399,6 +417,7 @@ if ($unitRaId <= 0) {
     $pdo = getDB();
   ensure_history_table($pdo);
   ensure_unit_ra_item_hazard_4m_column($pdo);
+  ensure_unit_ra_header_report_title_type($pdo);
 
     if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && ($_POST['action'] ?? '') === 'save_items') {
         $postedItems = build_posted_items($_POST);
@@ -673,6 +692,7 @@ if ($unitRaId <= 0) {
             unit_ra_id,
             unit_type,
             unit_title,
+            report_title_type,
             unit_code,
             process_name,
             created_by,
@@ -1065,6 +1085,10 @@ if ($unitRaId <= 0) {
             <span><?= h($header['unit_title']) ?></span>
           </div>
           <div class="meta-box">
+            <strong>평가서 제목</strong>
+            <span><?= h(((string)($header['report_title_type'] ?? 'regular')) === 'occasional' ? '수시 위험성평가서' : '정기 위험성평가서') ?></span>
+          </div>
+          <div class="meta-box">
             <strong>평가서 코드</strong>
             <span><?= h($header['unit_code'] ?: '-') ?></span>
           </div>
@@ -1195,7 +1219,7 @@ if ($unitRaId <= 0) {
                     <td><span class="score-box" id="score-before-<?= $index ?>"><?= h($item['risk_score_before'] ?? '-') ?></span></td>
                     <td class="col-wide-text"><textarea name="current_control_text[]"><?= h($item['current_control_text'] ?? '') ?></textarea></td>
                     <td><input type="number" min="1" max="5" name="likelihood_current[]" value="<?= h($item['likelihood_current'] ?? '') ?>" data-score-group="current" data-row-index="<?= $index ?>"></td>
-                    <td><input type="number" min="1" max="5" name="severity_current[]" value="<?= h($item['severity_before'] ?? $item['severity_current'] ?? '') ?>" data-score-group="current" data-row-index="<?= $index ?>" readonly></td>
+                    <td><input type="number" min="1" max="5" name="severity_current[]" value="<?= h($item['severity_current'] ?? $item['severity_before'] ?? '') ?>" data-score-group="current" data-row-index="<?= $index ?>" readonly></td>
                     <td><span class="score-box" id="score-current-<?= $index ?>"><?= h($item['risk_score_current'] ?? '-') ?></span></td>
                     <td><textarea name="additional_control_text[]"><?= h($item['additional_control_text'] ?? '') ?></textarea></td>
                     <td><input type="number" min="1" max="5" name="likelihood_after[]" value="<?= h($item['likelihood_after'] ?? '') ?>" data-score-group="after" data-row-index="<?= $index ?>"></td>

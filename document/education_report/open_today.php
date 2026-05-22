@@ -9,6 +9,10 @@ if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
 }
 
 $target = 'education_report.html?date=' . rawurlencode($date);
+$team = trim((string)($_GET['team'] ?? '공사팀'));
+if ($team !== '') {
+    $target .= '&team=' . rawurlencode($team);
+}
 
 try {
     require_once __DIR__ . '/../../tbm/tbm_db.php';
@@ -19,13 +23,17 @@ try {
         'SELECT output_filename
            FROM tbm_documents
           WHERE doc_date = :doc_date
+            AND team = :team
             AND generation_status = "success"
             AND output_filename IS NOT NULL
             AND output_filename <> ""
           ORDER BY COALESCE(generated_at, updated_at) DESC, id DESC
           LIMIT 1'
     );
-    $stmt->execute([':doc_date' => $date]);
+    $stmt->execute([
+        ':doc_date' => $date,
+        ':team' => $team,
+    ]);
     $outputFile = trim((string)($stmt->fetchColumn() ?: ''));
 
     if ($outputFile !== '') {

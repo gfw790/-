@@ -12,6 +12,24 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
+function ensure_unit_ra_header_report_title_type(PDO $pdo): void
+{
+    $columnExists = (int)$pdo->query("
+        SELECT COUNT(*)
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'unit_ra_header'
+          AND COLUMN_NAME = 'report_title_type'
+    ")->fetchColumn() > 0;
+
+    if (!$columnExists) {
+        $pdo->exec("
+            ALTER TABLE unit_ra_header
+            ADD COLUMN report_title_type VARCHAR(20) NOT NULL DEFAULT 'regular' AFTER unit_title
+        ");
+    }
+}
+
 // ── 응답 헬퍼 ────────────────────────────────────────────────────
 function jsonResponse(bool $success, string $message, array $data = []): void {
     header('Content-Type: application/json; charset=utf-8');
@@ -138,21 +156,25 @@ function cellDate($ws, string $cell): ?string {
     return date('Y-m-d', $ts);
 }
 
-// ── 헤더 정보 읽기 (행5, 행7) ────────────────────────────────────
-// 양식 컬럼 매핑 (2행 제거 후 기준):
-//   행4: A=unit_ra_id(자동), B=unit_code, D=unit_title, I=process_name, L=unit_type, O=remark
-//   행6: A=created_by, D=created_at, M=use_yn, O=sort_no
+// ── 헤더 정보 읽기 ───────────────────────────────────────────────
+// 양식 컬럼 매핑:
+//   A1: 평가서 제목(정기/수시)
+//   B4: unit_code, D4: unit_title, I4: process_name, L4: unit_type, O4: remark
+//   A6: created_by, M6: use_yn, O6: sort_no, Q6: evaluator_name
+$reportTitleCell = cellVal($ws, 'A1') ?? '';
+$reportTitleType = str_contains($reportTitleCell, '수시') ? 'occasional' : 'regular';
 $header = [
-    'unit_code'      => cellVal($ws, 'D3'),
+    'unit_code'      => cellVal($ws, 'B4'),
     'unit_title'     => cellVal($ws, 'D4'),
-    'process_name'   => cellVal($ws, 'O3'),
-    'unit_type'      => cellVal($ws, 'O4') ?? 'major_work',
-    'remark'         => cellVal($ws, 'O6'),
-    'created_by'     => 'excel_upload',
+    'report_title_type' => $reportTitleType,
+    'process_name'   => cellVal($ws, 'I4'),
+    'unit_type'      => cellVal($ws, 'L4') ?? 'major_work',
+    'remark'         => cellVal($ws, 'O4'),
+    'created_by'     => cellVal($ws, 'A6') ?? 'excel_upload',
     'updated_by'     => 'excel_upload',
-    'use_yn'         => 'Y',
-    'sort_no'        => 0,
-    'evaluator_name' => cellVal($ws, 'D5'),
+    'use_yn'         => cellVal($ws, 'M6') ?? 'Y',
+    'sort_no'        => cellInt($ws, 'O6') ?? 0,
+    'evaluator_name' => cellVal($ws, 'Q6'),
 ];
 
 // unit_type 한글 → DB값 변환
@@ -168,7 +190,7 @@ if (isset($unitTypeMap[$header['unit_type']])) {
 
 // 필수값 검증
 if (empty($header['unit_title'])) {
-    jsonResponse(false, '단위평가서명(unit_title)은 필수 입력 항목입니다. 엑셀 D5 셀을 확인하세요.');
+    jsonResponse(false, '단위평가서명(unit_title)은 필수 입력 항목입니다. 엑셀 D4 셀을 확인하세요.');
 }
 
 $validTypes = ['target', 'major_work', 'tool', 'env'];
@@ -179,12 +201,12 @@ if (!in_array($header['unit_type'], $validTypes, true)) {
 // ── 항목 행 읽기 (행10~) ─────────────────────────────────────────
 // 컬럼 매핑:
 //   A=sort_no, B=task_code, C=task_name, D=hazard_name
-//   E=accident_type, F=injury_result, G=cause_text
-//   H=likelihood_before, I=severity_before, J=risk_score_before
-//   K=current_control_text
-//   L=likelihood_current, M=severity_current, N=risk_score_current
-//   O=additional_control_text
-//   P=likelihood_after, Q=severity_after, R=risk_score_after, S=improvement_due_date, T=remark
+//   E=hazard_4m, F=accident_type, G=injury_result, H=cause_text
+//   I=likelihood_before, J=severity_before, K=risk_score_before
+//   L=current_control_text
+//   M=likelihood_current, N=severity_current, O=risk_score_current
+//   P=additional_control_text
+//   Q=likelihood_after, R=severity_after, S=risk_score_after, T=improvement_due_date, U=remark
 $items = [];
 $START_ROW = 9;
 $MAX_ROW   = 200; // 최대 200행까지 읽음
@@ -211,22 +233,23 @@ for ($r = $START_ROW; $r <= $MAX_ROW; $r++) {
         'task_code'                 => cellVal($ws, "B{$r}"),
         'task_name'                 => $taskName,
         'hazard_name'               => $hazardName,
-        'accident_type'             => cellVal($ws, "E{$r}"),
-        'injury_result'             => cellVal($ws, "F{$r}"),
-        'cause_text'                => cellVal($ws, "G{$r}"),
-        'likelihood_before'         => cellInt($ws, "H$r"),
-        'severity_before'           => cellInt($ws, "I$r"),
-        'risk_score_before'         => cellScore($ws, "J$r"),
-        'current_control_text'      => cellVal($ws, "K$r"),
-        'likelihood_current'        => cellInt($ws, "L$r"),
-        'severity_current'          => cellInt($ws, "I$r"),
-        'risk_score_current'        => pairScore(cellInt($ws, "L$r"), cellInt($ws, "I$r")),
-        'additional_control_text'   => cellVal($ws, "O$r"),
-        'likelihood_after'          => cellInt($ws, "P$r"),
-        'severity_after'            => cellInt($ws, "Q$r"),
-        'risk_score_after'          => cellScore($ws, "R$r"),
-        'improvement_due_date'      => cellDate($ws, "S$r"),
-        'remark'                    => cellVal($ws, "T$r"),
+        'hazard_4m'                 => cellVal($ws, "E{$r}"),
+        'accident_type'             => cellVal($ws, "F{$r}"),
+        'injury_result'             => cellVal($ws, "G{$r}"),
+        'cause_text'                => cellVal($ws, "H{$r}"),
+        'likelihood_before'         => cellInt($ws, "I{$r}"),
+        'severity_before'           => cellInt($ws, "J{$r}"),
+        'risk_score_before'         => pairScore(cellInt($ws, "I{$r}"), cellInt($ws, "J{$r}")),
+        'current_control_text'      => cellVal($ws, "L{$r}"),
+        'likelihood_current'        => cellInt($ws, "M{$r}"),
+        'severity_current'          => cellInt($ws, "N{$r}"),
+        'risk_score_current'        => pairScore(cellInt($ws, "M{$r}"), cellInt($ws, "N{$r}")),
+        'additional_control_text'   => cellVal($ws, "P{$r}"),
+        'likelihood_after'          => cellInt($ws, "Q{$r}"),
+        'severity_after'            => cellInt($ws, "R{$r}"),
+        'risk_score_after'          => pairScore(cellInt($ws, "Q{$r}"), cellInt($ws, "R{$r}")),
+        'improvement_due_date'      => cellDate($ws, "T{$r}"),
+        'remark'                    => cellVal($ws, "U{$r}"),
         'use_yn'                    => 'Y',
     ];
 }
@@ -238,6 +261,7 @@ if (empty($items)) {
 // ── DB 저장 (트랜잭션) ───────────────────────────────────────────
 try {
     $pdo = getDB();
+    ensure_unit_ra_header_report_title_type($pdo);
     $pdo->beginTransaction();
 
     // A4셀에 unit_ra_id 있으면 UPDATE, 없으면 INSERT
@@ -257,6 +281,7 @@ try {
             UPDATE unit_ra_header SET
                 unit_type    = :unit_type,
                 unit_title   = :unit_title,
+                report_title_type = :report_title_type,
                 process_name = :process_name,
                 use_yn       = :use_yn,
                 sort_no      = :sort_no,
@@ -269,6 +294,7 @@ try {
         $pdo->prepare($sqlHeader)->execute([
             ':unit_type'    => $header['unit_type'],
             ':unit_title'   => $header['unit_title'],
+            ':report_title_type' => $header['report_title_type'],
             ':process_name' => $header['process_name'],
             ':use_yn'       => $header['use_yn'],
             ':sort_no'      => $header['sort_no'],
@@ -288,11 +314,11 @@ try {
         // 신규 헤더 INSERT
         $sqlHeader = "
             INSERT INTO unit_ra_header
-                (unit_type, unit_title, unit_code, process_name,
+                (unit_type, unit_title, report_title_type, unit_code, process_name,
                  use_yn, sort_no, remark, created_by, evaluator_name, updated_by,
                  created_at, updated_at)
             VALUES
-                (:unit_type, :unit_title, :unit_code, :process_name,
+                (:unit_type, :unit_title, :report_title_type, :unit_code, :process_name,
                  :use_yn, :sort_no, :remark, :created_by, :evaluator_name, :updated_by,
                  NOW(), NOW())
         ";
@@ -305,7 +331,7 @@ try {
     $sqlItem = "
         INSERT INTO unit_ra_item
             (unit_ra_id, sort_no, task_code, task_name,
-             hazard_name, accident_type, injury_result,
+             hazard_name, hazard_4m, accident_type, injury_result,
              cause_text, current_control_text, additional_control_text,
              likelihood_before, severity_before, risk_score_before,
              likelihood_current, severity_current, risk_score_current,
@@ -314,7 +340,7 @@ try {
              created_at, updated_at)
         VALUES
             (:unit_ra_id, :sort_no, :task_code, :task_name,
-             :hazard_name, :accident_type, :injury_result,
+             :hazard_name, :hazard_4m, :accident_type, :injury_result,
              :cause_text, :current_control_text, :additional_control_text,
              :likelihood_before, :severity_before, :risk_score_before,
              :likelihood_current, :severity_current, :risk_score_current,

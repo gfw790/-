@@ -12,10 +12,26 @@ if (-not (Test-Path $templateDir)) {
 $macroCode = @'
 Option Explicit
 
+Private Function GetMainWorksheet() As Worksheet
+    On Error Resume Next
+    Set GetMainWorksheet = ThisWorkbook.Worksheets("RiskAssessment")
+    If GetMainWorksheet Is Nothing Then
+        Dim ws As Worksheet
+        For Each ws In ThisWorkbook.Worksheets
+            If ws.Visible = xlSheetVisible And ws.Name <> "__config" Then
+                Set GetMainWorksheet = ws
+                Exit Function
+            End If
+        Next ws
+    End If
+    On Error GoTo 0
+End Function
+
 Public Sub BindUploadButton()
     On Error Resume Next
     Dim ws As Worksheet
-    Set ws = ThisWorkbook.Worksheets(1)
+    Set ws = GetMainWorksheet()
+    If ws Is Nothing Then Exit Sub
     Dim buttonShape As Shape
     Set buttonShape = ws.Shapes("btnUploadRiskAssessment")
     If buttonShape Is Nothing Then
@@ -29,7 +45,8 @@ End Sub
 Public Sub RefreshUploadButton()
     On Error Resume Next
     Dim ws As Worksheet
-    Set ws = ThisWorkbook.Worksheets(1)
+    Set ws = GetMainWorksheet()
+    If ws Is Nothing Then Exit Sub
 
     ws.Shapes("btnUploadRiskAssessment").Delete
     Err.Clear

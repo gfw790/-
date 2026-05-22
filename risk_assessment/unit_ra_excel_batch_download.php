@@ -1,12 +1,5 @@
 <?php
-require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/lib/unit_ra_excel_export.php';
-
-$user = auth_current_user();
-if ($user === null) {
-    http_response_code(401);
-    exit('로그인이 필요합니다.');
-}
 
 function parse_batch_ids(string $raw): array
 {
@@ -28,7 +21,7 @@ if (empty($unitIds)) {
 
 if (!class_exists('ZipArchive')) {
     http_response_code(500);
-    exit('ZIP 확장을 사용할 수 없습니다.');
+    exit('ZIP 확장자를 사용할 수 없습니다.');
 }
 
 $pdo = getDB();

@@ -85,6 +85,14 @@ select:disabled { background: #f5f5f5; color: #aaa; cursor: not-allowed; }
         </div>
       </div>
 
+      <div class="form-group">
+        <label>평가서 제목 <span class="req">*</span></label>
+        <select id="report_title_type">
+          <option value="regular">정기 위험성평가서</option>
+          <option value="occasional">수시 위험성평가서</option>
+        </select>
+      </div>
+
       <!-- 단위평가서명 미리보기 -->
       <div class="form-group">
         <label>단위평가서명 <span class="req">*</span> <small>(자동 조합)</small></label>
@@ -1634,6 +1642,7 @@ function splitMajorWorkUnitTitle(record) {
 
 function applyCommonFormFields(record) {
   document.getElementById('unit_code').value = record.unit_code || '';
+  document.getElementById('report_title_type').value = record.report_title_type || 'regular';
   document.getElementById('use_yn').value = record.use_yn || 'Y';
   document.getElementById('created_by').value = record.created_by || '';
   document.getElementById('evaluator_name').value = record.evaluator_name || '';
@@ -1744,6 +1753,7 @@ async function saveHeader() {
   const payload = {
     unit_ra_id:  isEditMode() ? editingUnitRaId : null,
     unit_title:   unitTitle, unit_type: unitType, process_name: processName,
+    report_title_type: document.getElementById('report_title_type').value || 'regular',
     unit_code:    document.getElementById('unit_code').value.trim() || null,
     use_yn:       document.getElementById('use_yn').value,
     created_by:     document.getElementById('created_by').value.trim() || null,
@@ -1789,6 +1799,7 @@ async function resetForm() {
   }
 
   document.getElementById('unit_type').value  = '';
+  document.getElementById('report_title_type').value = 'regular';
   document.getElementById('unit_code').value  = '';
   document.getElementById('use_yn').value     = 'Y';
   document.getElementById('created_by').value = '';
