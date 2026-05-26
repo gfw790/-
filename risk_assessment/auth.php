@@ -1042,6 +1042,97 @@ function auth_accounts(): array
     return $defaultAccounts + $storedAccounts;
 }
 
+function auth_employee_status_map(): array
+{
+    static $statusMap = null;
+    if (is_array($statusMap)) {
+        return $statusMap;
+    }
+
+    $statusMap = [];
+    $dbPath = __DIR__ . '/../employees/employees.db';
+    if (!is_file($dbPath)) {
+        return $statusMap;
+    }
+
+    try {
+        $pdo = new PDO('sqlite:' . $dbPath);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $stmt = $pdo->query("
+            SELECT name,
+                   team,
+                   COALESCE(employment_status, 'active') AS employment_status,
+                   COALESCE(is_active, 1) AS is_active
+              FROM employees
+             WHERE TRIM(COALESCE(name, '')) <> ''
+        ");
+
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $name = trim((string)preg_replace('/\s*\([^)]*\)/u', '', (string)($row['name'] ?? '')));
+            if ($name === '') {
+                continue;
+            }
+
+            $team = auth_normalize_team_name((string)($row['team'] ?? ''));
+            $statusMap[$name][] = [
+                'team' => $team,
+                'employment_status' => trim((string)($row['employment_status'] ?? 'active')),
+                'is_active' => (int)($row['is_active'] ?? 1) === 1,
+            ];
+        }
+    } catch (Throwable $e) {
+        return $statusMap;
+    }
+
+    return $statusMap;
+}
+
+function auth_is_retired_account(?array $account): bool
+{
+    if (!is_array($account)) {
+        return false;
+    }
+
+    $name = trim((string)preg_replace('/\s*\([^)]*\)/u', '', (string)($account['name'] ?? '')));
+    if ($name === '') {
+        return false;
+    }
+
+    $team = auth_normalize_team_name((string)($account['team'] ?? ''));
+    $statusMap = auth_employee_status_map();
+    if (!isset($statusMap[$name])) {
+        return false;
+    }
+
+    $matchedTeamRecord = false;
+    foreach ($statusMap[$name] as $row) {
+        $rowTeam = auth_normalize_team_name((string)($row['team'] ?? ''));
+        $isRetired = ((string)($row['employment_status'] ?? 'active') === 'retired')
+            || !(bool)($row['is_active'] ?? true);
+
+        if ($team !== '' && $rowTeam !== '' && auth_team_key($rowTeam) === auth_team_key($team)) {
+            $matchedTeamRecord = true;
+            if (!$isRetired) {
+                return false;
+            }
+        }
+    }
+
+    if ($matchedTeamRecord) {
+        return true;
+    }
+
+    foreach ($statusMap[$name] as $row) {
+        $isRetired = ((string)($row['employment_status'] ?? 'active') === 'retired')
+            || !(bool)($row['is_active'] ?? true);
+        if (!$isRetired) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 function auth_role_label(string $role): string
 {
     return match ($role) {
@@ -1109,6 +1200,12 @@ function auth_current_user(): ?array
 
     $account = auth_find_user($loginId);
     if ($account === null) {
+        auth_logout();
+        return null;
+    }
+
+    if (auth_is_retired_account($account)) {
+        auth_logout();
         return null;
     }
 
@@ -1213,6 +1310,10 @@ function auth_login(string $loginId, string $password): bool
     }
 
     if ($account['password'] !== $password) {
+        return false;
+    }
+
+    if (auth_is_retired_account($account)) {
         return false;
     }
 
