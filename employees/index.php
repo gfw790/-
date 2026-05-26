@@ -256,9 +256,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // ── 검색/목록 ────────────────────────────────────────────────
 $search    = trim((string)($_GET['q'] ?? ''));
 $filterTeam = trim((string)($_GET['team'] ?? ''));
-$statusFilter = trim((string)($_GET['employment'] ?? 'active'));
+$statusFilter = trim((string)($_GET['employment'] ?? 'all'));
 if (!in_array($statusFilter, ['all', 'active', 'retired'], true)) {
-    $statusFilter = 'active';
+    $statusFilter = 'all';
 }
 
 $where  = [];
@@ -358,6 +358,15 @@ function team_badge(string $team): string {
     [$fg, $bg] = $map[$team] ?? ['#486581','#e8f0f8'];
     $t = h($team);
     return "<span style=\"display:inline-block;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:600;color:{$fg};background:{$bg};white-space:nowrap\">{$t}</span>";
+}
+
+function employment_badge_compact(array $emp): string {
+    $status = trim((string)($emp['employment_status'] ?? ''));
+    $isActive = (int)($emp['is_active'] ?? 1) === 1;
+    if ($status === 'retired' || !$isActive) {
+        return '<span style="display:inline-block;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:700;color:#9f1239;background:#ffe4e6;white-space:nowrap">퇴사</span>';
+    }
+    return '<span style="display:inline-block;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:700;color:#166534;background:#dcfce7;white-space:nowrap">재직중</span>';
 }
 ?>
 <!DOCTYPE html>
@@ -459,6 +468,11 @@ function team_badge(string $team): string {
     border-bottom: 1px solid #eef3f8;
     vertical-align: middle;
   }
+  th:nth-child(1), td:nth-child(1) { width: 88px; min-width: 88px; }
+  th:nth-child(3), td:nth-child(3) { min-width: 90px; }
+  th:nth-child(5), td:nth-child(5) { min-width: 120px; }
+  th:nth-child(7), td:nth-child(7) { min-width: 150px; }
+  th:nth-child(8), td:nth-child(8) { display: none; }
   tr:last-child td { border-bottom: none; }
   tr:hover td { background: #f7fbff; }
   .td-actions { display: flex; gap: 5px; white-space: nowrap; }
@@ -727,10 +741,11 @@ function team_badge(string $team): string {
           </thead>
           <tbody>
             <?php if (empty($employees)): ?>
-              <tr class="empty-row"><td colspan="11">등록된 직원이 없습니다.</td></tr>
+              <tr class="empty-row"><td colspan="12">등록된 직원이 없습니다.</td></tr>
             <?php else: ?>
               <?php foreach ($employees as $emp): ?>
                 <tr>
+                  <td><?= employment_badge_compact($emp) ?></td>
                   <td><?= h((string)($emp['employee_no'] ?? '')) ?></td>
                   <td><a href="view.php?id=<?= (int)$emp['id'] ?>" class="name-link"><?= display_name((string)$emp['name']) ?></a></td>
                   <td><?= team_badge((string)($emp['team'] ?? '')) ?></td>
@@ -738,7 +753,6 @@ function team_badge(string $team): string {
                   <td><?= h((string)($emp['job_title'] ?? '')) ?></td>
                   <td><?= h((string)($emp['phone'] ?? '')) ?></td>
                   <td><?= h((string)($emp['email'] ?? '')) ?></td>
-                  <td><?= employment_badge($emp) ?></td>
                   <td><?= h((string)($emp['join_date'] ?? '')) ?></td>
                   <td><?= h((string)($emp['emergency_contact'] ?? '')) ?></td>
                   <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="<?= h((string)($emp['memo'] ?? '')) ?>"><?= h((string)($emp['memo'] ?? '')) ?></td>

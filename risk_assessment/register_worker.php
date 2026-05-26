@@ -214,7 +214,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$storedAccounts = auth_read_stored_accounts();
+$storedAccounts = array_filter(
+    auth_read_stored_accounts(),
+    static fn(array $account): bool => !auth_is_retired_account($account)
+);
 uksort($storedAccounts, static fn(string $left, string $right): int => strnatcasecmp($left, $right));
 $teams = auth_read_teams();
 $teamStatuses = auth_read_team_statuses();
