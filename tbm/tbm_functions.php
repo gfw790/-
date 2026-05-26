@@ -226,6 +226,94 @@ function tbm_clean_attendee_name(string $name): string
     return $name;
 }
 
+function tbm_employee_status_map(): array
+{
+    static $statusMap = null;
+    if (is_array($statusMap)) {
+        return $statusMap;
+    }
+
+    $statusMap = [];
+    $dbPath = __DIR__ . '/../employees/employees.db';
+    if (!is_file($dbPath)) {
+        return $statusMap;
+    }
+
+    try {
+        $pdo = new PDO('sqlite:' . $dbPath);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $stmt = $pdo->query("
+            SELECT name,
+                   team,
+                   COALESCE(employment_status, 'active') AS employment_status,
+                   COALESCE(is_active, 1) AS is_active
+              FROM employees
+             WHERE TRIM(COALESCE(name, '')) <> ''
+        ");
+
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $name = tbm_clean_attendee_name((string)($row['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+
+            $team = tbm_normalize_display_team_name(auth_normalize_team_name((string)($row['team'] ?? '')));
+            $statusMap[$name][] = [
+                'team' => $team,
+                'is_active' => (int)($row['is_active'] ?? 1) === 1,
+                'employment_status' => trim((string)($row['employment_status'] ?? 'active')),
+            ];
+        }
+    } catch (Throwable $e) {
+        return $statusMap;
+    }
+
+    return $statusMap;
+}
+
+function tbm_is_active_attendee(string $name, string $teamName = ''): bool
+{
+    $name = tbm_clean_attendee_name($name);
+    if ($name === '') {
+        return false;
+    }
+
+    $statusMap = tbm_employee_status_map();
+    if (!isset($statusMap[$name])) {
+        return true;
+    }
+
+    $normalizedTeamName = tbm_normalize_display_team_name(auth_normalize_team_name($teamName));
+    $matchedTeamRecord = false;
+
+    foreach ($statusMap[$name] as $row) {
+        $rowTeam = (string)($row['team'] ?? '');
+        $isRetired = ((string)($row['employment_status'] ?? 'active') === 'retired')
+            || !(bool)($row['is_active'] ?? true);
+
+        if ($normalizedTeamName !== '' && $rowTeam !== '' && $rowTeam === $normalizedTeamName) {
+            $matchedTeamRecord = true;
+            if (!$isRetired) {
+                return true;
+            }
+        }
+    }
+
+    if ($matchedTeamRecord) {
+        return false;
+    }
+
+    foreach ($statusMap[$name] as $row) {
+        $isRetired = ((string)($row['employment_status'] ?? 'active') === 'retired')
+            || !(bool)($row['is_active'] ?? true);
+        if (!$isRetired) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 function tbm_attendee_names_for_team(string $teamName, array $excludeNames = ['진준철']): array
 {
     $teamName = trim($teamName);
@@ -246,7 +334,11 @@ function tbm_attendee_names_for_team(string $teamName, array $excludeNames = ['�
 
         foreach (auth_team_member_names($rawTeamName, ['worker', 'leader', 'manager']) as $rawName) {
             $cleanName = tbm_clean_attendee_name($rawName);
-            if ($cleanName === '' || in_array($cleanName, $excludeNames, true)) {
+            if (
+                $cleanName === ''
+                || in_array($cleanName, $excludeNames, true)
+                || !tbm_is_active_attendee($cleanName, $displayName)
+            ) {
                 continue;
             }
             $names[] = $cleanName;

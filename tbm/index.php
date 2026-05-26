@@ -74,7 +74,11 @@ foreach ($allTeams as $raTeam) {
     $names = auth_team_member_names($raTeam, ['worker', 'leader', 'manager']);
     foreach ($names as $rawName) {
         $cleanName = $tbmCleanName($rawName);
-        if ($cleanName === '' || in_array($cleanName, $tbmExcludeNames, true)) {
+        if (
+            $cleanName === ''
+            || in_array($cleanName, $tbmExcludeNames, true)
+            || !tbm_is_active_attendee($cleanName, $displayName)
+        ) {
             continue;
         }
         $teamMembers[$displayName][] = ['id' => 0, 'name' => $cleanName, 'position' => ''];

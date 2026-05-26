@@ -118,6 +118,7 @@ $teamFilter = sg_normalize_text($_GET['team'] ?? '');
 $typeFilter = sg_normalize_text($_GET['gear_type'] ?? '');
 
 $allItems = sg_fetch_all_items($pdo);
+$dailyReceipts = sg_fetch_receipts($pdo, 0, 'daily');
 $employeeGroups = sg_fetch_assigned_items_grouped_by_employee($pdo, [], false);
 
 $gearTypes = [];
@@ -127,12 +128,29 @@ foreach ($allItems as $item) {
         $gearTypes[$gearType] = $gearType;
     }
 }
+foreach ($dailyReceipts as $receipt) {
+    foreach ((array)($receipt['items'] ?? []) as $receiptItem) {
+        $gearType = sg_normalize_text($receiptItem['gear_label'] ?? '');
+        if ($gearType === '') {
+            $gearType = sg_normalize_text($receiptItem['item_name'] ?? '');
+        }
+        if ($gearType !== '') {
+            $gearTypes[$gearType] = $gearType;
+        }
+    }
+}
 $gearTypes = array_values($gearTypes);
 sort($gearTypes);
 
 $teams = [];
 foreach ($employeeGroups as $group) {
     $teamName = sg_normalize_text($group['employee_team'] ?? '');
+    if ($teamName !== '') {
+        $teams[$teamName] = $teamName;
+    }
+}
+foreach ($dailyReceipts as $receipt) {
+    $teamName = sg_normalize_text($receipt['worker_team'] ?? '');
     if ($teamName !== '') {
         $teams[$teamName] = $teamName;
     }
@@ -171,6 +189,51 @@ foreach ($employeeGroups as $group) {
         'employee_name' => sg_normalize_text($group['employee_name'] ?? ''),
         'employee_team' => $teamName,
         'assigned_count' => count((array)($group['assigned_items'] ?? [])),
+        'cells' => $cells,
+    ];
+}
+
+foreach ($dailyReceipts as $receipt) {
+    $workerName = sg_normalize_text($receipt['worker_name'] ?? '');
+    $workerTeam = sg_normalize_text($receipt['worker_team'] ?? '');
+    if ($workerName === '') {
+        continue;
+    }
+    if ($teamFilter !== '' && $workerTeam !== $teamFilter) {
+        continue;
+    }
+
+    $cells = [];
+    foreach ($gearTypes as $gearType) {
+        $cells[$gearType] = [];
+    }
+
+    $assignedCount = 0;
+    foreach ((array)($receipt['items'] ?? []) as $receiptItem) {
+        $gearType = sg_normalize_text($receiptItem['gear_label'] ?? '');
+        if ($gearType === '') {
+            $gearType = sg_normalize_text($receiptItem['item_name'] ?? '');
+        }
+        if ($gearType === '' || !isset($cells[$gearType])) {
+            continue;
+        }
+
+        $assignedAt = sg_normalize_text($receiptItem['assigned_date'] ?? sg_normalize_text($receipt['issue_date'] ?? ''));
+        $quantity = max(1, (int)($receiptItem['quantity'] ?? 1));
+        $assignedCount += $quantity;
+
+        for ($index = 0; $index < $quantity; $index++) {
+            $cells[$gearType][] = [
+                'assigned_at' => $assignedAt,
+                'gear_uid' => '',
+            ];
+        }
+    }
+
+    $employeeRows[] = [
+        'employee_name' => $workerName,
+        'employee_team' => $workerTeam,
+        'assigned_count' => $assignedCount,
         'cells' => $cells,
     ];
 }
@@ -280,6 +343,70 @@ foreach ($allItems as $item) {
 
     if (!$isDisposed && !$isIssued) {
         $inventoryMap[$rowKey]['current_count']++;
+    }
+}
+
+foreach ($dailyReceipts as $receipt) {
+    $workerName = sg_normalize_text($receipt['worker_name'] ?? '');
+    $workerTeam = sg_normalize_text($receipt['worker_team'] ?? '');
+    $receiptDate = sg_normalize_text($receipt['issue_date'] ?? '');
+
+    foreach ((array)($receipt['items'] ?? []) as $receiptItem) {
+        $gearType = sg_normalize_text($receiptItem['gear_label'] ?? '');
+        if ($gearType === '') {
+            $gearType = sg_normalize_text($receiptItem['item_name'] ?? '');
+        }
+        if ($typeFilter !== '' && $gearType !== $typeFilter) {
+            continue;
+        }
+
+        $itemName = sg_normalize_text($receiptItem['item_name'] ?? '');
+        $specName = sg_normalize_text($receiptItem['spec_name'] ?? '');
+        $modelName = sg_normalize_text($receiptItem['model_name'] ?? '');
+        $rowKey = implode('|', [$gearType, $itemName, $specName, $modelName]);
+
+        if (!isset($inventoryMap[$rowKey])) {
+            $inventoryMap[$rowKey] = [
+                'gear_type' => $gearType,
+                'item_name' => $itemName,
+                'spec_name' => $specName,
+                'model_name' => $modelName,
+                'total_count' => 0,
+                'current_count' => 0,
+                'issued_count' => 0,
+                'returned_count' => 0,
+                'disposed_count' => 0,
+                'purchase_dates' => [],
+                'purchase_counts_by_date' => [],
+                'purchased_items_by_date' => [],
+                'issued_dates' => [],
+                'issued_people_by_date' => [],
+            ];
+        }
+
+        $quantity = max(1, (int)($receiptItem['quantity'] ?? 1));
+        $assignedAt = sg_normalize_text($receiptItem['assigned_date'] ?? $receiptDate);
+        $inventoryMap[$rowKey]['issued_count'] += $quantity;
+
+        if ($assignedAt !== '') {
+            $issuedDateKey = status_date_only($assignedAt, '');
+            for ($index = 0; $index < $quantity; $index++) {
+                $inventoryMap[$rowKey]['issued_dates'][] = $assignedAt;
+            }
+            if ($issuedDateKey !== '') {
+                if (!isset($inventoryMap[$rowKey]['issued_people_by_date'][$issuedDateKey])) {
+                    $inventoryMap[$rowKey]['issued_people_by_date'][$issuedDateKey] = [];
+                }
+                $inventoryMap[$rowKey]['issued_people_by_date'][$issuedDateKey][] = [
+                    'gear_uid' => '',
+                    'employee_name' => $workerName,
+                    'employee_team' => $workerTeam,
+                    'assigned_at' => $assignedAt,
+                    'purchased_at' => '',
+                    'identifier_value' => $quantity > 1 ? '수량 ' . $quantity : '-',
+                ];
+            }
+        }
     }
 }
 

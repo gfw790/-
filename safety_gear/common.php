@@ -1744,19 +1744,34 @@ function sg_fetch_receipt_items(PDO $pdo, int $receiptId): array
     return $stmt->fetchAll() ?: [];
 }
 
-function sg_fetch_receipts(PDO $pdo, int $limit = 50): array
+function sg_fetch_receipts(PDO $pdo, int $limit = 50, string $workerType = ''): array
 {
-    $stmt = $pdo->prepare("
+    $sql = "
         SELECT receipt_id, document_no, worker_type, employee_id, worker_name, worker_team, worker_position,
                company_name, site_name, issue_date, pledge_text, status_label,
                attachment_path, attachment_original_name, confirm_note,
                created_by_login_id, created_by_name, confirmed_by_login_id, confirmed_by_name, confirmed_at,
                created_at, updated_at
         FROM safety_gear_receipt
-        ORDER BY created_at DESC, receipt_id DESC
-        LIMIT :limit_count
-    ");
-    $stmt->bindValue(':limit_count', $limit, PDO::PARAM_INT);
+    ";
+    $params = [];
+    $workerType = sg_normalize_text($workerType);
+    if ($workerType !== '') {
+        $sql .= " WHERE worker_type = :worker_type";
+        $params[':worker_type'] = $workerType;
+    }
+    $sql .= " ORDER BY created_at DESC, receipt_id DESC";
+    if ($limit > 0) {
+        $sql .= " LIMIT :limit_count";
+    }
+
+    $stmt = $pdo->prepare($sql);
+    if ($workerType !== '') {
+        $stmt->bindValue(':worker_type', $workerType, PDO::PARAM_STR);
+    }
+    if ($limit > 0) {
+        $stmt->bindValue(':limit_count', $limit, PDO::PARAM_INT);
+    }
     $stmt->execute();
     $rows = $stmt->fetchAll() ?: [];
 
