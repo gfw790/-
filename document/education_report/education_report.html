@@ -712,6 +712,7 @@
         const CONTENT_POOL_COLOR_KEY = 'education-report-content-pool-colors';
         const FLOATING_PANEL_POSITION_PREFIX = 'education-report-floating-panel:';
         const KYRGYZ_ONLY_KEY = 'education-report-kyrgyz-only';
+        const KYRGYZ_FIXED_ATTENDEE_NAMES = ['Баха'];
         const KYRGYZ_TARGET_GROUP = '터널 내 벨트 위에서 케이블 포설하기';
         const KYRGYZ_TRANSLATIONS = {
             'pool-20260515050659-050bdcdb': ['Жеке коргонуу каражаттарын сөзсүз кийүү (каска, бут кап, коопсуздук жилети, коргоочу көз айнек, коопсуздук бут кийим).'],
@@ -721,7 +722,12 @@
             'pool-20260515053505-335ec1a2': ['Кыймылдуу тепкич-арабаны токтоткондон кийин тормозун бекитип, дөңгөлөк такасын орнотуу.'],
             'pool-20260515054230-8e142adf': ['Кабель төшөөдө денеге күч келтирбеш үчүн ортодо ылайыктуу эс алып, ишти улантуу.'],
             'pool-20260518022718-d363ab6a': ['Суу болгон лента үстүндө жүргөндө тайгаланбоо үчүн жай жана коопсуз кыймылдоо.'],
-            'pool-20260518023019-cac26eb9': ['Кыймылдуу тепкичти жылдырганда жумушчу тарткан тарапта эмес, түрткөн тарапта турушу керек.']
+            'pool-20260518023019-cac26eb9': ['Кыймылдуу тепкичти жылдырганда жумушчу тарткан тарапта эмес, түрткөн тарапта турушу керек.'],
+            'pool-20260521043159-2411d708': ['Бардык жумушчулар көрүнүктүүлүктү камсыз кылуу үчүн жарык чагылдыруучу жилет кийиши керек.'],
+            'pool-20260522025317-05977cbb': ['Шаты менен иштегенде 2 адамдан турган бир топ болуп иштөө керек.'],
+            'pool-20260529034906-2a31b1c9': ['Шатыга чыгып-түшкөндө бут кийим нымдуу болгондуктан тайгаланып кетүү коркунучу бар, ошондуктан жай жана этият кыймылдоо керек.'],
+            'pool-20260529035026-91517ef8': ['Бийиктиги 1,8 мден жогору болгон шатынын тепкичинде иштегенде толук денелик коопсуздук курун тагып, коопсуздук илгичин бекитүү керек.'],
+            'pool-20260529035253-ac0195e6': ['Туннелдин ичинде чаң көп болгондуктан жумушчулар чаңдан коргоочу маска тагынышы керек.']
         };
         const UI_TRANSLATIONS = {
             ko: {
@@ -1348,17 +1354,63 @@
             if (!target) {
                 return;
             }
-            if (!name) {
-                target.innerHTML = '';
+            target.textContent = String(name || '');
+        }
+
+        function enableNameCellEditing(cell) {
+            const target = cell.querySelector('.hls.ps25') || cell.querySelector('.hls.ps24');
+            if (!target) {
                 return;
             }
-            target.innerHTML = '<span class="hrt cs2">' + escapeHtml(name) + '</span>';
+            if (target.dataset.manualEditable === 'true') {
+                return;
+            }
+
+            target.dataset.manualEditable = 'true';
+            target.contentEditable = 'true';
+            target.spellcheck = false;
+            target.style.cursor = 'text';
+            target.style.userSelect = 'text';
+            target.style.webkitUserModify = 'read-write-plaintext-only';
+            target.style.whiteSpace = 'nowrap';
+            target.style.outline = 'none';
+
+            target.addEventListener('keydown', function (event) {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                }
+            });
+
+            target.addEventListener('paste', function (event) {
+                event.preventDefault();
+                const text = (event.clipboardData || window.clipboardData).getData('text') || '';
+                document.execCommand('insertText', false, text.replace(/\s+/g, ' ').trim());
+            });
+
+            target.addEventListener('blur', function () {
+                target.textContent = target.textContent.replace(/\s+/g, ' ').trim();
+            });
+        }
+
+        function enableManualNameEditing() {
+            const slots = collectNameSlots();
+            for (let i = 0; i < slots.length; i++) {
+                enableNameCellEditing(slots[i]);
+            }
         }
 
         function clearNameSlots() {
             const slots = collectNameSlots();
             for (let i = 0; i < slots.length; i++) {
                 setNameInCell(slots[i], '');
+            }
+        }
+
+        function fillFixedKyrgyzNames() {
+            clearNameSlots();
+            const slots = collectNameSlots();
+            for (let i = 0; i < slots.length; i++) {
+                setNameInCell(slots[i], KYRGYZ_FIXED_ATTENDEE_NAMES[i] || '');
             }
         }
 
@@ -2668,7 +2720,7 @@
 
         async function loadNames() {
             if (kyrgyzOnlyEnabled) {
-                clearNameSlots();
+                fillFixedKyrgyzNames();
                 return;
             }
 
@@ -2716,6 +2768,7 @@
             }
             renderDateControlPanel(initialDate);
             getSafetyLineNodes();
+            enableManualNameEditing();
             renderCustomInputPanel([]);
             loadContentPool().catch(function () {
                 renderCustomInputPanel([]);
