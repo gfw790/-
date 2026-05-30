@@ -377,8 +377,8 @@ function paginate($total, $current, $perPage, $urlPattern) {
     $end = min($totalPages, $current + 5);
 
     if ($current > 1) {
-        $html .= '<a href="' . sprintf($urlPattern, 1) . '">짬</a>';
-        $html .= '<a href="' . sprintf($urlPattern, $current - 1) . '">??/a>';
+        $html .= '<a href="' . sprintf($urlPattern, 1) . '">처음</a>';
+        $html .= '<a href="' . sprintf($urlPattern, $current - 1) . '">이전</a>';
     }
     for ($i = $start; $i <= $end; $i++) {
         if ($i == $current) {
@@ -388,8 +388,8 @@ function paginate($total, $current, $perPage, $urlPattern) {
         }
     }
     if ($current < $totalPages) {
-        $html .= '<a href="' . sprintf($urlPattern, $current + 1) . '">??/a>';
-        $html .= '<a href="' . sprintf($urlPattern, $totalPages) . '">쨩</a>';
+        $html .= '<a href="' . sprintf($urlPattern, $current + 1) . '">다음</a>';
+        $html .= '<a href="' . sprintf($urlPattern, $totalPages) . '">끝</a>';
     }
     $html .= '</div>';
     return $html;

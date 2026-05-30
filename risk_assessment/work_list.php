@@ -27,6 +27,58 @@ function build_page_url(string $path, array $params = []): string
     return $path . '?' . http_build_query($queryParams, '', '&', PHP_QUERY_RFC3986);
 }
 
+function render_work_list_pagination(int $totalItems, int $currentPage, int $perPage, array $params = []): string
+{
+    $totalPages = max(1, (int)ceil($totalItems / max(1, $perPage)));
+    $currentPage = max(1, min($totalPages, $currentPage));
+
+    if ($totalItems <= 0 || $totalPages <= 1) {
+        return '';
+    }
+
+    $html = '<div class="pagination">';
+    $start = max(1, $currentPage - 5);
+    $end = min($totalPages, $currentPage + 5);
+
+    if ($currentPage > 1) {
+        $html .= sprintf(
+            '<a href="%s">처음</a>',
+            h(build_page_url('work_list.php', array_merge($params, ['page' => 1])))
+        );
+        $html .= sprintf(
+            '<a href="%s">이전</a>',
+            h(build_page_url('work_list.php', array_merge($params, ['page' => $currentPage - 1])))
+        );
+    }
+
+    for ($page = $start; $page <= $end; $page++) {
+        if ($page === $currentPage) {
+            $html .= '<span class="current">' . $page . '</span>';
+            continue;
+        }
+
+        $html .= sprintf(
+            '<a href="%s">%d</a>',
+            h(build_page_url('work_list.php', array_merge($params, ['page' => $page]))),
+            $page
+        );
+    }
+
+    if ($currentPage < $totalPages) {
+        $html .= sprintf(
+            '<a href="%s">다음</a>',
+            h(build_page_url('work_list.php', array_merge($params, ['page' => $currentPage + 1])))
+        );
+        $html .= sprintf(
+            '<a href="%s">끝</a>',
+            h(build_page_url('work_list.php', array_merge($params, ['page' => $totalPages])))
+        );
+    }
+
+    $html .= '</div>';
+    return $html;
+}
+
 function build_safety_standard_url(string $standardNo): string
 {
     $standardNo = trim($standardNo);
@@ -319,6 +371,56 @@ function work_list_report_matches_filters(array $report, string $unitTypeFilter,
         if (!in_array($majorFilter, $processNames, true)) {
             return false;
         }
+    }
+
+    return true;
+}
+
+function work_list_report_matches_keyword(array $report, string $keyword): bool
+{
+    $keyword = trim($keyword);
+    if ($keyword === '') {
+        return true;
+    }
+
+    $haystacks = [
+        (string)($report['work_title'] ?? ''),
+        (string)($report['work_place'] ?? ''),
+        (string)($report['work_date'] ?? ''),
+        (string)($report['team_name_display'] ?? ''),
+        (string)($report['team_name_context'] ?? ''),
+    ];
+
+    foreach ((array)($report['selected_units'] ?? []) as $unit) {
+        $haystacks[] = (string)($unit['unit_title'] ?? '');
+        $haystacks[] = (string)($unit['unit_code'] ?? '');
+        $haystacks[] = (string)($unit['unit_type'] ?? '');
+        $haystacks[] = (string)($unit['process_name'] ?? '');
+        $haystacks[] = (string)($unit['safe_work_standard_no'] ?? '');
+    }
+
+    foreach ($haystacks as $haystack) {
+        if ($haystack !== '' && mb_stripos($haystack, $keyword, 0, 'UTF-8') !== false) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function work_list_report_matches_date_range(array $report, string $dateFrom, string $dateTo): bool
+{
+    $workDate = trim((string)($report['work_date'] ?? ''));
+    if ($workDate === '') {
+        return $dateFrom === '' && $dateTo === '';
+    }
+
+    if ($dateFrom !== '' && $workDate < $dateFrom) {
+        return false;
+    }
+
+    if ($dateTo !== '' && $workDate > $dateTo) {
+        return false;
     }
 
     return true;
@@ -916,6 +1018,15 @@ unset($report);
 
 $reports = filter_reports_for_user($reports, $user);
 $unitTypeOptions = work_list_collect_type_options();
+$workListKeyword = trim((string)($_GET['work_keyword'] ?? ''));
+$workDateFrom = trim((string)($_GET['work_date_from'] ?? ''));
+$workDateTo = trim((string)($_GET['work_date_to'] ?? ''));
+if ($workDateFrom !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $workDateFrom)) {
+    $workDateFrom = '';
+}
+if ($workDateTo !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $workDateTo)) {
+    $workDateTo = '';
+}
 $selectedUnitTypeFilter = trim((string)($_GET['filter_type'] ?? ''));
 if ($selectedUnitTypeFilter !== '' && !array_key_exists($selectedUnitTypeFilter, $unitTypeOptions)) {
     $selectedUnitTypeFilter = '';
@@ -933,14 +1044,47 @@ if ($selectedUnitTypeFilter !== '' || $selectedMajorFilter !== '') {
         static fn(array $report): bool => work_list_report_matches_filters($report, $selectedUnitTypeFilter, $selectedMajorFilter)
     ));
 }
-$hasWorkListFilter = $selectedUnitTypeFilter !== '' || $selectedMajorFilter !== '';
+
+if ($workListKeyword !== '') {
+    $reports = array_values(array_filter(
+        $reports,
+        static fn(array $report): bool => work_list_report_matches_keyword($report, $workListKeyword)
+    ));
+}
+
+if ($workDateFrom !== '' || $workDateTo !== '') {
+    $reports = array_values(array_filter(
+        $reports,
+        static fn(array $report): bool => work_list_report_matches_date_range($report, $workDateFrom, $workDateTo)
+    ));
+}
+
+$hasWorkListFilter = $selectedUnitTypeFilter !== '' || $selectedMajorFilter !== '' || $workListKeyword !== '' || $workDateFrom !== '' || $workDateTo !== '';
 $filteredReportCount = count($reports);
+$workListPerPage = 10;
+$currentWorkListPage = max(1, (int)($_GET['page'] ?? 1));
+$totalWorkListPages = max(1, (int)ceil($filteredReportCount / $workListPerPage));
+$currentWorkListPage = min($currentWorkListPage, $totalWorkListPages);
+$workListPageOffset = ($currentWorkListPage - 1) * $workListPerPage;
+$pagedReports = array_slice($reports, $workListPageOffset, $workListPerPage);
+$workListPagination = render_work_list_pagination(
+    $filteredReportCount,
+    $currentWorkListPage,
+    $workListPerPage,
+    [
+        'work_keyword' => $workListKeyword,
+        'work_date_from' => $workDateFrom,
+        'work_date_to' => $workDateTo,
+        'filter_type' => $selectedUnitTypeFilter,
+        'filter_major' => $selectedMajorFilter,
+    ]
+);
 
 $hazardParticipantMap = [];
-if (!empty($reports) && tableExists($pdo, 'work_report_worker_hazard_selection')) {
+if (!empty($pagedReports) && tableExists($pdo, 'work_report_worker_hazard_selection')) {
     $reportIds = array_values(array_unique(array_map(
         static fn($row) => (int)($row['report_id'] ?? 0),
-        $reports
+        $pagedReports
     )));
     $reportIds = array_values(array_filter($reportIds, static fn($id) => $id > 0));
 
@@ -973,7 +1117,7 @@ if (!empty($reports) && tableExists($pdo, 'work_report_worker_hazard_selection')
     }
 }
 
-foreach ($reports as &$report) {
+foreach ($pagedReports as &$report) {
     $reportIdKey = (int)($report['report_id'] ?? 0);
     $participants = $hazardParticipantMap[$reportIdKey] ?? [];
     $report['hazard_participants'] = $participants;
@@ -1177,10 +1321,62 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     outline: 2px solid rgba(245, 166, 35, 0.25);
     border-color: rgba(245, 166, 35, 0.45);
   }
+  input.work-search-input[type="date"] {
+    color-scheme: dark;
+    background: rgba(255,255,255,0.04);
+    color: var(--text-hi);
+  }
+  input.work-search-input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: brightness(0) invert(1);
+    cursor: pointer;
+    opacity: 1;
+  }
   .work-search-meta {
     margin-top: 10px;
     color: var(--text-dim);
     font-size: 12px;
+  }
+  .search-entry-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 16px;
+  }
+  .search-entry-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 180px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    border: 1px solid var(--border2);
+    background: rgba(255,255,255,0.05);
+    color: var(--text-hi);
+    font: inherit;
+    font-weight: 800;
+    cursor: pointer;
+    transition: background .15s ease, border-color .15s ease, transform .15s ease;
+  }
+  .search-entry-button:hover {
+    background: rgba(255,255,255,0.09);
+    border-color: rgba(245, 166, 35, 0.4);
+    transform: translateY(-1px);
+  }
+  .search-tool-modal {
+    width: min(780px, 100%);
+  }
+  .search-tool-body {
+    padding: 18px 22px 22px;
+    max-height: calc(100vh - 156px);
+    overflow: auto;
+  }
+  .search-tool-body .work-search-form,
+  .search-tool-body .work-filter-form {
+    margin-top: 0;
+  }
+  .search-tool-body .work-search-meta,
+  .search-tool-body .unit-db-search-note {
+    margin-top: 12px;
   }
   .work-filter-form {
     display: flex;
@@ -1450,6 +1646,41 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
   }
   .table-wrap { overflow-x: auto; padding: 0 18px 18px; background: transparent !important; }
   .mobile-list { display: none; padding: 0 16px 16px; }
+  .pagination {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+    padding: 0 18px 22px;
+  }
+  .pagination a,
+  .pagination span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border2);
+    background: rgba(255,255,255,0.04);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+    line-height: 1.2;
+  }
+  .pagination a:hover {
+    background: rgba(255,255,255,0.09);
+    border-color: rgba(245, 166, 35, 0.36);
+    color: var(--text-hi);
+  }
+  .pagination .current {
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+    border-color: transparent;
+    color: #fff;
+    box-shadow: 0 10px 20px rgba(232, 146, 10, 0.24);
+  }
   .mobile-card {
     background: rgba(255,255,255,0.03);
     border: 1px solid var(--border);
@@ -2145,54 +2376,65 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
         <div class="panel-head-label">WORK LIST</div>
         <h1>작업 <span>목록</span></h1>
         <p><?= h($workListDescription) ?></p>
-        <form class="work-search-form" id="standard-search-form" autocomplete="off">
+        <div class="unit-db-search-title">작업목록 검색</div>
+        <form class="work-search-form" method="get" autocomplete="off">
           <div class="work-search-box">
             <input
               type="search"
-              id="standard-search-input"
+              name="work_keyword"
               class="work-search-input"
-              placeholder="작업표준서번호 또는 표준서명 검색"
+              placeholder="작업명, 장소, 팀명, 작업유형 검색"
+              value="<?= h($workListKeyword) ?>"
             >
-            <div class="work-search-results" id="standard-search-results"></div>
           </div>
+          <input
+            type="date"
+            name="work_date_from"
+            class="work-search-input"
+            value="<?= h($workDateFrom) ?>"
+            aria-label="작업일자 시작일"
+            style="flex:0 1 170px; min-width:160px;"
+          >
+          <input
+            type="date"
+            name="work_date_to"
+            class="work-search-input"
+            value="<?= h($workDateTo) ?>"
+            aria-label="작업일자 종료일"
+            style="flex:0 1 170px; min-width:160px;"
+          >
+          <?php if ($selectedUnitTypeFilter !== ''): ?>
+            <input type="hidden" name="filter_type" value="<?= h($selectedUnitTypeFilter) ?>">
+          <?php endif; ?>
+          <?php if ($selectedMajorFilter !== ''): ?>
+            <input type="hidden" name="filter_major" value="<?= h($selectedMajorFilter) ?>">
+          <?php endif; ?>
           <button type="submit" class="btn-secondary">검색</button>
-          <button type="button" class="btn-secondary" id="standard-search-reset">초기화</button>
+          <a class="btn-secondary" href="<?= h(build_page_url('work_list.php', [
+              'filter_type' => $selectedUnitTypeFilter,
+              'filter_major' => $selectedMajorFilter,
+          ])) ?>">초기화</a>
         </form>
-        <div class="work-search-meta" id="standard-search-meta">작업목록을 건드리지 않고 작업표준서만 검색합니다.</div>
-        <div class="unit-db-search-title">위험성평가서검색</div>
-        <form class="work-filter-form" id="unit-db-filter-form" autocomplete="off">
-          <div class="work-filter-field" style="flex:1 1 260px; min-width:240px;">
-            <label class="work-filter-label" for="unit-db-keyword">검색어</label>
-            <input
-              type="search"
-              id="unit-db-keyword"
-              class="work-search-input"
-              placeholder="평가서명 또는 위험성평가번호 검색"
-            >
-            <div class="work-search-results" id="unit-db-search-results"></div>
-          </div>
-          <div class="work-filter-field">
-            <label class="work-filter-label" for="filter-type">유형</label>
-            <select class="work-filter-select" id="filter-type" name="filter_type">
-              <option value="">전체</option>
-              <?php foreach ($unitTypeOptions as $typeValue => $typeLabel): ?>
-                <option value="<?= h($typeValue) ?>"><?= h($typeLabel) ?></option>
-              <?php endforeach; ?>
-            </select>
-          </div>
-          <div class="work-filter-field">
-            <label class="work-filter-label" for="filter-major">대분류</label>
-            <select class="work-filter-select" id="filter-major" name="filter_major">
-              <option value="">전체</option>
-            </select>
-          </div>
-          <div class="work-filter-actions">
-            <button type="submit" class="btn-secondary" id="unit-db-search-button">조회</button>
-            <button type="button" class="btn-secondary" id="unit-db-filter-reset">초기화</button>
-            <span class="work-filter-count" id="unit-db-filter-count">단위위험성평가서를 조회할 수 있습니다.</span>
-          </div>
-        </form>
-        <div class="unit-db-search-note">작업목록이 아니라 단위위험성평가 DB를 조회합니다. 결과를 누르면 미리보기가 열립니다.</div>
+        <div class="work-search-meta">
+          <?php if ($workListKeyword !== '' || $workDateFrom !== '' || $workDateTo !== ''): ?>
+            <?php
+              $searchMetaParts = [];
+              if ($workListKeyword !== '') {
+                  $searchMetaParts[] = '검색어 `' . h($workListKeyword) . '`';
+              }
+              if ($workDateFrom !== '' || $workDateTo !== '') {
+                  $searchMetaParts[] = '작업일자 ' . h($workDateFrom !== '' ? $workDateFrom : '전체') . ' ~ ' . h($workDateTo !== '' ? $workDateTo : '전체');
+              }
+            ?>
+            <?= implode(' / ', $searchMetaParts) ?> 결과 <?= number_format($filteredReportCount) ?>건
+          <?php else: ?>
+            작업명, 장소, 팀명, 작업유형, 위험성평가번호와 작업일자로 검색할 수 있습니다.
+          <?php endif; ?>
+        </div>
+        <div class="search-entry-actions">
+          <button type="button" class="search-entry-button" id="open-standard-search-modal">작업표준서검색</button>
+          <button type="button" class="search-entry-button" id="open-unit-db-search-modal">위험성평가서검색</button>
+        </div>
       </div>
 
       <?php if ($successMessage !== ''): ?>
@@ -2203,15 +2445,15 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
       <?php endif; ?>
 
       <?php if (empty($reports)): ?>
-        <div class="empty"><?= $hasWorkListFilter ? '선택한 유형/대분류에 맞는 작업이 없습니다.' : '아직 저장된 작업이 없습니다.' ?></div>
+        <div class="empty"><?= $hasWorkListFilter ? '검색 또는 필터 조건에 맞는 작업이 없습니다.' : '아직 저장된 작업이 없습니다.' ?></div>
       <?php else: ?>
         <div class="mobile-list">
-          <?php foreach ($reports as $report): ?>
+          <?php foreach ($pagedReports as $report): ?>
             <article class="mobile-card">
               <?php $reportEntryPage = work_list_entry_page($user, $report, $entryPage); ?>
               <div class="mobile-card-head">
                 <div>
-                  <div class="work-title"><?= h($report['work_title']) ?></div>
+                  <div class="work-title"><a href="work_list_detail.php?report_id=<?= (int)$report['report_id'] ?>" style="color:inherit;text-decoration:none;"><?= h($report['work_title']) ?></a></div>
                   <div class="sub-text"><?= $report['use_equipment_yn'] === 'Y' ? '중장비 사용' : '중장비 미사용' ?></div>
                 </div>
               </div>
@@ -2320,11 +2562,11 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
               </tr>
             </thead>
             <tbody>
-              <?php foreach ($reports as $report): ?>
+              <?php foreach ($pagedReports as $report): ?>
                 <tr>
                   <?php $reportEntryPage = work_list_entry_page($user, $report, $entryPage); ?>
                   <td>
-                    <div class="work-title"><?= h($report['work_title']) ?></div>
+                    <div class="work-title"><a href="work_list_detail.php?report_id=<?= (int)$report['report_id'] ?>" style="color:inherit;text-decoration:none;"><?= h($report['work_title']) ?></a></div>
                     <div class="sub-text"><?= $report['use_equipment_yn'] === 'Y' ? '중장비 사용' : '중장비 미사용' ?></div>
                   </td>
                   <td><?= h($report['work_date']) ?></td>
@@ -2392,7 +2634,81 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
             </tbody>
           </table>
         </div>
+        <?= $workListPagination ?>
       <?php endif; ?>
+    </div>
+  </div>
+  <div class="modal-backdrop" id="standard-search-modal" aria-hidden="true">
+    <div class="unit-preview-modal search-tool-modal" role="dialog" aria-modal="true" aria-labelledby="standard-search-modal-title">
+      <div class="unit-preview-head">
+        <div>
+          <h2 id="standard-search-modal-title">작업표준서검색</h2>
+          <p>작업표준서번호 또는 표준서명을 검색하고 결과를 선택하면 미리보기가 열립니다.</p>
+        </div>
+        <button type="button" class="modal-close" data-standard-search-modal-close aria-label="닫기">&times;</button>
+      </div>
+      <div class="search-tool-body">
+        <form class="work-search-form" id="standard-search-form" autocomplete="off">
+          <div class="work-search-box">
+            <input
+              type="search"
+              id="standard-search-input"
+              class="work-search-input"
+              placeholder="작업표준서번호 또는 표준서명 검색"
+            >
+            <div class="work-search-results" id="standard-search-results"></div>
+          </div>
+          <button type="submit" class="btn-secondary">검색</button>
+          <button type="button" class="btn-secondary" id="standard-search-reset">초기화</button>
+        </form>
+        <div class="work-search-meta" id="standard-search-meta">작업목록을 건드리지 않고 작업표준서만 검색합니다.</div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop" id="unit-db-search-modal" aria-hidden="true">
+    <div class="unit-preview-modal search-tool-modal" role="dialog" aria-modal="true" aria-labelledby="unit-db-search-modal-title">
+      <div class="unit-preview-head">
+        <div>
+          <h2 id="unit-db-search-modal-title">위험성평가서검색</h2>
+          <p>유형과 대분류 조건으로 단위위험성평가 DB를 조회하고 결과를 선택하면 미리보기가 열립니다.</p>
+        </div>
+        <button type="button" class="modal-close" data-unit-db-search-modal-close aria-label="닫기">&times;</button>
+      </div>
+      <div class="search-tool-body">
+        <form class="work-filter-form" id="unit-db-filter-form" autocomplete="off">
+          <div class="work-filter-field" style="flex:1 1 260px; min-width:240px;">
+            <label class="work-filter-label" for="unit-db-keyword">검색어</label>
+            <input
+              type="search"
+              id="unit-db-keyword"
+              class="work-search-input"
+              placeholder="평가서명 또는 위험성평가번호 검색"
+            >
+            <div class="work-search-results" id="unit-db-search-results"></div>
+          </div>
+          <div class="work-filter-field">
+            <label class="work-filter-label" for="filter-type">유형</label>
+            <select class="work-filter-select" id="filter-type" name="filter_type">
+              <option value="">전체</option>
+              <?php foreach ($unitTypeOptions as $typeValue => $typeLabel): ?>
+                <option value="<?= h($typeValue) ?>"><?= h($typeLabel) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="work-filter-field">
+            <label class="work-filter-label" for="filter-major">대분류</label>
+            <select class="work-filter-select" id="filter-major" name="filter_major">
+              <option value="">전체</option>
+            </select>
+          </div>
+          <div class="work-filter-actions">
+            <button type="submit" class="btn-secondary" id="unit-db-search-button">조회</button>
+            <button type="button" class="btn-secondary" id="unit-db-filter-reset">초기화</button>
+            <span class="work-filter-count" id="unit-db-filter-count">단위위험성평가서를 조회할 수 있습니다.</span>
+          </div>
+        </form>
+        <div class="unit-db-search-note">작업목록이 아니라 단위위험성평가 DB를 조회합니다. 결과를 누르면 미리보기가 열립니다.</div>
+      </div>
     </div>
   </div>
   <div class="modal-backdrop" id="unit-preview-modal" aria-hidden="true">
@@ -2727,6 +3043,10 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
       const hazardParticipantTitleNode = document.getElementById('hazard-participant-title');
       const hazardParticipantSubtitleNode = document.getElementById('hazard-participant-subtitle');
       const hazardParticipantListNode = document.getElementById('hazard-participant-list');
+      const openStandardSearchModalButton = document.getElementById('open-standard-search-modal');
+      const openUnitDbSearchModalButton = document.getElementById('open-unit-db-search-modal');
+      const standardSearchModal = document.getElementById('standard-search-modal');
+      const unitDbSearchModal = document.getElementById('unit-db-search-modal');
       const standardSearchForm = document.getElementById('standard-search-form');
       const standardSearchInput = document.getElementById('standard-search-input');
       const standardSearchMeta = document.getElementById('standard-search-meta');
@@ -2756,6 +3076,10 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
         || !hazardParticipantTitleNode
         || !hazardParticipantSubtitleNode
         || !hazardParticipantListNode
+        || !openStandardSearchModalButton
+        || !openUnitDbSearchModalButton
+        || !standardSearchModal
+        || !unitDbSearchModal
         || !standardSearchForm
         || !standardSearchInput
         || !standardSearchMeta
@@ -2787,6 +3111,8 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
       let previousSafetyBodyOverflow = '';
       let previousHazardParticipantBodyOverflow = '';
       let previousUnitDbBodyOverflow = '';
+      let previousStandardSearchBodyOverflow = '';
+      let previousUnitDbSearchBodyOverflow = '';
       let standardSearchDebounceTimer = 0;
       let standardSearchRequestToken = 0;
       let unitDbSearchDebounceTimer = 0;
@@ -3261,6 +3587,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
       }
 
       function openUnitDbModal(subtitle, bodyHtml) {
+        closeUnitDbSearchModal();
         closeModal();
         closeSafetyModal();
         closeHazardParticipantModal();
@@ -3364,6 +3691,8 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
           return;
         }
 
+        closeStandardSearchModal();
+        closeUnitDbSearchModal();
         closeSafetyModal();
         closeHazardParticipantModal();
         requestToken += 1;
@@ -3409,6 +3738,8 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
           return;
         }
 
+        closeStandardSearchModal();
+        closeUnitDbSearchModal();
         hideStandardSearchResults();
         closeModal();
         closeHazardParticipantModal();
@@ -3456,6 +3787,8 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
 
         closeModal();
         closeSafetyModal();
+        closeStandardSearchModal();
+        closeUnitDbSearchModal();
 
         previousHazardParticipantBodyOverflow = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
@@ -3473,6 +3806,52 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
         hazardParticipantModal.setAttribute('aria-hidden', 'true');
         document.body.style.overflow = previousHazardParticipantBodyOverflow;
       }
+
+      function openStandardSearchModal() {
+        closeModal();
+        closeSafetyModal();
+        closeHazardParticipantModal();
+        closeUnitDbModal();
+        closeUnitDbSearchModal();
+        previousStandardSearchBodyOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        standardSearchModal.classList.add('is-open');
+        standardSearchModal.setAttribute('aria-hidden', 'false');
+        window.setTimeout(() => standardSearchInput.focus(), 0);
+      }
+
+      function closeStandardSearchModal() {
+        standardSearchModal.classList.remove('is-open');
+        standardSearchModal.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = previousStandardSearchBodyOverflow;
+      }
+
+      function openUnitDbSearchModal() {
+        closeModal();
+        closeSafetyModal();
+        closeHazardParticipantModal();
+        closeUnitDbModal();
+        closeStandardSearchModal();
+        previousUnitDbSearchBodyOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        unitDbSearchModal.classList.add('is-open');
+        unitDbSearchModal.setAttribute('aria-hidden', 'false');
+        window.setTimeout(() => unitDbKeywordInput.focus(), 0);
+      }
+
+      function closeUnitDbSearchModal() {
+        unitDbSearchModal.classList.remove('is-open');
+        unitDbSearchModal.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = previousUnitDbSearchBodyOverflow;
+      }
+
+      openStandardSearchModalButton.addEventListener('click', () => {
+        openStandardSearchModal();
+      });
+
+      openUnitDbSearchModalButton.addEventListener('click', () => {
+        openUnitDbSearchModal();
+      });
 
       document.querySelectorAll('.js-unit-preview').forEach((button) => {
         button.addEventListener('click', () => {
@@ -3637,6 +4016,18 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
         }
       });
 
+      standardSearchModal.addEventListener('click', (event) => {
+        if (event.target === standardSearchModal || event.target.closest('[data-standard-search-modal-close]')) {
+          closeStandardSearchModal();
+        }
+      });
+
+      unitDbSearchModal.addEventListener('click', (event) => {
+        if (event.target === unitDbSearchModal || event.target.closest('[data-unit-db-search-modal-close]')) {
+          closeUnitDbSearchModal();
+        }
+      });
+
       unitDbModal.addEventListener('click', (event) => {
         if (event.target === unitDbModal || event.target.closest('[data-unit-db-modal-close]')) {
           closeUnitDbModal();
@@ -3660,6 +4051,10 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
       document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape' && hazardParticipantModal.classList.contains('is-open')) {
           closeHazardParticipantModal();
+        } else if (event.key === 'Escape' && unitDbSearchModal.classList.contains('is-open')) {
+          closeUnitDbSearchModal();
+        } else if (event.key === 'Escape' && standardSearchModal.classList.contains('is-open')) {
+          closeStandardSearchModal();
         } else if (event.key === 'Escape' && unitDbModal.classList.contains('is-open')) {
           closeUnitDbModal();
         } else if (event.key === 'Escape' && safetyModal.classList.contains('is-open')) {
