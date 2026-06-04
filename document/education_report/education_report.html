@@ -714,6 +714,26 @@
         const KYRGYZ_ONLY_KEY = 'education-report-kyrgyz-only';
         const KYRGYZ_FIXED_ATTENDEE_NAMES = ['Баха'];
         const KYRGYZ_TARGET_GROUP = '터널 내 벨트 위에서 케이블 포설하기';
+        const RUSSIAN_TARGET_GROUP = '터널 내 벨트위에서 케이블 포설하기기';
+        const RUSSIAN_TARGET_GROUP_LABEL = 'Прокладка кабеля на ленте в туннеле';
+        const RUSSIAN_MENU_TITLES = {
+            'pool-ru-20260601-01': '개인장구 착용',
+            'pool-ru-20260601-02': '안전대 착용',
+            'pool-ru-20260601-03': '미끄럼 주의',
+            'pool-ru-20260601-04': '교통안전 신호수 배치',
+            'pool-ru-20260601-05': '이동식 비계 고정',
+            'pool-ru-20260601-06': '근골격계 질환 예방',
+            'pool-ru-20260601-07': '벨트위 이동 시 미끄럼 주의',
+            'pool-ru-20260601-08': '이동식 비계 밀기',
+            'pool-ru-20260601-09': '작업유의사항',
+            'pool-ru-20260601-10': '형광조끼착용',
+            'pool-ru-20260601-11': '틀비계 형광봉 설치',
+            'pool-ru-20260601-12': '용접작업 시 안전수칙준수',
+            'pool-ru-20260601-13': '사다리 2인 1조',
+            'pool-ru-20260601-14': '사다리 승하강 시 주의',
+            'pool-ru-20260601-15': '사다리 안전대 착용',
+            'pool-ru-20260601-16': '방진마스크 착용'
+        };
         const KYRGYZ_TRANSLATIONS = {
             'pool-20260515050659-050bdcdb': ['Жеке коргонуу каражаттарын сөзсүз кийүү (каска, бут кап, коопсуздук жилети, коргоочу көз айнек, коопсуздук бут кийим).'],
             'pool-20260515051116-df745396': ['Иш учурунда толук денелик коопсуздук курун тагып, коопсуздук илгичин бекитүү.'],
@@ -821,6 +841,52 @@
                 custom_panel_title: 'Бош саптарды толтуруу',
                 custom_panel_hint: 'Бош саптарга кире турган текстти жазыңыз. Киргизүү дароо чагылдырылат.',
                 custom_panel_empty: 'Учурда бош сап жок.'
+            },
+            ru: {
+                report_title: 'Журнал инструктажа на рабочем месте',
+                project_name: '\u00A0○ Наименование работ : Электромонтажные работы проекта модернизации шахты Halla Cement',
+                label_date: 'Дата обучения',
+                label_location: 'Место обучения',
+                location_value: 'Рабочая площадка',
+                label_instructor: 'Инструктор',
+                instructor_value: 'Ответственный за работы - надзор',
+                label_subject: 'Тема обучения',
+                subject_value: 'Проведение инструктажа по безопасности перед началом работ',
+                label_content: 'Содержание обучения',
+                attendee_title: 'Участники инструктажа',
+                role_label: 'Должность',
+                name_label: 'Ф.И.О.',
+                signature_label: 'Подпись',
+                safety_section_title: '1. Проведение инструктажа по безопасности перед началом работ',
+                date_panel_title: 'Изменить дату обучения',
+                date_panel_hint: 'При изменении даты вместе обновляются дата инструктажа и 기준 загрузки участников.',
+                apply: 'Применить',
+                pool_panel_title: 'Пул содержания обучения',
+                pool_panel_hint: 'Отмеченные пункты будут отражены в содержании обучения. Ниже их можно отдельно сохранять и редактировать.',
+                pool_usage: 'Использовано строк',
+                kyrgyz_only_toggle: 'Показывать только кыргызский для группы прокладки кабеля на ленте в туннеле',
+                pool_apply: 'Применить выбор',
+                pool_clear: 'Снять выбор',
+                pool_random: 'Случайный выбор',
+                pool_group_placeholder: 'Введите название новой группы ситуаций',
+                pool_create_group: 'Создать группу',
+                pool_title_placeholder: 'Заголовок пункта',
+                pool_select_group: 'Выбрать всю текущую группу',
+                pool_reference_placeholder: 'Выбрать существующий пункт',
+                pool_reference_help: 'Можно загрузить содержание существующего пункта или добавить его в конец текущего содержания.',
+                pool_reference_replace: 'Загрузить содержание',
+                pool_reference_append: 'Добавить к текущему содержанию',
+                pool_content_placeholder: 'Вводите по одному предложению в строке. Переносы строк сохраняются как есть. Рекомендуется около 12 строк.',
+                pool_save: 'Сохранить как новый',
+                pool_update: 'Изменить выбранное',
+                pool_delete: 'Удалить',
+                pool_reset: 'Восстановить по умолчанию',
+                pool_empty_state: 'Сначала выберите ситуацию',
+                pool_new_item: 'Создать новый пункт',
+                pool_group_select: 'Выбор ситуации',
+                custom_panel_title: 'Добавить текст в пустые строки',
+                custom_panel_hint: 'Введите текст для пустых строк. Изменения применяются сразу.',
+                custom_panel_empty: 'Сейчас пустых строк нет.'
             }
         };
         let safetyLineNodes = [];
@@ -845,7 +911,13 @@
         }
 
         function getCurrentLocale() {
-            return kyrgyzOnlyEnabled ? 'ky' : 'ko';
+            if (kyrgyzOnlyEnabled) {
+                return 'ky';
+            }
+            if (String(currentPoolViewGroup || '').trim() === RUSSIAN_TARGET_GROUP) {
+                return 'ru';
+            }
+            return 'ko';
         }
 
         function t(key) {
@@ -1052,7 +1124,7 @@
 
         function applyDocumentLocale() {
             const roleLabelText = kyrgyzOnlyEnabled ? '' : t('role_label');
-            document.documentElement.lang = getCurrentLocale() === 'ky' ? 'ky' : 'ko';
+            document.documentElement.lang = getCurrentLocale();
             document.title = t('report_title');
             setNodeText('report-title', t('report_title'));
             setNodeText('report-project-name', t('project_name'));
@@ -1553,7 +1625,7 @@
             currentPoolGroups.forEach(function (groupName) {
                 const option = document.createElement('option');
                 option.value = groupName;
-                option.textContent = groupName;
+                option.textContent = getPoolGroupDisplayName(groupName);
                 select.appendChild(option);
             });
 
@@ -1574,7 +1646,7 @@
             currentPoolItems.forEach(function (item) {
                 const option = document.createElement('option');
                 option.value = item.id;
-                option.textContent = '[' + (item.group || '미분류') + '] ' + item.title;
+                option.textContent = '[' + (item.group || '미분류') + '] ' + getPoolMenuTitle(item);
                 select.appendChild(option);
             });
         }
@@ -1681,6 +1753,24 @@
                 return baseLines;
             }
             return (KYRGYZ_TRANSLATIONS[String(item.id || '').trim()] || []).slice();
+        }
+
+        function getPoolMenuTitle(item) {
+            const title = String((item && item.title) || '').trim();
+            const groupName = String((item && item.group) || '').trim();
+            const itemId = String((item && item.id) || '').trim();
+            if (groupName === RUSSIAN_TARGET_GROUP && Object.prototype.hasOwnProperty.call(RUSSIAN_MENU_TITLES, itemId)) {
+                return RUSSIAN_MENU_TITLES[itemId] + ' / ' + title;
+            }
+            return title;
+        }
+
+        function getPoolGroupDisplayName(groupName) {
+            const normalizedGroupName = String(groupName || '').trim();
+            if (normalizedGroupName === RUSSIAN_TARGET_GROUP) {
+                return RUSSIAN_TARGET_GROUP_LABEL;
+            }
+            return normalizedGroupName;
         }
 
         function countPoolLines(items) {
@@ -2418,7 +2508,7 @@
                     groupedItems.forEach(function (groupEntry) {
                         const groupBlock = document.createElement('div');
                         groupBlock.className = 'group-block';
-                        groupBlock.innerHTML = '<div class="group-title">' + escapeHtml(groupEntry.group) + '</div>';
+                        groupBlock.innerHTML = '<div class="group-title">' + escapeHtml(getPoolGroupDisplayName(groupEntry.group)) + '</div>';
 
                         const itemsWrap = document.createElement('div');
                         itemsWrap.className = 'group-items';
@@ -2429,7 +2519,7 @@
                             label.innerHTML = ''
                                 + '<input type="checkbox" class="education-pool-check" data-group="' + escapeHtml(groupEntry.group) + '" value="' + escapeHtml(item.id) + '">'
                                 + '<span class="check-item-body">'
-                                + '<span class="check-item-copy"><strong>' + escapeHtml(item.title) + '</strong><br><small>' + countPoolLines([item]) + '줄</small></span>'
+                                + '<span class="check-item-copy"><strong>' + escapeHtml(getPoolMenuTitle(item)) + '</strong><br><small>' + countPoolLines([item]) + '줄</small></span>'
                                 + '<input type="color" class="pool-item-color" data-item-id="' + escapeHtml(item.id) + '" value="' + escapeHtml(getPoolItemColor(item.id)) + '" title="항목 색상">'
                                 + '</span>';
                             itemsWrap.appendChild(label);
@@ -2446,7 +2536,7 @@
                 items.forEach(function (item) {
                     const option = document.createElement('option');
                     option.value = item.id;
-                    option.textContent = item.title;
+                    option.textContent = getPoolMenuTitle(item);
                     editorSelect.appendChild(option);
                 });
             }
@@ -2505,7 +2595,10 @@
 
             document.getElementById('education-pool-group-select').addEventListener('change', function () {
                 currentPoolViewGroup = String(this.value || '').trim();
+                applyDocumentLocale();
+                renderDateControlPanel(extractDateFromPage());
                 renderContentPoolPanel(currentPoolItems);
+                refreshCustomInputPanel();
                 fillPoolEditor('');
             });
 
