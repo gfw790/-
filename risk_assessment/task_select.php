@@ -2041,6 +2041,75 @@ function type_label(string $type): string
     color: var(--text-dim);
     font-size: 12px;
   }
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.9fr);
+    gap: 16px;
+    margin-bottom: 18px;
+  }
+  .hero-copy,
+  .hero-stats {
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 24px;
+    background: linear-gradient(180deg, rgba(23,36,56,0.94), rgba(12,20,32,0.94));
+    box-shadow: 0 18px 40px rgba(4, 10, 18, 0.24);
+  }
+  .hero-copy {
+    padding: 24px 24px 22px;
+  }
+  .hero-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    min-height: 30px;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: rgba(245,166,35,0.16);
+    border: 1px solid rgba(245,166,35,0.28);
+    color: var(--accent2);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+  }
+  .hero-copy h1 {
+    margin: 14px 0 10px;
+    font-size: clamp(28px, 4vw, 36px);
+    line-height: 1.14;
+    letter-spacing: -0.04em;
+  }
+  .hero-copy p {
+    max-width: 56ch;
+    color: rgba(197,216,235,0.78);
+    font-size: 14px;
+    line-height: 1.65;
+  }
+  .hero-stats {
+    display: grid;
+    gap: 12px;
+    padding: 16px;
+  }
+  .hero-stat {
+    padding: 16px 18px;
+    border-radius: 18px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .hero-stat strong {
+    display: block;
+    color: var(--text-hi);
+    font-size: 22px;
+    line-height: 1.15;
+    letter-spacing: -0.03em;
+  }
+  .hero-stat span {
+    display: block;
+    margin-top: 6px;
+    color: var(--text-dim);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .hero-stat-accent {
+    background: linear-gradient(135deg, rgba(58,127,193,0.2), rgba(245,166,35,0.12));
+  }
   .meta {
     display: flex;
     flex-wrap: wrap;
@@ -2700,10 +2769,54 @@ function type_label(string $type): string
   .detail-group {
     margin-top: 18px;
   }
+  .detail-group summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    list-style: none;
+    cursor: pointer;
+    padding: 16px 18px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: rgba(255,255,255,0.03);
+  }
+  .detail-group summary::-webkit-details-marker {
+    display: none;
+  }
+  .detail-group summary::after {
+    content: "+";
+    flex: 0 0 auto;
+    color: var(--accent2);
+    font-size: 22px;
+    line-height: 1;
+    font-weight: 500;
+  }
+  .detail-group[open] summary::after {
+    content: "−";
+  }
   .detail-group h3 {
     font-size: 15px;
     color: var(--text-hi);
     margin-bottom: 10px;
+  }
+  .detail-group-title {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+  .detail-group-title strong {
+    color: var(--text-hi);
+    font-size: 15px;
+    letter-spacing: -0.02em;
+  }
+  .detail-group-title span {
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+  .detail-group-body {
+    padding-top: 12px;
   }
   .detail-subgroup {
     margin-top: 12px;
@@ -2800,6 +2913,21 @@ function type_label(string $type): string
     gap: 10px;
     margin-top: 18px;
     flex-wrap: wrap;
+  }
+  .form-submit-bar {
+    margin-top: 28px;
+  }
+  .quick-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .quick-actions .btn-secondary {
+    min-height: 40px;
+    padding: 10px 14px;
+    border-radius: 999px;
+    white-space: nowrap;
   }
   .is-hidden {
     display: none;
@@ -2986,11 +3114,189 @@ function type_label(string $type): string
     display: none !important;
   }
   @media (max-width: 720px) {
-    .hero h1 { font-size: 24px; }
-    .selector-grid { grid-template-columns: 1fr; }
+    body {
+      padding: 14px 10px 28px;
+    }
+    .hero {
+      grid-template-columns: 1fr;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .hero-copy,
+    .hero-stats {
+      border-radius: 20px;
+    }
+    .hero-copy {
+      padding: 18px 18px 16px;
+    }
+    .hero-copy h1 {
+      margin-top: 12px;
+      font-size: 24px;
+    }
+    .hero-copy p {
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .hero-stats {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      padding: 12px;
+    }
+    .hero-stat {
+      padding: 14px;
+      border-radius: 16px;
+    }
+    .hero-stat strong {
+      font-size: 18px;
+    }
+    .topbar {
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .topbar > .identity:first-child {
+      width: 100%;
+      justify-content: space-between;
+    }
+    .quick-actions {
+      width: 100%;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding-bottom: 4px;
+      scrollbar-width: none;
+    }
+    .quick-actions::-webkit-scrollbar {
+      display: none;
+    }
+    .quick-actions .btn-secondary {
+      flex: 0 0 auto;
+      min-height: 38px;
+      padding: 9px 13px;
+      font-size: 13px;
+    }
+    .panel {
+      padding: 14px !important;
+    }
+    .entry-card,
+    .summary-card,
+    .selector-box,
+    .selected-task {
+      padding: 14px;
+    }
+    .selector-grid,
     .form-grid,
-    .summary-grid { grid-template-columns: 1fr; }
+    .summary-grid {
+      grid-template-columns: 1fr;
+    }
     .summary-code-grid { grid-template-columns: 1fr; }
+    .selector-box p,
+    .selector-add-row span,
+    .task-info {
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .selector-box p {
+      margin-bottom: 10px;
+    }
+    .selector-box h2 {
+      margin-bottom: 8px;
+    }
+    .selector-add-row {
+      position: sticky;
+      top: 10px;
+      z-index: 14;
+      padding: 10px;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      background: rgba(12, 20, 32, 0.88);
+      backdrop-filter: blur(18px);
+    }
+    .list-grid,
+    .detail-task-grid {
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+    .check-item label {
+      padding: 11px 12px;
+    }
+    .selected-task {
+      margin-top: 18px !important;
+    }
+    .selected-task-detail-lines {
+      max-height: 220px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+    .selected-task-detail-line {
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    .selected-task-detail-line.is-removable {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+    .selected-task-remove-btn {
+      width: 100%;
+      min-height: 38px;
+    }
+    .note-toolbar {
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .note-toolbar-group {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }
+    .note-toolbar-group::-webkit-scrollbar {
+      display: none;
+    }
+    .note-toolbar button {
+      flex: 0 0 auto;
+      min-height: 38px;
+      padding: 8px 11px;
+      font-size: 12px;
+    }
+    .detail-group {
+      margin-top: 14px;
+    }
+    .detail-group summary {
+      padding: 14px;
+      border-radius: 14px;
+    }
+    .detail-group-title strong {
+      font-size: 14px;
+    }
+    .detail-group-title span {
+      font-size: 11px;
+    }
+    .detail-group-body {
+      padding-top: 10px;
+    }
+    .summary-actions {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .summary-actions > * {
+      width: 100%;
+    }
+    .form-submit-bar {
+      position: sticky;
+      bottom: 10px;
+      z-index: 18;
+      justify-content: stretch;
+      padding: 10px;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 18px;
+      background: rgba(12, 20, 32, 0.9);
+      backdrop-filter: blur(18px);
+    }
+    .form-submit-bar .btn-primary {
+      width: 100%;
+      min-height: 52px;
+      font-size: 15px;
+    }
   }
   @media print {
     body {
@@ -3060,8 +3366,11 @@ function type_label(string $type): string
       <div class="topbar">
         <div class="identity">
           <span style="color:var(--text-hi);font-size:14px;font-weight:700"><?= h(auth_display_name($user)) ?></span>
+          <?php if ($roleMeta): ?>
+            <span class="role-badge"><?= h($roleMeta['button']) ?></span>
+          <?php endif; ?>
         </div>
-        <div class="identity">
+        <div class="identity quick-actions">
           <a class="btn-secondary" href="work_list.php">작업목록</a>
           <?php if ($isAdmin): ?>
             <a class="btn-secondary" href="register_worker.php">계정관리</a>
@@ -3091,6 +3400,26 @@ function type_label(string $type): string
           <a class="btn-secondary" href="<?= h($selfPage) ?>?logout=1">로그아웃</a>
         </div>
       </div>
+
+      <?php if ($roleMeta): ?>
+        <section class="hero">
+          <div class="hero-copy">
+            <span class="hero-eyebrow"><?= h($selectedManagerTeam !== '' ? $selectedManagerTeam . ' 기준' : ((string)($user['team'] ?? '현장 작업 기준'))) ?></span>
+            <h1><?= h($roleMeta['title']) ?></h1>
+            <p><?= h($roleMeta['description']) ?></p>
+          </div>
+          <div class="hero-stats">
+            <div class="hero-stat">
+              <strong><?= number_format(count($tasks)) ?></strong>
+              <span>현재 선택 가능한 위험성평가 항목</span>
+            </div>
+            <div class="hero-stat hero-stat-accent">
+              <strong><?= $savedReport ? '저장 완료' : '빠른 입력' ?></strong>
+              <span><?= $savedReport ? '방금 저장한 내용을 바로 확인할 수 있습니다.' : '모바일에서도 핵심 정보부터 짧게 입력할 수 있습니다.' ?></span>
+            </div>
+          </div>
+        </section>
+      <?php endif; ?>
 
       <?php if ($savedRaId > 0): ?>
         <div class="success">위험성평가 등록이 완료되었습니다. 저장된 문서 번호는 RA_ID <?= (int)$savedRaId ?> 입니다.</div>
@@ -3361,7 +3690,7 @@ function type_label(string $type): string
                 </div>
                 <div class="selector-add-row">
                   <button type="button" class="btn-secondary" id="add-selected-task">추가</button>
-                  <span>현재 선택 작업을 목록에 추가하고, 공정명/대분류/작업유형 선택을 초기화합니다.</span>
+                  <span>현재 선택을 목록에 담고 다음 항목을 바로 고를 수 있습니다.</span>
                 </div>
               </div>
             <?php endif; ?>
@@ -3375,8 +3704,14 @@ function type_label(string $type): string
               ?>
               <?php foreach ($detailLabels as $detailType => $detailLabel): ?>
                 <?php if ($activeGasTeam && auth_can_manage($user) && $detailType === 'major_work') continue; ?>
-                <div class="detail-group">
-                  <h3><?= h($detailLabel) ?></h3>
+                <details class="detail-group"<?= $detailType === 'major_work' ? ' open' : '' ?>>
+                  <summary>
+                    <span class="detail-group-title">
+                      <strong><?= h($detailLabel) ?></strong>
+                      <span>필요한 항목만 열어서 선택</span>
+                    </span>
+                  </summary>
+                  <div class="detail-group-body">
                   <?php if (!empty($detailOptionGroups[$detailType])): ?>
                     <?php if ($detailType === 'major_work'): ?>
                       <div class="detail-task-grid">
@@ -3501,7 +3836,8 @@ function type_label(string $type): string
                   <?php else: ?>
                     <div class="empty" style="margin-top:12px; padding:18px 14px;">선택할 수 있는 항목이 없습니다.</div>
                   <?php endif; ?>
-                </div>
+                  </div>
+                </details>
               <?php endforeach; ?>
             </div>
             <?php endif; ?>
@@ -3550,7 +3886,7 @@ function type_label(string $type): string
                 </div>
               <?php endif; ?>
 
-            <div class="page-actions">
+            <div class="page-actions form-submit-bar">
               <button type="submit" class="btn-primary"><?= $leaderElectricalDetailOnlyMode ? '세부사항 저장' : '확인 및 저장' ?></button>
             </div>
           </form>

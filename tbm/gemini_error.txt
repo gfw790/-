@@ -495,3 +495,19 @@
 [2026-06-04T00:01:06+09:00] [retrying] prompt updated for attempt 3
 [2026-06-04T00:01:22+09:00] [attempt 3] AI 출력 검증 실패: 퀴즈 3개 총 글자 수가 827자입니다. 545~820자여야 합니다.
 [2026-06-04T00:01:22+09:00] [retrying] prompt updated for attempt 4
+[2026-06-06T00:01:13+09:00] [attempt 1] GEMINI_QUOTA_EXCEEDED::{
+  "error": {
+    "code": 429,
+    "message": "Your prepayment credits are depleted. Please go to AI Studio at https://ai.studio/projects to manage your project and billing. Learn more at https://ai.google.dev/gemini-api/docs/billing#prepay. ",
+    "status": "RESOURCE_EXHAUSTED"
+  }
+}
+
+[2026-06-06T06:35:12+09:00] [attempt 1] GEMINI_QUOTA_EXCEEDED::{
+  "error": {
+    "code": 429,
+    "message": "Your prepayment credits are depleted. Please go to AI Studio at https://ai.studio/projects to manage your project and billing. Learn more at https://ai.google.dev/gemini-api/docs/billing#prepay. ",
+    "status": "RESOURCE_EXHAUSTED"
+  }
+}
+

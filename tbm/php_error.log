@@ -396,3 +396,47 @@ Stack trace:
 [05-Jun-2026 00:00:32 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
 [05-Jun-2026 00:00:43 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=4) — Gemini Vision 폴백
 [05-Jun-2026 00:00:53 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[06-Jun-2026 00:00:09 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=2) — Gemini Vision 폴백
+[06-Jun-2026 00:00:13 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=2) — Gemini Vision 폴백
+[06-Jun-2026 00:00:17 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[06-Jun-2026 00:00:21 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[06-Jun-2026 00:00:25 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[06-Jun-2026 00:00:29 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[06-Jun-2026 00:00:34 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[06-Jun-2026 00:00:38 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[06-Jun-2026 00:00:42 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=2) — Gemini Vision 폴백
+[06-Jun-2026 00:00:46 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=2) — Gemini Vision 폴백
+[06-Jun-2026 00:00:50 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[06-Jun-2026 00:00:54 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[06-Jun-2026 00:00:58 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[06-Jun-2026 00:01:02 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[06-Jun-2026 00:01:06 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[06-Jun-2026 00:01:10 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[06-Jun-2026 06:34:07 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=2) — Gemini Vision 폴백
+[06-Jun-2026 06:34:11 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=2) — Gemini Vision 폴백
+[06-Jun-2026 06:34:15 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[06-Jun-2026 06:34:19 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[06-Jun-2026 06:34:24 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[06-Jun-2026 06:34:28 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[06-Jun-2026 06:34:32 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[06-Jun-2026 06:34:36 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[06-Jun-2026 06:34:40 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=2) — Gemini Vision 폴백
+[06-Jun-2026 06:34:44 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=2) — Gemini Vision 폴백
+[06-Jun-2026 06:34:48 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[06-Jun-2026 06:34:53 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[06-Jun-2026 06:34:57 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[06-Jun-2026 06:35:01 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[06-Jun-2026 06:35:05 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[06-Jun-2026 06:35:10 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[06-Jun-2026 06:35:12 Asia/Seoul] [TBM AI AJAX] AI 생성 실패: GEMINI_QUOTA_EXCEEDED::{
+  "error": {
+    "code": 429,
+    "message": "Your prepayment credits are depleted. Please go to AI Studio at https://ai.studio/projects to manage your project and billing. Learn more at https://ai.google.dev/gemini-api/docs/billing#prepay. ",
+    "status": "RESOURCE_EXHAUSTED"
+  }
+}
+ in tbm_ai.php:1491
+[06-Jun-2026 06:44:15 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=2) — Gemini Vision 폴백
+[06-Jun-2026 06:44:25 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[06-Jun-2026 06:44:34 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[06-Jun-2026 06:44:46 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
