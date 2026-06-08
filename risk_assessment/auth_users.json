@@ -222,5 +222,12 @@
         "role": "worker",
         "team": "공사팀-전기2",
         "phone": ""
+    },
+    "5118": {
+        "password": "1234",
+        "name": "윤동은",
+        "role": "worker",
+        "team": "공사팀-전기",
+        "phone": "010-3647-5118"
     }
 }
