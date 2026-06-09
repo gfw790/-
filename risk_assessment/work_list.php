@@ -1899,6 +1899,29 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     padding: 9px 14px;
     white-space: nowrap;
   }
+  .org-current-count {
+    display: inline-flex;
+    align-items: center;
+    position: absolute;
+    top: 14px;
+    right: 16px;
+    z-index: 3;
+    min-height: 34px;
+    padding: 0 12px;
+    border: 1px solid rgba(27, 53, 86, 0.16);
+    border-radius: 999px;
+    background: #ffffff;
+    color: #314258;
+    font-size: 12px;
+    font-weight: 800;
+    white-space: nowrap;
+    box-shadow: 0 8px 22px rgba(16, 31, 48, 0.1);
+  }
+  .org-current-count strong {
+    margin-left: 5px;
+    color: #16212f;
+    font-size: 14px;
+  }
   .unit-preview-body {
     padding: 18px 22px 22px;
     max-height: calc(100vh - 156px);
@@ -2071,10 +2094,11 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     margin: 0;
     font-size: 20px;
     letter-spacing: .01em;
+    color: #f5f8fc;
   }
   .org-modal-sub {
     margin-top: 7px;
-    color: var(--text-dim);
+    color: #b8c7d9;
     font-size: 12px;
     letter-spacing: .01em;
     line-height: 1.5;
@@ -2114,6 +2138,8 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
   .org-legend-dot.team { background: #5e8cff; }
   .org-chart-surface {
     --org-team-top-width: 110px;
+    --org-team-child-width: 152px;
+    position: relative;
     border: 1px solid rgba(255,255,255,0.12);
     border-radius: 16px;
     padding: 20px 16px 14px;
@@ -2136,15 +2162,15 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
   }
   .org-teams-wrap::-webkit-scrollbar-track { background: rgba(255,255,255,0.07); border-radius: 999px; }
   .org-chart { display:flex; flex-direction:column; align-items:center; }
-  .org-vert { width:2px; height:34px; background:linear-gradient(180deg, rgba(255,255,255,.3), rgba(255,255,255,.08)); flex-shrink:0; }
+  .org-vert { width:2px; height:34px; background:linear-gradient(180deg, rgba(55, 74, 104, .82), rgba(55, 74, 104, .62)); flex-shrink:0; }
   /* 노드 */
   .org-node {
-    border: 1px solid rgba(255,255,255,0.18);
+    border: 1px solid rgba(27, 53, 86, 0.14);
     border-radius: 13px;
     padding: 0;
     text-align: center;
-    background: linear-gradient(180deg, rgba(15,27,43,.96), rgba(8,16,28,.96));
-    box-shadow: 0 8px 22px rgba(0,0,0,.24);
+    background: linear-gradient(180deg, #ffffff, #f7fbff);
+    box-shadow: 0 12px 30px rgba(16, 31, 48, .12);
     overflow: hidden;
   }
   .org-node-label {
@@ -2159,13 +2185,13 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
   .org-node-name {
     font-size: 15px;
     font-weight: 700;
-    color: var(--text-hi);
+    color: #16212f;
     line-height: 1.35;
     padding: 9px 20px 10px;
   }
-  .org-node-ceo { border-color:var(--accent); box-shadow:0 0 0 1px rgba(245,166,35,.52), 0 12px 30px rgba(245,166,35,.18); }
+  .org-node-ceo { border-color: rgba(226, 160, 66, 0.55); box-shadow: 0 12px 30px rgba(226, 160, 66, .16); }
   .org-node-ceo .org-node-label { background: linear-gradient(90deg, rgba(245,166,35,.96), rgba(227,137,32,.96)); }
-  .org-node-safety { border-color:rgba(93,219,154,.58); box-shadow:0 10px 24px rgba(18,77,49,.28); }
+  .org-node-safety { border-color: rgba(93,219,154,.5); box-shadow: 0 12px 30px rgba(48, 151, 104, .14); }
   .org-node-safety .org-node-label { background: linear-gradient(90deg, rgba(75,176,127,.95), rgba(48,151,104,.95)); }
   /* 안전관리자 T-분기:
      - junction이 컨테이너 전체 너비를 차지(align-self:stretch)하고 position:relative
@@ -2180,21 +2206,25 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     position:absolute; left:50% ; top:50%; transform:translateY(-50%);
     display:flex; align-items:center;
   }
-  .org-junction-hline { width:130px; height:2px; background:linear-gradient(90deg, rgba(255,255,255,.18), rgba(93,219,154,.42)); flex-shrink:0; }
+  .org-junction-hline { width:130px; height:2px; background:linear-gradient(90deg, rgba(76, 108, 145, .5), rgba(48, 151, 104, .45)); flex-shrink:0; }
   .org-junction-branch .org-node {
     margin-left: 0px; /* stem과 겹치지 않도록 여백 */
   }
   /* 팀 연결: fit-content로 카드 내용에 맞게만 늘어나도록 */
   .org-teams-wrap { width:100%; overflow-x:auto; padding-bottom:4px; }
   .org-teams-row {
-    display:flex; gap:16px; align-items:flex-start;
-    position:relative; width:fit-content; margin:0 auto;
+    display:flex;
+    gap:18px;
+    align-items:flex-start;
+    position:relative;
+    width:fit-content;
+    margin:0 auto;
   }
   .org-teams-row::before {
     content:''; position:absolute; top:0;
     left: calc(var(--org-team-top-width) / 2);
     right: calc(var(--org-team-top-width) / 2);
-    height:2px; background:rgba(255,255,255,0.2);
+    height:2px; background:rgba(76, 108, 145, 0.42);
   }
   /* 팀 카드 래퍼: overflow:hidden 밖에서 수직 연결선을 그림 */
   .org-team-col {
@@ -2205,18 +2235,18 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
   }
   .org-team-col::before {
     content:''; position:absolute; top:0; left:50%; transform:translateX(-50%);
-    width:2px; height:36px; background:rgba(255,255,255,0.2);
+    width:2px; height:36px; background:rgba(76, 108, 145, 0.42);
   }
   .org-team-card {
     width: 100%;
     min-width: 0;
-    background: linear-gradient(180deg, rgba(13,23,36,.95), rgba(10,18,29,.95));
-    border:1px solid rgba(255,255,255,0.14);
+    background: linear-gradient(180deg, #ffffff, #f7fbff);
+    border:1px solid rgba(27, 53, 86, 0.14);
     border-radius:10px;
     overflow:hidden;
-    box-shadow: 0 8px 22px rgba(0,0,0,.22);
+    box-shadow: 0 12px 30px rgba(16, 31, 48, .12);
   }
-  .org-team-card-child { min-width:152px; }
+  .org-team-card-child { width: 100%; min-width: 0; }
   .org-team-head {
     background: linear-gradient(90deg, rgba(245,166,35,.95), rgba(227,137,32,.95));
     color:#fff;
@@ -2227,12 +2257,17 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     letter-spacing:.03em;
     line-height: 1.25;
   }
-  .org-team-body { padding:11px 12px 10px; }
+  .org-team-body {
+    padding: 11px 12px 10px;
+    background: linear-gradient(180deg, #fbfdff 0%, #f2f7fc 100%);
+    color: #16212f;
+  }
   .org-team-children-wrap {
     position:relative;
     width:max-content;
     min-width:100%;
-    margin-top:18px;
+    margin-top:0;
+    padding-top:18px;
     display:flex;
     justify-content:center;
   }
@@ -2243,30 +2278,57 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     left:50%;
     transform:translateX(-50%);
     width:2px;
-    height:16px;
-    background:var(--border2);
+    height:18px;
+    background:rgba(76, 108, 145, 0.42);
   }
   .org-team-children-row {
     display:flex;
     gap:16px;
-    padding-top:16px;
+    padding-top:0;
     width:max-content;
     justify-content:center;
+    position:relative;
+  }
+  .org-team-children-row::before {
+    content:'';
+    position:absolute;
+    top:0;
+    left: calc(var(--org-team-child-width) / 2);
+    right: calc(var(--org-team-child-width) / 2);
+    height:2px;
+    background:rgba(76, 108, 145, 0.42);
+  }
+  .org-team-children-row.is-single::before {
+    display:none;
   }
   .org-subteam-col {
     display:flex;
     flex-direction:column;
     align-items:center;
+    width: var(--org-team-child-width);
+    flex: 0 0 var(--org-team-child-width);
+    padding-top:18px;
+    position:relative;
+  }
+  .org-subteam-col::before {
+    content:'';
+    position:absolute;
+    top:0;
+    left:50%;
+    transform:translateX(-50%);
+    width:2px;
+    height:18px;
+    background:rgba(76, 108, 145, 0.42);
   }
   .org-role-sec { padding:5px 0; border-top:1px solid var(--border2); }
-  .org-role-sec { padding:7px 0 6px; border-top:1px dashed rgba(255,255,255,0.12); }
+  .org-role-sec { padding:7px 0 6px; border-top:1px dashed rgba(27, 53, 86, 0.14); }
   .org-role-sec:first-child { border-top:none; padding-top:0; }
   .org-role-lbl {
     display: inline-flex;
     align-items: center;
     gap: 6px;
     font-size:10px;
-    color:var(--text-lo);
+    color:#5b6b7f;
     margin-bottom:5px;
     letter-spacing:.05em;
     font-weight: 700;
@@ -2278,13 +2340,21 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     border-radius: 999px;
     background: rgba(245,166,35,0.65);
   }
-  .org-role-lbl.role-manager { color: #f7c77a; }
+  .org-role-lbl.role-manager { color: #9a6200; }
   .org-role-lbl.role-manager::before { background: #f5a623; }
-  .org-role-lbl.role-leader { color: #7ec6ff; }
+  .org-role-lbl.role-leader { color: #205db5; }
   .org-role-lbl.role-leader::before { background: #4d9dff; }
-  .org-role-lbl.role-worker { color: #98e4bc; }
+  .org-role-lbl.role-worker { color: #23764b; }
   .org-role-lbl.role-worker::before { background: #5ddb9a; }
-  .org-member-name { display:block; font-size:12px; color:var(--text-hi); padding:1px 0; line-height: 1.45; }
+  .org-member-name {
+    display:block;
+    font-size:12px;
+    color:#16212f;
+    font-weight: 700;
+    padding:2px 0;
+    line-height: 1.5;
+    text-shadow: none;
+  }
   .org-member-name + .org-member-name { margin-top: 1px; }
   .org-has-phone {
     cursor:pointer;
@@ -2294,18 +2364,21 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     margin:0 -5px;
     transition: background .15s ease, color .15s ease;
   }
-  .org-has-phone:hover { color:var(--accent); background: rgba(245,166,35,0.13); }
+  .org-has-phone:hover { color:#9a6200; background: rgba(245,166,35,0.16); }
   @media (max-width: 720px) {
     .org-modal-shell { width: min(100%, 100%); }
     .org-modal-head { align-items: flex-start; }
     .org-modal-title-wrap h2 { font-size: 18px; }
     .org-modal-body { padding: 14px 12px 16px; max-height: calc(100vh - 110px); }
-    .org-chart-surface { --org-team-top-width: 96px; padding: 14px 10px 10px; }
+    .org-chart-surface { --org-team-top-width: 96px; --org-team-child-width: 136px; padding: 14px 10px 10px; }
     .org-teams-row { gap: 12px; }
     .org-team-col { padding-top: 28px; }
     .org-team-col::before { height: 28px; }
     .org-team-card { min-width: 96px; }
-    .org-team-card-child { min-width: 136px; }
+    .org-team-children-wrap { padding-top: 14px; }
+    .org-team-children-row { gap: 12px; }
+    .org-team-children-wrap::before,
+    .org-subteam-col::before { height: 14px; }
   }
   #org-phone-tip {
     position:fixed; z-index:99999; display:none;
@@ -2816,11 +2889,52 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
   </div>
 
   <!-- 조직도 모달 -->
+  <?php
+    $orgChart = auth_org_chart_data();
+    $orgCeo = $orgChart['ceo'] ?? [];
+    $orgSafety = $orgChart['safety'] ?? [];
+    $orgTeams = $orgChart['teams'] ?? [];
+    $orgVisiblePeople = [];
+    $orgAddVisiblePerson = static function(array $entry) use (&$orgVisiblePeople): void {
+        $name = trim((string)($entry['name'] ?? ''));
+        if ($name === '') {
+            return;
+        }
+        $phone = trim((string)($entry['phone'] ?? ''));
+        $orgVisiblePeople[$name . '|' . $phone] = true;
+    };
+    foreach ($orgCeo as $entry) {
+        $orgAddVisiblePerson($entry);
+    }
+    foreach ($orgSafety as $entry) {
+        $orgAddVisiblePerson($entry);
+    }
+    $orgCollectVisiblePeople = static function(array $team) use (&$orgCollectVisiblePeople, $orgAddVisiblePerson): void {
+        foreach (['managers', 'leaders', 'workers'] as $roleKey) {
+            foreach (($team[$roleKey] ?? []) as $entry) {
+                if (is_array($entry)) {
+                    $orgAddVisiblePerson($entry);
+                }
+            }
+        }
+        foreach (($team['children'] ?? []) as $childTeam) {
+            if (is_array($childTeam)) {
+                $orgCollectVisiblePeople($childTeam);
+            }
+        }
+    };
+    foreach ($orgTeams as $team) {
+        if (is_array($team)) {
+            $orgCollectVisiblePeople($team);
+        }
+    }
+    $orgCurrentPeopleCount = count($orgVisiblePeople);
+  ?>
   <div class="modal-backdrop" id="org-modal" aria-hidden="true">
     <div class="unit-preview-modal org-modal-shell" role="dialog" aria-modal="true" aria-labelledby="org-modal-title">
       <div class="unit-preview-head org-modal-head">
         <div class="org-modal-title-wrap">
-          <h2 id="org-modal-title">조직도</h2>
+          <h2 id="org-modal-title">(주)현대기전 조직도</h2>
           <p class="org-modal-sub">이름을 누르면 전화번호를 빠르게 확인할 수 있습니다.</p>
         </div>
         <div class="modal-head-actions">
@@ -2829,77 +2943,6 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
         </div>
       </div>
       <div class="unit-preview-body org-modal-body">
-        <div class="org-modal-legend" aria-hidden="true">
-          <span class="org-legend-item"><span class="org-legend-dot ceo"></span>대표/임원</span>
-          <span class="org-legend-item"><span class="org-legend-dot safety"></span>안전관리</span>
-          <span class="org-legend-item"><span class="org-legend-dot team"></span>팀 조직</span>
-        </div>
-        <?php
-        $orgStrip = static function(string $n): string {
-            return trim((string)preg_replace('/\s*\([^)]*\)/', '', $n));
-        };
-        $orgCeo = [];
-        $orgSafety = [];
-        foreach (auth_accounts() as $acc) {
-            $role = (string)($acc['role'] ?? '');
-            $name = $orgStrip((string)($acc['name'] ?? ''));
-            if ($name === '' || $role === 'admin') continue;
-            $entry = ['name' => $name, 'phone' => trim((string)($acc['phone'] ?? ''))];
-            if ($role === 'ceo') $orgCeo[] = $entry;
-            elseif ($role === 'safety_manager') $orgSafety[] = $entry;
-        }
-        $teamSupervisors = auth_read_team_supervisors();
-        $orgTeamEntries = [];
-        foreach (auth_read_teams() as $orgTeamName) {
-            if (auth_team_key($orgTeamName) === auth_team_key('안전관리')) {
-                continue;
-            }
-            $toMembers = static function(array $members) use ($orgStrip): array {
-                $result = [];
-                foreach ($members as $m) {
-                    $n = $orgStrip((string)($m['name'] ?? ''));
-                    if ($n === '') continue;
-                    $result[] = ['name' => $n, 'phone' => trim((string)($m['phone'] ?? ''))];
-                }
-                return $result;
-            };
-            // 경영지원 팀은 모든 role 포함, 다른 팀은 manager/leader/worker만
-            $isAdminTeam = auth_team_key($orgTeamName) === auth_team_key('경영지원');
-            $managerRoles = $isAdminTeam ? ['manager', 'safety_manager', 'leader', 'worker', 'administrator', 'admin'] : ['manager'];
-            $leaderRoles = $isAdminTeam ? ['leader', 'safety_manager'] : ['leader'];
-            $workerRoles = ['worker'];
-
-            $orgTeamEntries[$orgTeamName] = [
-                'name'     => $orgTeamName,
-                'managers' => $toMembers(auth_team_members($orgTeamName, $managerRoles)),
-                'leaders'  => $toMembers(auth_team_members($orgTeamName, $leaderRoles)),
-                'workers'  => $toMembers(auth_team_members($orgTeamName, $workerRoles)),
-                'children' => [],
-            ];
-        }
-
-        $orgTeamParent = [];
-        foreach ($orgTeamEntries as $teamName => $_) {
-            $supervisor = $teamSupervisors[$teamName] ?? '';
-            if ($supervisor !== '' && auth_team_exists($supervisor)) {
-                $orgTeamParent[$teamName] = $supervisor;
-            }
-        }
-
-        $orgTeams = [];
-        foreach ($orgTeamEntries as $teamName => $entry) {
-            if (isset($orgTeamParent[$teamName])) {
-                continue;
-            }
-            $entry['children'] = [];
-            foreach ($orgTeamEntries as $possibleChildName => $possibleChildEntry) {
-                if (isset($orgTeamParent[$possibleChildName]) && auth_team_key($orgTeamParent[$possibleChildName]) === auth_team_key($teamName)) {
-                    $entry['children'][] = $possibleChildEntry;
-                }
-            }
-            $orgTeams[] = $entry;
-        }
-        ?>
         <?php
         $orgNameHtml = static function(array $entry): string {
             $name = htmlspecialchars($entry['name'], ENT_QUOTES, 'UTF-8');
@@ -2909,8 +2952,59 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
             }
             return '<span class="org-member-name">' . $name . '</span>';
         };
+        $renderOrgTeamCard = static function(array $team, callable $orgNameHtml, callable $renderOrgTeamCard, bool $isChild = false): void {
+            $children = array_values(array_filter($team['children'] ?? [], static fn($child): bool => is_array($child)));
+            $childCount = count($children);
+            $rowClass = 'org-team-children-row';
+            if ($childCount === 1) {
+                $rowClass .= ' is-single';
+            }
+        ?>
+          <div class="org-team-card<?= $isChild ? ' org-team-card-child' : '' ?>">
+            <div class="org-team-head"><?= h((string)($team['name'] ?? '')) ?></div>
+            <div class="org-team-body">
+              <?php if (!empty($team['managers'])): ?>
+                <div class="org-role-sec">
+                  <div class="org-role-lbl role-manager"><?= h((string)($team['manager_label'] ?? '관리감독자')) ?></div>
+                  <?php foreach ($team['managers'] as $m): ?>
+                    <?= $orgNameHtml($m) ?>
+                  <?php endforeach; ?>
+                </div>
+              <?php endif; ?>
+              <?php if (!empty($team['leaders'])): ?>
+                <div class="org-role-sec">
+                  <div class="org-role-lbl role-leader"><?= h((string)($team['leader_label'] ?? '작업지휘자')) ?></div>
+                  <?php foreach ($team['leaders'] as $m): ?>
+                    <?= $orgNameHtml($m) ?>
+                  <?php endforeach; ?>
+                </div>
+              <?php endif; ?>
+              <?php if (!empty($team['workers'])): ?>
+                <div class="org-role-sec">
+                  <div class="org-role-lbl role-worker"><?= h((string)($team['worker_label'] ?? '일반작업자')) ?></div>
+                  <?php foreach ($team['workers'] as $m): ?>
+                    <?= $orgNameHtml($m) ?>
+                  <?php endforeach; ?>
+                </div>
+              <?php endif; ?>
+            </div>
+          </div>
+          <?php if (!empty($children)): ?>
+            <div class="org-team-children-wrap">
+              <div class="<?= h($rowClass) ?>">
+                <?php foreach ($children as $childTeam): ?>
+                  <div class="org-subteam-col">
+                    <?php $renderOrgTeamCard($childTeam, $orgNameHtml, $renderOrgTeamCard, true); ?>
+                  </div>
+                <?php endforeach; ?>
+              </div>
+            </div>
+          <?php endif; ?>
+        <?php
+        };
         ?>
         <div class="org-chart-surface">
+        <span class="org-current-count" data-org-current-count>현재인원 <strong><?= number_format($orgCurrentPeopleCount) ?></strong>명</span>
         <div class="org-chart">
           <!-- 대표이사 -->
           <?php foreach ($orgCeo as $entry): ?>
@@ -2949,74 +3043,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
             <div class="org-teams-row">
               <?php foreach ($orgTeams as $orgTeam): ?>
                 <div class="org-team-col">
-                <div class="org-team-card">
-                  <div class="org-team-head"><?= h($orgTeam['name']) ?></div>
-                  <div class="org-team-body">
-                    <?php if (!empty($orgTeam['managers'])): ?>
-                      <div class="org-role-sec">
-                        <div class="org-role-lbl role-manager">관리감독자</div>
-                        <?php foreach ($orgTeam['managers'] as $m): ?>
-                          <?= $orgNameHtml($m) ?>
-                        <?php endforeach; ?>
-                      </div>
-                    <?php endif; ?>
-                    <?php if (!empty($orgTeam['leaders'])): ?>
-                      <div class="org-role-sec">
-                        <div class="org-role-lbl role-leader">작업지휘자</div>
-                        <?php foreach ($orgTeam['leaders'] as $m): ?>
-                          <?= $orgNameHtml($m) ?>
-                        <?php endforeach; ?>
-                      </div>
-                    <?php endif; ?>
-                    <?php if (!empty($orgTeam['workers'])): ?>
-                      <div class="org-role-sec">
-                        <div class="org-role-lbl role-worker">일반작업자</div>
-                        <?php foreach ($orgTeam['workers'] as $m): ?>
-                          <?= $orgNameHtml($m) ?>
-                        <?php endforeach; ?>
-                      </div>
-                    <?php endif; ?>
-                  </div>
-                </div><!-- org-team-card -->
-                <?php if (!empty($orgTeam['children'])): ?>
-                  <div class="org-team-children-wrap">
-                    <div class="org-team-children-row">
-                      <?php foreach ($orgTeam['children'] as $childTeam): ?>
-                        <div class="org-subteam-col">
-                          <div class="org-team-card org-team-card-child">
-                            <div class="org-team-head"><?= h($childTeam['name']) ?></div>
-                            <div class="org-team-body">
-                              <?php if (!empty($childTeam['managers'])): ?>
-                                <div class="org-role-sec">
-                                  <div class="org-role-lbl role-manager">관리감독자</div>
-                                  <?php foreach ($childTeam['managers'] as $m): ?>
-                                    <?= $orgNameHtml($m) ?>
-                                  <?php endforeach; ?>
-                                </div>
-                              <?php endif; ?>
-                              <?php if (!empty($childTeam['leaders'])): ?>
-                                <div class="org-role-sec">
-                                  <div class="org-role-lbl role-leader">작업지휘자</div>
-                                  <?php foreach ($childTeam['leaders'] as $m): ?>
-                                    <?= $orgNameHtml($m) ?>
-                                  <?php endforeach; ?>
-                                </div>
-                              <?php endif; ?>
-                              <?php if (!empty($childTeam['workers'])): ?>
-                                <div class="org-role-sec">
-                                  <div class="org-role-lbl role-worker">일반작업자</div>
-                                  <?php foreach ($childTeam['workers'] as $m): ?>
-                                    <?= $orgNameHtml($m) ?>
-                                  <?php endforeach; ?>
-                                </div>
-                              <?php endif; ?>
-                            </div>
-                          </div>
-                        </div>
-                      <?php endforeach; ?>
-                    </div>
-                  </div>
-                <?php endif; ?>
+                  <?php $renderOrgTeamCard($orgTeam, $orgNameHtml, $renderOrgTeamCard); ?>
                 </div><!-- org-team-col -->
               <?php endforeach; ?>
             </div>
@@ -4245,7 +4272,163 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
 
       function openOrgPrintPreview() {
         hidePhoneTip();
-        window.open('org_chart_print_preview.php?v=20260422', '_blank', 'noopener');
+        const orgBody = orgModal.querySelector('.org-modal-body');
+        const orgTitle = document.getElementById('org-modal-title');
+        if (!orgBody || !orgTitle) {
+          return;
+        }
+
+        const previewWindow = window.open('', '_blank');
+        if (!previewWindow) {
+          return;
+        }
+        try {
+          previewWindow.opener = null;
+        } catch (e) {}
+        previewWindow.focus();
+
+        const headMarkup = Array.from(document.head.querySelectorAll('style, link[rel="stylesheet"]'))
+          .map((node) => node.outerHTML)
+          .join('\n');
+        const doc = previewWindow.document;
+        doc.open();
+        doc.write('<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head><body></body></html>');
+        doc.close();
+
+        doc.title = orgTitle.textContent || '조직도';
+        doc.head.insertAdjacentHTML('beforeend', headMarkup);
+        doc.head.insertAdjacentHTML('beforeend', `
+<style>
+  body {
+    margin: 0;
+    padding: 24px;
+    background: #ffffff !important;
+    color: #16212f !important;
+  }
+  .org-print-shell {
+    max-width: 1280px;
+    margin: 0 auto;
+    background: #ffffff !important;
+  }
+  .org-print-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+    color: #16212f !important;
+    background: #ffffff !important;
+    border-bottom: 1px solid #d8e1ea;
+    padding-bottom: 12px;
+    font-family: "Malgun Gothic", sans-serif;
+  }
+  .org-print-head h1 {
+    margin: 0;
+    font-size: 24px;
+    color: #16212f !important;
+  }
+  .org-print-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .org-print-actions .btn-secondary {
+    background: #ffffff !important;
+    color: #1d2b45 !important;
+    border: 1px solid #c9d2e2 !important;
+    box-shadow: none !important;
+  }
+  .org-print-actions .btn-secondary:hover {
+    background: #f5f8fc !important;
+  }
+  .org-print-shell .org-modal-legend {
+    color: #223247;
+  }
+  .org-print-shell .org-junction-hline {
+    background: linear-gradient(90deg, rgba(55, 74, 104, .82), rgba(37, 107, 76, .72)) !important;
+  }
+  .org-print-shell .org-vert {
+    background: linear-gradient(180deg, rgba(55, 74, 104, .82), rgba(55, 74, 104, .62)) !important;
+  }
+  .org-print-shell .org-teams-row::before,
+  .org-print-shell .org-team-col::before,
+  .org-print-shell .org-team-children-wrap::before,
+  .org-print-shell .org-team-children-row::before,
+  .org-print-shell .org-subteam-col::before {
+    background: rgba(55, 74, 104, 0.78) !important;
+  }
+  .org-print-shell .org-chart-surface {
+    background: #ffffff !important;
+    box-shadow: 0 10px 30px rgba(18, 33, 47, 0.08);
+  }
+  .org-print-shell .org-team-card,
+  .org-print-shell .org-node,
+  .org-print-shell .org-node.org-node-safety {
+    color: #16212f;
+  }
+  .org-print-shell .org-team-head,
+  .org-print-shell .org-node-name,
+  .org-print-shell .org-member-name {
+    color: #16212f !important;
+  }
+  .org-print-shell .org-role-lbl.role-manager {
+    color: #9a6200 !important;
+  }
+  .org-print-shell .org-role-lbl.role-leader {
+    color: #205db5 !important;
+  }
+  .org-print-shell .org-role-lbl.role-worker {
+    color: #23764b !important;
+  }
+  @media print {
+    body {
+      padding: 0;
+      background: #fff;
+    }
+    .org-print-actions {
+      display: none !important;
+    }
+  }
+</style>`);
+
+        doc.documentElement.style.background = '#ffffff';
+        doc.documentElement.style.color = '#16212f';
+        doc.body.style.margin = '0';
+        doc.body.style.padding = '24px';
+        doc.body.style.background = '#ffffff';
+        doc.body.style.color = '#16212f';
+
+        doc.body.innerHTML = `
+  <div class="org-print-shell" style="max-width:1280px;margin:0 auto;background:#ffffff;color:#16212f;">
+    <div class="org-print-head" style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px;color:#16212f;background:#ffffff;border-bottom:1px solid #d8e1ea;padding-bottom:12px;font-family:'Malgun Gothic',sans-serif;">
+      <div>
+        <h1 style="margin:0;font-size:24px;color:#16212f;"></h1>
+      </div>
+      <div class="org-print-actions" style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button type="button" class="btn-secondary" data-print-action="print" style="background:#ffffff;color:#1d2b45;border:1px solid #c9d2e2;box-shadow:none;">인쇄</button>
+        <button type="button" class="btn-secondary" data-print-action="close" style="background:#ffffff;color:#1d2b45;border:1px solid #c9d2e2;box-shadow:none;">닫기</button>
+      </div>
+    </div>
+    <div class="org-print-body" style="background:#ffffff;color:#16212f;"></div>
+  </div>`;
+
+        const titleNode = doc.querySelector('.org-print-head h1');
+        const bodyNode = doc.querySelector('.org-print-body');
+        if (titleNode) {
+          titleNode.textContent = orgTitle.textContent || '조직도';
+        }
+        if (bodyNode) {
+          bodyNode.innerHTML = orgBody.innerHTML;
+        }
+
+        const printButton = doc.querySelector('[data-print-action="print"]');
+        const closeButton = doc.querySelector('[data-print-action="close"]');
+        if (printButton) {
+          printButton.addEventListener('click', () => previewWindow.print());
+        }
+        if (closeButton) {
+          closeButton.addEventListener('click', () => previewWindow.close());
+        }
       }
 
       document.querySelectorAll('.org-has-phone').forEach(function(el) {

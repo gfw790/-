@@ -650,6 +650,246 @@ function auth_team_member_names(string $teamName, ?array $includeRoles = null): 
     return array_values($names);
 }
 
+function auth_org_chart_unassigned_team_label(): string
+{
+    return '팀 미지정';
+}
+
+function auth_org_chart_data(): array
+{
+    $stripName = static function (string $name): string {
+        return trim((string)preg_replace('/\s*\([^)]*\)/u', '', $name));
+    };
+
+    $orgCeo = [];
+    $orgSafety = [];
+    $accountsByTeam = [];
+    $accountTeams = [];
+    $unassignedLabel = auth_org_chart_unassigned_team_label();
+
+    foreach (auth_accounts() as $loginId => $account) {
+        if (auth_is_retired_account($account)) {
+            continue;
+        }
+
+        $role = auth_normalize_role((string)($account['role'] ?? ''));
+        $name = $stripName((string)($account['name'] ?? $loginId));
+        if ($name === '') {
+            continue;
+        }
+
+        $entry = [
+            'login_id' => (string)$loginId,
+            'name' => $name,
+            'phone' => trim((string)($account['phone'] ?? '')),
+            'role' => $role,
+            'team' => auth_normalize_team_name((string)($account['team'] ?? '')),
+        ];
+
+        if ($role === 'ceo') {
+            $orgCeo[] = ['name' => $name, 'phone' => $entry['phone']];
+            continue;
+        }
+
+        if ($role === 'safety_manager') {
+            $orgSafety[] = ['name' => $name, 'phone' => $entry['phone']];
+            continue;
+        }
+
+        $teamName = $entry['team'] !== '' ? $entry['team'] : $unassignedLabel;
+        if ($teamName === $unassignedLabel) {
+            continue;
+        }
+        if (!auth_is_team_active($teamName)) {
+            continue;
+        }
+        $accountTeams[$teamName] = true;
+        $accountsByTeam[$teamName][] = $entry;
+    }
+
+    $teams = auth_read_active_teams();
+    foreach (array_keys($accountTeams) as $teamName) {
+        if ($teamName === $unassignedLabel) {
+            continue;
+        }
+        if (!auth_team_exists($teamName) || !auth_is_team_active($teamName)) {
+            $teams[] = $teamName;
+        }
+    }
+    $teams = auth_unique_team_list($teams);
+
+    $toMembers = static function (array $members) use ($stripName): array {
+        $result = [];
+        foreach ($members as $member) {
+            $name = $stripName((string)($member['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $result[] = [
+                'name' => $name,
+                'phone' => trim((string)($member['phone'] ?? '')),
+            ];
+        }
+        usort($result, static fn(array $a, array $b): int => strnatcasecmp((string)$a['name'], (string)$b['name']));
+        return $result;
+    };
+
+    $orgTeamEntries = [];
+    foreach ($teams as $teamName) {
+        if ($teamName !== $unassignedLabel && auth_team_key($teamName) === auth_team_key('안전관리')) {
+            continue;
+        }
+
+        $isAdminTeam = $teamName !== $unassignedLabel && auth_team_key($teamName) === auth_team_key('경영지원');
+        $teamAccounts = $accountsByTeam[$teamName] ?? [];
+        $managerRoles = $isAdminTeam
+            ? ['manager', 'leader', 'worker', 'administrator', 'admin']
+            : ['manager', 'administrator', 'admin'];
+        $leaderRoles = ['leader'];
+        $workerRoles = ['worker'];
+
+        $filterByRoles = static function (array $members, array $roles): array {
+            return array_values(array_filter(
+                $members,
+                static fn(array $member): bool => in_array((string)($member['role'] ?? ''), $roles, true)
+            ));
+        };
+
+        $orgTeamEntries[$teamName] = [
+            'name' => $teamName,
+            'managers' => $toMembers($filterByRoles($teamAccounts, $managerRoles)),
+            'leaders' => $toMembers($filterByRoles($teamAccounts, $leaderRoles)),
+            'workers' => $toMembers($filterByRoles($teamAccounts, $workerRoles)),
+            'manager_label' => '관리감독자',
+            'leader_label' => '작업지휘자',
+            'worker_label' => '일반작업자',
+            'children' => [],
+        ];
+    }
+
+    $specialLeadTeams = ['공사팀-모터', '가스팀', '제조팀'];
+    foreach ($specialLeadTeams as $specialTeamName) {
+        if (!isset($orgTeamEntries[$specialTeamName])) {
+            continue;
+        }
+
+        if (!empty($orgTeamEntries[$specialTeamName]['managers'])) {
+            $orgTeamEntries[$specialTeamName]['leaders'] = array_merge(
+                $orgTeamEntries[$specialTeamName]['managers'],
+                $orgTeamEntries[$specialTeamName]['leaders']
+            );
+            $orgTeamEntries[$specialTeamName]['managers'] = [];
+        }
+    }
+
+    $specialSupervisorName = '진종철';
+    $specialParentName = '총괄 관리감독';
+    $specialParentTeams = ['공사팀-전기', '공사팀-모터', '가스팀', '제조팀'];
+    $specialSupervisorEntry = null;
+
+    if (isset($orgTeamEntries['공사팀-전기'])) {
+        foreach (($orgTeamEntries['공사팀-전기']['managers'] ?? []) as $managerIndex => $managerEntry) {
+            if ((string)($managerEntry['name'] ?? '') !== $specialSupervisorName) {
+                continue;
+            }
+
+            $specialSupervisorEntry = $managerEntry;
+            unset($orgTeamEntries['공사팀-전기']['managers'][$managerIndex]);
+            $orgTeamEntries['공사팀-전기']['managers'] = array_values($orgTeamEntries['공사팀-전기']['managers']);
+            break;
+        }
+    }
+
+    if ($specialSupervisorEntry !== null) {
+        $orgTeamEntries[$specialParentName] = [
+            'name' => $specialParentName,
+            'managers' => [$specialSupervisorEntry],
+            'leaders' => [],
+            'workers' => [],
+            'manager_label' => '관리감독자',
+            'leader_label' => '작업지휘자',
+            'worker_label' => '일반작업자',
+            'children' => [],
+        ];
+    }
+
+    $teamSupervisors = auth_read_team_supervisors();
+    $orgTeamParent = [];
+    foreach ($orgTeamEntries as $teamName => $_) {
+        if ($teamName === $unassignedLabel) {
+            continue;
+        }
+        $supervisor = $teamSupervisors[$teamName] ?? '';
+        if ($supervisor !== '' && isset($orgTeamEntries[$supervisor])) {
+            $orgTeamParent[$teamName] = $supervisor;
+        }
+    }
+
+    if ($specialSupervisorEntry !== null) {
+        foreach ($specialParentTeams as $specialTeamName) {
+            if (!isset($orgTeamEntries[$specialTeamName])) {
+                continue;
+            }
+            $orgTeamParent[$specialTeamName] = $specialParentName;
+        }
+    }
+
+    $buildTeamTree = static function (string $teamName) use (&$buildTeamTree, $orgTeamEntries, $orgTeamParent): array {
+        $entry = $orgTeamEntries[$teamName] ?? [
+            'name' => $teamName,
+            'managers' => [],
+            'leaders' => [],
+            'workers' => [],
+            'manager_label' => '관리감독자',
+            'leader_label' => '작업지휘자',
+            'worker_label' => '일반작업자',
+            'children' => [],
+        ];
+
+        $entry['children'] = [];
+        foreach ($orgTeamEntries as $possibleChildName => $_) {
+            if (($orgTeamParent[$possibleChildName] ?? '') === $teamName) {
+                $entry['children'][] = $buildTeamTree($possibleChildName);
+            }
+        }
+
+        return $entry;
+    };
+
+    $orgTeams = [];
+    foreach (array_keys($orgTeamEntries) as $teamName) {
+        if (isset($orgTeamParent[$teamName])) {
+            continue;
+        }
+
+        $orgTeams[] = $buildTeamTree($teamName);
+    }
+
+    $allTeamNames = [];
+    foreach ($orgTeams as $team) {
+        $teamName = (string)($team['name'] ?? '');
+        if ($teamName !== '') {
+            $allTeamNames[] = $teamName;
+        }
+        foreach (($team['children'] ?? []) as $childTeam) {
+            $childName = (string)($childTeam['name'] ?? '');
+            if ($childName !== '') {
+                $allTeamNames[] = $childName;
+            }
+        }
+    }
+
+    $allTeamNames = array_values(array_unique($allTeamNames));
+    sort($allTeamNames, SORT_STRING);
+
+    return [
+        'ceo' => $orgCeo,
+        'safety' => $orgSafety,
+        'teams' => $orgTeams,
+        'all_team_names' => $allTeamNames,
+    ];
+}
+
 function auth_delete_team(string $teamName): array
 {
     $teamName = auth_normalize_team_name($teamName);

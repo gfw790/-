@@ -114,13 +114,19 @@ foreach ($orgTeams as $team) {
 
 $allTeamNames = array_values(array_unique($allTeamNames));
 sort($allTeamNames, SORT_STRING);
+
+$orgChart = auth_org_chart_data();
+$orgCeo = $orgChart['ceo'];
+$orgSafety = $orgChart['safety'];
+$orgTeams = $orgChart['teams'];
+$allTeamNames = $orgChart['all_team_names'];
 ?>
 <!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>현대기전 조직도</title>
+<title>(주)현대기전 조직도</title>
 <style>
   :root {
     --bg: #f5f7fb;
@@ -151,6 +157,7 @@ sort($allTeamNames, SORT_STRING);
   .title-wrap h1 {
     margin: 0;
     font-size: 22px;
+    color: #1c2738;
   }
   .title-wrap p {
     margin: 4px 0 0;
@@ -440,7 +447,7 @@ sort($allTeamNames, SORT_STRING);
   .org-safety-junction { align-self: stretch; position: relative; display: flex; flex-direction: column; align-items: center; }
   .org-junction-stem { display: flex; flex-direction: column; align-items: center; }
   .org-junction-branch { position: absolute; left: 50%; top: 50%; transform: translateY(-50%); display: flex; align-items: center; }
-  .org-junction-hline { width: 120px; height: 2px; background: #cfd6e4; flex-shrink: 0; }
+  .org-junction-hline { width: 120px; height: 2px; background: #6a7890; flex-shrink: 0; }
   .org-teams-wrap { width: 100%; overflow-x: auto; padding-bottom: 4px; }
   .org-teams-row {
     display: flex;
@@ -457,7 +464,7 @@ sort($allTeamNames, SORT_STRING);
     left: calc(var(--org-team-top-width) / 2);
     right: calc(var(--org-team-top-width) / 2);
     height: 2px;
-    background: #cfd6e4;
+    background: #6a7890;
   }
   .org-team-col {
     display: flex;
@@ -476,7 +483,7 @@ sort($allTeamNames, SORT_STRING);
     transform: translateX(-50%);
     width: 2px;
     height: 56px;
-    background: #cfd6e4;
+    background: #6a7890;
   }
   .org-team-card {
     width: 100%;
@@ -513,7 +520,7 @@ sort($allTeamNames, SORT_STRING);
     transform: translateX(-50%);
     width: 2px;
     height: 14px;
-    background: #cfd6e4;
+    background: #6a7890;
   }
   .org-team-children-row {
     display: flex;
@@ -633,7 +640,7 @@ sort($allTeamNames, SORT_STRING);
 
     <div class="toolbar">
       <div class="title-wrap">
-        <h1>현대기전 조직도</h1>
+        <h1>(주)현대기전 조직도</h1>
         <p>인쇄할 팀을 선택한 뒤 <strong>미리보기</strong> 버튼으로 확인하고 출력하세요.</p>
       </div>
       <div class="actions">
@@ -712,11 +719,55 @@ sort($allTeamNames, SORT_STRING);
     </div>
 
     <section class="sheet">
-      <h2 class="print-title">현대기전 조직도</h2>
+      <h2 class="print-title">(주)현대기전 조직도</h2>
 
       <?php
       $orgNameHtml = static function(array $entry): string {
           return '<span class="org-member-name">' . h($entry['name']) . '</span>';
+      };
+      $renderOrgTeamCard = static function(array $team, callable $orgNameHtml, callable $renderOrgTeamCard, bool $isChild = false): void {
+      ?>
+        <div class="org-team-card<?= $isChild ? ' org-team-card-child' : '' ?>">
+          <div class="org-team-head"><?= h((string)($team['name'] ?? '')) ?></div>
+          <div class="org-team-body">
+            <?php if (!empty($team['managers'])): ?>
+              <div class="org-role-sec">
+                <div class="org-role-lbl role-manager"><?= h((string)($team['manager_label'] ?? '관리감독자')) ?></div>
+                <?php foreach ($team['managers'] as $member): ?>
+                  <?= $orgNameHtml($member) ?>
+                <?php endforeach; ?>
+              </div>
+            <?php endif; ?>
+            <?php if (!empty($team['leaders'])): ?>
+              <div class="org-role-sec">
+                <div class="org-role-lbl role-leader"><?= h((string)($team['leader_label'] ?? '작업지휘자')) ?></div>
+                <?php foreach ($team['leaders'] as $member): ?>
+                  <?= $orgNameHtml($member) ?>
+                <?php endforeach; ?>
+              </div>
+            <?php endif; ?>
+            <?php if (!empty($team['workers'])): ?>
+              <div class="org-role-sec">
+                <div class="org-role-lbl role-worker"><?= h((string)($team['worker_label'] ?? '일반작업자')) ?></div>
+                <?php foreach ($team['workers'] as $member): ?>
+                  <?= $orgNameHtml($member) ?>
+                <?php endforeach; ?>
+              </div>
+            <?php endif; ?>
+          </div>
+        </div>
+        <?php if (!empty($team['children'])): ?>
+          <div class="org-team-children-wrap">
+            <div class="org-team-children-row">
+              <?php foreach ($team['children'] as $child): ?>
+                <div class="org-subteam-col" data-team-name="<?= h((string)($child['name'] ?? '')) ?>">
+                  <?php $renderOrgTeamCard($child, $orgNameHtml, $renderOrgTeamCard, true); ?>
+                </div>
+              <?php endforeach; ?>
+            </div>
+          </div>
+        <?php endif; ?>
+      <?php
       };
       ?>
       <div class="org-chart-surface">
@@ -755,6 +806,7 @@ sort($allTeamNames, SORT_STRING);
               <div class="org-teams-row">
                 <?php foreach ($orgTeams as $team): ?>
                   <div class="org-team-col" data-team-name="<?= h((string)($team['name'] ?? '')) ?>">
+                    <?php $renderOrgTeamCard($team, $orgNameHtml, $renderOrgTeamCard); continue; ?>
                     <div class="org-team-card">
                       <div class="org-team-head"><?= h($team['name']) ?></div>
                       <div class="org-team-body">
