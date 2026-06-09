@@ -1451,6 +1451,46 @@ function auth_update_account_phone(string $loginId, string $phone): array
     return [true, '전화번호가 저장되었습니다.'];
 }
 
+function auth_update_stored_account_team(string $loginId, string $teamName): array
+{
+    $loginId = trim($loginId);
+    $teamName = auth_normalize_team_name($teamName);
+    if ($loginId === '') {
+        return [false, '변경할 계정을 찾을 수 없습니다.'];
+    }
+
+    $storedAccounts = auth_read_stored_accounts();
+    if (!isset($storedAccounts[$loginId])) {
+        return [false, '변경할 계정을 찾을 수 없습니다.'];
+    }
+
+    $role = auth_normalize_role((string)($storedAccounts[$loginId]['role'] ?? 'worker'));
+    $teamRequired = !in_array($role, ['admin', 'ceo'], true);
+    if ($teamRequired && $teamName === '') {
+        return [false, '소속팀을 선택해주세요.'];
+    }
+
+    if ($teamName !== '' && !auth_team_exists($teamName)) {
+        return [false, '선택한 팀을 찾을 수 없습니다.'];
+    }
+
+    $storedAccounts[$loginId]['team'] = $teamName;
+
+    if (!auth_write_stored_accounts($storedAccounts)) {
+        return [false, '계정 소속팀을 저장하지 못했습니다.'];
+    }
+
+    if (
+        isset($_SESSION['auth_user']) &&
+        is_array($_SESSION['auth_user']) &&
+        (string)($_SESSION['auth_user']['login_id'] ?? '') === $loginId
+    ) {
+        $_SESSION['auth_user']['team'] = $teamName;
+    }
+
+    return [true, '계정 소속팀이 변경되었습니다.'];
+}
+
 function auth_change_password(string $loginId, string $currentPassword, string $newPassword): array
 {
     $loginId = trim($loginId);

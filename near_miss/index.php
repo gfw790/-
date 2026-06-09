@@ -1,6 +1,10 @@
 ﻿<?php
 require_once 'includes/header.php';
 
+if (!isset($_currentUser)) {
+    $_currentUser = null;
+}
+
 $page = max(1, (int)($_GET['page'] ?? 1));
 $offset = ($page - 1) * POSTS_PER_PAGE;
 $selectedMonth = trim((string)($_GET['stat_month'] ?? ''));

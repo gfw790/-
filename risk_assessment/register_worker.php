@@ -67,6 +67,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = $message;
             }
         }
+    } elseif ($action === 'update_account_team') {
+        if (!$canManageAccounts) {
+            $error = '소속팀을 변경할 권한이 없습니다.';
+        } else {
+            $updateLoginId = trim((string)($_POST['update_login_id'] ?? ''));
+            $updateTeam = auth_normalize_team_name((string)($_POST['update_team'] ?? ''));
+            [$ok, $message] = auth_update_stored_account_team($updateLoginId, $updateTeam);
+            if ($ok) {
+                $success = $message;
+            } else {
+                $error = $message;
+            }
+        }
     } elseif ($action === 'update_account_role') {
         if (!$canAssignRoles) {
             $error = '역할을 변경할 권한이 없습니다.';
@@ -697,6 +710,23 @@ function h($value): string
     align-items: center;
     margin-top: 7px;
   }
+  .account-inline-form {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-top: 7px;
+  }
+  .account-inline-form select {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 10px;
+    font-size: 12px;
+    border-radius: 8px;
+    border: 1px solid #c8d8e8;
+    background: #fff;
+    color: #243447;
+    font-family: inherit;
+  }
   .phone-input {
     flex: 1;
     padding: 6px 10px;
@@ -854,6 +884,17 @@ function h($value): string
                                 아이디 <?= h($loginId) ?> / 비밀번호 <?= h((string)($account['password'] ?? '')) ?>
                               </div>
                               <?php if ($canManageAccounts): ?>
+                                <form method="post" class="account-inline-form">
+                                  <input type="hidden" name="action" value="update_account_team">
+                                  <input type="hidden" name="update_login_id" value="<?= h($loginId) ?>">
+                                  <select name="update_team" aria-label="소속팀 변경">
+                                    <option value="">팀 미지정</option>
+                                    <?php foreach ($teams as $teamName): ?>
+                                      <option value="<?= h($teamName) ?>" <?= auth_normalize_team_name((string)($account['team'] ?? '')) === auth_normalize_team_name((string)$teamName) ? 'selected' : '' ?>><?= h($teamName) ?></option>
+                                    <?php endforeach; ?>
+                                  </select>
+                                  <button type="submit" class="phone-save-btn">팀 저장</button>
+                                </form>
                                 <form method="post" class="phone-form">
                                   <input type="hidden" name="action" value="update_account_phone">
                                   <input type="hidden" name="update_login_id" value="<?= h($loginId) ?>">
