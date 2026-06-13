@@ -60,6 +60,62 @@ function extract_names_from_tbm_output_html(string $html): array
     return $names;
 }
 
+function auth_team_names(string $teamName): array
+{
+    $teamName = trim($teamName);
+    if ($teamName === '') {
+        return [];
+    }
+
+    require_once __DIR__ . '/../../risk_assessment/auth.php';
+
+    $names = [];
+    $seen = [];
+
+    foreach (auth_accounts() as $account) {
+        if (!is_array($account) || auth_is_retired_account($account)) {
+            continue;
+        }
+
+        $accountTeam = auth_normalize_team_name((string)($account['team'] ?? ''));
+        if ($accountTeam !== auth_normalize_team_name($teamName)) {
+            continue;
+        }
+
+        $name = trim((string)($account['name'] ?? ''));
+        if ($name === '') {
+            continue;
+        }
+
+        $key = normalize_name($name);
+        if ($key === '' || isset($seen[$key])) {
+            continue;
+        }
+
+        $seen[$key] = true;
+        $names[] = $name;
+    }
+
+    sort($names, SORT_STRING);
+    return array_values($names);
+}
+
+function auth_available_teams(): array
+{
+    require_once __DIR__ . '/../../risk_assessment/auth.php';
+
+    $teams = [];
+    foreach (auth_read_teams() as $teamName) {
+        $teamName = auth_normalize_team_name((string)$teamName);
+        if ($teamName === '') {
+            continue;
+        }
+        $teams[] = $teamName;
+    }
+
+    return array_values(array_unique($teams));
+}
+
 $hardExcludedNames = ['소장님', '김종훈', '조한봉'];
 
 $date = trim((string)($_GET['date'] ?? date('Y-m-d')));
@@ -69,8 +125,23 @@ if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
 
 $requestedFile = trim((string)($_GET['file'] ?? ''));
 $requestedTeam = trim((string)($_GET['team'] ?? '공사팀'));
+$availableTeams = [];
 
 try {
+    $availableTeams = auth_available_teams();
+    $authNames = auth_team_names($requestedTeam);
+    if ($authNames !== []) {
+        json_out([
+            'ok' => true,
+            'date' => $date,
+            'team' => $requestedTeam,
+            'source' => 'auth_team',
+            'available_teams' => $availableTeams,
+            'count' => count($authNames),
+            'names' => array_slice($authNames, 0, 12),
+        ]);
+    }
+
     require_once __DIR__ . '/../../tbm/tbm_db.php';
     require_once __DIR__ . '/../../tbm/tbm_functions.php';
 
@@ -141,6 +212,7 @@ try {
             'ok' => true,
             'date' => $date,
             'team' => $requestedTeam,
+            'available_teams' => $availableTeams,
             'count' => 0,
             'names' => [],
         ]);
@@ -196,6 +268,7 @@ try {
             'doc_id' => (int)$doc['id'],
             'doc_team' => (string)($doc['team'] ?? ''),
             'source_file' => (string)($doc['output_filename'] ?? ''),
+            'available_teams' => $availableTeams,
             'count' => 0,
             'names' => [],
         ]);
@@ -225,6 +298,7 @@ try {
         'doc_id' => (int)$doc['id'],
         'doc_team' => (string)($doc['team'] ?? ''),
         'source_file' => (string)($doc['output_filename'] ?? ''),
+        'available_teams' => $availableTeams,
         'count' => count($filtered),
         'names' => array_slice($filtered, 0, 12),
     ]);

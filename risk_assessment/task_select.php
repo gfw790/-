@@ -3372,7 +3372,7 @@ function type_label(string $type): string
         </div>
         <div class="identity quick-actions">
           <a class="btn-secondary" href="work_list.php">작업목록</a>
-          <?php if ($isAdmin): ?>
+          <?php if ($canManage): ?>
             <a class="btn-secondary" href="register_worker.php">계정관리</a>
           <?php endif; ?>
           <?php

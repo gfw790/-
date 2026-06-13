@@ -3,8 +3,8 @@ require_once __DIR__ . '/auth.php';
 
 $user = auth_current_user();
 $canManageAccounts = auth_can_manage($user) || auth_is_admin($user);
-$canManageTeams = auth_is_admin($user);
-$canAssignRoles = auth_is_admin($user);
+$canManageTeams = auth_can_manage($user) || auth_is_admin($user);
+$canAssignRoles = auth_is_admin($user) || (is_array($user) && (string)($user['role'] ?? '') === 'safety_manager');
 $registrationOpen = auth_is_worker_registration_open();
 if ($user !== null && !$canManageAccounts) {
     header('Location: work_list.php');

@@ -229,5 +229,68 @@
         "role": "worker",
         "team": "공사팀-전기",
         "phone": "010-3647-5118"
+    },
+    "300": {
+        "password": "1234",
+        "name": "김청송",
+        "role": "leader",
+        "team": "전기 포설팀",
+        "phone": "010-7928-7550"
+    },
+    "301": {
+        "password": "1234",
+        "name": "김철",
+        "role": "worker",
+        "team": "전기 포설팀",
+        "phone": "010-2217-3277"
+    },
+    "302": {
+        "password": "1234",
+        "name": "이동준",
+        "role": "worker",
+        "team": "전기 포설팀",
+        "phone": "010-8555-1727"
+    },
+    "303": {
+        "password": "1234",
+        "name": "정열",
+        "role": "worker",
+        "team": "전기 포설팀",
+        "phone": "010-4641-1314"
+    },
+    "304": {
+        "password": "1234",
+        "name": "정강",
+        "role": "worker",
+        "team": "전기 포설팀",
+        "phone": "010-2241-0052"
+    },
+    "305": {
+        "password": "1234",
+        "name": "최룡",
+        "role": "worker",
+        "team": "전기 포설팀",
+        "phone": ""
+    },
+    "306": {
+        "password": "1234",
+        "name": "김국청",
+        "role": "worker",
+        "team": "전기 포설팀",
+        "phone": ""
+    },
+    "307": {
+        "password": "1234",
+        "name": "김기명",
+        "role": "worker",
+        "team": "전기 포설팀",
+        "phone": ""
+    },
+    "308": {
+        "password": "1234",
+        "name": "손병규",
+        "role": "worker",
+        "team": "전기 포설팀",
+        "phone": ""
     }
 }

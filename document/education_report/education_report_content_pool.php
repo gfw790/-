@@ -159,6 +159,7 @@ function pool_normalize_item(array $item): ?array
     $title = trim((string)($item['title'] ?? ''));
     $content = trim((string)($item['content'] ?? ''));
     $lines = pool_normalize_lines($content);
+    $translations = pool_normalize_translations((array)($item['translations'] ?? []));
 
     if ($title === '' && !empty($lines)) {
         $title = $lines[0];
@@ -175,7 +176,285 @@ function pool_normalize_item(array $item): ?array
         'content' => implode("\n", $lines),
         'lines' => $lines,
         'line_count' => count($lines),
+        'translations' => $translations,
     ];
+}
+
+function pool_translation_config(): array
+{
+    $config = [
+        'provider' => 'libretranslate',
+        'endpoint' => '',
+        'api_key' => '',
+        'source_language' => 'ko',
+        'request_timeout' => 15,
+    ];
+
+    $configPath = __DIR__ . '/education_report_translation_config.php';
+    if (is_file($configPath)) {
+        $fileConfig = require $configPath;
+        if (is_array($fileConfig)) {
+            $config = array_merge($config, $fileConfig);
+        }
+    }
+
+    $envMap = [
+        'provider' => 'EDUCATION_REPORT_TRANSLATION_PROVIDER',
+        'endpoint' => 'EDUCATION_REPORT_TRANSLATION_ENDPOINT',
+        'api_key' => 'EDUCATION_REPORT_TRANSLATION_API_KEY',
+        'source_language' => 'EDUCATION_REPORT_TRANSLATION_SOURCE',
+        'request_timeout' => 'EDUCATION_REPORT_TRANSLATION_TIMEOUT',
+    ];
+
+    foreach ($envMap as $key => $envName) {
+        $value = getenv($envName);
+        if ($value === false || $value === '') {
+            continue;
+        }
+        $config[$key] = $value;
+    }
+
+    $config['provider'] = strtolower(trim((string)($config['provider'] ?? 'libretranslate')));
+    $config['endpoint'] = trim((string)($config['endpoint'] ?? ''));
+    $config['api_key'] = trim((string)($config['api_key'] ?? ''));
+    $config['source_language'] = trim((string)($config['source_language'] ?? 'ko')) ?: 'ko';
+    $config['request_timeout'] = max(3, (int)($config['request_timeout'] ?? 15));
+    $config['enabled'] = ($config['provider'] === 'libretranslate' && $config['endpoint'] !== '');
+
+    return $config;
+}
+
+function pool_translate_http_post_json(string $url, array $payload, int $timeoutSeconds): ?array
+{
+    $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false) {
+        return null;
+    }
+
+    if (function_exists('curl_init')) {
+        $ch = curl_init($url);
+        if ($ch === false) {
+            return null;
+        }
+
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => $json,
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'Accept: application/json',
+            ],
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => $timeoutSeconds,
+        ]);
+
+        $raw = curl_exec($ch);
+        $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        curl_close($ch);
+
+        if (!is_string($raw) || $raw === '' || $status < 200 || $status >= 300) {
+            return null;
+        }
+
+        $decoded = json_decode($raw, true);
+        return is_array($decoded) ? $decoded : null;
+    }
+
+    $context = stream_context_create([
+        'http' => [
+            'method' => 'POST',
+            'header' => "Content-Type: application/json\r\nAccept: application/json\r\n",
+            'content' => $json,
+            'timeout' => $timeoutSeconds,
+            'ignore_errors' => true,
+        ],
+    ]);
+
+    $raw = @file_get_contents($url, false, $context);
+    if (!is_string($raw) || $raw === '') {
+        return null;
+    }
+
+    $decoded = json_decode($raw, true);
+    return is_array($decoded) ? $decoded : null;
+}
+
+function pool_translate_text(string $text, string $targetLanguage): ?string
+{
+    $text = trim($text);
+    if ($text === '') {
+        return '';
+    }
+
+    $config = pool_translation_config();
+    if (!$config['enabled']) {
+        return null;
+    }
+
+    $targetLanguage = trim($targetLanguage);
+    if ($targetLanguage === '') {
+        return null;
+    }
+
+    if ($config['provider'] !== 'libretranslate') {
+        return null;
+    }
+
+    $endpoint = rtrim($config['endpoint'], '/');
+    if ($endpoint === '') {
+        return null;
+    }
+
+    $payload = [
+        'q' => $text,
+        'source' => $config['source_language'],
+        'target' => $targetLanguage,
+        'format' => 'text',
+    ];
+
+    if ($config['api_key'] !== '') {
+        $payload['api_key'] = $config['api_key'];
+    }
+
+    $response = pool_translate_http_post_json($endpoint . '/translate', $payload, $config['request_timeout']);
+    $translatedText = trim((string)($response['translatedText'] ?? ''));
+    return $translatedText !== '' ? $translatedText : null;
+}
+
+function pool_build_translation_entry(string $translatedContent): ?array
+{
+    $lines = pool_normalize_lines($translatedContent);
+    if ($lines === []) {
+        return null;
+    }
+
+    return [
+        'title' => trim((string)($lines[0] ?? '')),
+        'content' => implode("\n", $lines),
+        'lines' => $lines,
+        'line_count' => count($lines),
+        'updated_at' => date('c'),
+    ];
+}
+
+function pool_normalize_translation_entry(array $entry): ?array
+{
+    $content = trim((string)($entry['content'] ?? ''));
+    $lines = pool_normalize_lines($content);
+    if ($lines === []) {
+        $lines = array_values(array_filter(array_map('trim', (array)($entry['lines'] ?? [])), static function(string $line): bool {
+            return $line !== '';
+        }));
+        $content = implode("\n", $lines);
+    }
+
+    if ($lines === [] || $content === '') {
+        return null;
+    }
+
+    $title = trim((string)($entry['title'] ?? ''));
+    if ($title === '') {
+        $title = trim((string)($lines[0] ?? ''));
+    }
+
+    return [
+        'title' => $title,
+        'content' => $content,
+        'lines' => $lines,
+        'line_count' => count($lines),
+        'updated_at' => trim((string)($entry['updated_at'] ?? '')),
+    ];
+}
+
+function pool_normalize_translations(array $translations): array
+{
+    $result = [];
+    foreach ($translations as $language => $entry) {
+        $language = strtolower(trim((string)$language));
+        if ($language === '' || !is_array($entry)) {
+            continue;
+        }
+        $normalized = pool_normalize_translation_entry($entry);
+        if ($normalized === null) {
+            continue;
+        }
+        $result[$language] = $normalized;
+    }
+    return $result;
+}
+
+function pool_apply_translation(array $item, string $language): array
+{
+    $language = strtolower(trim($language));
+    if ($language === '') {
+        return $item;
+    }
+
+    $translatedContent = pool_translate_text((string)($item['content'] ?? ''), $language);
+    if ($translatedContent === null || trim($translatedContent) === '') {
+        return $item;
+    }
+
+    $entry = pool_build_translation_entry($translatedContent);
+    if ($entry === null) {
+        return $item;
+    }
+
+    $item['translations'] = pool_normalize_translations((array)($item['translations'] ?? []));
+    $item['translations'][$language] = $entry;
+    return $item;
+}
+
+function pool_translation_missing(array $item, string $language): bool
+{
+    $language = strtolower(trim($language));
+    if ($language === '') {
+        return false;
+    }
+
+    $translations = pool_normalize_translations((array)($item['translations'] ?? []));
+    if (!isset($translations[$language])) {
+        return true;
+    }
+
+    return trim((string)($translations[$language]['content'] ?? '')) === '';
+}
+
+function pool_fill_missing_translations(array $items, string $language, ?array &$translatedIds = null): array
+{
+    $translatedIds = [];
+    $result = [];
+
+    foreach ($items as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+
+        if (pool_translation_missing($item, $language)) {
+            $updatedItem = pool_apply_translation($item, $language);
+            $before = trim((string)(((array)($item['translations'][$language] ?? []))['content'] ?? ''));
+            $after = trim((string)(((array)($updatedItem['translations'][$language] ?? []))['content'] ?? ''));
+            if ($after !== '' && $after !== $before) {
+                $translatedIds[] = (string)($updatedItem['id'] ?? '');
+            }
+            $item = $updatedItem;
+        }
+
+        $result[] = $item;
+    }
+
+    return $result;
+}
+
+function pool_find_item_by_id(array $items, string $id): ?array
+{
+    foreach ($items as $item) {
+        if (is_array($item) && (string)($item['id'] ?? '') === $id) {
+            return $item;
+        }
+    }
+
+    return null;
 }
 
 function pool_prepare_items(array $items): array
@@ -210,11 +489,24 @@ function pool_write_store(array $items, array $groups = []): bool
         'updated_at' => date('c'),
         'groups' => $normalizedGroups,
         'items' => array_map(static function(array $item): array {
+            $translations = [];
+            foreach ((array)($item['translations'] ?? []) as $language => $entry) {
+                if (!is_array($entry)) {
+                    continue;
+                }
+                $translations[$language] = [
+                    'title' => (string)($entry['title'] ?? ''),
+                    'content' => (string)($entry['content'] ?? ''),
+                    'updated_at' => (string)($entry['updated_at'] ?? ''),
+                ];
+            }
+
             return [
                 'id' => $item['id'],
                 'group' => $item['group'] ?? '',
                 'title' => $item['title'],
                 'content' => $item['content'],
+                'translations' => $translations,
             ];
         }, $normalizedItems),
     ];
@@ -283,6 +575,7 @@ try {
             'ok' => true,
             'groups' => $store['groups'],
             'items' => $store['items'],
+            'translation_enabled' => pool_translation_config()['enabled'],
         ]);
     }
 
@@ -335,12 +628,13 @@ try {
 
         if ($id === '') {
             $id = 'pool-' . date('YmdHis') . '-' . substr(bin2hex(random_bytes(4)), 0, 8);
-            $items[] = [
+            $newItem = [
                 'id' => $id,
                 'group' => $group,
                 'title' => $title,
                 'content' => $content,
             ];
+            $items[] = pool_apply_translation($newItem, 'zh');
         } else {
             $updated = false;
             foreach ($items as &$item) {
@@ -350,18 +644,20 @@ try {
                 $item['group'] = $group;
                 $item['title'] = $title;
                 $item['content'] = $content;
+                $item = pool_apply_translation($item, 'zh');
                 $updated = true;
                 break;
             }
             unset($item);
 
             if (!$updated) {
-                $items[] = [
+                $newItem = [
                     'id' => $id,
                     'group' => $group,
                     'title' => $title,
                     'content' => $content,
                 ];
+                $items[] = pool_apply_translation($newItem, 'zh');
             }
         }
 
@@ -376,6 +672,82 @@ try {
             'groups' => $groups,
             'items' => $items,
             'saved_id' => $id,
+        ]);
+    }
+
+    if ($action === 'translate_items') {
+        $idsRaw = trim((string)($_POST['ids'] ?? ''));
+        $language = strtolower(pool_request_value('language'));
+        if ($language === '') {
+            $language = 'zh';
+        }
+
+        $ids = json_decode($idsRaw, true);
+        if (!is_array($ids)) {
+            $ids = [];
+        }
+
+        $requestedIds = [];
+        foreach ($ids as $value) {
+            $value = trim((string)$value);
+            if ($value === '') {
+                continue;
+            }
+            $requestedIds[$value] = true;
+        }
+
+        $translatedIds = [];
+        if ($requestedIds !== []) {
+            foreach ($items as $index => $item) {
+                $itemId = (string)($item['id'] ?? '');
+                if ($itemId === '' || !isset($requestedIds[$itemId])) {
+                    continue;
+                }
+
+                $before = trim((string)(((array)($item['translations'][$language] ?? []))['content'] ?? ''));
+                $items[$index] = pool_apply_translation($item, $language);
+                $after = trim((string)(((array)($items[$index]['translations'][$language] ?? []))['content'] ?? ''));
+                if ($after !== '' && $after !== $before) {
+                    $translatedIds[] = $itemId;
+                }
+            }
+        }
+
+        $items = pool_prepare_items($items);
+        $groups = pool_normalize_groups($groups, $items);
+        if (!pool_write_store($items, $groups)) {
+            pool_json_out(['ok' => false, 'error' => 'write_failed'], 500);
+        }
+
+        pool_json_out([
+            'ok' => true,
+            'groups' => $groups,
+            'items' => $items,
+            'translated_ids' => array_values(array_unique($translatedIds)),
+            'translation_enabled' => pool_translation_config()['enabled'],
+        ]);
+    }
+
+    if ($action === 'translate_missing') {
+        $language = strtolower(pool_request_value('language'));
+        if ($language === '') {
+            $language = 'zh';
+        }
+
+        $translatedIds = [];
+        $items = pool_fill_missing_translations($items, $language, $translatedIds);
+        $items = pool_prepare_items($items);
+        $groups = pool_normalize_groups($groups, $items);
+        if (!pool_write_store($items, $groups)) {
+            pool_json_out(['ok' => false, 'error' => 'write_failed'], 500);
+        }
+
+        pool_json_out([
+            'ok' => true,
+            'groups' => $groups,
+            'items' => $items,
+            'translated_ids' => array_values(array_unique($translatedIds)),
+            'translation_enabled' => pool_translation_config()['enabled'],
         ]);
     }
 
