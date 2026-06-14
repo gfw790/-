@@ -183,7 +183,7 @@ function pool_normalize_item(array $item): ?array
 function pool_translation_config(): array
 {
     $config = [
-        'provider' => 'libretranslate',
+        'provider' => 'google_basic',
         'endpoint' => '',
         'api_key' => '',
         'source_language' => 'ko',
@@ -214,12 +214,16 @@ function pool_translation_config(): array
         $config[$key] = $value;
     }
 
-    $config['provider'] = strtolower(trim((string)($config['provider'] ?? 'libretranslate')));
+    $config['provider'] = strtolower(trim((string)($config['provider'] ?? 'google_basic')));
     $config['endpoint'] = trim((string)($config['endpoint'] ?? ''));
     $config['api_key'] = trim((string)($config['api_key'] ?? ''));
     $config['source_language'] = trim((string)($config['source_language'] ?? 'ko')) ?: 'ko';
     $config['request_timeout'] = max(3, (int)($config['request_timeout'] ?? 15));
-    $config['enabled'] = ($config['provider'] === 'libretranslate' && $config['endpoint'] !== '');
+    if ($config['provider'] === 'google_basic') {
+        $config['enabled'] = ($config['api_key'] !== '');
+    } else {
+        $config['enabled'] = ($config['provider'] === 'libretranslate' && $config['endpoint'] !== '');
+    }
 
     return $config;
 }
@@ -296,29 +300,46 @@ function pool_translate_text(string $text, string $targetLanguage): ?string
         return null;
     }
 
-    if ($config['provider'] !== 'libretranslate') {
-        return null;
+    if ($config['provider'] === 'google_basic') {
+        $endpoint = 'https://translation.googleapis.com/language/translate/v2?key=' . rawurlencode($config['api_key']);
+        $payload = [
+            'q' => $text,
+            'source' => $config['source_language'],
+            'target' => $targetLanguage,
+            'format' => 'text',
+        ];
+
+        $response = pool_translate_http_post_json($endpoint, $payload, $config['request_timeout']);
+        $translatedText = trim((string)($response['data']['translations'][0]['translatedText'] ?? ''));
+        if ($translatedText === '') {
+            return null;
+        }
+        return html_entity_decode($translatedText, ENT_QUOTES | ENT_HTML5, 'UTF-8');
     }
 
-    $endpoint = rtrim($config['endpoint'], '/');
-    if ($endpoint === '') {
-        return null;
+    if ($config['provider'] === 'libretranslate') {
+        $endpoint = rtrim($config['endpoint'], '/');
+        if ($endpoint === '') {
+            return null;
+        }
+
+        $payload = [
+            'q' => $text,
+            'source' => $config['source_language'],
+            'target' => $targetLanguage,
+            'format' => 'text',
+        ];
+
+        if ($config['api_key'] !== '') {
+            $payload['api_key'] = $config['api_key'];
+        }
+
+        $response = pool_translate_http_post_json($endpoint . '/translate', $payload, $config['request_timeout']);
+        $translatedText = trim((string)($response['translatedText'] ?? ''));
+        return $translatedText !== '' ? $translatedText : null;
     }
 
-    $payload = [
-        'q' => $text,
-        'source' => $config['source_language'],
-        'target' => $targetLanguage,
-        'format' => 'text',
-    ];
-
-    if ($config['api_key'] !== '') {
-        $payload['api_key'] = $config['api_key'];
-    }
-
-    $response = pool_translate_http_post_json($endpoint . '/translate', $payload, $config['request_timeout']);
-    $translatedText = trim((string)($response['translatedText'] ?? ''));
-    return $translatedText !== '' ? $translatedText : null;
+    return null;
 }
 
 function pool_build_translation_entry(string $translatedContent): ?array

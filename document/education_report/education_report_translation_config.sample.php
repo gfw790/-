@@ -2,13 +2,13 @@
 declare(strict_types=1);
 
 return [
-    // Supported for now: libretranslate
-    'provider' => 'libretranslate',
+    // Supported: google_basic, libretranslate
+    'provider' => 'google_basic',
 
-    // Example: http://127.0.0.1:5000 or https://libretranslate.com
+    // Only for libretranslate. Example: http://127.0.0.1:5000 or https://libretranslate.com
     'endpoint' => '',
 
-    // Optional for self-hosted LibreTranslate. Required by some hosted instances.
+    // Google Cloud Translation Basic v2 API key, or LibreTranslate API key.
     'api_key' => '',
 
     // Source language for education content.
