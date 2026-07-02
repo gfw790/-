@@ -1,5 +1,11 @@
 <?php
 
+require_once dirname(dirname(__DIR__))
+    . DIRECTORY_SEPARATOR . 'xampp'
+    . DIRECTORY_SEPARATOR . 'htdocs'
+    . DIRECTORY_SEPARATOR . 'safety'
+    . DIRECTORY_SEPARATOR . 'ensure_combined.php';
+
 if (PHP_SAPI !== 'cli') {
     require_once __DIR__ . '/auth.php';
 
@@ -18,12 +24,7 @@ header('Content-Type: application/json; charset=utf-8');
 
 function safety_standard_json_path(): string
 {
-    return dirname(dirname(__DIR__))
-        . DIRECTORY_SEPARATOR . 'xampp'
-        . DIRECTORY_SEPARATOR . 'htdocs'
-        . DIRECTORY_SEPARATOR . 'safety'
-        . DIRECTORY_SEPARATOR . 'data'
-        . DIRECTORY_SEPARATOR . 'combined.generated.json';
+    return safety_ensure_combined_is_current();
 }
 
 function normalize_standard_key(string $value): string

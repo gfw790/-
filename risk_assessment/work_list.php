@@ -357,6 +357,23 @@ function work_list_collect_major_options(PDO $pdo, string $unitTypeFilter = ''):
     return work_list_normalize_text_list($stmt->fetchAll(PDO::FETCH_COLUMN) ?: []);
 }
 
+function work_list_report_checked_items(array $report): array
+{
+    return work_list_normalize_text_list((array)($report['leader_checked_items'] ?? []));
+}
+
+function work_list_collect_checked_item_options(array $reports): array
+{
+    $items = [];
+    foreach ($reports as $report) {
+        foreach (work_list_report_checked_items($report) as $itemName) {
+            $items[] = $itemName;
+        }
+    }
+
+    return work_list_normalize_text_list($items);
+}
+
 function work_list_report_matches_filters(array $report, string $unitTypeFilter, string $majorFilter): bool
 {
     if ($unitTypeFilter !== '') {
@@ -374,6 +391,15 @@ function work_list_report_matches_filters(array $report, string $unitTypeFilter,
     }
 
     return true;
+}
+
+function work_list_report_matches_checked_item(array $report, string $checkedItemFilter): bool
+{
+    if ($checkedItemFilter === '') {
+        return true;
+    }
+
+    return in_array($checkedItemFilter, work_list_report_checked_items($report), true);
 }
 
 function work_list_report_matches_keyword(array $report, string $keyword): bool
@@ -397,6 +423,10 @@ function work_list_report_matches_keyword(array $report, string $keyword): bool
         $haystacks[] = (string)($unit['unit_type'] ?? '');
         $haystacks[] = (string)($unit['process_name'] ?? '');
         $haystacks[] = (string)($unit['safe_work_standard_no'] ?? '');
+    }
+
+    foreach (work_list_report_checked_items($report) as $itemName) {
+        $haystacks[] = $itemName;
     }
 
     foreach ($haystacks as $haystack) {
@@ -989,6 +1019,40 @@ if (!empty($reports) && tableExists($pdo, 'work_report_selected_unit')) {
     }
 }
 
+$leaderCheckedItemsByReportId = [];
+if (!empty($reports) && tableExists($pdo, 'work_report_detail')) {
+    $reportIds = array_values(array_unique(array_map(
+        static fn($row) => (int)($row['report_id'] ?? 0),
+        $reports
+    )));
+    $reportIds = array_values(array_filter($reportIds, static fn($id) => $id > 0));
+
+    if (!empty($reportIds)) {
+        $placeholders = implode(',', array_fill(0, count($reportIds), '?'));
+        $detailTaskStmt = $pdo->prepare("
+            SELECT
+                report_id,
+                task_name
+            FROM work_report_detail
+            WHERE report_id IN ($placeholders)
+            ORDER BY report_id ASC, report_detail_id ASC
+        ");
+        $detailTaskStmt->execute($reportIds);
+        foreach ($detailTaskStmt->fetchAll() as $row) {
+            $reportIdKey = (int)($row['report_id'] ?? 0);
+            $taskName = trim((string)($row['task_name'] ?? ''));
+            if ($reportIdKey <= 0 || $taskName === '') {
+                continue;
+            }
+
+            if (!isset($leaderCheckedItemsByReportId[$reportIdKey])) {
+                $leaderCheckedItemsByReportId[$reportIdKey] = [];
+            }
+            $leaderCheckedItemsByReportId[$reportIdKey][] = $taskName;
+        }
+    }
+}
+
 foreach ($reports as &$report) {
     $resolvedTeamName = report_team_context($report);
     $report['team_name_context'] = $resolvedTeamName;
@@ -1005,6 +1069,7 @@ foreach ($reports as &$report) {
         ];
     }
     $report['selected_units'] = $selectedUnits;
+    $report['leader_checked_items'] = $leaderCheckedItemsByReportId[(int)($report['report_id'] ?? 0)] ?? [];
     $workInputCompleted = (int)($report['leader_detail_count'] ?? 0) > 0;
     $hazardSubmissionCount = (int)($report['hazard_worker_selection_count'] ?? 0)
         + (int)($report['hazard_selection_count'] ?? 0)
@@ -1038,10 +1103,23 @@ if ($selectedMajorFilter !== '' && !in_array($selectedMajorFilter, $majorOptions
     $selectedMajorFilter = '';
 }
 
+$checkedItemOptions = work_list_collect_checked_item_options($reports);
+$selectedCheckedItemFilter = trim((string)($_GET['filter_checked_item'] ?? ''));
+if ($selectedCheckedItemFilter !== '' && !in_array($selectedCheckedItemFilter, $checkedItemOptions, true)) {
+    $selectedCheckedItemFilter = '';
+}
+
 if ($selectedUnitTypeFilter !== '' || $selectedMajorFilter !== '') {
     $reports = array_values(array_filter(
         $reports,
         static fn(array $report): bool => work_list_report_matches_filters($report, $selectedUnitTypeFilter, $selectedMajorFilter)
+    ));
+}
+
+if ($selectedCheckedItemFilter !== '') {
+    $reports = array_values(array_filter(
+        $reports,
+        static fn(array $report): bool => work_list_report_matches_checked_item($report, $selectedCheckedItemFilter)
     ));
 }
 
@@ -1059,7 +1137,7 @@ if ($workDateFrom !== '' || $workDateTo !== '') {
     ));
 }
 
-$hasWorkListFilter = $selectedUnitTypeFilter !== '' || $selectedMajorFilter !== '' || $workListKeyword !== '' || $workDateFrom !== '' || $workDateTo !== '';
+$hasWorkListFilter = $selectedUnitTypeFilter !== '' || $selectedMajorFilter !== '' || $selectedCheckedItemFilter !== '' || $workListKeyword !== '' || $workDateFrom !== '' || $workDateTo !== '';
 $filteredReportCount = count($reports);
 $workListPerPage = 10;
 $currentWorkListPage = max(1, (int)($_GET['page'] ?? 1));
@@ -1077,6 +1155,7 @@ $workListPagination = render_work_list_pagination(
         'work_date_to' => $workDateTo,
         'filter_type' => $selectedUnitTypeFilter,
         'filter_major' => $selectedMajorFilter,
+        'filter_checked_item' => $selectedCheckedItemFilter,
     ]
 );
 
@@ -1364,10 +1443,13 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
   }
   .search-tool-modal {
     width: min(780px, 100%);
+    height: min(920px, calc(100vh - 24px));
+    max-height: calc(100vh - 24px);
   }
   .search-tool-body {
     padding: 18px 22px 22px;
-    max-height: calc(100vh - 156px);
+    height: calc(100% - 88px);
+    max-height: calc(100vh - 112px);
     overflow: auto;
   }
   .search-tool-body .work-search-form,
@@ -1572,7 +1654,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     border: 1px solid var(--border2);
     background: #12203a;
     box-shadow: 0 18px 36px rgba(0, 0, 0, 0.35);
-    max-height: min(320px, calc(100vh - 240px));
+    max-height: min(520px, calc(100vh - 220px));
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -1899,6 +1981,9 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     padding: 9px 14px;
     white-space: nowrap;
   }
+  .search-tool-head-actions {
+    align-items: center;
+  }
   .org-current-count {
     display: inline-flex;
     align-items: center;
@@ -2070,6 +2155,9 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     .unit-preview-head { padding: 16px 16px 14px; }
     .unit-preview-head h2 { font-size: 19px; }
     .modal-head-actions { width: 100%; justify-content: flex-end; }
+    .search-tool-modal { height: calc(100vh - 12px); max-height: calc(100vh - 12px); }
+    .search-tool-body { height: calc(100% - 86px); max-height: calc(100vh - 118px); }
+    .work-search-results { max-height: min(420px, calc(100vh - 200px)); }
     .unit-preview-body { padding: 14px 16px 16px; }
     .unit-preview-meta-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .standard-preview-grid { grid-template-columns: 1fr; }
@@ -2476,6 +2564,19 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
             aria-label="작업일자 종료일"
             style="flex:0 1 170px; min-width:160px;"
           >
+          <select
+            name="filter_checked_item"
+            class="work-filter-select"
+            aria-label="작업지휘자 선택 항목"
+            style="flex:0 1 240px; min-width:220px;"
+          >
+            <option value="">작업지휘자 선택 항목 전체</option>
+            <?php foreach ($checkedItemOptions as $checkedItemOption): ?>
+              <option value="<?= h($checkedItemOption) ?>" <?= $selectedCheckedItemFilter === $checkedItemOption ? 'selected' : '' ?>>
+                <?= h($checkedItemOption) ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
           <?php if ($selectedUnitTypeFilter !== ''): ?>
             <input type="hidden" name="filter_type" value="<?= h($selectedUnitTypeFilter) ?>">
           <?php endif; ?>
@@ -2489,11 +2590,14 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
           ])) ?>">초기화</a>
         </form>
         <div class="work-search-meta">
-          <?php if ($workListKeyword !== '' || $workDateFrom !== '' || $workDateTo !== ''): ?>
+          <?php if ($workListKeyword !== '' || $workDateFrom !== '' || $workDateTo !== '' || $selectedCheckedItemFilter !== ''): ?>
             <?php
               $searchMetaParts = [];
               if ($workListKeyword !== '') {
                   $searchMetaParts[] = '검색어 `' . h($workListKeyword) . '`';
+              }
+              if ($selectedCheckedItemFilter !== '') {
+                  $searchMetaParts[] = '선택항목 `' . h($selectedCheckedItemFilter) . '`';
               }
               if ($workDateFrom !== '' || $workDateTo !== '') {
                   $searchMetaParts[] = '작업일자 ' . h($workDateFrom !== '' ? $workDateFrom : '전체') . ' ~ ' . h($workDateTo !== '' ? $workDateTo : '전체');
@@ -2501,7 +2605,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
             ?>
             <?= implode(' / ', $searchMetaParts) ?> 결과 <?= number_format($filteredReportCount) ?>건
           <?php else: ?>
-            작업명, 장소, 팀명, 작업유형, 위험성평가번호와 작업일자로 검색할 수 있습니다.
+            작업명, 장소, 팀명, 작업유형, 위험성평가번호, 작업지휘자 선택 항목과 작업일자로 검색할 수 있습니다.
           <?php endif; ?>
         </div>
         <div class="search-entry-actions">
@@ -2718,7 +2822,10 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
           <h2 id="standard-search-modal-title">작업표준서검색</h2>
           <p>작업표준서번호 또는 표준서명을 검색하고 결과를 선택하면 미리보기가 열립니다.</p>
         </div>
-        <button type="button" class="modal-close" data-standard-search-modal-close aria-label="닫기">&times;</button>
+        <div class="modal-head-actions search-tool-head-actions">
+          <a class="btn-secondary" href="/safety/index.html" target="_blank" rel="noopener">통합 조회 시스템</a>
+          <button type="button" class="modal-close" data-standard-search-modal-close aria-label="닫기">&times;</button>
+        </div>
       </div>
       <div class="search-tool-body">
         <form class="work-search-form" id="standard-search-form" autocomplete="off">

@@ -261,6 +261,77 @@ function detail_tool_labels(array $detailValues): array
     return $labels;
 }
 
+function fetch_leader_detail_entries(PDO $pdo, int $reportId): array
+{
+    if (!table_exists($pdo, 'work_report_detail')) {
+        return [];
+    }
+
+    $entries = [];
+    $stmt = $pdo->prepare("
+        SELECT
+            wd.report_detail_id,
+            wd.task_name,
+            wd.risk_code,
+            h.unit_ra_id,
+            h.unit_code,
+            h.unit_title,
+            h.unit_type,
+            h.process_name
+        FROM work_report_detail wd
+        LEFT JOIN unit_ra_header h
+            ON TRIM(h.unit_code) COLLATE utf8mb4_unicode_ci = TRIM(wd.risk_code) COLLATE utf8mb4_unicode_ci
+        WHERE wd.report_id = :report_id
+        ORDER BY wd.report_detail_id ASC
+    ");
+    $stmt->execute([':report_id' => $reportId]);
+
+    foreach ($stmt->fetchAll() ?: [] as $row) {
+        $rawValue = trim((string)($row['task_name'] ?? ''));
+        if ($rawValue === '') {
+            continue;
+        }
+
+        $parsed = parse_detail_selection($rawValue);
+        $title = trim((string)($parsed['title'] ?? ''));
+        $parent = trim((string)($parsed['parent'] ?? ''));
+        $type = trim((string)($parsed['type'] ?? ''));
+        $riskCode = trim((string)($row['risk_code'] ?? ''));
+
+        if ($title === '') {
+            $title = $rawValue;
+        }
+
+        $displayTitle = $title;
+        if ($type === 'major_work_sub' && $parent !== '' && $parent !== $title) {
+            $displayTitle = $parent . ' - ' . $title;
+        }
+
+        $metaParts = [];
+        if ($parent !== '' && $parent !== $title && $type !== 'major_work_sub') {
+            $metaParts[] = $parent;
+        }
+        if ($type !== '' && $type !== $title) {
+            $metaParts[] = $type;
+        }
+
+        $entries[] = [
+            'report_detail_id' => (int)($row['report_detail_id'] ?? 0),
+            'task_name' => $rawValue,
+            'title' => $displayTitle,
+            'meta' => implode(' / ', array_unique($metaParts)),
+            'risk_code' => $riskCode,
+            'unit_ra_id' => (int)($row['unit_ra_id'] ?? 0),
+            'unit_code' => trim((string)($row['unit_code'] ?? '')),
+            'unit_title' => trim((string)($row['unit_title'] ?? '')),
+            'unit_type' => trim((string)($row['unit_type'] ?? '')),
+            'process_name' => trim((string)($row['process_name'] ?? '')),
+        ];
+    }
+
+    return $entries;
+}
+
 function fetch_simple_list(PDO $pdo, string $tableName, string $columnName, int $reportId, string $orderColumn = ''): array
 {
     if (!table_exists($pdo, $tableName)) {
@@ -741,10 +812,22 @@ if (empty($selectedUnits) && (int)($report['unit_ra_id'] ?? 0) > 0) {
         'safe_work_standard_no' => '',
     ];
 }
+$selectedUnits = array_values(array_filter($selectedUnits, static function (array $unit): bool {
+    return trim((string)($unit['unit_code'] ?? '')) !== '';
+}));
 
 $tasks = fetch_simple_list($pdo, 'work_report_task', 'task_name', $reportId, 'sort_no');
 $tools = fetch_simple_list($pdo, 'work_report_tool', 'tool_name', $reportId, 'tool_name');
 $leaderDetails = fetch_simple_list($pdo, 'work_report_detail', 'task_name', $reportId, 'report_detail_id');
+$leaderDetailEntries = fetch_leader_detail_entries($pdo, $reportId);
+$leaderDetailEntries = array_values(array_filter($leaderDetailEntries, static function (array $entry): bool {
+    $entryCode = trim((string)($entry['unit_code'] ?? ''));
+    if ($entryCode === '') {
+        $entryCode = trim((string)($entry['risk_code'] ?? ''));
+    }
+
+    return $entryCode !== '' && (int)($entry['unit_ra_id'] ?? 0) > 0;
+}));
 $imageCount = fetch_image_count($pdo, $reportId);
 $images = fetch_report_images($pdo, $reportId);
 $participantCount = fetch_hazard_participant_count($pdo, $reportId);
@@ -979,6 +1062,15 @@ $pageTitle = trim((string)($report['work_title'] ?? '')) ?: '작업 상세';
     border-radius: 16px;
     padding: 16px;
   }
+  .unit-card.is-clickable {
+    cursor: pointer;
+    transition: transform .15s ease, border-color .15s ease, background .15s ease;
+  }
+  .unit-card.is-clickable:hover {
+    transform: translateY(-1px);
+    border-color: rgba(245,166,35,0.35);
+    background: rgba(255,255,255,0.05);
+  }
   .unit-code {
     color: var(--accent-2);
     font-size: 12px;
@@ -1211,12 +1303,181 @@ $pageTitle = trim((string)($report['work_title'] ?? '')) ?: '작업 상세';
   .photo-viewer-close:hover {
     background: rgba(24, 36, 54, 0.98);
   }
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(5, 10, 18, 0.78);
+    backdrop-filter: blur(4px);
+  }
+  .modal-backdrop.is-open { display: flex; }
+  .unit-preview-modal {
+    width: min(1180px, 100%);
+    max-height: calc(100vh - 40px);
+    overflow: hidden;
+    border-radius: 18px;
+    border: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(18, 30, 48, 0.98), rgba(12, 20, 32, 0.98));
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.38);
+  }
+  .unit-preview-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 20px 22px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .unit-preview-head h2 {
+    margin: 0 0 6px;
+    color: var(--text-hi);
+    font-size: 22px;
+    line-height: 1.3;
+  }
+  .unit-preview-head p {
+    margin: 0;
+    color: var(--text-dim);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .modal-close {
+    flex: 0 0 auto;
+    min-width: 42px;
+    height: 42px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: rgba(255,255,255,0.06);
+    color: var(--text-hi);
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .modal-close:hover { background: rgba(255,255,255,0.11); }
+  .unit-preview-body {
+    padding: 18px 22px 22px;
+    max-height: calc(100vh - 156px);
+    overflow: auto;
+  }
+  .unit-preview-loading,
+  .unit-preview-error,
+  .unit-preview-empty {
+    padding: 32px 18px;
+    border: 1px dashed var(--border);
+    border-radius: 14px;
+    text-align: center;
+    color: var(--text-dim);
+    background: rgba(255,255,255,0.03);
+  }
+  .unit-preview-error { color: #ffd3d1; border-color: rgba(214, 69, 65, 0.45); }
+  .unit-preview-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .unit-preview-meta-card {
+    min-width: 0;
+    padding: 12px 13px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.035);
+  }
+  .unit-preview-meta-card strong {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--text-dim);
+    font-size: 11px;
+    letter-spacing: .04em;
+  }
+  .unit-preview-meta-card span {
+    display: block;
+    color: var(--text-hi);
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.45;
+    word-break: break-word;
+  }
+  .unit-preview-section {
+    margin-top: 16px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: rgba(255,255,255,0.025);
+  }
+  .unit-preview-section h3 {
+    margin: 0 0 10px;
+    color: var(--text-hi);
+    font-size: 16px;
+  }
+  .unit-preview-remark {
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .unit-preview-table-wrap {
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+  }
+  .unit-preview-table {
+    width: 100%;
+    min-width: 880px;
+    border-collapse: collapse;
+  }
+  .unit-preview-table th,
+  .unit-preview-table td {
+    padding: 11px 12px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    vertical-align: top;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .unit-preview-table th {
+    position: sticky;
+    top: 0;
+    background: rgba(18, 30, 48, 0.98);
+    color: var(--text-dim);
+    font-size: 12px;
+    letter-spacing: .04em;
+  }
+  .unit-preview-table td { color: var(--text); }
+  .unit-preview-table td strong { color: var(--text-hi); }
+  .sub-text { color: var(--text-dim); font-size: 12px; line-height: 1.6; }
+  .risk-badge-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .risk-level-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    font-size: 11px;
+    font-weight: 800;
+  }
+  .risk-level-badge.is-low { color: var(--success); border-color: rgba(127,224,175,0.35); background: rgba(127,224,175,0.1); }
+  .risk-level-badge.is-medium { color: var(--accent-2); border-color: rgba(245,166,35,0.35); background: rgba(245,166,35,0.1); }
+  .risk-level-badge.is-high { color: var(--danger); border-color: rgba(255,180,175,0.35); background: rgba(255,180,175,0.1); }
+  .risk-score-text { color: var(--text-hi); font-weight: 700; }
   .span-7 { grid-column: span 7; }
   .span-5 { grid-column: span 5; }
   @media (max-width: 900px) {
     .meta-grid, .summary-grid, .unit-grid, .hazard-grid { grid-template-columns: 1fr; }
     .span-7, .span-5 { grid-column: span 12; }
     .title { font-size: 24px; }
+    .unit-preview-meta-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
 </style>
 </head>
@@ -1299,14 +1560,22 @@ $pageTitle = trim((string)($report['work_title'] ?? '')) ?: '작업 상세';
       <section class="card span-5">
         <div class="card-head">
           <h2>연결된 위험성평가서</h2>
-          <p>이 작업에 연결된 위험성평가서와 분류 정보를 요약해서 보여줍니다.</p>
+          <p>관리감독자가 연결한 위험성평가서와 작업지휘자가 입력한 위험성평가서 항목을 함께 보여줍니다.</p>
         </div>
         <div class="card-body">
           <?php if (!empty($selectedUnits)): ?>
             <div class="unit-grid">
               <?php foreach ($selectedUnits as $unit): ?>
-                <article class="unit-card">
-                  <div class="unit-code"><?= h(trim((string)($unit['unit_code'] ?? '')) !== '' ? $unit['unit_code'] : '번호 미등록') ?></div>
+                <article
+                  class="unit-card is-clickable js-unit-preview-card"
+                  data-unit-ra-id="<?= (int)($unit['unit_ra_id'] ?? 0) ?>"
+                  role="button"
+                  tabindex="0"
+                  aria-label="<?= h(trim((string)($unit['unit_title'] ?? '')) !== '' ? $unit['unit_title'] . ' 위험성평가서 미리보기' : '위험성평가서 미리보기') ?>"
+                >
+                  <?php if (trim((string)($unit['unit_code'] ?? '')) !== ''): ?>
+                    <div class="unit-code"><?= h((string)$unit['unit_code']) ?></div>
+                  <?php endif; ?>
                   <div class="unit-title"><?= h(trim((string)($unit['unit_title'] ?? '')) !== '' ? $unit['unit_title'] : '제목 없음') ?></div>
                   <div class="muted">유형: <?= h(trim((string)($unit['unit_type'] ?? '')) !== '' ? $unit['unit_type'] : '-') ?></div>
                   <div class="muted">대분류: <?= h(trim((string)($unit['process_name'] ?? '')) !== '' ? $unit['process_name'] : '-') ?></div>
@@ -1318,6 +1587,42 @@ $pageTitle = trim((string)($report['work_title'] ?? '')) ?: '작업 상세';
             </div>
           <?php else: ?>
             <p class="empty-text">연결된 위험성평가서가 없습니다.</p>
+          <?php endif; ?>
+
+          <div class="hazard-section-label" style="margin-top:18px;">작업지휘자 입력 위험성평가서 목록</div>
+          <?php if (!empty($leaderDetailEntries)): ?>
+            <div class="unit-grid">
+              <?php foreach ($leaderDetailEntries as $entry): ?>
+                <article
+                  class="unit-card<?= (int)($entry['unit_ra_id'] ?? 0) > 0 ? ' is-clickable js-unit-preview-card' : '' ?>"
+                  <?php if ((int)($entry['unit_ra_id'] ?? 0) > 0): ?>
+                    data-unit-ra-id="<?= (int)($entry['unit_ra_id'] ?? 0) ?>"
+                    role="button"
+                    tabindex="0"
+                    aria-label="<?= h(((string)($entry['unit_title'] ?? '') !== '' ? $entry['unit_title'] : (string)($entry['title'] ?? '위험성평가서')) . ' 위험성평가서 미리보기') ?>"
+                  <?php endif; ?>
+                >
+                  <?php
+                    $entryCode = trim((string)($entry['unit_code'] ?? ''));
+                    if ($entryCode === '') {
+                        $entryCode = trim((string)($entry['risk_code'] ?? ''));
+                    }
+                  ?>
+                  <?php if ($entryCode !== ''): ?>
+                    <div class="unit-code"><?= h($entryCode) ?></div>
+                  <?php endif; ?>
+                  <div class="unit-title"><?= h(trim((string)($entry['unit_title'] ?? '')) !== '' ? $entry['unit_title'] : (string)($entry['title'] ?? '항목 없음')) ?></div>
+                  <div class="muted">선택항목: <?= h((string)($entry['title'] ?? '-')) ?></div>
+                  <div class="muted">유형: <?= h(trim((string)($entry['unit_type'] ?? '')) !== '' ? $entry['unit_type'] : ((string)($entry['meta'] ?? '') !== '' ? (string)$entry['meta'] : '작업지휘자 선택 항목')) ?></div>
+                  <div class="muted">대분류: <?= h(trim((string)($entry['process_name'] ?? '')) !== '' ? $entry['process_name'] : '-') ?></div>
+                  <?php if ((int)($entry['unit_ra_id'] ?? 0) <= 0): ?>
+                    <div class="muted">연결된 평가서를 찾지 못했습니다.</div>
+                  <?php endif; ?>
+                </article>
+              <?php endforeach; ?>
+            </div>
+          <?php else: ?>
+            <p class="empty-text">작업지휘자가 입력한 위험성평가서 목록이 없습니다.</p>
           <?php endif; ?>
         </div>
       </section>
@@ -1424,7 +1729,261 @@ $pageTitle = trim((string)($report['work_title'] ?? '')) ?: '작업 상세';
       <img class="photo-viewer-image" id="photo-viewer-image" src="" alt="">
     </div>
   </div>
+  <div class="modal-backdrop" id="unit-preview-modal" aria-hidden="true">
+    <div class="unit-preview-modal" role="dialog" aria-modal="true" aria-labelledby="unit-preview-title">
+      <div class="unit-preview-head">
+        <div>
+          <h2 id="unit-preview-title">위험성평가 미리보기</h2>
+          <p id="unit-preview-subtitle">데이터를 불러오는 중입니다.</p>
+        </div>
+        <button type="button" class="modal-close" id="unit-preview-close" aria-label="닫기">&times;</button>
+      </div>
+      <div class="unit-preview-body" id="unit-preview-body">
+        <div class="unit-preview-loading">위험성평가 상세 정보를 불러오는 중입니다.</div>
+      </div>
+    </div>
+  </div>
   <script>
+    (() => {
+      const modal = document.getElementById('unit-preview-modal');
+      const closeButton = document.getElementById('unit-preview-close');
+      const titleNode = document.getElementById('unit-preview-title');
+      const subtitleNode = document.getElementById('unit-preview-subtitle');
+      const bodyNode = document.getElementById('unit-preview-body');
+      const triggers = document.querySelectorAll('.js-unit-preview-card');
+      if (!modal || !closeButton || !titleNode || !subtitleNode || !bodyNode || !triggers.length) {
+        return;
+      }
+
+      let requestToken = 0;
+      let previousBodyOverflow = '';
+      const unitTypeLabels = {
+        target: '작업대상',
+        major_work: '중대위험작업',
+        tool: '공구/장비',
+        env: '작업환경',
+      };
+
+      function escapeHtml(value) {
+        return String(value == null ? '' : value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      function displayValue(value) {
+        const text = String(value ?? '').trim();
+        return text === '' ? '-' : escapeHtml(text);
+      }
+
+      function displayTextBlock(value) {
+        const text = String(value ?? '').trim();
+        return text === '' ? '-' : escapeHtml(text).replace(/\n/g, '<br>');
+      }
+
+      function formatDate(value) {
+        const text = String(value ?? '').trim();
+        return text === '' ? '' : text;
+      }
+
+      function renderMetaCard(label, value) {
+        return `
+          <div class="unit-preview-meta-card">
+            <strong>${escapeHtml(label)}</strong>
+            <span>${value}</span>
+          </div>
+        `;
+      }
+
+      function renderItems(items) {
+        if (!Array.isArray(items) || items.length === 0) {
+          return '<div class="unit-preview-empty">등록된 위험성평가 항목이 없습니다.</div>';
+        }
+
+        const renderRiskLine = (label, probability, severity, riskScore) => {
+          const hasValue = String(probability ?? '').trim() !== ''
+            || String(severity ?? '').trim() !== ''
+            || String(riskScore ?? '').trim() !== '';
+
+          if (!hasValue) {
+            return '';
+          }
+
+          const p = String(probability ?? '').trim() || '-';
+          const s = String(severity ?? '').trim() || '-';
+          const r = String(riskScore ?? '').trim() || '-';
+          const numericScore = Number.parseInt(String(riskScore ?? '').trim(), 10);
+          let riskLevelClass = 'is-medium';
+          let riskLevelLabel = '중위험';
+          if (Number.isFinite(numericScore)) {
+            if (numericScore <= 6) {
+              riskLevelClass = 'is-low';
+              riskLevelLabel = '저위험';
+            } else if (numericScore >= 15) {
+              riskLevelClass = 'is-high';
+              riskLevelLabel = '고위험';
+            }
+          }
+
+          return `
+            <div class="risk-badge-line">
+              <span class="risk-level-badge ${riskLevelClass}">${escapeHtml(riskLevelLabel)}</span>
+              <span class="risk-score-text"><strong>${escapeHtml(label)}</strong> P ${escapeHtml(p)} / S ${escapeHtml(s)} / R ${escapeHtml(r)}</span>
+            </div>
+          `;
+        };
+
+        const rows = items.map((item, index) => {
+          const sortNo = String(item.sort_no ?? '').trim() !== '' ? item.sort_no : (index + 1);
+          const accidentSummary = [item.accident_type, item.injury_result]
+            .map((part) => String(part ?? '').trim())
+            .filter(Boolean)
+            .join(' / ');
+          const riskSummary = [
+            renderRiskLine('현재', item.likelihood_before, item.severity_before, item.risk_score_before),
+            renderRiskLine('조치후', item.likelihood_current, item.severity_current, item.risk_score_current),
+            renderRiskLine('개선후', item.likelihood_after, item.severity_after, item.risk_score_after),
+          ].filter(Boolean).join('');
+
+          return `
+            <tr>
+              <td>${escapeHtml(sortNo)}</td>
+              <td>${displayValue(item.task_name)}</td>
+              <td>${escapeHtml(String(item.hazard_4m_label || item.hazard_4m || '-').trim() || '-')}</td>
+              <td>
+                <strong>${displayValue(item.hazard_name)}</strong>
+                ${String(item.cause_text ?? '').trim() !== '' ? `<div class="sub-text" style="margin-top:6px">원인/위험상황: ${displayTextBlock(item.cause_text)}</div>` : ''}
+              </td>
+              <td>${accidentSummary !== '' ? escapeHtml(accidentSummary) : '-'}</td>
+              <td>${riskSummary !== '' ? `<div class="sub-text">${riskSummary}</div>` : '-'}</td>
+              <td>${displayTextBlock(item.current_control_text)}</td>
+              <td>${displayTextBlock(item.additional_control_text)}</td>
+            </tr>
+          `;
+        }).join('');
+
+        return `
+          <div class="unit-preview-table-wrap">
+            <table class="unit-preview-table">
+              <thead>
+                <tr>
+                  <th>No</th>
+                  <th>작업절차</th>
+                  <th>4M분류</th>
+                  <th>유해위험요인</th>
+                  <th>사고유형/상해결과</th>
+                  <th>위험도</th>
+                  <th>현재 조치</th>
+                  <th>추가 조치</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        `;
+      }
+
+      function renderPreview(payload) {
+        const header = payload && payload.header ? payload.header : {};
+        const items = payload && Array.isArray(payload.items) ? payload.items : [];
+        const unitTitle = String(header.unit_title ?? '').trim();
+        const unitCode = String(header.unit_code ?? '').trim();
+        titleNode.textContent = unitTitle || unitCode || '위험성평가 미리보기';
+        subtitleNode.textContent = unitCode
+          ? `${unitCode} · 항목 ${items.length}건`
+          : `항목 ${items.length}건`;
+
+        bodyNode.innerHTML = `
+          <div class="unit-preview-meta-grid">
+            ${renderMetaCard('위험성평가번호', displayValue(header.unit_code))}
+            ${renderMetaCard('작업표준서번호', displayValue(header.safe_work_standard_no))}
+            ${renderMetaCard('평가유형', displayValue(unitTypeLabels[String(header.unit_type ?? '').trim()] || header.unit_type))}
+            ${renderMetaCard('공정명', displayValue(header.process_name))}
+            ${renderMetaCard('평가서명', displayValue(header.unit_title))}
+            ${renderMetaCard('평가자', displayValue(header.evaluator_name))}
+            ${renderMetaCard('등록일', displayValue(formatDate(header.created_at)))}
+            ${renderMetaCard('수정일', displayValue(formatDate(header.updated_at)))}
+          </div>
+          <section class="unit-preview-section">
+            <h3>비고</h3>
+            <div class="unit-preview-remark">${displayTextBlock(header.remark)}</div>
+          </section>
+          <section class="unit-preview-section">
+            <h3>위험성평가 항목</h3>
+            ${renderItems(items)}
+          </section>
+        `;
+      }
+
+      function closeModal() {
+        modal.classList.remove('is-open');
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = previousBodyOverflow;
+      }
+
+      function openModal(unitRaId) {
+        if (!Number.isInteger(unitRaId) || unitRaId <= 0) {
+          return;
+        }
+
+        requestToken += 1;
+        const currentToken = requestToken;
+        previousBodyOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        modal.classList.add('is-open');
+        modal.setAttribute('aria-hidden', 'false');
+        titleNode.textContent = '위험성평가 미리보기';
+        subtitleNode.textContent = '데이터를 불러오는 중입니다.';
+        bodyNode.innerHTML = '<div class="unit-preview-loading">위험성평가 상세 정보를 불러오는 중입니다.</div>';
+
+        fetch(`unit_ra_header_api.php?action=preview&unit_ra_id=${encodeURIComponent(unitRaId)}`)
+          .then((response) => response.json())
+          .then((json) => {
+            if (currentToken !== requestToken) {
+              return;
+            }
+            if (!json || !json.success) {
+              throw new Error(json && json.message ? json.message : '위험성평가 정보를 불러오지 못했습니다.');
+            }
+            renderPreview(json.data || {});
+          })
+          .catch((error) => {
+            if (currentToken !== requestToken) {
+              return;
+            }
+            titleNode.textContent = '위험성평가 미리보기';
+            subtitleNode.textContent = '데이터를 불러오지 못했습니다.';
+            bodyNode.innerHTML = `<div class="unit-preview-error">${escapeHtml(error && error.message ? error.message : '오류가 발생했습니다.')}</div>`;
+          });
+      }
+
+      triggers.forEach((trigger) => {
+        trigger.addEventListener('click', () => {
+          openModal(Number(trigger.dataset.unitRaId || 0));
+        });
+        trigger.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            openModal(Number(trigger.dataset.unitRaId || 0));
+          }
+        });
+      });
+
+      closeButton.addEventListener('click', closeModal);
+      modal.addEventListener('click', (event) => {
+        if (event.target === modal) {
+          closeModal();
+        }
+      });
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && modal.classList.contains('is-open')) {
+          closeModal();
+        }
+      });
+    })();
+
     (() => {
       const toggleButton = document.getElementById('hazard-summary-toggle');
       const summaryPanel = document.getElementById('hazard-summary-panel');

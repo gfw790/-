@@ -17,7 +17,7 @@ if (!auth_can_manage($user)) {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>보호구관리</title>
+        <title>蹂댄샇援ш?由?/title>
         <style>
             body { font-family: "Malgun Gothic", sans-serif; background:#f3f7fb; color:#122033; margin:0; padding:32px; }
             .panel { max-width:720px; margin:0 auto; background:#fff; border:1px solid #d7e0ea; border-radius:20px; padding:24px; }
@@ -28,10 +28,10 @@ if (!auth_can_manage($user)) {
     </head>
     <body>
         <div class="panel">
-            <h1>보호구관리</h1>
-            <p>이 페이지는 안전관리자 또는 관리권한 사용자만 접근할 수 있습니다.</p>
+            <h1>蹂댄샇援ш?由?/h1>
+            <p>???섏씠吏???덉쟾愿由ъ옄 ?먮뒗 愿由ш텒???ъ슜?먮쭔 ?묎렐?????덉뒿?덈떎.</p>
             <div class="actions">
-                <a class="button secondary" href="/risk_assessment/work_list.php">작업목록으로 돌아가기</a>
+                <a class="button secondary" href="/risk_assessment/work_list.php">?묒뾽紐⑸줉?쇰줈 ?뚯븘媛湲?/a>
             </div>
         </div>
     </body>
@@ -45,7 +45,7 @@ if (!auth_can_manage($user)) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>안전보호구 관리</title>
+    <title>?덉쟾蹂댄샇援?愿由?/title>
     <style>
         :root {
             --bg: #edf3f8;
@@ -273,6 +273,9 @@ if (!auth_can_manage($user)) {
             }
         }
 
+        @media (max-width: 1024px) {
+        }
+
         @media (max-width: 760px) {
             .grid {
                 grid-template-columns: 1fr;
@@ -284,113 +287,113 @@ if (!auth_can_manage($user)) {
     <div class="page">
         <section class="panel">
             <div class="row" style="justify-content:flex-end; margin-bottom:8px;">
-                <a class="btn-secondary" href="/risk_assessment/work_list.php">작업목록</a>
+                <a class="btn-secondary" href="/risk_assessment/work_list.php">?묒뾽紐⑸줉</a>
             </div>
-            <h1>안전보호구 관리</h1>
-            <p class="lead">바코드 또는 QR 코드를 스캔해 등록하고, 보호구 종류·구매처·구매가격·지급자·상태·이력을 함께 관리합니다. 구조는 RFID/NFC 확장도 가능한 형태로 열어 두었습니다.</p>
+            <h1>?덉쟾蹂댄샇援?愿由?/h1>
+            <p class="lead">諛붿퐫???먮뒗 QR 肄붾뱶瑜??ㅼ틪???깅줉?섍퀬, 蹂댄샇援?醫낅쪟쨌援щℓ泥샕룰뎄留ㅺ?寃㈑룹?湲됱옄쨌?곹깭쨌?대젰???④퍡 愿由ы빀?덈떎. 援ъ“??RFID/NFC ?뺤옣??媛?ν븳 ?뺥깭濡??댁뼱 ?먯뿀?듬땲??</p>
 
             <div class="grid" style="margin-top:16px;">
                 <div class="field">
-                    <label for="template_select">제품 템플릿</label>
+                    <label for="template_select">?쒗뭹 ?쒗뵆由?/label>
                     <select id="template_select">
-                        <option value="">선택 안 함</option>
+                        <option value="">?좏깮 ????/option>
                     </select>
                 </div>
                 <div class="field">
-                    <label for="template_name">템플릿 이름</label>
+                    <label for="template_name">?쒗뵆由??대쫫</label>
                     <div class="row">
-                        <input id="template_name" class="grow" type="text" placeholder="예: K2 안전모 기본형">
-                        <button id="saveTemplateButton" type="button" class="ghost">템플릿 저장</button>
-                        <button id="deleteTemplateButton" type="button" class="secondary">템플릿 삭제</button>
+                        <input id="template_name" class="grow" type="text" placeholder="?? K2 ?덉쟾紐?湲곕낯??>
+                        <button id="saveTemplateButton" type="button" class="ghost">?쒗뵆由????/button>
+                        <button id="deleteTemplateButton" type="button" class="secondary">?쒗뵆由???젣</button>
                     </div>
                 </div>
                 <div class="field">
-                    <label for="identifier_type">식별 방식</label>
+                    <label for="identifier_type">?앸퀎 諛⑹떇</label>
                     <select id="identifier_type">
-                        <option value="barcode">바코드</option>
-                        <option value="qr">QR 코드</option>
-                        <option value="internal">내부 관리번호</option>
+                        <option value="barcode">諛붿퐫??/option>
+                        <option value="qr">QR 肄붾뱶</option>
+                        <option value="internal">?대? 愿由щ쾲??/option>
                         <option value="rfid">RFID</option>
                         <option value="nfc">NFC</option>
                     </select>
                 </div>
                 <div class="field">
-                    <label for="identifier_value">식별값</label>
+                    <label for="identifier_value">?앸퀎媛?/label>
                     <div class="row">
-                        <input id="identifier_value" class="grow" type="text" placeholder="스캔 또는 직접 입력">
-                        <button id="generateInternalKeyButton" type="button" class="ghost">내부 키 생성</button>
+                        <input id="identifier_value" class="grow" type="text" placeholder="?ㅼ틪 ?먮뒗 吏곸젒 ?낅젰">
+                        <button id="generateInternalKeyButton" type="button" class="ghost">?대? ???앹꽦</button>
                     </div>
                 </div>
                 <div class="field">
-                    <label for="gear_type">보호구 종류</label>
-                    <input id="gear_type" type="text" placeholder="예: 안전모, 안전벨트, 방진마스크">
+                    <label for="gear_type">蹂댄샇援?醫낅쪟</label>
+                    <input id="gear_type" type="text" placeholder="?? ?덉쟾紐? ?덉쟾踰⑦듃, 諛⑹쭊留덉뒪??>
                 </div>
                 <div class="field">
-                    <label for="item_name">품명</label>
-                    <input id="item_name" type="text" placeholder="예: 안전모">
+                    <label for="item_name">?덈챸</label>
+                    <input id="item_name" type="text" placeholder="?? ?덉쟾紐?>
                 </div>
                 <div class="field">
-                    <label for="model_name">모델</label>
-                    <input id="model_name" type="text" placeholder="예: K2 화이트">
+                    <label for="model_name">紐⑤뜽</label>
+                    <input id="model_name" type="text" placeholder="?? K2 ?붿씠??>
                 </div>
                 <div class="field">
-                    <label for="purchase_vendor">구매처</label>
-                    <input id="purchase_vendor" type="text" placeholder="예: 안전마트">
+                    <label for="purchase_vendor">援щℓ泥?/label>
+                    <input id="purchase_vendor" type="text" placeholder="?? ?덉쟾留덊듃">
                 </div>
                 <div class="field">
-                    <label for="purchase_price">구매가격</label>
-                    <input id="purchase_price" type="text" placeholder="예: 15000" inputmode="numeric">
+                    <label for="purchase_price">援щℓ媛寃?/label>
+                    <input id="purchase_price" type="text" placeholder="?? 15000" inputmode="numeric">
                 </div>
                 <div class="field">
-                    <label for="purchased_at">구매일</label>
+                    <label for="purchased_at">援щℓ??/label>
                     <input id="purchased_at" type="date">
                 </div>
 <div class="field">
-                    <label for="status">상태</label>
+                    <label for="status">?곹깭</label>
                     <input id="status" type="text" readonly>
                 </div>
                 <div class="field">
-                    <label for="assigned_employee_id">지급자</label>
+                    <label for="assigned_employee_id">吏湲됱옄</label>
                     <select id="assigned_employee_id">
-                        <option value="">선택 안 함</option>
+                        <option value="">?좏깮 ????/option>
                     </select>
                 </div>
                 <div class="field">
-                    <label for="assigned_team">지급팀</label>
-                    <input id="assigned_team" type="text" placeholder="직원 선택 시 자동 입력">
+                    <label for="assigned_team">吏湲됲?</label>
+                    <input id="assigned_team" type="text" placeholder="吏곸썝 ?좏깮 ???먮룞 ?낅젰">
                 </div>
                 <div class="field">
-                    <label for="assigned_at">지급일</label>
+                    <label for="assigned_at">吏湲됱씪</label>
                     <select id="assigned_team_select" style="margin-top:6px;">
-                        <option value="">팀 선택</option>
+                        <option value="">? ?좏깮</option>
                     </select>
                     <input id="assigned_at" type="date">
                 </div>
                 <div class="field">
-                    <label for="assigned_employee_name">지급자명</label>
+                    <label for="assigned_employee_name">吏湲됱옄紐?/label>
                     <div class="row">
-                        <input id="assigned_employee_name" class="grow" type="text" placeholder="직원 선택 시 자동 입력">
-                        <button id="clearAssigneeButton" type="button" class="secondary">지급자 삭제</button>
+                        <input id="assigned_employee_name" class="grow" type="text" placeholder="吏곸썝 ?좏깮 ???먮룞 ?낅젰">
+                        <button id="clearAssigneeButton" type="button" class="secondary">吏湲됱옄 ??젣</button>
                     </div>
                 </div>
                 <div class="field full">
-                    <label for="notes">메모</label>
-                    <textarea id="notes" placeholder="추가 메모를 입력하세요."></textarea>
+                    <label for="notes">硫붾え</label>
+                    <textarea id="notes" placeholder="異붽? 硫붾え瑜??낅젰?섏꽭??"></textarea>
                 </div>
             </div>
 
             <div class="row" style="margin-top:14px;">
-                <button id="saveButton" type="button">저장</button>
-                <button id="newButton" type="button" class="secondary">신규 입력</button>
-                <button id="findButton" type="button" class="secondary">식별값 조회</button>
-                <button id="initialIssueButton" type="button" class="ghost">초기 지급 등록</button>
-                <button id="deleteButton" type="button" class="danger">삭제</button>
-                <a href="/safety_gear/report.php" class="button secondary">이력서 조회/출력</a>
-                <a href="/safety_gear/receipt_batch_print.php" class="button secondary">개인별 확인서 일괄출력</a>
-                <a href="/safety_gear/status.php" class="button secondary">안전보호구 현황</a>
+                <button id="saveButton" type="button">???/button>
+                <button id="newButton" type="button" class="secondary">?좉퇋 ?낅젰</button>
+                <button id="findButton" type="button" class="secondary">?앸퀎媛?議고쉶</button>
+                <button id="initialIssueButton" type="button" class="ghost">珥덇린 吏湲??깅줉</button>
+                <button id="deleteButton" type="button" class="danger">??젣</button>
+                <a href="/safety_gear/report.php" class="button secondary">?대젰??議고쉶/異쒕젰</a>
+                <a href="/safety_gear/receipt_batch_print.php" class="button secondary">媛쒖씤蹂??뺤씤???쇨큵異쒕젰</a>
+                <a href="/safety_gear/status.php" class="button secondary">?덉쟾蹂댄샇援??꾪솴</a>
                 <label class="hint" style="display:flex; align-items:center; gap:6px; margin-left:4px;">
                     <input id="continuousMode" type="checkbox">
-                    연속 등록 모드
+                    ?곗냽 ?깅줉 紐⑤뱶
                 </label>
             </div>
 
@@ -398,91 +401,91 @@ if (!auth_can_manage($user)) {
                 <video id="scannerVideo" playsinline muted></video>
                 <div class="scanner-bar">
                     <div class="row">
-                        <button id="startScanButton" type="button">카메라 스캔 시작</button>
-                        <button id="stopScanButton" type="button" class="secondary">카메라 중지</button>
+                        <button id="startScanButton" type="button">移대찓???ㅼ틪 ?쒖옉</button>
+                        <button id="stopScanButton" type="button" class="secondary">移대찓??以묒?</button>
                     </div>
-                    <div class="hint" style="color:#cbd5e1; margin-top:8px;">BarcodeDetector를 지원하는 브라우저에서는 카메라 스캔이 가능하고, 그렇지 않으면 직접 입력으로도 등록할 수 있습니다.</div>
+                    <div class="hint" style="color:#cbd5e1; margin-top:8px;">BarcodeDetector瑜?吏?먰븯??釉뚮씪?곗??먯꽌??移대찓???ㅼ틪??媛?ν븯怨? 洹몃젃吏 ?딆쑝硫?吏곸젒 ?낅젰?쇰줈???깅줉?????덉뒿?덈떎.</div>
                 </div>
             </div>
 
-            <div id="statusBox" class="status">준비되었습니다. 스캔하거나 식별값을 입력해 주세요.</div>
+            <div id="statusBox" class="status">以鍮꾨릺?덉뒿?덈떎. ?ㅼ틪?섍굅???앸퀎媛믪쓣 ?낅젰??二쇱꽭??</div>
 
-            <h3 style="margin-top:22px;">추적 이력</h3>
+            <h3 style="margin-top:22px;">異붿쟻 ?대젰</h3>
             <div class="grid" style="margin-top:12px;">
                 <div class="field">
-                    <label for="history_type">이력 종류</label>
+                    <label for="history_type">?대젰 醫낅쪟</label>
                     <select id="history_type">
-                        <option value="입고">입고</option>
-                        <option value="지급">지급</option>
-                        <option value="회수">회수</option>
-                        <option value="점검">점검</option>
-                        <option value="수리">수리</option>
-                        <option value="폐기">폐기</option>
-                        <option value="비고">비고</option>
+                        <option value="?낃퀬">?낃퀬</option>
+                        <option value="吏湲?>吏湲?/option>
+                        <option value="?뚯닔">?뚯닔</option>
+                        <option value="?먭?">?먭?</option>
+                        <option value="?섎━">?섎━</option>
+                        <option value="?먭린">?먭린</option>
+                        <option value="鍮꾧퀬">鍮꾧퀬</option>
                     </select>
                 </div>
                 <div class="field">
-                    <label for="history_at">이력 날짜</label>
+                    <label for="history_at">?대젰 ?좎쭨</label>
                     <input id="history_at" type="date">
                 </div>
                 <div class="field full">
-                    <label for="history_note">이력 내용</label>
+                    <label for="history_note">?대젰 ?댁슜</label>
                     <div class="row">
-                        <input id="history_note" class="grow" type="text" placeholder="예: 홍길동 지급, 외관 점검 완료">
-                        <button id="addHistoryButton" type="button" class="ghost">이력 추가</button>
-                        <button id="cancelHistoryEditButton" type="button" class="secondary" hidden>수정 취소</button>
+                        <input id="history_note" class="grow" type="text" placeholder="?? ?띻만??吏湲? ?멸? ?먭? ?꾨즺">
+                        <button id="addHistoryButton" type="button" class="ghost">?대젰 異붽?</button>
+                        <button id="cancelHistoryEditButton" type="button" class="secondary" hidden>?섏젙 痍⑥냼</button>
                     </div>
                 </div>
             </div>
             <div id="historyList" class="history-list"></div>
 
             <div class="bulk-box">
-                <h3>입고 수량 일괄 등록</h3>
-                <p class="hint" style="margin:8px 0 12px;">현재 입력한 보호구 기본정보를 기준으로, 수량만큼 내부코드를 자동 생성해 한 번에 입고 등록합니다.</p>
+                <h3>?낃퀬 ?섎웾 ?쇨큵 ?깅줉</h3>
+                <p class="hint" style="margin:8px 0 12px;">?꾩옱 ?낅젰??蹂댄샇援?湲곕낯?뺣낫瑜?湲곗??쇰줈, ?섎웾留뚰겮 ?대?肄붾뱶瑜??먮룞 ?앹꽦????踰덉뿉 ?낃퀬 ?깅줉?⑸땲??</p>
                 <div class="field">
-                    <label for="bulk_quantity">입고 수량</label>
-                    <input id="bulk_quantity" type="number" min="1" step="1" value="1" placeholder="예: 10">
+                    <label for="bulk_quantity">?낃퀬 ?섎웾</label>
+                    <input id="bulk_quantity" type="number" min="1" step="1" value="1" placeholder="?? 10">
                 </div>
                 <div class="row" style="margin-top:10px;">
-                    <button id="bulkReceiveButton" type="button" class="ghost">입고 수량 일괄 등록</button>
+                    <button id="bulkReceiveButton" type="button" class="ghost">?낃퀬 ?섎웾 ?쇨큵 ?깅줉</button>
                 </div>
             </div>
 
             <div class="bulk-box">
-                <h3>기존 지급품 일괄 등록</h3>
-                <p class="hint" style="margin:8px 0 12px;">현재 입력한 보호구 기본정보와 지급자 정보를 기준으로, 식별값만 여러 줄로 넣어 한 번에 `지급됨` 상태로 등록합니다.</p>
+                <h3>湲곗〈 吏湲됲뭹 ?쇨큵 ?깅줉</h3>
+                <p class="hint" style="margin:8px 0 12px;">?꾩옱 ?낅젰??蹂댄샇援?湲곕낯?뺣낫? 吏湲됱옄 ?뺣낫瑜?湲곗??쇰줈, ?앸퀎媛믩쭔 ?щ윭 以꾨줈 ?ｌ뼱 ??踰덉뿉 `吏湲됰맖` ?곹깭濡??깅줉?⑸땲??</p>
                 <div class="field">
-                    <label for="bulk_identifiers">식별값 목록</label>
-                    <textarea id="bulk_identifiers" placeholder="한 줄에 하나씩 입력&#10;BARCODE-001&#10;BARCODE-002&#10;BARCODE-003"></textarea>
+                    <label for="bulk_identifiers">?앸퀎媛?紐⑸줉</label>
+                    <textarea id="bulk_identifiers" placeholder="??以꾩뿉 ?섎굹???낅젰&#10;BARCODE-001&#10;BARCODE-002&#10;BARCODE-003"></textarea>
                 </div>
                 <div class="row" style="margin-top:10px;">
-                    <button id="bulkInitialIssueButton" type="button" class="ghost">기존 지급품 일괄 등록</button>
-                    <button id="bulkClearButton" type="button" class="secondary">입력 비우기</button>
+                    <button id="bulkInitialIssueButton" type="button" class="ghost">湲곗〈 吏湲됲뭹 ?쇨큵 ?깅줉</button>
+                    <button id="bulkClearButton" type="button" class="secondary">?낅젰 鍮꾩슦湲?/button>
                 </div>
             </div>
         </section>
 
         <aside class="panel">
             <div class="section-head">
-                <h2>선택 항목</h2>
-                <div id="currentItemBadge" class="badge">신규 등록 모드</div>
+                <h2>?좏깮 ??ぉ</h2>
+                <div id="currentItemBadge" class="badge">?좉퇋 ?깅줉 紐⑤뱶</div>
             </div>
             <div class="qr-box" style="margin-top:14px;">
-                <img id="qrImage" alt="QR 코드" hidden>
-                <div id="qrEmpty" class="hint">식별값이 있으면 QR 미리보기가 표시됩니다.</div>
+                <img id="qrImage" alt="QR 肄붾뱶" hidden>
+                <div id="qrEmpty" class="hint">?앸퀎媛믪씠 ?덉쑝硫?QR 誘몃━蹂닿린媛 ?쒖떆?⑸땲??</div>
             </div>
 
             <div class="section-head" style="margin-top:22px;">
-                <h3>등록 목록</h3>
+                <h3>?깅줉 紐⑸줉</h3>
                 <span id="recentCount" class="count"></span>
             </div>
             <div class="row" style="margin-top:10px;">
-                <input id="searchInput" class="grow" type="text" placeholder="식별값, 보호구, 구매처, 지급자 검색">
-                <button id="searchButton" type="button" class="secondary">검색</button>
-                <button id="searchResetButton" type="button" class="secondary">초기화</button>
-                <button id="exportButton" type="button" class="ghost">CSV 다운로드</button>
+                <input id="searchInput" class="grow" type="text" placeholder="?앸퀎媛? 蹂댄샇援? 援щℓ泥? 吏湲됱옄 寃??>
+                <button id="searchButton" type="button" class="secondary">寃??/button>
+                <button id="searchResetButton" type="button" class="secondary">珥덇린??/button>
+                <button id="exportButton" type="button" class="ghost">CSV ?ㅼ슫濡쒕뱶</button>
             </div>
-            <div class="hint" style="margin-top:8px;">최근 수정된 순서로 보입니다. 항목을 누르면 상세가 왼쪽에 채워집니다.</div>
+            <div class="hint" style="margin-top:8px;">理쒓렐 ?섏젙???쒖꽌濡?蹂댁엯?덈떎. ??ぉ???꾨Ⅴ硫??곸꽭媛 ?쇱そ??梨꾩썙吏묐땲??</div>
             <div id="recentList" class="recent-list"></div>
         </aside>
     </div>
@@ -503,7 +506,7 @@ if (!auth_can_manage($user)) {
 
             const select = document.createElement('select');
             select.id = 'gear_type';
-            select.innerHTML = '<option value="">보호구 종류 선택</option>';
+            select.innerHTML = '<option value="">蹂댄샇援?醫낅쪟 ?좏깮</option>';
 
             if (original.value) {
                 const option = document.createElement('option');
@@ -522,9 +525,9 @@ if (!auth_can_manage($user)) {
                 tools.className = 'row';
                 tools.style.marginTop = '6px';
                 tools.innerHTML =
-                    '<input id="gear_type_new_name" class="grow" type="text" placeholder="새 보호구 종류 입력">' +
-                    '<button id="addGearTypeButton" type="button" class="ghost">목록 추가</button>' +
-                    '<button id="deleteGearTypeButton" type="button" class="secondary">선택 삭제</button>';
+                    '<input id="gear_type_new_name" class="grow" type="text" placeholder="??蹂댄샇援?醫낅쪟 ?낅젰">' +
+                    '<button id="addGearTypeButton" type="button" class="ghost">紐⑸줉 異붽?</button>' +
+                    '<button id="deleteGearTypeButton" type="button" class="secondary">?좏깮 ??젣</button>';
                 field.appendChild(tools);
             }
 
@@ -555,13 +558,13 @@ if (!auth_can_manage($user)) {
 
             const specLabel = document.createElement('label');
             specLabel.setAttribute('for', 'spec_name');
-            specLabel.textContent = '규격';
+            specLabel.textContent = '洹쒓꺽';
 
             specInput = document.createElement('input');
             specInput.id = 'spec_name';
             specInput.type = 'text';
             specInput.setAttribute('list', 'spec_name_list');
-            specInput.placeholder = '예: ABS, 6인치, 전체식';
+            specInput.placeholder = '?? ABS, 6?몄튂, ?꾩껜??;
 
             const specList = document.createElement('datalist');
             specList.id = 'spec_name_list';
@@ -592,12 +595,12 @@ if (!auth_can_manage($user)) {
 
             const kcsLabel = document.createElement('label');
             kcsLabel.setAttribute('for', 'kcs_cert_no');
-            kcsLabel.textContent = 'KCS 안전인증번호';
+            kcsLabel.textContent = 'KCS ?덉쟾?몄쬆踰덊샇';
 
             kcsInput = document.createElement('input');
             kcsInput.id = 'kcs_cert_no';
             kcsInput.type = 'text';
-            kcsInput.placeholder = '예: KCS-2026-000123';
+            kcsInput.placeholder = '?? KCS-2026-000123';
 
             kcsField.appendChild(kcsLabel);
             kcsField.appendChild(kcsInput);
@@ -624,12 +627,12 @@ if (!auth_can_manage($user)) {
 
             const manufacturerLabel = document.createElement('label');
             manufacturerLabel.setAttribute('for', 'manufacturer_name');
-            manufacturerLabel.textContent = '제조사';
+            manufacturerLabel.textContent = '?쒖“??;
 
             manufacturerInput = document.createElement('input');
             manufacturerInput.id = 'manufacturer_name';
             manufacturerInput.type = 'text';
-            manufacturerInput.placeholder = '예: K2, 3M, 유한킴벌리';
+            manufacturerInput.placeholder = '?? K2, 3M, ?좏븳?대쾶由?;
 
             manufacturerField.appendChild(manufacturerLabel);
             manufacturerField.appendChild(manufacturerInput);
@@ -721,7 +724,7 @@ if (!auth_can_manage($user)) {
             const response = await fetch(url, options);
             const payload = await response.json();
             if (!response.ok || !payload || payload.ok !== true) {
-                throw new Error(payload && payload.message ? payload.message : '요청 처리 중 오류가 발생했습니다.');
+                throw new Error(payload && payload.message ? payload.message : '?붿껌 泥섎━ 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.');
             }
             return payload;
         }
@@ -773,7 +776,7 @@ if (!auth_can_manage($user)) {
 
         function renderEmployees() {
             const select = fields.assignedEmployeeId;
-            select.innerHTML = '<option value="">선택 안 함</option>';
+            select.innerHTML = '<option value="">?좏깮 ????/option>';
             state.employees.forEach(function (employee) {
                 const option = document.createElement('option');
                 option.value = employee.id;
@@ -815,7 +818,7 @@ if (!auth_can_manage($user)) {
                 return a.localeCompare(b, 'ko');
             });
 
-            fields.assignedTeamSelect.innerHTML = '<option value="">팀 선택</option>';
+            fields.assignedTeamSelect.innerHTML = '<option value="">? ?좏깮</option>';
             teams.forEach(function (teamName) {
                 const option = document.createElement('option');
                 option.value = teamName;
@@ -827,7 +830,7 @@ if (!auth_can_manage($user)) {
         }
 
         function renderTemplates() {
-            fields.templateSelect.innerHTML = '<option value="">선택 안 함</option>';
+            fields.templateSelect.innerHTML = '<option value="">?좏깮 ????/option>';
             state.templates.forEach(function (template) {
                 const option = document.createElement('option');
                 option.value = template.id;
@@ -842,7 +845,7 @@ if (!auth_can_manage($user)) {
         function renderGearTypes() {
             const select = fields.gearType;
             const currentValue = String(select.value || '').trim();
-            select.innerHTML = '<option value="">보호구 종류 선택</option>';
+            select.innerHTML = '<option value="">蹂댄샇援?醫낅쪟 ?좏깮</option>';
 
             state.gearTypes.forEach(function (type) {
                 const option = document.createElement('option');
@@ -920,7 +923,7 @@ if (!auth_can_manage($user)) {
             fields.historyList.innerHTML = '';
             const items = Array.isArray(history) ? history : [];
             if (!items.length) {
-                fields.historyList.innerHTML = '<div class="history-item"><div class="history-meta">이력이 없습니다.</div><div>저장 후 이력을 추가할 수 있습니다.</div></div>';
+                fields.historyList.innerHTML = '<div class="history-item"><div class="history-meta">?대젰???놁뒿?덈떎.</div><div>??????대젰??異붽??????덉뒿?덈떎.</div></div>';
                 return;
             }
 
@@ -930,7 +933,7 @@ if (!auth_can_manage($user)) {
                 element.innerHTML =
                     '<div class="history-meta">' + escapeHtml(entry.timestamp || '') + ' / ' + escapeHtml(entry.type || '') + '</div>' +
                     '<div>' + escapeHtml(entry.note || '') + '</div>' +
-                    '<div class="row" style="margin-top:8px;"><button type="button" class="secondary history-edit-button">수정</button></div>';
+                    '<div class="row" style="margin-top:8px;"><button type="button" class="secondary history-edit-button">?섏젙</button></div>';
                 const editButton = element.querySelector('.history-edit-button');
                 if (editButton) {
                     editButton.addEventListener('click', function () {
@@ -943,10 +946,10 @@ if (!auth_can_manage($user)) {
 
         function resetHistoryForm() {
             state.currentHistoryId = 0;
-            fields.historyType.value = '입고';
+            fields.historyType.value = '?낃퀬';
             fields.historyAt.value = getTodayDate();
             fields.historyNote.value = '';
-            fields.addHistoryButton.textContent = '이력 추가';
+            fields.addHistoryButton.textContent = '?대젰 異붽?';
             fields.cancelHistoryEditButton.hidden = true;
         }
 
@@ -956,10 +959,10 @@ if (!auth_can_manage($user)) {
             }
 
             state.currentHistoryId = Number(entry.history_id) || 0;
-            fields.historyType.value = entry.type || '입고';
+            fields.historyType.value = entry.type || '?낃퀬';
             fields.historyAt.value = formatDateOnly(entry.timestamp || '') || getTodayDate();
             fields.historyNote.value = entry.note || '';
-            fields.addHistoryButton.textContent = '이력 수정 저장';
+            fields.addHistoryButton.textContent = '?대젰 ?섏젙 ???;
             fields.cancelHistoryEditButton.hidden = false;
             fields.historyNote.focus();
         }
@@ -977,7 +980,7 @@ if (!auth_can_manage($user)) {
             fields.purchaseVendor.value = '';
             fields.purchasePrice.value = '';
             fields.purchasedAt.value = '';
-            fields.status.value = '사용 가능';
+            fields.status.value = '?ъ슜 媛??;
             fields.assignedEmployeeId.value = '';
             fields.assignedEmployeeName.value = '';
             fields.assignedTeam.value = '';
@@ -987,7 +990,7 @@ if (!auth_can_manage($user)) {
             fields.assignedAt.value = '';
             fields.notes.value = '';
             resetHistoryForm();
-            fields.currentItemBadge.textContent = '신규 등록 모드';
+            fields.currentItemBadge.textContent = '?좉퇋 ?깅줉 紐⑤뱶';
             renderHistory([]);
             updateQrPreview();
         }
@@ -1003,7 +1006,7 @@ if (!auth_can_manage($user)) {
             }
             fields.assignedAt.value = '';
             resetHistoryForm();
-            fields.currentItemBadge.textContent = '연속 등록 대기';
+            fields.currentItemBadge.textContent = '?곗냽 ?깅줉 ?湲?;
             renderHistory([]);
             updateQrPreview();
             fields.identifierValue.focus();
@@ -1023,7 +1026,7 @@ if (!auth_can_manage($user)) {
             fields.purchaseVendor.value = entry.purchase_vendor || '';
             fields.purchasePrice.value = formatNumberWithComma(entry.purchase_price || '');
             fields.purchasedAt.value = entry.purchased_at || '';
-            fields.status.value = entry.status || '사용 가능';
+            fields.status.value = entry.status || '?ъ슜 媛??;
             fields.assignedEmployeeId.value = entry.assigned_employee_id || '';
             fields.assignedEmployeeName.value = entry.assigned_employee_name || '';
             fields.assignedTeam.value = entry.assigned_team || '';
@@ -1033,7 +1036,7 @@ if (!auth_can_manage($user)) {
             fields.assignedAt.value = formatDateOnly(entry.assigned_at || '');
             fields.notes.value = entry.notes || '';
             resetHistoryForm();
-            fields.currentItemBadge.textContent = state.currentItemId ? '등록 항목 수정 모드' : '신규 등록 모드';
+            fields.currentItemBadge.textContent = state.currentItemId ? '?깅줉 ??ぉ ?섏젙 紐⑤뱶' : '?좉퇋 ?깅줉 紐⑤뱶';
             renderHistory(entry.history || []);
             updateQrPreview();
         }
@@ -1054,21 +1057,21 @@ if (!auth_can_manage($user)) {
             fields.manufacturerName.value = entry.manufacturer_name || '';
             fields.purchaseVendor.value = entry.purchase_vendor || '';
             fields.purchasePrice.value = formatNumberWithComma(entry.purchase_price || '');
-            fields.status.value = entry.status || '사용 가능';
+            fields.status.value = entry.status || '?ъ슜 媛??;
             fields.notes.value = entry.notes || '';
         }
 
         function renderRecentList() {
             const visibleItems = state.searchQuery ? state.items.slice() : state.items.filter(function (item) {
-                return String(item.status || '').trim() !== '지급됨';
+                return String(item.status || '').trim() !== '吏湲됰맖';
             });
             fields.recentList.innerHTML = '';
-            fields.recentCount.textContent = '총 ' + visibleItems.length + '건';
-            fields.recentCount.textContent = '총 ' + state.items.length + '건';
+            fields.recentCount.textContent = '珥?' + visibleItems.length + '嫄?;
+            fields.recentCount.textContent = '珥?' + state.items.length + '嫄?;
 
-            fields.recentCount.textContent = '총 ' + visibleItems.length + '건';
+            fields.recentCount.textContent = '珥?' + visibleItems.length + '嫄?;
             if (!visibleItems.length) {
-                fields.recentList.innerHTML = '<div class="recent-item"><div class="recent-title">등록된 보호구가 없습니다.</div><div class="recent-meta">첫 항목을 등록해 주세요.</div></div>';
+                fields.recentList.innerHTML = '<div class="recent-item"><div class="recent-title">?깅줉??蹂댄샇援ш? ?놁뒿?덈떎.</div><div class="recent-meta">泥???ぉ???깅줉??二쇱꽭??</div></div>';
                 return;
             }
 
@@ -1076,17 +1079,17 @@ if (!auth_can_manage($user)) {
                 const node = document.createElement('div');
                 node.className = 'recent-item';
                 node.innerHTML =
-                    '<div class="recent-title">' + escapeHtml(item.gear_type || '미분류') + '</div>' +
+                    '<div class="recent-title">' + escapeHtml(item.gear_type || '誘몃텇瑜?) + '</div>' +
                     '<div class="recent-meta">' +
-                    '식별값: ' + escapeHtml(item.identifier_value || '') + '<br>' +
-                    '구매처: ' + escapeHtml(item.purchase_vendor || '-') + '<br>' +
-                    '지급자: ' + escapeHtml(item.assigned_employee_name || '-') + '<br>' +
-                    '상태: ' + escapeHtml(item.status || '-') +
+                    '?앸퀎媛? ' + escapeHtml(item.identifier_value || '') + '<br>' +
+                    '援щℓ泥? ' + escapeHtml(item.purchase_vendor || '-') + '<br>' +
+                    '吏湲됱옄: ' + escapeHtml(item.assigned_employee_name || '-') + '<br>' +
+                    '?곹깭: ' + escapeHtml(item.status || '-') +
                     '</div>';
-                node.querySelector('.recent-meta').insertAdjacentHTML('afterbegin', '구매일: ' + escapeHtml(item.purchased_at || '-') + '<br>');
+                node.querySelector('.recent-meta').insertAdjacentHTML('afterbegin', '援щℓ?? ' + escapeHtml(item.purchased_at || '-') + '<br>');
                 node.addEventListener('click', function () {
                     fillForm(item);
-                    setStatus('항목을 불러왔습니다.', false);
+                    setStatus('??ぉ??遺덈윭?붿뒿?덈떎.', false);
                 });
                 fields.recentList.appendChild(node);
             });
@@ -1123,7 +1126,7 @@ if (!auth_can_manage($user)) {
         async function loadItemById(itemId) {
             const payload = await apiRequest({ action: 'get', id: itemId });
             fillForm(payload.item || null);
-            setStatus('항목을 불러왔습니다.', false);
+            setStatus('??ぉ??遺덈윭?붿뒿?덈떎.', false);
         }
 
         function buildSaveParams() {
@@ -1155,16 +1158,16 @@ if (!auth_can_manage($user)) {
             renderRecentList();
             if (fields.continuousMode.checked) {
                 clearForContinuousRegistration();
-                setStatus('저장되었습니다. 다음 식별값을 바로 스캔하거나 입력해 주세요.', false);
+                setStatus('??λ릺?덉뒿?덈떎. ?ㅼ쓬 ?앸퀎媛믪쓣 諛붾줈 ?ㅼ틪?섍굅???낅젰??二쇱꽭??', false);
                 return;
             }
             fillForm(payload.item || null);
-            setStatus(payload.message || '저장되었습니다.', false);
+            setStatus(payload.message || '??λ릺?덉뒿?덈떎.', false);
         }
 
         async function runInitialIssue() {
             if (!state.currentItemId) {
-                setStatus('초기 지급 처리할 항목을 먼저 불러와 주세요.', true);
+                setStatus('珥덇린 吏湲?泥섎━????ぉ??癒쇱? 遺덈윭? 二쇱꽭??', true);
                 return;
             }
 
@@ -1175,13 +1178,13 @@ if (!auth_can_manage($user)) {
                 assigned_employee_name: fields.assignedEmployeeName.value.trim(),
                 assigned_team: fields.assignedTeam.value.trim(),
                 assigned_at: fields.assignedAt.value || '',
-                history_note: '시스템 도입 전 지급 완료된 품목을 초기 등록'
+                history_note: '?쒖뒪???꾩엯 ??吏湲??꾨즺???덈ぉ??珥덇린 ?깅줉'
             }, 'POST');
 
             state.items = Array.isArray(payload.items) ? payload.items : [];
             fillForm(payload.item || null);
             renderRecentList();
-            setStatus(payload.message || '초기 지급 등록이 완료되었습니다.', false);
+            setStatus(payload.message || '珥덇린 吏湲??깅줉???꾨즺?섏뿀?듬땲??', false);
         }
 
         async function runBulkInitialIssue() {
@@ -1208,7 +1211,7 @@ if (!auth_can_manage($user)) {
             state.items = Array.isArray(payload.items) ? payload.items : [];
             renderRecentList();
             fields.bulkIdentifiers.value = '';
-            setStatus(payload.message || '기존 지급품 일괄 등록이 완료되었습니다.', false);
+            setStatus(payload.message || '湲곗〈 吏湲됲뭹 ?쇨큵 ?깅줉???꾨즺?섏뿀?듬땲??', false);
         }
 
         async function runBulkStockReceive() {
@@ -1235,33 +1238,33 @@ if (!auth_can_manage($user)) {
                 ? payload.created_identifiers[0]
                 : '';
             updateQrPreview();
-            setStatus(payload.message || '입고 수량 일괄 등록이 완료되었습니다.', false);
+            setStatus(payload.message || '?낃퀬 ?섎웾 ?쇨큵 ?깅줉???꾨즺?섏뿀?듬땲??', false);
         }
 
         async function findByIdentifier() {
             const identifier = fields.identifierValue.value.trim();
             if (!identifier) {
-                setStatus('먼저 식별값을 입력해 주세요.', true);
+                setStatus('癒쇱? ?앸퀎媛믪쓣 ?낅젰??二쇱꽭??', true);
                 return;
             }
 
             const payload = await apiRequest({ action: 'find', identifier: identifier });
             if (!payload.found) {
                 state.currentItemId = '';
-                fields.currentItemBadge.textContent = '신규 등록 모드';
+                fields.currentItemBadge.textContent = '?좉퇋 ?깅줉 紐⑤뱶';
                 renderHistory([]);
                 updateQrPreview();
-                setStatus('등록되지 않은 식별값입니다. 신규 정보로 저장할 수 있습니다.', false);
+                setStatus('?깅줉?섏? ?딆? ?앸퀎媛믪엯?덈떎. ?좉퇋 ?뺣낫濡???ν븷 ???덉뒿?덈떎.', false);
                 return;
             }
 
             fillForm(payload.item || null);
-            setStatus('기존 등록 항목을 찾았습니다.', false);
+            setStatus('湲곗〈 ?깅줉 ??ぉ??李얠븯?듬땲??', false);
         }
 
         async function addHistory() {
             if (!state.currentItemId) {
-                setStatus('먼저 보호구를 저장해 주세요.', true);
+                setStatus('癒쇱? 蹂댄샇援щ? ??ν빐 二쇱꽭??', true);
                 return;
             }
 
@@ -1280,15 +1283,15 @@ if (!auth_can_manage($user)) {
             fillForm(payload.item || null);
             renderRecentList();
             resetHistoryForm();
-            setStatus(payload.message || (isEditingHistory ? '이력이 수정되었습니다.' : '이력이 추가되었습니다.'), false);
+            setStatus(payload.message || (isEditingHistory ? '?대젰???섏젙?섏뿀?듬땲??' : '?대젰??異붽??섏뿀?듬땲??'), false);
         }
 
         async function deleteCurrentItem() {
             if (!state.currentItemId) {
-                setStatus('삭제할 항목을 먼저 선택해 주세요.', true);
+                setStatus('??젣????ぉ??癒쇱? ?좏깮??二쇱꽭??', true);
                 return;
             }
-            if (!window.confirm('선택한 보호구 항목을 삭제할까요?')) {
+            if (!window.confirm('?좏깮??蹂댄샇援???ぉ????젣?좉퉴??')) {
                 return;
             }
 
@@ -1300,7 +1303,7 @@ if (!auth_can_manage($user)) {
             state.items = Array.isArray(payload.items) ? payload.items : [];
             clearForm();
             renderRecentList();
-            setStatus(payload.message || '삭제되었습니다.', false);
+            setStatus(payload.message || '??젣?섏뿀?듬땲??', false);
         }
 
         async function saveTemplate() {
@@ -1326,13 +1329,13 @@ if (!auth_can_manage($user)) {
             }) || null;
             state.currentTemplateId = savedTemplate ? savedTemplate.id : '';
             renderTemplates();
-            setStatus(payload.message || '템플릿이 저장되었습니다.', false);
+            setStatus(payload.message || '?쒗뵆由우씠 ??λ릺?덉뒿?덈떎.', false);
         }
 
         async function saveGearType() {
             const typeName = String(fields.gearTypeNewName.value || '').trim();
             if (!typeName) {
-                setStatus('새 보호구 종류명을 입력해 주세요.', true);
+                setStatus('??蹂댄샇援?醫낅쪟紐낆쓣 ?낅젰??二쇱꽭??', true);
                 fields.gearTypeNewName.focus();
                 return;
             }
@@ -1346,7 +1349,7 @@ if (!auth_can_manage($user)) {
             renderGearTypes();
             fields.gearType.value = typeName;
             fields.gearTypeNewName.value = '';
-            setStatus(payload.message || '보호구 종류가 저장되었습니다.', false);
+            setStatus(payload.message || '蹂댄샇援?醫낅쪟媛 ??λ릺?덉뒿?덈떎.', false);
         }
 
         async function deleteGearType() {
@@ -1355,11 +1358,11 @@ if (!auth_can_manage($user)) {
             const typeId = selected ? String(selected.dataset.id || '') : '';
 
             if (!typeName) {
-                setStatus('삭제할 보호구 종류를 먼저 선택해 주세요.', true);
+                setStatus('??젣??蹂댄샇援?醫낅쪟瑜?癒쇱? ?좏깮??二쇱꽭??', true);
                 return;
             }
 
-            if (!window.confirm('선택한 보호구 종류를 목록에서 삭제할까요?')) {
+            if (!window.confirm('?좏깮??蹂댄샇援?醫낅쪟瑜?紐⑸줉?먯꽌 ??젣?좉퉴??')) {
                 return;
             }
 
@@ -1372,15 +1375,15 @@ if (!auth_can_manage($user)) {
             state.gearTypes = Array.isArray(payload.gear_types) ? payload.gear_types : [];
             fields.gearType.value = '';
             renderGearTypes();
-            setStatus(payload.message || '보호구 종류가 삭제되었습니다.', false);
+            setStatus(payload.message || '蹂댄샇援?醫낅쪟媛 ??젣?섏뿀?듬땲??', false);
         }
 
         async function deleteTemplate() {
             if (!state.currentTemplateId) {
-                setStatus('삭제할 템플릿을 먼저 선택해 주세요.', true);
+                setStatus('??젣???쒗뵆由우쓣 癒쇱? ?좏깮??二쇱꽭??', true);
                 return;
             }
-            if (!window.confirm('선택한 템플릿을 삭제할까요?')) {
+            if (!window.confirm('?좏깮???쒗뵆由우쓣 ??젣?좉퉴??')) {
                 return;
             }
 
@@ -1393,7 +1396,7 @@ if (!auth_can_manage($user)) {
             state.currentTemplateId = '';
             fields.templateName.value = '';
             renderTemplates();
-            setStatus(payload.message || '템플릿이 삭제되었습니다.', false);
+            setStatus(payload.message || '?쒗뵆由우씠 ??젣?섏뿀?듬땲??', false);
         }
 
         async function createInternalKey() {
@@ -1404,22 +1407,22 @@ if (!auth_can_manage($user)) {
             fields.identifierType.value = payload.identifier_type || 'internal';
             fields.identifierValue.value = payload.identifier_value || '';
             updateQrPreview();
-            setStatus('내부 관리키를 생성했습니다.', false);
+            setStatus('?대? 愿由ы궎瑜??앹꽦?덉뒿?덈떎.', false);
         }
 
         async function applySearch() {
             state.searchQuery = String(fields.searchInput.value || '').trim();
             await loadItems();
-            setStatus(state.searchQuery ? '검색 결과를 불러왔습니다.' : '전체 목록을 불러왔습니다.', false);
+            setStatus(state.searchQuery ? '寃??寃곌낵瑜?遺덈윭?붿뒿?덈떎.' : '?꾩껜 紐⑸줉??遺덈윭?붿뒿?덈떎.', false);
         }
 
         function resetSearch() {
             fields.searchInput.value = '';
             state.searchQuery = '';
             loadItems().then(function () {
-                setStatus('검색을 초기화했습니다.', false);
+                setStatus('寃?됱쓣 珥덇린?뷀뻽?듬땲??', false);
             }).catch(function (error) {
-                setStatus(error.message || '목록을 다시 불러오지 못했습니다.', true);
+                setStatus(error.message || '紐⑸줉???ㅼ떆 遺덈윭?ㅼ? 紐삵뻽?듬땲??', true);
             });
         }
 
@@ -1431,11 +1434,11 @@ if (!auth_can_manage($user)) {
 
         async function startScanner() {
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                setStatus('이 브라우저는 카메라를 지원하지 않습니다.', true);
+                setStatus('??釉뚮씪?곗???移대찓?쇰? 吏?먰븯吏 ?딆뒿?덈떎.', true);
                 return;
             }
             if (!('BarcodeDetector' in window)) {
-                setStatus('이 브라우저는 BarcodeDetector를 지원하지 않습니다. 직접 입력으로 등록해 주세요.', true);
+                setStatus('??釉뚮씪?곗???BarcodeDetector瑜?吏?먰븯吏 ?딆뒿?덈떎. 吏곸젒 ?낅젰?쇰줈 ?깅줉??二쇱꽭??', true);
                 return;
             }
 
@@ -1470,16 +1473,16 @@ if (!auth_can_manage($user)) {
                         fields.identifierType.value = (String(code.format || '').toLowerCase() === 'qr_code') ? 'qr' : 'barcode';
                         updateQrPreview();
                         stopScanner();
-                        setStatus('코드를 인식했습니다. 기존 등록 여부를 조회합니다.', false);
+                        setStatus('肄붾뱶瑜??몄떇?덉뒿?덈떎. 湲곗〈 ?깅줉 ?щ?瑜?議고쉶?⑸땲??', false);
                         await findByIdentifier();
                     } catch (error) {
-                        setStatus('카메라 스캔 중 오류가 발생했습니다.', true);
+                        setStatus('移대찓???ㅼ틪 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
                     }
                 }, 700);
 
-                setStatus('카메라가 시작되었습니다. 코드를 화면 중앙에 맞춰 주세요.', false);
+                setStatus('移대찓?쇨? ?쒖옉?섏뿀?듬땲?? 肄붾뱶瑜??붾㈃ 以묒븰??留욎떠 二쇱꽭??', false);
             } catch (error) {
-                setStatus('카메라 권한이 없거나 시작에 실패했습니다.', true);
+                setStatus('移대찓??沅뚰븳???녾굅???쒖옉???ㅽ뙣?덉뒿?덈떎.', true);
             }
         }
 
@@ -1564,7 +1567,7 @@ if (!auth_can_manage($user)) {
         fields.assignedTeam.addEventListener('input', applyManualAssigneeState);
         fields.clearAssigneeButton.addEventListener('click', function () {
             clearAssigneeSelection();
-            setStatus('지급자 정보가 비워졌습니다. 저장하면 물품은 유지되고 지급자만 삭제됩니다.', false);
+            setStatus('吏湲됱옄 ?뺣낫媛 鍮꾩썙議뚯뒿?덈떎. ??ν븯硫?臾쇳뭹? ?좎??섍퀬 吏湲됱옄留???젣?⑸땲??', false);
         });
         fields.historyType.addEventListener('change', function () {
             const historyStatusMap = {
@@ -1593,7 +1596,7 @@ if (!auth_can_manage($user)) {
             try {
                 await saveCurrentItem();
             } catch (error) {
-                setStatus(error.message || '저장 중 오류가 발생했습니다.', true);
+                setStatus(error.message || '???以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
             }
         });
 
@@ -1602,14 +1605,14 @@ if (!auth_can_manage($user)) {
             fields.templateName.value = '';
             state.currentTemplateId = '';
             renderTemplates();
-            setStatus('신규 입력 모드로 전환했습니다.', false);
+            setStatus('?좉퇋 ?낅젰 紐⑤뱶濡??꾪솚?덉뒿?덈떎.', false);
         });
 
         document.getElementById('findButton').addEventListener('click', async function () {
             try {
                 await findByIdentifier();
             } catch (error) {
-                setStatus(error.message || '조회 중 오류가 발생했습니다.', true);
+                setStatus(error.message || '議고쉶 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
             }
         });
 
@@ -1617,7 +1620,7 @@ if (!auth_can_manage($user)) {
             try {
                 await runInitialIssue();
             } catch (error) {
-                setStatus(error.message || '초기 지급 등록 중 오류가 발생했습니다.', true);
+                setStatus(error.message || '珥덇린 吏湲??깅줉 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
             }
         });
 
@@ -1625,7 +1628,7 @@ if (!auth_can_manage($user)) {
             try {
                 await deleteCurrentItem();
             } catch (error) {
-                setStatus(error.message || '삭제 중 오류가 발생했습니다.', true);
+                setStatus(error.message || '??젣 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
             }
         });
 
@@ -1633,20 +1636,20 @@ if (!auth_can_manage($user)) {
             try {
                 await addHistory();
             } catch (error) {
-                setStatus(error.message || '이력 추가 중 오류가 발생했습니다.', true);
+                setStatus(error.message || '?대젰 異붽? 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
             }
         });
 
         fields.cancelHistoryEditButton.addEventListener('click', function () {
             resetHistoryForm();
-            setStatus('이력 수정이 취소되었습니다.', false);
+            setStatus('?대젰 ?섏젙??痍⑥냼?섏뿀?듬땲??', false);
         });
 
         document.getElementById('generateInternalKeyButton').addEventListener('click', async function () {
             try {
                 await createInternalKey();
             } catch (error) {
-                setStatus(error.message || '내부 키 생성 중 오류가 발생했습니다.', true);
+                setStatus(error.message || '?대? ???앹꽦 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
             }
         });
 
@@ -1654,7 +1657,7 @@ if (!auth_can_manage($user)) {
             try {
                 await applySearch();
             } catch (error) {
-                setStatus(error.message || '검색 중 오류가 발생했습니다.', true);
+                setStatus(error.message || '寃??以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
             }
         });
 
@@ -1664,14 +1667,14 @@ if (!auth_can_manage($user)) {
             try {
                 await runBulkInitialIssue();
             } catch (error) {
-                setStatus(error.message || '기존 지급품 일괄 등록 중 오류가 발생했습니다.', true);
+                setStatus(error.message || '湲곗〈 吏湲됲뭹 ?쇨큵 ?깅줉 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
             }
         });
         document.getElementById('bulkReceiveButton').addEventListener('click', async function () {
             try {
                 await runBulkStockReceive();
             } catch (error) {
-                setStatus(error.message || '입고 수량 일괄 등록 중 오류가 발생했습니다.', true);
+                setStatus(error.message || '?낃퀬 ?섎웾 ?쇨큵 ?깅줉 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
             }
         });
         document.getElementById('bulkClearButton').addEventListener('click', function () {
@@ -1681,34 +1684,34 @@ if (!auth_can_manage($user)) {
             try {
                 await saveTemplate();
             } catch (error) {
-                setStatus(error.message || '템플릿 저장 중 오류가 발생했습니다.', true);
+                setStatus(error.message || '?쒗뵆由????以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
             }
         });
         fields.addGearTypeButton.addEventListener('click', async function () {
             try {
                 await saveGearType();
             } catch (error) {
-                setStatus(error.message || '보호구 종류 저장을 처리하지 못했습니다.', true);
+                setStatus(error.message || '蹂댄샇援?醫낅쪟 ??μ쓣 泥섎━?섏? 紐삵뻽?듬땲??', true);
             }
         });
         fields.deleteGearTypeButton.addEventListener('click', async function () {
             try {
                 await deleteGearType();
             } catch (error) {
-                setStatus(error.message || '보호구 종류 삭제를 처리하지 못했습니다.', true);
+                setStatus(error.message || '蹂댄샇援?醫낅쪟 ??젣瑜?泥섎━?섏? 紐삵뻽?듬땲??', true);
             }
         });
         document.getElementById('deleteTemplateButton').addEventListener('click', async function () {
             try {
                 await deleteTemplate();
             } catch (error) {
-                setStatus(error.message || '템플릿 삭제 중 오류가 발생했습니다.', true);
+                setStatus(error.message || '?쒗뵆由???젣 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
             }
         });
         document.getElementById('startScanButton').addEventListener('click', startScanner);
         document.getElementById('stopScanButton').addEventListener('click', function () {
             stopScanner();
-            setStatus('카메라를 중지했습니다.', false);
+            setStatus('移대찓?쇰? 以묒??덉뒿?덈떎.', false);
         });
 
         fields.searchInput.addEventListener('keydown', function (event) {
@@ -1724,7 +1727,7 @@ if (!auth_can_manage($user)) {
             }) || null;
             applyTemplate(selected);
             if (selected) {
-                setStatus('템플릿 내용을 불러왔습니다. 식별값만 입력하면 바로 등록할 수 있습니다.', false);
+                setStatus('?쒗뵆由??댁슜??遺덈윭?붿뒿?덈떎. ?앸퀎媛믩쭔 ?낅젰?섎㈃ 諛붾줈 ?깅줉?????덉뒿?덈떎.', false);
             }
         });
 
@@ -1743,9 +1746,9 @@ if (!auth_can_manage($user)) {
                     await loadItemById(gearUid);
                     return;
                 }
-                setStatus('준비되었습니다. 스캔하거나 식별값을 입력해 주세요.', false);
+                setStatus('以鍮꾨릺?덉뒿?덈떎. ?ㅼ틪?섍굅???앸퀎媛믪쓣 ?낅젰??二쇱꽭??', false);
             } catch (error) {
-                setStatus(error.message || '초기 데이터를 불러오지 못했습니다.', true);
+                setStatus(error.message || '珥덇린 ?곗씠?곕? 遺덈윭?ㅼ? 紐삵뻽?듬땲??', true);
             }
         })();
     </script>
