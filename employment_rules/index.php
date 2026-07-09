@@ -1,0 +1,2440 @@
+<?php
+declare(strict_types=1);
+
+require_once __DIR__ . '/../risk_assessment/auth.php';
+
+$user = auth_current_user();
+if (!is_array($user)) {
+    header('Location: /risk_assessment/task_select.php');
+    exit;
+}
+
+if (!auth_can_manage($user)) {
+    http_response_code(403);
+    ?>
+    <!DOCTYPE html>
+    <html lang="ko">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>권한이 없습니다</title>
+        <style>
+            body { margin: 0; padding: 40px 20px; background: #f5f7fb; color: #1f2937; font-family: "Malgun Gothic", sans-serif; }
+            .panel { max-width: 760px; margin: 0 auto; background: #fff; border: 1px solid #dbe2ea; border-radius: 20px; padding: 28px; }
+            a { color: #0b4ea2; }
+        </style>
+    </head>
+    <body>
+        <div class="panel">
+            <h1>권한이 없습니다</h1>
+            <p>이 페이지는 관리자 권한이 필요한 메뉴입니다. 접근 권한이 필요하면 관리자에게 문의해 주세요.</p>
+            <p><a href="/risk_assessment/work_list.php">작업 목록으로 돌아가기</a></p>
+        </div>
+    </body>
+    </html>
+    <?php
+    exit;
+}
+
+function h(string $value): string
+{
+    return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+}
+
+function employment_rules_storage_path(): string
+{
+    return __DIR__ . '/data.json';
+}
+
+function employment_rules_upload_root(): string
+{
+    return dirname(__DIR__) . '/uploads/employment_rules';
+}
+
+function employment_rules_load_data(): array
+{
+    $path = employment_rules_storage_path();
+    if (!is_file($path)) {
+        return [
+            'current' => null,
+        ];
+    }
+
+    $raw = file_get_contents($path);
+    if ($raw === false || trim($raw) === '') {
+        return [
+            'current' => null,
+        ];
+    }
+
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        return [
+            'current' => null,
+        ];
+    }
+
+    if (!array_key_exists('current', $decoded)) {
+        $decoded['current'] = null;
+    }
+
+    return $decoded;
+}
+
+function employment_rules_save_data(array $data): void
+{
+    $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false) {
+        throw new RuntimeException('데이터를 JSON으로 인코딩하지 못했습니다.');
+    }
+
+    if (file_put_contents(employment_rules_storage_path(), $json, LOCK_EX) === false) {
+        throw new RuntimeException('데이터 파일을 저장하지 못했습니다.');
+    }
+}
+
+function employment_rules_flash(?string $type = null, ?string $message = null): ?array
+{
+    if ($type !== null && $message !== null) {
+        $_SESSION['employment_rules_flash'] = [
+            'type' => $type,
+            'message' => $message,
+        ];
+        return null;
+    }
+
+    $flash = $_SESSION['employment_rules_flash'] ?? null;
+    unset($_SESSION['employment_rules_flash']);
+
+    return is_array($flash) ? $flash : null;
+}
+
+function employment_rules_normalize_whitespace(string $text): string
+{
+    $text = str_replace(["\r\n", "\r"], "\n", $text);
+    $text = preg_replace("/[ \t\x{00A0}]+/u", ' ', $text);
+    $text = preg_replace("/\n{3,}/u", "\n\n", $text);
+    return trim((string)$text);
+}
+
+function employment_rules_decode_preview_text(string $bytes): string
+{
+    if ($bytes === '') {
+        return '';
+    }
+
+    if (str_starts_with($bytes, "\xFF\xFE")) {
+        $bytes = substr($bytes, 2);
+        return employment_rules_normalize_whitespace((string)mb_convert_encoding($bytes, 'UTF-8', 'UTF-16LE'));
+    }
+
+    if (str_starts_with($bytes, "\xFE\xFF")) {
+        $bytes = substr($bytes, 2);
+        return employment_rules_normalize_whitespace((string)mb_convert_encoding($bytes, 'UTF-8', 'UTF-16BE'));
+    }
+
+    $utf8 = @mb_convert_encoding($bytes, 'UTF-8', 'UTF-8');
+    if (is_string($utf8) && $utf8 !== '') {
+        return employment_rules_normalize_whitespace($utf8);
+    }
+
+    return employment_rules_normalize_whitespace((string)mb_convert_encoding($bytes, 'UTF-8', 'UTF-16LE'));
+}
+
+function employment_rules_detect_heading(string $line): ?array
+{
+    $line = trim($line);
+    if ($line === '') {
+        return null;
+    }
+
+    if (preg_match('/^\s*\x{C81C}\s*\d+\s*\x{C7A5}\b/u', $line) === 1) {
+        return ['tag' => 'h2', 'level' => 2];
+    }
+
+    if (preg_match('/^\s*\x{C81C}\s*\d+\s*\x{C870}(?:\s*\x{C758}\s*\d+)?\b/u', $line) === 1) {
+        return ['tag' => 'h3', 'level' => 3];
+    }
+
+    $normalizedHeading = preg_replace('/\s+/u', '', $line);
+    $genericHeadings = [
+        "\u{CD1D}\u{CE59}",
+        "\u{C778}\u{C0AC}",
+        "\u{BCF5}\u{BB34}",
+        "\u{ADFC}\u{B85C}\u{C2DC}\u{AC04}",
+        "\u{D734}\u{C77C}",
+        "\u{D734}\u{AC00}",
+        "\u{C784}\u{AE08}",
+        "\u{D1F4}\u{C9C1}",
+        "\u{C9D5}\u{ACC4}",
+        "\u{AD50}\u{C721}",
+        "\u{C548}\u{C804}\u{BCF4}\u{AC74}",
+        "\u{C7AC}\u{D574}\u{BCF4}\u{C0C1}",
+        "\u{C9C1}\u{C7A5}\u{B0B4}\u{AD34}\u{B86D}\u{D798}\u{C608}\u{BC29}",
+        "\u{C9C1}\u{C7A5}\u{ADDC}\u{C728}\u{ACFC}\u{C608}\u{C808}",
+        "\u{BD80}\u{CE59}",
+        "\u{BCC4}\u{C9C0}\u{C11C}\u{C2DD}",
+    ];
+    if (mb_strlen($line, 'UTF-8') <= 24 && in_array($normalizedHeading, $genericHeadings, true)) {
+        return ['tag' => 'h2', 'level' => 2];
+    }
+
+    return null;
+}
+
+function employment_rules_slugify(string $text, int $index): string
+{
+    $slug = preg_replace('/[^a-zA-Z0-9\x{AC00}-\x{D7A3}\-_]+/u', '-', trim($text));
+    $slug = trim((string)$slug, '-');
+    if ($slug === '') {
+        $slug = 'section-' . $index;
+    }
+    return $slug . '-' . $index;
+}
+
+function employment_rules_law_api_oc(): string
+{
+    return 'riskserver_law';
+}
+
+function employment_rules_normalize_law_reference(string $value): string
+{
+    $value = trim($value);
+    $value = str_replace(["\u{300C}", "\u{300D}", '"', "'"], '', $value);
+    $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+    return trim($value);
+}
+
+function employment_rules_normalize_law_title(string $value): string
+{
+    $value = employment_rules_normalize_law_reference($value);
+    $value = str_replace(["\u{318D}", "\u{00B7}", ' '], '', $value);
+    return mb_strtolower($value, 'UTF-8');
+}
+
+function employment_rules_build_law_article_code(int $articleNo, int $articleSubNo = 0, bool $forApi = false): string
+{
+    if ($forApi) {
+        return sprintf('%04d%02d', $articleNo, $articleSubNo);
+    }
+
+    return sprintf('%04d%02d000', $articleNo, $articleSubNo);
+}
+
+function employment_rules_build_law_article_label(int $articleNo, int $articleSubNo = 0, string $articleTitle = ''): string
+{
+    $label = "\u{C81C}" . $articleNo . "\u{C870}";
+    if ($articleSubNo > 0) {
+        $label .= "\u{C758}" . $articleSubNo;
+    }
+    if ($articleTitle !== '') {
+        $label .= '(' . $articleTitle . ')';
+    }
+
+    return $label;
+}
+
+function employment_rules_parse_law_reference(string $query): ?array
+{
+    $query = employment_rules_normalize_law_reference($query);
+    if ($query === '') {
+        return null;
+    }
+
+    if (preg_match('/(.+?(?:\x{BC95}|\x{C2DC}\x{D589}\x{B839}|\x{C2DC}\x{D589}\x{ADDC}\x{CE59}))\s*\x{C81C}\s*(\d+)\s*\x{C870}(?:\s*\x{C758}\s*(\d+))?/u', $query, $matches) !== 1) {
+        return null;
+    }
+
+    $lawName = employment_rules_normalize_law_reference((string)($matches[1] ?? ''));
+    $articleNo = (int)($matches[2] ?? 0);
+    $articleSubNo = (int)($matches[3] ?? 0);
+    if ($lawName === '' || $articleNo <= 0) {
+        return null;
+    }
+
+    return [
+        'query' => $query,
+        'law_name' => $lawName,
+        'article_no' => $articleNo,
+        'article_sub_no' => $articleSubNo,
+    ];
+}
+
+function employment_rules_build_law_article_url(string $lawName, int $articleNo, int $articleSubNo = 0): string
+{
+    return 'https://www.law.go.kr/LSW/lsLinkProc.do?lsNm='
+        . rawurlencode($lawName)
+        . '&joNo='
+        . rawurlencode(employment_rules_build_law_article_code($articleNo, $articleSubNo, false))
+        . '&mode=10&lsClsCd=010101L';
+}
+
+function employment_rules_build_law_search_url(string $query): string
+{
+    $reference = employment_rules_parse_law_reference($query);
+    if ($reference !== null) {
+        return employment_rules_build_law_article_url(
+            (string)$reference['law_name'],
+            (int)$reference['article_no'],
+            (int)$reference['article_sub_no']
+        );
+    }
+
+    $query = employment_rules_normalize_law_reference($query);
+    if ($query === '') {
+        return 'https://www.law.go.kr/';
+    }
+
+    return 'https://www.law.go.kr/lsSc.do?menuId=1&query=' . rawurlencode($query) . '&subMenuId=15&tabMenuId=81';
+}
+
+function employment_rules_build_open_api_url(string $endpoint, array $params): string
+{
+    return 'https://www.law.go.kr/DRF/' . ltrim($endpoint, '/')
+        . '?'
+        . http_build_query($params, '', '&', PHP_QUERY_RFC3986);
+}
+
+function employment_rules_fetch_remote_html(string $url): string
+{
+    $headers = "User-Agent: Mozilla/5.0\r\nAccept-Language: ko-KR,ko;q=0.9,en;q=0.8\r\n";
+
+    if (function_exists('curl_init')) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_TIMEOUT => 12,
+            CURLOPT_HTTPHEADER => [
+                'User-Agent: Mozilla/5.0',
+                'Accept-Language: ko-KR,ko;q=0.9,en;q=0.8',
+            ],
+        ]);
+        $result = curl_exec($ch);
+        $statusCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if (is_string($result) && $result !== '' && $statusCode >= 200 && $statusCode < 400) {
+            return $result;
+        }
+    }
+
+    $context = stream_context_create([
+        'http' => [
+            'method' => 'GET',
+            'timeout' => 12,
+            'header' => $headers,
+        ],
+    ]);
+    $result = @file_get_contents($url, false, $context);
+    return is_string($result) ? $result : '';
+}
+
+function employment_rules_fetch_remote_json(string $url): array
+{
+    $raw = employment_rules_fetch_remote_html($url);
+    if ($raw === '') {
+        return [];
+    }
+
+    $decoded = json_decode($raw, true);
+    return is_array($decoded) ? $decoded : [];
+}
+
+function employment_rules_value_list(mixed $value): array
+{
+    if (!is_array($value)) {
+        return [];
+    }
+
+    if (function_exists('array_is_list')) {
+        return array_is_list($value) ? $value : [$value];
+    }
+
+    $expected = 0;
+    foreach (array_keys($value) as $key) {
+        if ($key !== $expected) {
+            return [$value];
+        }
+        $expected++;
+    }
+
+    return $value;
+}
+
+function employment_rules_extract_content_value(mixed $value): string
+{
+    if (is_array($value)) {
+        return trim((string)($value['content'] ?? ''));
+    }
+
+    return trim((string)$value);
+}
+
+function employment_rules_pick_law_search_result(array $items, string $lawName): ?array
+{
+    $normalizedLawName = employment_rules_normalize_law_title($lawName);
+
+    foreach ($items as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+
+        $candidateName = employment_rules_normalize_law_title((string)($item['법령명한글'] ?? ''));
+        $candidateAlias = employment_rules_normalize_law_title((string)($item['법령약칭명'] ?? ''));
+        if ($candidateName === $normalizedLawName || $candidateAlias === $normalizedLawName) {
+            return $item;
+        }
+    }
+
+    foreach ($items as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+
+        $candidateName = employment_rules_normalize_law_title((string)($item['법령명한글'] ?? ''));
+        $candidateAlias = employment_rules_normalize_law_title((string)($item['법령약칭명'] ?? ''));
+        if (
+            ($candidateName !== '' && str_contains($candidateName, $normalizedLawName))
+            || ($candidateAlias !== '' && str_contains($candidateAlias, $normalizedLawName))
+        ) {
+            return $item;
+        }
+    }
+
+    return isset($items[0]) && is_array($items[0]) ? $items[0] : null;
+}
+
+function employment_rules_format_law_date(string $value): string
+{
+    $value = trim($value);
+    if ($value === '') {
+        return '';
+    }
+
+    if (preg_match('/^(\d{4})(\d{2})(\d{2})$/', $value, $matches) === 1) {
+        return (int)$matches[1] . '. ' . (int)$matches[2] . '. ' . (int)$matches[3] . '.';
+    }
+
+    return $value;
+}
+
+function employment_rules_collect_law_text_lines(mixed $node, array &$lines): void
+{
+    if (!is_array($node)) {
+        return;
+    }
+
+    foreach (['조문내용', '항내용', '호내용', '목내용'] as $textKey) {
+        $value = employment_rules_normalize_whitespace(trim((string)($node[$textKey] ?? '')));
+        if ($value !== '' && !in_array($value, $lines, true)) {
+            $lines[] = $value;
+        }
+    }
+
+    foreach (['항', '호', '목'] as $childKey) {
+        foreach (employment_rules_value_list($node[$childKey] ?? []) as $child) {
+            employment_rules_collect_law_text_lines($child, $lines);
+        }
+    }
+}
+
+function employment_rules_strip_article_heading(string $line, int $articleNo, int $articleSubNo, string $articleTitle): string
+{
+    $patterns = [
+        employment_rules_build_law_article_label($articleNo, $articleSubNo, $articleTitle),
+        employment_rules_build_law_article_label($articleNo, $articleSubNo),
+    ];
+
+    foreach ($patterns as $pattern) {
+        if ($pattern === '') {
+            continue;
+        }
+
+        $quoted = preg_quote($pattern, '/');
+        $line = preg_replace('/^\s*' . $quoted . '\s*/u', '', $line, 1) ?? $line;
+    }
+
+    return trim($line);
+}
+
+function employment_rules_pick_law_article_unit(array $articleUnits): ?array
+{
+    foreach ($articleUnits as $unit) {
+        if (!is_array($unit)) {
+            continue;
+        }
+
+        if (trim((string)($unit['조문내용'] ?? '')) !== '' || trim((string)($unit['조문여부'] ?? '')) === '조문') {
+            return $unit;
+        }
+    }
+
+    return isset($articleUnits[0]) && is_array($articleUnits[0]) ? $articleUnits[0] : null;
+}
+
+function employment_rules_build_law_api_payload(string $query): array
+{
+    $reference = employment_rules_parse_law_reference($query);
+    if ($reference === null) {
+        throw new InvalidArgumentException('법령명과 조문 번호를 함께 입력해 주세요.');
+    }
+
+    $searchUrl = employment_rules_build_open_api_url('lawSearch.do', [
+        'OC' => employment_rules_law_api_oc(),
+        'target' => 'law',
+        'type' => 'JSON',
+        'query' => (string)$reference['law_name'],
+    ]);
+    $searchData = employment_rules_fetch_remote_json($searchUrl);
+    $searchRoot = is_array($searchData['LawSearch'] ?? null) ? $searchData['LawSearch'] : [];
+    $searchItems = employment_rules_value_list($searchRoot['law'] ?? []);
+    $selectedLaw = employment_rules_pick_law_search_result($searchItems, (string)$reference['law_name']);
+    if (!is_array($selectedLaw)) {
+        throw new RuntimeException('법제처에서 해당 법령을 찾지 못했습니다.');
+    }
+
+    $lawId = trim((string)($selectedLaw['법령ID'] ?? $selectedLaw['id'] ?? ''));
+    if ($lawId === '') {
+        throw new RuntimeException('법령 ID를 확인하지 못했습니다.');
+    }
+
+    $detailUrl = employment_rules_build_open_api_url('lawService.do', [
+        'OC' => employment_rules_law_api_oc(),
+        'target' => 'lawjosub',
+        'type' => 'JSON',
+        'ID' => $lawId,
+        'JO' => employment_rules_build_law_article_code((int)$reference['article_no'], (int)$reference['article_sub_no'], true),
+    ]);
+    $detailData = employment_rules_fetch_remote_json($detailUrl);
+    $lawData = is_array($detailData['법령'] ?? null) ? $detailData['법령'] : [];
+    if ($lawData === []) {
+        throw new RuntimeException('선택한 조문의 상세 내용을 불러오지 못했습니다.');
+    }
+
+    $baseInfo = is_array($lawData['기본정보'] ?? null) ? $lawData['기본정보'] : [];
+    $articleUnits = employment_rules_value_list($lawData['조문']['조문단위'] ?? []);
+    $articleUnit = employment_rules_pick_law_article_unit($articleUnits);
+    if (!is_array($articleUnit)) {
+        throw new RuntimeException('조문 본문을 찾지 못했습니다.');
+    }
+
+    $articleTitle = trim((string)($articleUnit['조문제목'] ?? ''));
+    $articleLabel = employment_rules_build_law_article_label(
+        (int)$reference['article_no'],
+        (int)$reference['article_sub_no'],
+        $articleTitle
+    );
+
+    $bodyLines = [];
+    employment_rules_collect_law_text_lines($articleUnit, $bodyLines);
+    if ($bodyLines !== []) {
+        $bodyLines[0] = employment_rules_strip_article_heading(
+            (string)$bodyLines[0],
+            (int)$reference['article_no'],
+            (int)$reference['article_sub_no'],
+            $articleTitle
+        );
+        if ($bodyLines[0] === '') {
+            array_shift($bodyLines);
+        }
+    }
+
+    $lawName = trim((string)($baseInfo['법령명_한글'] ?? $selectedLaw['법령명한글'] ?? $reference['law_name']));
+    $ministry = employment_rules_extract_content_value($baseInfo['소관부처'] ?? '');
+    $lawKind = employment_rules_extract_content_value($baseInfo['법종구분'] ?? '');
+    $effectiveAt = employment_rules_format_law_date((string)($baseInfo['시행일자'] ?? $articleUnit['조문시행일자'] ?? ''));
+    $promulgationAt = employment_rules_format_law_date((string)($baseInfo['공포일자'] ?? ''));
+    $promulgationNo = ltrim(trim((string)($baseInfo['공포번호'] ?? '')), '0');
+    $revisionType = trim((string)($baseInfo['제개정구분'] ?? ''));
+    $contactPhone = trim((string)($baseInfo['전화번호'] ?? ''));
+
+    return [
+        'query' => (string)$reference['query'],
+        'law_name' => $lawName,
+        'article_label' => $articleLabel,
+        'article_title' => $articleTitle,
+        'law_kind' => $lawKind,
+        'ministry' => $ministry,
+        'effective_at' => $effectiveAt,
+        'promulgation_at' => $promulgationAt,
+        'promulgation_no' => $promulgationNo,
+        'revision_type' => $revisionType,
+        'contact_phone' => $contactPhone,
+        'body_lines' => array_values(array_filter($bodyLines, static fn ($line): bool => trim((string)$line) !== '')),
+        'open_url' => employment_rules_build_law_article_url(
+            (string)$reference['law_name'],
+            (int)$reference['article_no'],
+            (int)$reference['article_sub_no']
+        ),
+        'law_id' => $lawId,
+    ];
+}
+
+if (($_GET['action'] ?? '') === 'law_api') {
+    header('Content-Type: application/json; charset=UTF-8');
+    $query = trim((string)($_GET['query'] ?? ''));
+
+    try {
+        if ($query === '' || mb_strlen($query, 'UTF-8') > 200) {
+            throw new InvalidArgumentException('법령명을 포함한 검색어를 입력해 주세요.');
+        }
+
+        echo json_encode(
+            array_merge(['success' => true], employment_rules_build_law_api_payload($query)),
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        );
+    } catch (Throwable $e) {
+        http_response_code($e instanceof InvalidArgumentException ? 400 : 502);
+        echo json_encode([
+            'success' => false,
+            'message' => $e->getMessage(),
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+    exit;
+}
+
+if (($_GET['action'] ?? '') === 'law_proxy') {
+    $query = trim((string)($_GET['query'] ?? ''));
+    if ($query === '' || mb_strlen($query, 'UTF-8') > 200) {
+        http_response_code(400);
+        header('Content-Type: text/html; charset=UTF-8');
+        echo '<!DOCTYPE html><html lang="ko"><meta charset="UTF-8"><body style="font-family:Malgun Gothic,sans-serif;padding:24px;">법령명을 포함한 검색어를 입력해 주세요.</body></html>';
+        exit;
+    }
+
+    $remoteUrl = employment_rules_build_law_search_url($query);
+    $html = employment_rules_fetch_remote_html($remoteUrl);
+    if ($html === '') {
+        http_response_code(502);
+        header('Content-Type: text/html; charset=UTF-8');
+        echo '<!DOCTYPE html><html lang="ko"><meta charset="UTF-8"><body style="font-family:Malgun Gothic,sans-serif;padding:24px;">법령 페이지를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</body></html>';
+        exit;
+    }
+
+    if (stripos($html, '<head') !== false) {
+        $html = preg_replace('/<head([^>]*)>/i', '<head$1><base href="https://www.law.go.kr/">', $html, 1) ?? $html;
+    }
+
+    header('Content-Type: text/html; charset=UTF-8');
+    echo $html;
+    exit;
+}
+
+function employment_rules_build_html_from_text(string $text): array
+{
+    $lines = preg_split("/\n+/u", $text) ?: [];
+    $html = [];
+    $toc = [];
+    $headingIndex = 0;
+
+    foreach ($lines as $line) {
+        $line = employment_rules_normalize_whitespace($line);
+        if ($line === '') {
+            continue;
+        }
+
+        $line = trim($line, " \t\n\r\0\x0B\x{FEFF}");
+        if ($line === '') {
+            continue;
+        }
+
+        $heading = employment_rules_detect_heading($line);
+        if ($heading !== null) {
+            $headingIndex++;
+            $id = employment_rules_slugify($line, $headingIndex);
+            $html[] = sprintf('<%1$s id="%2$s">%3$s</%1$s>', $heading['tag'], h($id), h($line));
+            $toc[] = [
+                'id' => $id,
+                'title' => $line,
+                'level' => $heading['level'],
+            ];
+            continue;
+        }
+
+        if (preg_match('/^[\-\*\x{2022}]\s+/u', $line) === 1) {
+            $html[] = '<p class="bullet">' . h($line) . '</p>';
+            continue;
+        }
+
+        $html[] = '<p>' . h($line) . '</p>';
+    }
+
+    return [
+        'html' => implode("\n", $html),
+        'toc' => $toc,
+    ];
+}
+
+function employment_rules_extract_table_html(DOMElement $tableNode): string
+{
+    $rows = [];
+    foreach ($tableNode->childNodes as $rowNode) {
+        if (!$rowNode instanceof DOMElement || $rowNode->localName !== 'tr') {
+            continue;
+        }
+
+        $cells = [];
+        foreach ($rowNode->childNodes as $cellNode) {
+            if (!$cellNode instanceof DOMElement || $cellNode->localName !== 'tc') {
+                continue;
+            }
+
+            $texts = [];
+            $textNodes = $cellNode->getElementsByTagNameNS('*', 't');
+            foreach ($textNodes as $textNode) {
+                $value = employment_rules_normalize_whitespace($textNode->textContent);
+                if ($value !== '') {
+                    $texts[] = $value;
+                }
+            }
+
+            $cellText = trim(implode(' ', $texts));
+            $attrs = '';
+            foreach ($cellNode->childNodes as $child) {
+                if (!$child instanceof DOMElement || $child->localName !== 'cellSpan') {
+                    continue;
+                }
+
+                $colSpan = (int)$child->getAttribute('colSpan');
+                $rowSpan = (int)$child->getAttribute('rowSpan');
+                if ($colSpan > 1) {
+                    $attrs .= ' colspan="' . $colSpan . '"';
+                }
+                if ($rowSpan > 1) {
+                    $attrs .= ' rowspan="' . $rowSpan . '"';
+                }
+                break;
+            }
+
+            $cells[] = '<td' . $attrs . '>' . h($cellText) . '</td>';
+        }
+
+        if ($cells !== []) {
+            $rows[] = '<tr>' . implode('', $cells) . '</tr>';
+        }
+    }
+
+    if ($rows === []) {
+        return '';
+    }
+
+    return '<div class="rule-table-wrap"><table class="rule-table"><tbody>' . implode('', $rows) . '</tbody></table></div>';
+}
+
+function employment_rules_extract_from_sections(ZipArchive $zip): array
+{
+    $xmlParts = [];
+    for ($i = 0; $i < $zip->numFiles; $i++) {
+        $name = (string)$zip->getNameIndex($i);
+        if (preg_match('#^Contents/section\d+\.xml$#', $name) === 1) {
+            $xmlParts[] = $name;
+        }
+    }
+
+    sort($xmlParts, SORT_NATURAL);
+
+    $html = [];
+    $toc = [];
+    $headingIndex = 0;
+
+    foreach ($xmlParts as $partName) {
+        $xml = $zip->getFromName($partName);
+        if (!is_string($xml) || trim($xml) === '') {
+            continue;
+        }
+
+        $dom = new DOMDocument();
+        if (@$dom->loadXML($xml, LIBXML_NONET | LIBXML_NOWARNING | LIBXML_NOERROR) === false) {
+            continue;
+        }
+
+        $paragraphs = $dom->getElementsByTagNameNS('*', 'p');
+        foreach ($paragraphs as $paragraph) {
+            if (!$paragraph instanceof DOMElement) {
+                continue;
+            }
+
+            $tables = $paragraph->getElementsByTagNameNS('*', 'tbl');
+            if ($tables->length > 0) {
+                foreach ($tables as $tableNode) {
+                    if ($tableNode instanceof DOMElement) {
+                        $tableHtml = employment_rules_extract_table_html($tableNode);
+                        if ($tableHtml !== '') {
+                            $html[] = $tableHtml;
+                        }
+                    }
+                }
+                continue;
+            }
+
+            $texts = [];
+            $textNodes = $paragraph->getElementsByTagNameNS('*', 't');
+            foreach ($textNodes as $textNode) {
+                $value = employment_rules_normalize_whitespace($textNode->textContent);
+                if ($value !== '') {
+                    $texts[] = $value;
+                }
+            }
+
+            $line = employment_rules_normalize_whitespace(implode(' ', $texts));
+            if ($line === '') {
+                continue;
+            }
+
+            $heading = employment_rules_detect_heading($line);
+            if ($heading !== null) {
+                $headingIndex++;
+                $id = employment_rules_slugify($line, $headingIndex);
+                $html[] = sprintf('<%1$s id="%2$s">%3$s</%1$s>', $heading['tag'], h($id), h($line));
+                $toc[] = [
+                    'id' => $id,
+                    'title' => $line,
+                    'level' => $heading['level'],
+                ];
+                continue;
+            }
+
+            $html[] = '<p>' . h($line) . '</p>';
+        }
+    }
+
+    return [
+        'html' => implode("\n", $html),
+        'toc' => $toc,
+    ];
+}
+
+function employment_rules_parse_hwpx(string $path): array
+{
+    $zip = new ZipArchive();
+    if ($zip->open($path) !== true) {
+        throw new RuntimeException('HWPX 파일을 열 수 없습니다.');
+    }
+
+    try {
+        $previewText = '';
+        $previewBytes = $zip->getFromName('Preview/PrvText.txt');
+        if (is_string($previewBytes) && $previewBytes !== '') {
+            $previewText = employment_rules_decode_preview_text($previewBytes);
+        }
+
+        $previewBuilt = ['html' => '', 'toc' => []];
+        if ($previewText !== '') {
+            $previewBuilt = employment_rules_build_html_from_text($previewText);
+        }
+
+        $sectionBuilt = employment_rules_extract_from_sections($zip);
+        $previewPlainText = trim(strip_tags(str_replace(['</p>', '</h2>', '</h3>'], ["\n", "\n", "\n"], $previewBuilt['html'])));
+        $sectionPlainText = trim(strip_tags(str_replace(['</p>', '</h2>', '</h3>'], ["\n", "\n", "\n"], $sectionBuilt['html'])));
+
+        $built = $previewBuilt;
+        if ($sectionPlainText !== '') {
+            $previewLength = mb_strlen($previewPlainText, 'UTF-8');
+            $sectionLength = mb_strlen($sectionPlainText, 'UTF-8');
+
+            if ($sectionLength > $previewLength) {
+                $built = $sectionBuilt;
+            }
+        } elseif ($previewPlainText === '') {
+            $built = $sectionBuilt;
+        }
+
+        $plainText = trim(strip_tags(str_replace(['</p>', '</h2>', '</h3>'], ["\n", "\n", "\n"], $built['html'])));
+        if ($plainText === '') {
+            throw new RuntimeException('문서에서 본문 텍스트를 추출하지 못했습니다. HWPX 파일 형식과 내용을 확인해 주세요.');
+        }
+
+        $lines = preg_split("/\n+/u", $plainText) ?: [];
+        $title = "\u{CDE8}\u{C5C5}\u{ADDC}\u{CE59}";
+
+        $summary = '';
+        foreach ($lines as $line) {
+            $line = employment_rules_normalize_whitespace($line);
+            if ($line === '' || $line === $title) {
+                continue;
+            }
+            $summary = $line;
+            break;
+        }
+
+        return [
+            'title' => $title,
+            'summary' => $summary,
+            'content_html' => $built['html'],
+            'toc' => $built['toc'],
+            'plain_text' => $plainText,
+        ];
+    } finally {
+        $zip->close();
+    }
+}
+
+function employment_rules_handle_upload(array $user): void
+{
+    $file = $_FILES['draft_file'] ?? null;
+    if (!is_array($file) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        throw new RuntimeException('업로드할 HWPX 파일을 선택해 주세요.');
+    }
+
+    $originalName = trim((string)($file['name'] ?? ''));
+    $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+    if ($extension !== 'hwpx') {
+        throw new RuntimeException('HWPX 형식의 파일만 업로드할 수 있습니다.');
+    }
+
+    $tmpName = (string)($file['tmp_name'] ?? '');
+    if (!is_uploaded_file($tmpName)) {
+        throw new RuntimeException('업로드된 파일을 확인하지 못했습니다.');
+    }
+
+    $uploadRoot = employment_rules_upload_root();
+    $relativeDir = date('Y/m');
+    $targetDir = $uploadRoot . '/' . $relativeDir;
+    if (!is_dir($targetDir) && !mkdir($targetDir, 0775, true) && !is_dir($targetDir)) {
+        throw new RuntimeException('업로드 폴더를 생성하지 못했습니다.');
+    }
+
+    $safeBaseName = preg_replace('/[^a-zA-Z0-9\x{AC00}-\x{D7A3}_\-]/u', '_', pathinfo($originalName, PATHINFO_FILENAME));
+    $safeBaseName = trim((string)$safeBaseName, '_');
+    if ($safeBaseName === '') {
+        $safeBaseName = 'employment_rules';
+    }
+
+    $storedName = sprintf('%s_%s_%s.hwpx', $safeBaseName, date('Ymd_His'), substr(bin2hex(random_bytes(4)), 0, 8));
+    $targetPath = $targetDir . '/' . $storedName;
+
+    if (!move_uploaded_file($tmpName, $targetPath)) {
+        throw new RuntimeException('업로드 파일을 저장하지 못했습니다.');
+    }
+
+    $parsed = employment_rules_parse_hwpx($targetPath);
+    $now = date('Y-m-d H:i:s');
+
+    employment_rules_save_data([
+        'current' => [
+            'title' => $parsed['title'],
+            'summary' => $parsed['summary'],
+            'content_html' => $parsed['content_html'],
+            'toc' => $parsed['toc'],
+            'plain_text' => $parsed['plain_text'],
+            'source_name' => $originalName,
+            'source_path' => '/uploads/employment_rules/' . $relativeDir . '/' . $storedName,
+            'uploaded_at' => $now,
+            'uploaded_by' => trim((string)($user['name'] ?? $user['login_id'] ?? "\u{AD00}\u{B9AC}\u{C790}")),
+        ],
+    ]);
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    try {
+        employment_rules_handle_upload($user);
+        employment_rules_flash('success', 'HWPX 파일을 업로드하고 취업규칙을 반영했습니다.');
+    } catch (Throwable $e) {
+        employment_rules_flash('error', $e->getMessage());
+    }
+
+    header('Location: ' . $_SERVER['PHP_SELF']);
+    exit;
+}
+
+$data = employment_rules_load_data();
+$current = is_array($data['current'] ?? null) ? $data['current'] : null;
+$flash = employment_rules_flash();
+$pageTitle = "\u{CDE8}\u{C5C5}\u{ADDC}\u{CE59}";
+$summary = trim((string)($current['summary'] ?? ''));
+$toc = is_array($current['toc'] ?? null) ? $current['toc'] : [];
+$renderedContentHtml = (string)($current['content_html'] ?? '');
+$tocGroups = [];
+$appendixGroups = [];
+$annexGroups = [];
+$currentGroupIndex = -1;
+$currentCollection = 'chapters';
+foreach ($toc as $item) {
+    $level = (int)($item['level'] ?? 0);
+    $title = trim((string)($item['title'] ?? ''));
+    $id = trim((string)($item['id'] ?? ''));
+    if ($title === '' || $id === '') {
+        continue;
+    }
+
+    $isAppendixHeading = preg_match('/^\x{BD80}\x{CE59}(?:\s|\(|$)/u', $title) === 1;
+    $isAnnexHeading = preg_match('/^\x{BCC4}\x{C9C0}(?:\s*\x{C11C}\x{C2DD})?(?:\s|\(|$)/u', $title) === 1;
+    if ($level === 2 || $currentGroupIndex < 0) {
+        if ($isAppendixHeading) {
+            $appendixGroups[] = [
+                'heading' => [
+                    'id' => $id,
+                    'title' => $title,
+                    'level' => $level > 0 ? $level : 2,
+                ],
+                'items' => [],
+            ];
+            $currentCollection = 'appendix';
+            $currentGroupIndex = count($appendixGroups) - 1;
+            continue;
+        }
+        if ($isAnnexHeading) {
+            $annexGroups[] = [
+                'heading' => [
+                    'id' => $id,
+                    'title' => $title,
+                    'level' => $level > 0 ? $level : 2,
+                ],
+                'items' => [],
+            ];
+            $currentCollection = 'annex';
+            $currentGroupIndex = count($annexGroups) - 1;
+            continue;
+        }
+
+        $tocGroups[] = [
+            'heading' => [
+                'id' => $id,
+                'title' => $title,
+                'level' => $level > 0 ? $level : 2,
+            ],
+            'items' => [],
+        ];
+        $currentCollection = 'chapters';
+        $currentGroupIndex = count($tocGroups) - 1;
+        continue;
+    }
+
+    if ($currentCollection === 'appendix') {
+        $appendixGroups[$currentGroupIndex]['items'][] = [
+            'id' => $id,
+            'title' => $title,
+            'level' => $level,
+        ];
+        continue;
+    }
+    if ($currentCollection === 'annex') {
+        $annexGroups[$currentGroupIndex]['items'][] = [
+            'id' => $id,
+            'title' => $title,
+            'level' => $level,
+        ];
+        continue;
+    }
+
+    $tocGroups[$currentGroupIndex]['items'][] = [
+        'id' => $id,
+        'title' => $title,
+        'level' => $level,
+    ];
+}
+?>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= h($pageTitle) ?></title>
+    <style>
+        :root {
+            --law-blue: #1e4f95;
+            --law-deep-blue: #12386f;
+            --law-line: #d7e1ef;
+            --law-bg: #f4f7fb;
+            --law-card: #ffffff;
+            --law-text: #1f2937;
+            --law-muted: #5b6777;
+            --law-accent: #0b5bd3;
+            --law-heading: #17315c;
+            --law-gold: #b08a3c;
+        }
+
+        * { box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body {
+            margin: 0;
+            background:
+                linear-gradient(180deg, #ebf1f8 0%, #f7f9fc 220px, #f4f7fb 220px, #f4f7fb 100%);
+            color: var(--law-text);
+            font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+        }
+
+        a { color: var(--law-accent); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        .topbar {
+            background: linear-gradient(180deg, var(--law-blue), var(--law-deep-blue));
+            color: #fff;
+            border-bottom: 4px solid #0d2649;
+        }
+
+        .topbar-inner {
+            max-width: 1560px;
+            margin: 0 auto;
+            padding: 18px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .brand-mark {
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
+            background:
+                radial-gradient(circle at 30% 30%, rgba(255,255,255,0.35), transparent 55%),
+                linear-gradient(135deg, #f8d68d, #b88a2f);
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35);
+        }
+
+        .brand-copy small {
+            display: block;
+            color: rgba(255,255,255,0.75);
+            font-size: 12px;
+            letter-spacing: 0.08em;
+        }
+
+        .brand-copy strong {
+            display: block;
+            font-size: 25px;
+            letter-spacing: -0.04em;
+            margin-top: 4px;
+        }
+
+        .user-chip {
+            padding: 10px 14px;
+            border: 1px solid rgba(255,255,255,0.22);
+            border-radius: 999px;
+            background: rgba(255,255,255,0.08);
+            font-size: 13px;
+            color: rgba(255,255,255,0.92);
+            white-space: nowrap;
+        }
+
+        .search-band {
+            max-width: 1560px;
+            margin: 0 auto;
+            padding: 18px 24px 26px;
+        }
+
+        .search-box {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: #fff;
+            border: 1px solid #c1d0e5;
+            border-radius: 16px;
+            padding: 14px 18px;
+            box-shadow: 0 10px 30px rgba(15, 39, 74, 0.08);
+        }
+
+        .search-box .label {
+            color: var(--law-blue);
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .search-box .hint {
+            color: var(--law-muted);
+            font-size: 14px;
+        }
+
+        .layout {
+            max-width: 1560px;
+            margin: 0 auto;
+            padding: 0 24px 48px;
+            display: grid;
+            grid-template-columns: 270px minmax(0, 1.2fr) 440px;
+            gap: 24px;
+        }
+
+        .sidebar,
+        .law-panel,
+        .content-card,
+        .upload-card {
+            background: var(--law-card);
+            border: 1px solid var(--law-line);
+            border-radius: 20px;
+            box-shadow: 0 18px 38px rgba(21, 45, 83, 0.05);
+        }
+
+        .sidebar {
+            padding: 20px;
+            position: sticky;
+            top: 20px;
+            align-self: start;
+            max-height: calc(100vh - 40px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar h2,
+        .upload-card h2,
+        .content-card h1 {
+            margin: 0;
+        }
+
+        .sidebar h2 {
+            font-size: 18px;
+            color: var(--law-heading);
+            padding-bottom: 14px;
+            border-bottom: 2px solid #e8eef7;
+        }
+
+        .meta-list {
+            margin: 18px 0 0;
+            padding: 0;
+            list-style: none;
+            display: grid;
+            gap: 10px;
+            font-size: 14px;
+        }
+
+        .sidebar-scroll {
+            margin-top: 16px;
+            padding-right: 6px;
+            overflow-y: auto;
+            min-height: 0;
+        }
+
+        .sidebar-scroll::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        .sidebar-scroll::-webkit-scrollbar-thumb {
+            background: #c5d3e7;
+            border-radius: 999px;
+            border: 2px solid #f8fbff;
+        }
+
+        .meta-list strong {
+            display: block;
+            color: var(--law-heading);
+            font-size: 12px;
+            margin-bottom: 3px;
+        }
+
+        .toc {
+            margin-top: 22px;
+            padding-top: 18px;
+            border-top: 1px solid #e8eef7;
+        }
+
+        .toc h3 {
+            margin: 0 0 12px;
+            font-size: 16px;
+            color: var(--law-heading);
+        }
+
+        .toc-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .toc-header h3 {
+            margin: 0;
+        }
+
+        .toc ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: grid;
+            gap: 8px;
+        }
+
+        .toc-list.is-collapsed {
+            display: none;
+        }
+
+        .toc-group {
+            border-top: 1px solid #edf2f8;
+            padding-top: 10px;
+            margin-top: 10px;
+        }
+
+        .toc-group:first-child {
+            border-top: 0;
+            padding-top: 0;
+            margin-top: 0;
+        }
+
+        .toc-group-toggle {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            border: 1px solid #d7e2f0;
+            background: #f8fbff;
+            color: var(--law-heading);
+            border-radius: 12px;
+            padding: 10px 12px;
+            font: inherit;
+            font-size: 14px;
+            font-weight: 700;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .toc-group-toggle:hover {
+            background: #eef4fc;
+        }
+
+        .toc-group-toggle .chevron {
+            flex: 0 0 auto;
+            color: #5d7397;
+            transition: transform 0.18s ease;
+        }
+
+        .toc-group.is-collapsed .toc-group-toggle .chevron {
+            transform: rotate(-90deg);
+        }
+
+        .toc-group-items {
+            list-style: none;
+            margin: 10px 0 0;
+            padding: 0;
+            display: grid;
+            gap: 8px;
+        }
+
+        .toc-group.is-collapsed .toc-group-items {
+            display: none;
+        }
+
+        .toc a {
+            display: block;
+            color: #334155;
+            font-size: 14px;
+            padding: 7px 10px;
+            border-radius: 10px;
+            background: #f8fafc;
+            border: 1px solid transparent;
+        }
+
+        .toc a.level-3 {
+            margin-left: 14px;
+            background: #fbfcfe;
+        }
+
+        .toc a:hover {
+            border-color: #c7d7ee;
+            color: var(--law-accent);
+            text-decoration: none;
+        }
+
+        .main {
+            display: grid;
+            gap: 20px;
+        }
+
+        .law-panel {
+            position: sticky;
+            top: 20px;
+            align-self: start;
+            height: calc(100vh - 40px);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .law-panel-head {
+            padding: 18px 18px 14px;
+            border-bottom: 1px solid #e7eef8;
+            background: linear-gradient(180deg, #f8fbff, #ffffff);
+        }
+
+        .law-panel-head h2 {
+            margin: 0;
+            font-size: 18px;
+            color: var(--law-heading);
+        }
+
+        .law-panel-head p {
+            margin: 8px 0 0;
+            color: var(--law-muted);
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .law-panel-meta {
+            margin-top: 12px;
+            display: grid;
+            gap: 8px;
+        }
+
+        .law-panel-query {
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: #f4f8fd;
+            border: 1px solid #dbe5f3;
+            color: #1f355c;
+            font-size: 13px;
+            line-height: 1.5;
+            word-break: keep-all;
+        }
+
+        .law-panel-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 40px;
+            padding: 0 12px;
+            border-radius: 12px;
+            background: #1d4d93;
+            color: #fff;
+            font-size: 13px;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .law-panel-link:hover {
+            color: #fff;
+            text-decoration: none;
+            filter: brightness(1.03);
+        }
+
+        .law-panel-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            background: #eef4fb;
+            overflow-y: auto;
+        }
+
+        .law-panel-content {
+            min-height: 100%;
+            height: auto;
+            padding: 20px 18px 24px;
+            overflow: visible;
+            background: #fff;
+            color: #20324f;
+        }
+
+        .law-panel-placeholder,
+        .law-panel-loading,
+        .law-panel-error {
+            display: flex;
+            min-height: 560px;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            line-height: 1.8;
+            color: #50627f;
+        }
+
+        .law-panel-placeholder strong,
+        .law-panel-loading strong,
+        .law-panel-error strong {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 19px;
+            color: #17315b;
+        }
+
+        .law-panel-card {
+            display: grid;
+            gap: 18px;
+        }
+
+        .law-panel-card-head {
+            padding: 16px 18px;
+            border: 1px solid #dbe5f3;
+            border-radius: 16px;
+            background: linear-gradient(180deg, #f8fbff, #f2f7fd);
+        }
+
+        .law-panel-title {
+            margin: 0;
+            font-size: 22px;
+            line-height: 1.45;
+            color: #163157;
+        }
+
+        .law-panel-subtitle {
+            margin: 8px 0 0;
+            color: #4f6283;
+            font-size: 14px;
+        }
+
+        .law-panel-section {
+            padding: 16px 18px;
+            border: 1px solid #e3ebf7;
+            border-radius: 16px;
+            background: #fdfefe;
+        }
+
+        .law-panel-section h3 {
+            margin: 0 0 12px;
+            font-size: 15px;
+            color: #1e355d;
+        }
+
+        .law-panel-section p {
+            margin: 0 0 10px;
+            color: #243754;
+            line-height: 1.8;
+            font-size: 14px;
+            word-break: keep-all;
+        }
+
+        .law-panel-section p:last-child {
+            margin-bottom: 0;
+        }
+
+        .law-panel-list {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+            display: grid;
+            gap: 8px;
+        }
+
+        .law-panel-list li {
+            display: grid;
+            grid-template-columns: 80px minmax(0, 1fr);
+            gap: 10px;
+            font-size: 13px;
+            color: #334866;
+        }
+
+        .law-panel-list strong {
+            color: #18345f;
+        }
+
+        .law-panel-frame {
+            width: 100%;
+            height: 100%;
+            min-height: 560px;
+            border: 0;
+            background: #fff;
+        }
+
+        .upload-card {
+            padding: 22px 22px 20px;
+        }
+
+        .upload-card h2 {
+            font-size: 21px;
+            color: var(--law-heading);
+            margin-bottom: 8px;
+        }
+
+        .upload-card p {
+            margin: 0;
+            color: var(--law-muted);
+            line-height: 1.6;
+        }
+
+        .upload-form {
+            margin-top: 18px;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 12px;
+        }
+
+        .file-input {
+            position: relative;
+            overflow: hidden;
+            border: 1px dashed #9db3d6;
+            background: linear-gradient(180deg, #f9fbfe, #f2f6fc);
+            border-radius: 14px;
+            padding: 16px 18px;
+        }
+
+        .file-input input {
+            width: 100%;
+            font: inherit;
+        }
+
+        .button {
+            border: 0;
+            border-radius: 14px;
+            padding: 0 20px;
+            min-height: 56px;
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+            color: #fff;
+            background: linear-gradient(180deg, #2c67bd, #124686);
+            box-shadow: 0 10px 24px rgba(18, 70, 134, 0.22);
+        }
+
+        .button:hover {
+            filter: brightness(1.03);
+        }
+
+        .flash {
+            margin-top: 14px;
+            border-radius: 14px;
+            padding: 13px 15px;
+            font-size: 14px;
+            border: 1px solid transparent;
+        }
+
+        .flash.success {
+            background: #edf7ee;
+            color: #165c2b;
+            border-color: #b7dfbf;
+        }
+
+        .flash.error {
+            background: #fff1f1;
+            color: #8c1d1d;
+            border-color: #f0b8b8;
+        }
+
+        .content-card {
+            overflow: hidden;
+        }
+
+        .content-header {
+            padding: 28px 30px 20px;
+            border-bottom: 1px solid #e6edf7;
+            background:
+                linear-gradient(180deg, rgba(245, 249, 255, 0.98), rgba(255,255,255,0.98)),
+                linear-gradient(135deg, rgba(30,79,149,0.08), transparent 48%);
+        }
+
+        .content-header .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 12px;
+            border-radius: 999px;
+            background: #eef4fc;
+            color: var(--law-blue);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+        }
+
+        .content-header h1 {
+            font-size: 34px;
+            color: var(--law-heading);
+            margin-top: 16px;
+            letter-spacing: -0.05em;
+        }
+
+        .content-header p {
+            margin: 14px 0 0;
+            color: var(--law-muted);
+            line-height: 1.8;
+            font-size: 15px;
+        }
+
+        .content-header-meta {
+            margin-top: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .law-link-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: #eef6ff;
+            border: 1px solid #d7e5f7;
+            color: #1d4d93;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .document {
+            padding: 32px 30px 36px;
+            line-height: 1.95;
+            font-size: 16px;
+        }
+
+        .document h2,
+        .document h3 {
+            color: var(--law-heading);
+            letter-spacing: -0.02em;
+        }
+
+        .document h2 {
+            margin: 34px 0 14px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #d9e4f4;
+            font-size: 24px;
+        }
+
+        .document h3 {
+            margin: 28px 0 10px;
+            font-size: 19px;
+        }
+
+        .document p {
+            margin: 10px 0;
+            color: #1f2937;
+        }
+
+        .document p.bullet {
+            padding-left: 12px;
+            color: #374151;
+        }
+
+        .law-ref-link {
+            color: var(--law-accent);
+            text-decoration: underline;
+            text-decoration-style: dotted;
+            text-underline-offset: 2px;
+            font-weight: 600;
+        }
+
+        .law-ref-link:hover {
+            color: #083f97;
+        }
+
+        .rule-table-wrap {
+            margin: 18px 0;
+            overflow-x: auto;
+            border: 1px solid #d6dfed;
+            border-radius: 14px;
+        }
+
+        .rule-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #fff;
+            min-width: 560px;
+        }
+
+        .rule-table td {
+            border: 1px solid #dbe3ef;
+            padding: 10px 12px;
+            vertical-align: top;
+            font-size: 14px;
+            line-height: 1.7;
+        }
+
+        .empty-state {
+            padding: 56px 30px 64px;
+            text-align: center;
+            color: var(--law-muted);
+        }
+
+        .empty-state strong {
+            display: block;
+            color: var(--law-heading);
+            font-size: 24px;
+            margin-bottom: 12px;
+        }
+
+        .footer-note {
+            max-width: 1560px;
+            margin: 0 auto;
+            padding: 0 24px 44px;
+            color: #6b7280;
+            font-size: 13px;
+        }
+
+        @media (max-width: 1080px) {
+            .layout {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                position: static;
+                max-height: none;
+            }
+
+            .law-panel {
+                position: static;
+                height: auto;
+                max-height: none;
+            }
+        }
+
+        @media (max-width: 720px) {
+            .topbar-inner,
+            .search-band,
+            .layout,
+            .footer-note {
+                padding-left: 16px;
+                padding-right: 16px;
+            }
+
+            .brand-copy strong {
+                font-size: 22px;
+            }
+
+            .user-chip {
+                white-space: normal;
+            }
+
+            .upload-form {
+                grid-template-columns: 1fr;
+            }
+
+            .content-header,
+            .document,
+            .upload-card,
+            .sidebar {
+                padding-left: 18px;
+                padding-right: 18px;
+            }
+
+            .content-header h1 {
+                font-size: 28px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <div class="brand">
+                <div class="brand-mark" aria-hidden="true"></div>
+                <div class="brand-copy">
+                    <small>EMPLOYMENT RULES SYSTEM</small>
+                    <strong>취업규칙</strong>
+                </div>
+            </div>
+            <div class="user-chip"><?= h(trim((string)($user['name'] ?? $user['login_id'] ?? "\u{AD00}\u{B9AC}\u{C790}"))) ?> 님</div>
+        </div>
+        <div class="search-band">
+            <div class="search-box">
+                <span class="label">HWPX 업로드 자동 반영</span>
+                <span class="hint">최신 취업규칙 문서를 업로드하면 본문, 목차, 관련 법령 링크가 자동으로 정리됩니다.</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="layout">
+        <aside class="sidebar">
+            <h2>문서 정보</h2>
+            <div class="sidebar-scroll" id="sidebar-scroll-area">
+                <ul class="meta-list">
+                    <li>
+                        <strong>문서명</strong>
+                        <span><?php echo ($current ? '취업규칙' : '업로드 대기 중'); ?></span>
+                    </li>
+                    <li>
+                        <strong>반영 상태</strong>
+                        <span><?php echo ($current ? '게시 중' : '초안 미반영'); ?></span>
+                    </li>
+                    <li>
+                        <strong>반영 일시</strong>
+                        <span><?= h((string)($current['uploaded_at'] ?? '-')) ?></span>
+                    </li>
+                    <li>
+                        <strong>반영자</strong>
+                        <span><?= h((string)($current['uploaded_by'] ?? '-')) ?></span>
+                    </li>
+                    <li>
+                        <strong>원본 파일</strong>
+                        <?php if (!empty($current['source_path']) && !empty($current['source_name'])): ?>
+                            <a href="<?= h((string)$current['source_path']) ?>" target="_blank" rel="noopener"><?= h((string)$current['source_name']) ?></a>
+                        <?php else: ?>
+                            <span>-</span>
+                        <?php endif; ?>
+                    </li>
+                </ul>
+
+                <?php if ($tocGroups !== [] || $appendixGroups !== [] || $annexGroups !== []): ?>
+                    <div class="toc">
+                        <div class="toc-header">
+                            <h3>목차</h3>
+                        </div>
+                        <div class="toc-list" id="toc-list">
+                            <?php foreach ($tocGroups as $groupIndex => $group): ?>
+                                <?php
+                                $heading = $group['heading'];
+                                $items = $group['items'];
+                                $headingId = trim((string)($heading['id'] ?? ''));
+                                $headingTitle = trim((string)($heading['title'] ?? ''));
+                                if ($headingId === '' || $headingTitle === '') {
+                                    continue;
+                                }
+                                ?>
+                                <div class="toc-group is-collapsed" data-toc-group>
+                                    <button type="button" class="toc-group-toggle" data-toc-toggle aria-expanded="false" aria-controls="toc-group-items-<?= $groupIndex ?>">
+                                        <span><?= h($headingTitle) ?></span>
+                                        <span class="chevron">&#9662;</span>
+                                    </button>
+                                    <ul class="toc-group-items" id="toc-group-items-<?= $groupIndex ?>">
+                                        <li><a class="level-2" href="#<?= h($headingId) ?>"><?= h($headingTitle) ?></a></li>
+                                        <?php foreach ($items as $item): ?>
+                                            <?php
+                                            $anchorId = trim((string)($item['id'] ?? ''));
+                                            $anchorTitle = trim((string)($item['title'] ?? ''));
+                                            $levelClass = 'level-' . (int)($item['level'] ?? 3);
+                                            if ($anchorId === '' || $anchorTitle === '') {
+                                                continue;
+                                            }
+                                            ?>
+                                            <li><a class="<?= h($levelClass) ?>" href="#<?= h($anchorId) ?>"><?= h($anchorTitle) ?></a></li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                </div>
+                            <?php endforeach; ?>
+                            <?php if ($appendixGroups !== []): ?>
+                                <div class="toc-header" style="margin-top:16px;">
+                                    <h3>부칙</h3>
+                                </div>
+                                <?php foreach ($appendixGroups as $groupIndex => $group): ?>
+                                    <?php
+                                    $heading = $group['heading'];
+                                    $items = $group['items'];
+                                    $headingId = trim((string)($heading['id'] ?? ''));
+                                    $headingTitle = trim((string)($heading['title'] ?? ''));
+                                    if ($headingId === '' || $headingTitle === '') {
+                                        continue;
+                                    }
+                                    $appendixDomId = 'toc-appendix-items-' . $groupIndex;
+                                    ?>
+                                    <div class="toc-group is-collapsed" data-toc-group>
+                                        <button type="button" class="toc-group-toggle" data-toc-toggle aria-expanded="false" aria-controls="<?= h($appendixDomId) ?>">
+                                            <span><?= h($headingTitle) ?></span>
+                                            <span class="chevron">&#9662;</span>
+                                        </button>
+                                        <ul class="toc-group-items" id="<?= h($appendixDomId) ?>">
+                                            <li><a class="level-2" href="#<?= h($headingId) ?>"><?= h($headingTitle) ?></a></li>
+                                            <?php foreach ($items as $item): ?>
+                                                <?php
+                                                $anchorId = trim((string)($item['id'] ?? ''));
+                                                $anchorTitle = trim((string)($item['title'] ?? ''));
+                                                $levelClass = 'level-' . (int)($item['level'] ?? 3);
+                                                if ($anchorId === '' || $anchorTitle === '') {
+                                                    continue;
+                                                }
+                                                ?>
+                                                <li><a class="<?= h($levelClass) ?>" href="#<?= h($anchorId) ?>"><?= h($anchorTitle) ?></a></li>
+                                            <?php endforeach; ?>
+                                        </ul>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                            <?php if ($annexGroups !== []): ?>
+                                <div class="toc-header" style="margin-top:16px;">
+                                    <h3>별지 서식</h3>
+                                </div>
+                                <?php foreach ($annexGroups as $groupIndex => $group): ?>
+                                    <?php
+                                    $heading = $group['heading'];
+                                    $items = $group['items'];
+                                    $headingId = trim((string)($heading['id'] ?? ''));
+                                    $headingTitle = trim((string)($heading['title'] ?? ''));
+                                    if ($headingId === '' || $headingTitle === '') {
+                                        continue;
+                                    }
+                                    $annexDomId = 'toc-annex-items-' . $groupIndex;
+                                    ?>
+                                    <div class="toc-group is-collapsed" data-toc-group>
+                                        <button type="button" class="toc-group-toggle" data-toc-toggle aria-expanded="false" aria-controls="<?= h($annexDomId) ?>">
+                                            <span><?= h($headingTitle) ?></span>
+                                            <span class="chevron">&#9662;</span>
+                                        </button>
+                                        <ul class="toc-group-items" id="<?= h($annexDomId) ?>">
+                                            <li><a class="level-2" href="#<?= h($headingId) ?>"><?= h($headingTitle) ?></a></li>
+                                            <?php foreach ($items as $item): ?>
+                                                <?php
+                                                $anchorId = trim((string)($item['id'] ?? ''));
+                                                $anchorTitle = trim((string)($item['title'] ?? ''));
+                                                $levelClass = 'level-' . (int)($item['level'] ?? 3);
+                                                if ($anchorId === '' || $anchorTitle === '') {
+                                                    continue;
+                                                }
+                                                ?>
+                                                <li><a class="<?= h($levelClass) ?>" href="#<?= h($anchorId) ?>"><?= h($anchorTitle) ?></a></li>
+                                            <?php endforeach; ?>
+                                        </ul>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </aside>
+        
+        <section class="main">
+            <div class="upload-card">
+                <h2>취업규칙 파일 업로드</h2>
+                <p>HWPX 파일을 등록하면 문서 내용을 파싱해 본문/목차를 자동 반영합니다. 업로드 후 화면에서 즉시 확인할 수 있습니다.</p>
+                <form class="upload-form" method="post" enctype="multipart/form-data">
+                    <label class="file-input">
+                        <input type="file" name="draft_file" accept=".hwpx" required>
+                    </label>
+                    <button class="button" type="submit">업로드 후 취업규칙 반영</button>
+                </form>
+                <?php if (is_array($flash)): ?>
+                    <div class="flash <?= h((string)($flash['type'] ?? 'success')) ?>"><?= h((string)($flash['message'] ?? '')) ?></div>
+                <?php endif; ?>
+            </div>
+
+            <article class="content-card">
+                <?php if ($current): ?>
+                    <div class="content-header">
+                        <span class="badge">최신 반영본</span>
+                        <h1>취업규칙</h1>
+                        <?php if ($summary !== ''): ?>
+                            <p><?= h($summary) ?></p>
+                        <?php else: ?>
+                            <p>요약 정보가 없습니다. HWPX 파일을 업로드해 내용을 반영해 주세요.</p>
+                        <?php endif; ?>
+                        <div class="content-header-meta">
+                            <span class="law-link-status" id="law-link-status">법령 링크 감지 0건</span>
+                        </div>
+                    </div>
+                    <div class="document">
+                        <?= $renderedContentHtml ?>
+                    </div>
+                <?php else: ?>
+                    <div class="empty-state">
+                        <strong>아직 반영된 취업규칙이 없습니다.</strong>
+                        <div>상단 업로드 영역에서 .hwpx 파일을 등록하면 본문과 목차가 자동으로 반영됩니다.</div>
+                    </div>
+                <?php endif; ?>
+            </article>
+        </section>
+
+        <aside class="law-panel">
+            <div class="law-panel-head">
+                <h2>관련 법조문</h2>
+                <p>본문의 법령 링크를 누르면 선택한 조문을 이 영역에서 바로 확인할 수 있습니다.</p>
+                <div class="law-panel-meta">
+                    <div class="law-panel-query" id="law-panel-query">아직 선택한 법령이 없습니다.</div>
+                    <a class="law-panel-link" id="law-panel-open-link" href="https://www.law.go.kr/" target="_blank" rel="noopener">법제처 원문 열기</a>
+                </div>
+            </div>
+            <div class="law-panel-body">
+                <div class="law-panel-content law-panel-placeholder" id="law-panel-content">
+                    <div>
+                        <strong>관련 법조문 보기</strong>
+                        <span>본문의 법령 링크를 클릭하면 선택한 조문을 이곳에 표시합니다.</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <div class="footer-note">취업규칙 문서는 관리자 권한으로만 반영됩니다. 변경이 필요한 경우 최신 HWPX 파일을 다시 업로드해 주세요.</div>
+    <script>
+        (function () {
+            var toggles = document.querySelectorAll('[data-toc-toggle]');
+            toggles.forEach(function (toggle) {
+                toggle.addEventListener('click', function () {
+                    var group = toggle.closest('[data-toc-group]');
+                    if (!group) {
+                        return;
+                    }
+
+                    var isCollapsed = group.classList.toggle('is-collapsed');
+                    toggle.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+                });
+            });
+
+            function buildLawSearchUrl(query) {
+                var normalizedQuery = normalizeLawReference(query);
+                var matched = normalizedQuery.match(/(.+?(?:\uBC95|\uC2DC\uD589\uB839|\uC2DC\uD589\uADDC\uCE59))\s*\uC81C\s*(\d+)\s*\uC870(?:\s*\uC758\s*(\d+))?/);
+                if (!matched) {
+                    return 'https://www.law.go.kr/lsSc.do?menuId=1&query=' + encodeURIComponent(normalizedQuery) + '&subMenuId=15&tabMenuId=81';
+                }
+
+                var lawName = normalizeLawReference(matched[1] || '');
+                var articleNumber = parseInt(matched[2] || '0', 10);
+                var articleSubNumber = parseInt(matched[3] || '0', 10);
+                if (!lawName || !articleNumber) {
+                    return 'https://www.law.go.kr/lsSc.do?menuId=1&query=' + encodeURIComponent(normalizedQuery) + '&subMenuId=15&tabMenuId=81';
+                }
+
+                return 'https://www.law.go.kr/LSW/lsLinkProc.do?lsNm='
+                    + encodeURIComponent(lawName)
+                    + '&joNo='
+                    + encodeURIComponent(buildLawArticleNo(articleNumber, articleSubNumber))
+                    + '&mode=10&lsClsCd=010101L';
+            }
+
+            function escapeHtml(text) {
+                return String(text)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            function normalizeLawReference(text) {
+                return String(text || '')
+                    .replace(/[\u300C\u300D"']/g, '')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+            }
+
+            function padNumber(value, size) {
+                var output = String(Math.max(0, parseInt(value || 0, 10) || 0));
+                while (output.length < size) {
+                    output = '0' + output;
+                }
+                return output;
+            }
+
+            function buildLawArticleNo(articleNumber, articleSubNumber) {
+                return padNumber(articleNumber, 4) + padNumber(articleSubNumber || 0, 2) + '000';
+            }
+
+            function buildLawReferenceLink(lawName, articleNumber, articleSubNumber, labelText) {
+                var queryText = normalizeLawReference(
+                    lawName + ' ' + '\uC81C' + articleNumber + '\uC870' + (articleSubNumber ? '\uC758' + articleSubNumber : '')
+                );
+                return {
+                    href: buildLawSearchUrl(queryText),
+                    queryText: queryText,
+                    labelText: labelText
+                };
+            }
+
+            function linkLawReferences(root) {
+                if (!root) {
+                    return;
+                }
+
+                var pattern = /([^\[\]\n,;:<]*?(?:\uBC95|\uC2DC\uD589\uB839|\uC2DC\uD589\uADDC\uCE59)\s*\uC81C\s*\d+\s*\uC870(?:\s*\uC758\s*\d+)?)/g;
+                root.querySelectorAll('p, h2, h3, td').forEach(function (element) {
+                    if (element.querySelector('a')) {
+                        return;
+                    }
+
+                    var text = element.textContent || '';
+                    if (!pattern.test(text)) {
+                        pattern.lastIndex = 0;
+                        return;
+                    }
+
+                    pattern.lastIndex = 0;
+                    var replacedHtml = escapeHtml(text).replace(pattern, function (matchedText) {
+                        var queryText = matchedText.replace(/[\[\]"'“”‘’]/g, '').replace(/\s+/g, ' ').trim();
+                        var href = buildLawSearchUrl(queryText);
+                        return '<a class=\"law-ref-link\" href=\"' + href + '\" target=\"_blank\" rel=\"noopener\" data-law-query=\"' + escapeHtml(queryText) + '\">' + escapeHtml(matchedText) + '</a>';
+                    });
+                    element.innerHTML = replacedHtml;
+                });
+            }
+
+            function linkLawReferencesSafe(root) {
+                if (!root) {
+                    return 0;
+                }
+
+                var citationPattern = /([^\[\]\n;:<]*?(?:\uBC95|\uC2DC\uD589\uB839|\uC2DC\uD589\uADDC\uCE59))\s*\uC81C\s*(\d+)\s*\uC870(?:\s*\uC758\s*(\d+))?((?:\s*,\s*\uC81C\s*\d+\s*\uC870(?:\s*\uC758\s*\d+)?)*)/g;
+                var trailingPattern = /(\s*,\s*)\uC81C\s*(\d+)\s*\uC870(?:\s*\uC758\s*(\d+))?/g;
+                var linkCount = 0;
+
+                root.querySelectorAll('p, h2, h3, td').forEach(function (element) {
+                    if (element.querySelector('a')) {
+                        return;
+                    }
+
+                    var text = element.textContent || '';
+                    if (!citationPattern.test(text)) {
+                        citationPattern.lastIndex = 0;
+                        return;
+                    }
+
+                    citationPattern.lastIndex = 0;
+                    var replacedHtml = escapeHtml(text).replace(citationPattern, function (matchedText, lawNameText, articleNumber, articleSubNumber, trailingArticles) {
+                        var lawName = normalizeLawReference(lawNameText);
+                        var firstArticleNumber = parseInt(articleNumber || '0', 10);
+                        var firstArticleSubNumber = parseInt(articleSubNumber || '0', 10);
+                        if (!lawName || !firstArticleNumber) {
+                            return escapeHtml(matchedText);
+                        }
+
+                        var firstLabelText = normalizeLawReference(
+                            lawName + ' ' + '\uC81C' + firstArticleNumber + '\uC870' + (firstArticleSubNumber ? '\uC758' + firstArticleSubNumber : '')
+                        );
+                        var firstLink = buildLawReferenceLink(lawName, firstArticleNumber, firstArticleSubNumber, firstLabelText);
+                        linkCount += 1;
+
+                        var trailingHtml = escapeHtml(trailingArticles || '').replace(trailingPattern, function (subMatchedText, delimiter, nextArticleNumber, nextArticleSubNumber) {
+                            var nextArticle = parseInt(nextArticleNumber || '0', 10);
+                            var nextSubArticle = parseInt(nextArticleSubNumber || '0', 10);
+                            if (!nextArticle) {
+                                return escapeHtml(subMatchedText);
+                            }
+
+                            var nextLabelText = '\uC81C' + nextArticle + '\uC870' + (nextSubArticle ? '\uC758' + nextSubArticle : '');
+                            var nextLink = buildLawReferenceLink(lawName, nextArticle, nextSubArticle, nextLabelText);
+                            linkCount += 1;
+
+                            return escapeHtml(delimiter)
+                                + '<a class="law-ref-link" href="'
+                                + nextLink.href
+                                + '" target="_blank" rel="noopener" data-law-query="'
+                                + escapeHtml(nextLink.queryText)
+                                + '">'
+                                + escapeHtml(nextLink.labelText)
+                                + '</a>';
+                        });
+
+                        return '<a class="law-ref-link" href="'
+                            + firstLink.href
+                            + '" target="_blank" rel="noopener" data-law-query="'
+                            + escapeHtml(firstLink.queryText)
+                            + '">'
+                            + escapeHtml(firstLink.labelText)
+                            + '</a>'
+                            + trailingHtml;
+                    });
+
+                    element.innerHTML = replacedHtml;
+                });
+
+                return linkCount;
+            }
+
+            var detectedLawLinkCount = linkLawReferencesSafe(document.querySelector('.document'));
+            var lawLinkStatus = document.getElementById('law-link-status');
+            if (lawLinkStatus) {
+                lawLinkStatus.textContent = '\uBC95\uB839 \uB9C1\uD06C \uAC10\uC9C0 ' + detectedLawLinkCount + '\uAC74';
+            }
+
+            var lawPanelContent = document.getElementById('law-panel-content');
+            var lawPanelQuery = document.getElementById('law-panel-query');
+            var lawPanelOpenLink = document.getElementById('law-panel-open-link');
+
+            /*
+            function renderLawPanelState(className, title, description) {
+                if (!lawPanelContent) {
+                    return;
+                }
+
+                lawPanelContent.className = 'law-panel-content ' + className;
+                lawPanelContent.innerHTML = '<div><strong>' + escapeHtml(title) + '</strong><span>' + escapeHtml(description) + '</span></div>';
+            }
+
+            function renderLawPanelResult(payload) {
+                if (!lawPanelContent) {
+                    return;
+                }
+
+                var infoItems = [];
+                if (payload.law_kind) {
+                    infoItems.push('<li><strong>법종</strong><span>' + escapeHtml(payload.law_kind) + '</span></li>');
+                }
+                if (payload.ministry) {
+                    infoItems.push('<li><strong>소관부처</strong><span>' + escapeHtml(payload.ministry) + '</span></li>');
+                }
+                if (payload.effective_at) {
+                    infoItems.push('<li><strong>시행일</strong><span>' + escapeHtml(payload.effective_at) + '</span></li>');
+                }
+                if (payload.promulgation_at || payload.promulgation_no || payload.revision_type) {
+                    var promulgationMeta = [];
+                    if (payload.promulgation_no) {
+                        promulgationMeta.push('제' + escapeHtml(payload.promulgation_no) + '호');
+                    }
+                    if (payload.promulgation_at) {
+                        promulgationMeta.push(escapeHtml(payload.promulgation_at));
+                    }
+                    if (payload.revision_type) {
+                        promulgationMeta.push(escapeHtml(payload.revision_type));
+                    }
+                    infoItems.push('<li><strong>공포정보</strong><span>' + promulgationMeta.join(' / ') + '</span></li>');
+                }
+                if (payload.contact_phone) {
+                    infoItems.push('<li><strong>문의전화</strong><span>' + escapeHtml(payload.contact_phone) + '</span></li>');
+                }
+
+                var bodyLines = Array.isArray(payload.body_lines) ? payload.body_lines : [];
+                var bodyHtml = bodyLines.length
+                    ? bodyLines.map(function (line) { return '<p>' + escapeHtml(line) + '</p>'; }).join('')
+                    : '<p>조문 본문을 찾지 못했습니다.</p>';
+
+                lawPanelContent.className = 'law-panel-content';
+                lawPanelContent.innerHTML = ''
+                    + '<div class="law-panel-card">'
+                    + '  <div class="law-panel-card-head">'
+                    + '    <h3 class="law-panel-title">' + escapeHtml(payload.article_label || payload.query || '') + '</h3>'
+                    + '    <p class="law-panel-subtitle">' + escapeHtml(payload.law_name || '') + '</p>'
+                    + '  </div>'
+                    + '  <section class="law-panel-section">'
+                    + '    <h3>조문 내용</h3>'
+                    +      bodyHtml
+                    + '  </section>'
+                    + '  <section class="law-panel-section">'
+                    + '    <h3>기본 정보</h3>'
+                    + '    <ul class="law-panel-list">' + infoItems.join('') + '</ul>'
+                    + '  </section>'
+                    + '</div>';
+            }
+
+            function loadLawPanel(queryText, openUrl) {
+                if (!queryText || !lawPanelContent || !lawPanelQuery || !lawPanelOpenLink) {
+                    return;
+                }
+
+                lawPanelQuery.textContent = queryText;
+                lawPanelOpenLink.href = openUrl || buildLawSearchUrl(queryText);
+                renderLawPanelState('law-panel-loading', '법령 불러오는 중', '선택한 조문을 법제처 Open API로 조회하고 있습니다.');
+
+                fetch('index.php?action=law_api&query=' + encodeURIComponent(queryText), {
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                })
+                    .then(function (response) {
+                        return response.json()
+                            .catch(function () {
+                                return {
+                                    success: false,
+                                    message: '법령 응답을 해석하지 못했습니다.'
+                                };
+                            })
+                            .then(function (payload) {
+                                if (!response.ok || !payload.success) {
+                                    throw new Error(payload.message || '법령 정보를 불러오지 못했습니다.');
+                                }
+
+                                return payload;
+                            });
+                    })
+                    .then(function (payload) {
+                        lawPanelOpenLink.href = payload.open_url || lawPanelOpenLink.href;
+                        renderLawPanelResult(payload);
+                    })
+                    .catch(function (error) {
+                        renderLawPanelState('law-panel-error', '법령 조회 실패', error && error.message ? error.message : '잠시 후 다시 시도해 주세요.');
+                    });
+            }
+
+            */
+
+            function renderLawPanelState(className, title, description) {
+                if (!lawPanelContent) {
+                    return;
+                }
+
+                lawPanelContent.className = 'law-panel-content ' + className;
+                lawPanelContent.innerHTML = '<div><strong>' + escapeHtml(title) + '</strong><span>' + escapeHtml(description) + '</span></div>';
+            }
+
+            function renderLawPanelResult(payload) {
+                if (!lawPanelContent) {
+                    return;
+                }
+
+                var infoItems = [];
+                if (payload.law_kind) {
+                    infoItems.push('<li><strong>\uBC95\uC885</strong><span>' + escapeHtml(payload.law_kind) + '</span></li>');
+                }
+                if (payload.ministry) {
+                    infoItems.push('<li><strong>\uC18C\uAD00\uBD80\uCC98</strong><span>' + escapeHtml(payload.ministry) + '</span></li>');
+                }
+                if (payload.effective_at) {
+                    infoItems.push('<li><strong>\uC2DC\uD589\uC77C</strong><span>' + escapeHtml(payload.effective_at) + '</span></li>');
+                }
+                if (payload.promulgation_at || payload.promulgation_no || payload.revision_type) {
+                    var promulgationMeta = [];
+                    if (payload.promulgation_no) {
+                        promulgationMeta.push('\uC81C' + escapeHtml(payload.promulgation_no) + '\uD638');
+                    }
+                    if (payload.promulgation_at) {
+                        promulgationMeta.push(escapeHtml(payload.promulgation_at));
+                    }
+                    if (payload.revision_type) {
+                        promulgationMeta.push(escapeHtml(payload.revision_type));
+                    }
+                    infoItems.push('<li><strong>\uACF5\uD3EC\uC815\uBCF4</strong><span>' + promulgationMeta.join(' / ') + '</span></li>');
+                }
+                if (payload.contact_phone) {
+                    infoItems.push('<li><strong>\uBB38\uC758\uC804\uD654</strong><span>' + escapeHtml(payload.contact_phone) + '</span></li>');
+                }
+
+                var bodyLines = Array.isArray(payload.body_lines) ? payload.body_lines : [];
+                var bodyHtml = bodyLines.length
+                    ? bodyLines.map(function (line) { return '<p>' + escapeHtml(line) + '</p>'; }).join('')
+                    : '<p>\uC870\uBB38 \uBCF8\uBB38\uC744 \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.</p>';
+
+                lawPanelContent.className = 'law-panel-content';
+                lawPanelContent.innerHTML = ''
+                    + '<div class="law-panel-card">'
+                    + '  <div class="law-panel-card-head">'
+                    + '    <h3 class="law-panel-title">' + escapeHtml(payload.article_label || payload.query || '') + '</h3>'
+                    + '    <p class="law-panel-subtitle">' + escapeHtml(payload.law_name || '') + '</p>'
+                    + '  </div>'
+                    + '  <section class="law-panel-section">'
+                    + '    <h3>\uC870\uBB38 \uB0B4\uC6A9</h3>'
+                    +      bodyHtml
+                    + '  </section>'
+                    + '  <section class="law-panel-section">'
+                    + '    <h3>\uAE30\uBCF8 \uC815\uBCF4</h3>'
+                    + '    <ul class="law-panel-list">' + infoItems.join('') + '</ul>'
+                    + '  </section>'
+                    + '</div>';
+            }
+
+            function loadLawPanel(queryText, openUrl) {
+                if (!queryText || !lawPanelContent || !lawPanelQuery || !lawPanelOpenLink) {
+                    return;
+                }
+
+                lawPanelQuery.textContent = queryText;
+                lawPanelOpenLink.href = openUrl || buildLawSearchUrl(queryText);
+                renderLawPanelState(
+                    'law-panel-loading',
+                    '\uBC95\uB839 \uBD88\uB7EC\uC624\uB294 \uC911',
+                    '\uC120\uD0DD\uD55C \uC870\uBB38\uC744 \uBC95\uC81C\uCC98 Open API\uB85C \uC870\uD68C\uD558\uACE0 \uC788\uC2B5\uB2C8\uB2E4.'
+                );
+
+                fetch('index.php?action=law_api&query=' + encodeURIComponent(queryText), {
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                })
+                    .then(function (response) {
+                        return response.json()
+                            .catch(function () {
+                                return {
+                                    success: false,
+                                    message: '\uBC95\uB839 \uC751\uB2F5\uC744 \uD574\uC11D\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.'
+                                };
+                            })
+                            .then(function (payload) {
+                                if (!response.ok || !payload.success) {
+                                    throw new Error(payload.message || '\uBC95\uB839 \uC815\uBCF4\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.');
+                                }
+
+                                return payload;
+                            });
+                    })
+                    .then(function (payload) {
+                        lawPanelOpenLink.href = payload.open_url || lawPanelOpenLink.href;
+                        renderLawPanelResult(payload);
+                    })
+                    .catch(function (error) {
+                        renderLawPanelState(
+                            'law-panel-error',
+                            '\uBC95\uB839 \uC870\uD68C \uC2E4\uD328',
+                            error && error.message ? error.message : '\uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694.'
+                        );
+                    });
+            }
+
+            document.querySelectorAll('.document .law-ref-link').forEach(function (link) {
+                link.addEventListener('click', function (event) {
+                    var queryText = String(link.dataset.lawQuery || link.textContent || '').trim();
+                    if (!queryText || !lawPanelContent || !lawPanelQuery || !lawPanelOpenLink) {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    loadLawPanel(queryText, link.href);
+                });
+            });
+        }());
+    </script>
+</body>
+</html>
+
