@@ -1235,8 +1235,15 @@ foreach ($reports as &$report) {
 }
 unset($report);
 
-$canAccessLegacyListPage = trim((string)($user['name'] ?? '')) === '김남균';
-$canAccessMyGearTest = trim((string)($user['name'] ?? '')) === '김남균';
+$currentUserName = trim((string)($user['name'] ?? ''));
+$currentUserLoginId = trim((string)($user['login_id'] ?? ''));
+$canAccessLegacyListPage = $currentUserName === "\u{AE40}\u{B0A8}\u{ADE0}";
+$canAccessMyGearTest = $currentUserName === "\u{AE40}\u{B0A8}\u{ADE0}";
+$canAccessEmploymentRules = in_array($currentUserLoginId, [
+    '5878',
+    '2316',
+    '7204',
+], true);
 $workListDescription = '저장된 작업리스트를 확인하고 필요한 항목을 다시 열어볼 수 있습니다.';
 ?>
 <!DOCTYPE html>
@@ -2525,6 +2532,8 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
         <?php endif; ?>
         <?php if ($canAccessMyGearTest): ?>
           <a class="btn-secondary" href="/safety_gear/my_gear.php">나의 보호구</a>
+        <?php endif; ?>
+        <?php if ($canAccessEmploymentRules): ?>
           <a class="btn-secondary" href="/employment_rules/index.php">취업규칙</a>
         <?php endif; ?>
         <?php if ($canManage): ?>

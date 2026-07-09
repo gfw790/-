@@ -750,7 +750,14 @@ if ($requestMethod === 'POST' && ($_POST['action'] ?? '') === 'login') {
 $user = auth_current_user();
 $userRole = (string)($user['role'] ?? '');
 $isAdmin = auth_is_admin($user);
-$canAccessMyGearTest = trim((string)($user['name'] ?? '')) === '김남균';
+$currentUserName = trim((string)($user['name'] ?? ''));
+$currentUserLoginId = trim((string)($user['login_id'] ?? ''));
+$canAccessMyGearTest = $currentUserName === "\u{AE40}\u{B0A8}\u{ADE0}";
+$canAccessEmploymentRules = in_array($currentUserLoginId, [
+    '5878',
+    '2316',
+    '7204',
+], true);
 $canManage = auth_can_manage($user);
 $canLead = auth_can_lead($user);
 $isWorker = auth_is_worker($user);
@@ -3393,6 +3400,8 @@ function type_label(string $type): string
           <?php endif; ?>
           <?php if ($canAccessMyGearTest): ?>
             <a class="btn-secondary" href="/safety_gear/my_gear.php">나의 보호구</a>
+          <?php endif; ?>
+          <?php if ($canAccessEmploymentRules): ?>
             <a class="btn-secondary" href="/employment_rules/index.php">취업규칙</a>
           <?php endif; ?>
           <a class="btn-secondary" href="<?= h($boardPageUrl) ?>">게시판</a>
