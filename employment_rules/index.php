@@ -241,13 +241,15 @@ function employment_rules_parse_law_reference(string $query): ?array
         return null;
     }
 
-    if (preg_match('/(.+?(?:\x{BC95}|\x{C2DC}\x{D589}\x{B839}|\x{C2DC}\x{D589}\x{ADDC}\x{CE59}))\s*\x{C81C}\s*(\d+)\s*\x{C870}(?:\s*\x{C758}\s*(\d+))?/u', $query, $matches) !== 1) {
+    if (preg_match('/(.+?(?:\x{BC95}\x{B960}|\x{BC95}|\x{C2DC}\x{D589}\x{B839}|\x{C2DC}\x{D589}\x{ADDC}\x{CE59}))\s*\x{C81C}\s*(\d+)\s*\x{C870}(?:\s*\x{C758}\s*(\d+))?(?:\s*\x{C81C}\s*(\d+)\s*\x{D56D}(?:\s*\x{C81C}\s*(\d+)\s*\x{D638})?)?/u', $query, $matches) !== 1) {
         return null;
     }
 
     $lawName = employment_rules_normalize_law_reference((string)($matches[1] ?? ''));
     $articleNo = (int)($matches[2] ?? 0);
     $articleSubNo = (int)($matches[3] ?? 0);
+    $paragraphNo = (int)($matches[4] ?? 0);
+    $itemNo = (int)($matches[5] ?? 0);
     if ($lawName === '' || $articleNo <= 0) {
         return null;
     }
@@ -257,6 +259,8 @@ function employment_rules_parse_law_reference(string $query): ?array
         'law_name' => $lawName,
         'article_no' => $articleNo,
         'article_sub_no' => $articleSubNo,
+        'paragraph_no' => $paragraphNo,
+        'item_no' => $itemNo,
     ];
 }
 
@@ -439,6 +443,31 @@ function employment_rules_collect_law_text_lines(mixed $node, array &$lines): vo
     }
 }
 
+function employment_rules_pick_child_unit_by_number(array $units, string $numberKey, int $number): ?array
+{
+    foreach ($units as $unit) {
+        if (!is_array($unit)) {
+            continue;
+        }
+
+        $rawNumber = employment_rules_extract_content_value($unit[$numberKey] ?? '');
+        if ($rawNumber === '') {
+            continue;
+        }
+
+        if (preg_match('/\d+/', $rawNumber, $matches) !== 1) {
+            continue;
+        }
+
+        if ((int)($matches[0] ?? 0) === $number) {
+            return $unit;
+        }
+    }
+
+    $fallbackIndex = $number - 1;
+    return isset($units[$fallbackIndex]) && is_array($units[$fallbackIndex]) ? $units[$fallbackIndex] : null;
+}
+
 function employment_rules_strip_article_heading(string $line, int $articleNo, int $articleSubNo, string $articleTitle): string
 {
     $patterns = [
@@ -526,9 +555,35 @@ function employment_rules_build_law_api_payload(string $query): array
         $articleTitle
     );
 
+    $paragraphNo = (int)($reference['paragraph_no'] ?? 0);
+    $itemNo = (int)($reference['item_no'] ?? 0);
+    if ($paragraphNo > 0) {
+        $articleLabel .= ' ' . "\u{C81C}" . $paragraphNo . "\u{D56D}";
+    }
+    if ($itemNo > 0) {
+        $articleLabel .= ' ' . "\u{C81C}" . $itemNo . "\u{D638}";
+    }
+
+    $bodySourceNode = $articleUnit;
+    if ($paragraphNo > 0) {
+        $paragraphUnits = employment_rules_value_list($articleUnit['항'] ?? []);
+        $selectedParagraph = employment_rules_pick_child_unit_by_number($paragraphUnits, '항번호', $paragraphNo);
+        if (is_array($selectedParagraph)) {
+            $bodySourceNode = $selectedParagraph;
+
+            if ($itemNo > 0) {
+                $itemUnits = employment_rules_value_list($selectedParagraph['호'] ?? []);
+                $selectedItem = employment_rules_pick_child_unit_by_number($itemUnits, '호번호', $itemNo);
+                if (is_array($selectedItem)) {
+                    $bodySourceNode = $selectedItem;
+                }
+            }
+        }
+    }
+
     $bodyLines = [];
-    employment_rules_collect_law_text_lines($articleUnit, $bodyLines);
-    if ($bodyLines !== []) {
+    employment_rules_collect_law_text_lines($bodySourceNode, $bodyLines);
+    if ($bodyLines !== [] && $paragraphNo <= 0) {
         $bodyLines[0] = employment_rules_strip_article_heading(
             (string)$bodyLines[0],
             (int)$reference['article_no'],
@@ -663,6 +718,129 @@ function employment_rules_build_html_from_text(string $text): array
     return [
         'html' => implode("\n", $html),
         'toc' => $toc,
+    ];
+}
+
+function employment_rules_extract_summary_from_plain_text(string $plainText, string $title = "\u{CDE8}\u{C5C5}\u{ADDC}\u{CE59}"): string
+{
+    $lines = preg_split("/\n+/u", $plainText) ?: [];
+    foreach ($lines as $line) {
+        $line = employment_rules_normalize_whitespace((string)$line);
+        if ($line === '' || $line === $title) {
+            continue;
+        }
+
+        return $line;
+    }
+
+    return '';
+}
+
+function employment_rules_dom_inner_html(DOMNode $node): string
+{
+    $owner = $node->ownerDocument;
+    if (!$owner instanceof DOMDocument) {
+        return '';
+    }
+
+    $html = '';
+    foreach ($node->childNodes as $child) {
+        $html .= $owner->saveHTML($child);
+    }
+
+    return $html;
+}
+
+function employment_rules_normalize_saved_content_html(string $contentHtml): array
+{
+    $wrapper = '<div id="employment-rules-root">' . $contentHtml . '</div>';
+    $dom = new DOMDocument();
+    $loaded = @$dom->loadHTML(
+        '<?xml encoding="utf-8" ?>' . $wrapper,
+        LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD | LIBXML_NONET | LIBXML_NOWARNING | LIBXML_NOERROR
+    );
+
+    if ($loaded === false) {
+        throw new RuntimeException('\uC800\uC7A5\uD560 \uBB38\uC11C HTML\uC744 \uD574\uC11D\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.');
+    }
+
+    $xpath = new DOMXPath($dom);
+    $rootList = $xpath->query('//*[@id="employment-rules-root"]');
+    if (!$rootList instanceof DOMNodeList || $rootList->length < 1) {
+        throw new RuntimeException('\uBB38\uC11C \uB8E8\uD2B8\uB97C \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.');
+    }
+
+    $root = $rootList->item(0);
+    if (!$root instanceof DOMElement) {
+        throw new RuntimeException('\uBB38\uC11C \uB8E8\uD2B8\uB97C \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.');
+    }
+
+    foreach (['script', 'style'] as $tag) {
+        while (true) {
+            $nodes = $root->getElementsByTagName($tag);
+            if ($nodes->length < 1) {
+                break;
+            }
+
+            $node = $nodes->item(0);
+            if ($node instanceof DOMNode && $node->parentNode instanceof DOMNode) {
+                $node->parentNode->removeChild($node);
+                continue;
+            }
+
+            break;
+        }
+    }
+
+    $toc = [];
+    $headingIndex = 0;
+    $headingNodes = $xpath->query('.//h2 | .//h3', $root);
+    if ($headingNodes instanceof DOMNodeList) {
+        foreach ($headingNodes as $headingNode) {
+            if (!$headingNode instanceof DOMElement) {
+                continue;
+            }
+
+            $tag = strtolower($headingNode->tagName);
+            $level = $tag === 'h2' ? 2 : 3;
+            $title = employment_rules_normalize_whitespace($headingNode->textContent ?? '');
+            if ($title === '') {
+                continue;
+            }
+
+            $headingIndex++;
+            $id = trim((string)$headingNode->getAttribute('id'));
+            if ($id === '') {
+                $id = employment_rules_slugify($title, $headingIndex);
+                $headingNode->setAttribute('id', $id);
+            }
+
+            $toc[] = [
+                'id' => $id,
+                'title' => $title,
+                'level' => $level,
+            ];
+        }
+    }
+
+    $plainLines = [];
+    $lineNodes = $xpath->query('.//h2 | .//h3 | .//p | .//td', $root);
+    if ($lineNodes instanceof DOMNodeList) {
+        foreach ($lineNodes as $lineNode) {
+            $line = employment_rules_normalize_whitespace($lineNode->textContent ?? '');
+            if ($line !== '') {
+                $plainLines[] = $line;
+            }
+        }
+    }
+
+    $plainText = trim(implode("\n", $plainLines));
+    $normalizedHtml = trim(employment_rules_dom_inner_html($root));
+
+    return [
+        'content_html' => $normalizedHtml,
+        'toc' => $toc,
+        'plain_text' => $plainText,
     ];
 }
 
@@ -926,6 +1104,74 @@ function employment_rules_handle_upload(array $user): void
     ]);
 }
 
+function employment_rules_handle_save_edits(array $user): void
+{
+    header('Content-Type: application/json; charset=UTF-8');
+
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        http_response_code(405);
+        echo json_encode([
+            'success' => false,
+            'message' => 'POST \uC694\uCCAD\uB9CC \uD5C8\uC6A9\uB429\uB2C8\uB2E4.',
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
+    try {
+        $raw = file_get_contents('php://input');
+        $payload = json_decode(is_string($raw) ? $raw : '', true);
+        if (!is_array($payload)) {
+            throw new InvalidArgumentException('\uC800\uC7A5 \uC694\uCCAD \uB370\uC774\uD130\uB97C \uD574\uC11D\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.');
+        }
+
+        $contentHtml = trim((string)($payload['content_html'] ?? ''));
+        if ($contentHtml === '') {
+            throw new InvalidArgumentException('\uC800\uC7A5\uD560 \uBCF8\uBB38\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.');
+        }
+        if (mb_strlen($contentHtml, '8bit') > 2_000_000) {
+            throw new InvalidArgumentException('\uBB38\uC11C\uAC00 \uB108\uBB34 \uD07D\uB2C8\uB2E4. \uBCF8\uBB38 \uD06C\uAE30\uB97C \uC904\uC778 \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694.');
+        }
+
+        $data = employment_rules_load_data();
+        $current = is_array($data['current'] ?? null) ? $data['current'] : null;
+        if (!is_array($current)) {
+            throw new InvalidArgumentException('\uC800\uC7A5\uD560 \uB300\uC0C1 \uBB38\uC11C\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.');
+        }
+
+        $normalized = employment_rules_normalize_saved_content_html($contentHtml);
+        $now = date('Y-m-d H:i:s');
+        $title = trim((string)($current['title'] ?? "\u{CDE8}\u{C5C5}\u{ADDC}\u{CE59}"));
+
+        $current['content_html'] = (string)$normalized['content_html'];
+        $current['toc'] = is_array($normalized['toc'] ?? null) ? $normalized['toc'] : [];
+        $current['plain_text'] = (string)($normalized['plain_text'] ?? '');
+        $current['summary'] = employment_rules_extract_summary_from_plain_text($current['plain_text'], $title);
+        $current['updated_at'] = $now;
+        $current['updated_by'] = trim((string)($user['name'] ?? $user['login_id'] ?? "\u{AD00}\u{B9AC}\u{C790}"));
+
+        $data['current'] = $current;
+        employment_rules_save_data($data);
+
+        echo json_encode([
+            'success' => true,
+            'updated_at' => $now,
+            'summary' => $current['summary'],
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    } catch (Throwable $e) {
+        http_response_code($e instanceof InvalidArgumentException ? 400 : 500);
+        echo json_encode([
+            'success' => false,
+            'message' => $e->getMessage(),
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    exit;
+}
+
+if (($_GET['action'] ?? '') === 'save_edits') {
+    employment_rules_handle_save_edits($user);
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         employment_rules_handle_upload($user);
@@ -1043,6 +1289,8 @@ foreach ($toc as $item) {
             --law-accent: #0b5bd3;
             --law-heading: #17315c;
             --law-gold: #b08a3c;
+            --header-sticky-offset: 104px;
+            --panel-sticky-gap: 8px;
         }
 
         * { box-sizing: border-box; }
@@ -1059,13 +1307,16 @@ foreach ($toc as $item) {
         a:hover { text-decoration: underline; }
 
         .topbar {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
             background: linear-gradient(180deg, var(--law-blue), var(--law-deep-blue));
             color: #fff;
             border-bottom: 4px solid #0d2649;
         }
 
         .topbar-inner {
-            max-width: 1560px;
+            max-width: min(1920px, calc(100vw - 32px));
             margin: 0 auto;
             padding: 18px 24px;
             display: flex;
@@ -1084,10 +1335,8 @@ foreach ($toc as $item) {
             width: 48px;
             height: 48px;
             border-radius: 14px;
-            background:
-                radial-gradient(circle at 30% 30%, rgba(255,255,255,0.35), transparent 55%),
-                linear-gradient(135deg, #f8d68d, #b88a2f);
-            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35);
+            background: url("현대기전 로고.png") center / 72% 72% no-repeat;
+            box-shadow: none;
         }
 
         .brand-copy small {
@@ -1115,7 +1364,7 @@ foreach ($toc as $item) {
         }
 
         .search-band {
-            max-width: 1560px;
+            max-width: min(1920px, calc(100vw - 32px));
             margin: 0 auto;
             padding: 18px 24px 26px;
         }
@@ -1143,11 +1392,11 @@ foreach ($toc as $item) {
         }
 
         .layout {
-            max-width: 1560px;
-            margin: 0 auto;
+            max-width: min(1920px, calc(100vw - 32px));
+            margin: 20px auto 0;
             padding: 0 24px 48px;
             display: grid;
-            grid-template-columns: 270px minmax(0, 1.2fr) 440px;
+            grid-template-columns: 220px minmax(0, 1.15fr) 540px;
             gap: 24px;
         }
 
@@ -1164,9 +1413,9 @@ foreach ($toc as $item) {
         .sidebar {
             padding: 20px;
             position: sticky;
-            top: 20px;
+            top: calc(var(--header-sticky-offset) + var(--panel-sticky-gap));
             align-self: start;
-            max-height: calc(100vh - 40px);
+            max-height: calc(100vh - var(--header-sticky-offset) - (var(--panel-sticky-gap) * 2));
             display: flex;
             flex-direction: column;
         }
@@ -1223,6 +1472,12 @@ foreach ($toc as $item) {
             border-top: 1px solid #e8eef7;
         }
 
+        .sidebar-scroll > .toc:first-child {
+            margin-top: 0;
+            padding-top: 0;
+            border-top: 0;
+        }
+
         .toc h3 {
             margin: 0 0 12px;
             font-size: 16px;
@@ -1230,11 +1485,16 @@ foreach ($toc as $item) {
         }
 
         .toc-header {
+            position: sticky;
+            top: 0;
+            z-index: 2;
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 10px;
             margin-bottom: 12px;
+            padding: 0 0 10px;
+            background: var(--law-card);
         }
 
         .toc-header h3 {
@@ -1337,9 +1597,9 @@ foreach ($toc as $item) {
 
         .law-panel {
             position: sticky;
-            top: 20px;
+            top: calc(var(--header-sticky-offset) + var(--panel-sticky-gap));
             align-self: start;
-            height: calc(100vh - 40px);
+            height: calc(100vh - var(--header-sticky-offset) - (var(--panel-sticky-gap) * 2));
             display: flex;
             flex-direction: column;
             overflow: hidden;
@@ -1684,6 +1944,136 @@ foreach ($toc as $item) {
             color: #374151;
         }
 
+        .document p.related-basis {
+            white-space: normal;
+        }
+
+        .rule-editable {
+            cursor: pointer;
+            border-radius: 8px;
+            transition: background-color 0.16s ease;
+        }
+
+        .rule-editable:hover {
+            background: #f6faff;
+        }
+
+        .rule-edit-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 1200;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: rgba(12, 22, 38, 0.56);
+        }
+
+        .rule-edit-modal.is-open {
+            display: flex;
+        }
+
+        .rule-edit-dialog {
+            width: min(1120px, 100%);
+            max-height: calc(100vh - 40px);
+            overflow: hidden;
+            background: #fff;
+            border: 1px solid #d6e0ee;
+            border-radius: 18px;
+            box-shadow: 0 24px 56px rgba(12, 26, 46, 0.24);
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+        }
+
+        .rule-edit-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 16px 18px;
+            border-bottom: 1px solid #e7eef8;
+            background: #f8fbff;
+        }
+
+        .rule-edit-head h3 {
+            margin: 0;
+            color: #163965;
+            font-size: 18px;
+        }
+
+        .rule-edit-close {
+            border: 1px solid #d3deed;
+            background: #fff;
+            color: #334155;
+            border-radius: 10px;
+            width: 34px;
+            height: 34px;
+            cursor: pointer;
+            font-size: 20px;
+            line-height: 1;
+        }
+
+        .rule-edit-body {
+            padding: 16px 18px;
+            display: grid;
+            gap: 10px;
+        }
+
+        .rule-edit-group {
+            display: grid;
+            gap: 8px;
+        }
+
+        .rule-edit-body label {
+            font-size: 13px;
+            color: #475569;
+            font-weight: 700;
+        }
+
+        .rule-edit-textarea {
+            width: 100%;
+            min-height: 260px;
+            resize: vertical;
+            border: 1px solid #cdd9ea;
+            border-radius: 12px;
+            padding: 12px 13px;
+            font: inherit;
+            font-size: 15px;
+            line-height: 1.7;
+            color: #0f172a;
+            background: #fff;
+        }
+
+        .rule-edit-textarea.secondary {
+            min-height: 110px;
+        }
+
+        .rule-edit-foot {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            padding: 14px 18px 16px;
+            border-top: 1px solid #e7eef8;
+            background: #fcfdff;
+        }
+
+        .rule-edit-btn {
+            border-radius: 10px;
+            border: 1px solid #c9d7ea;
+            background: #fff;
+            color: #334155;
+            padding: 9px 13px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .rule-edit-btn.primary {
+            border-color: #184d94;
+            background: #1d4d93;
+            color: #fff;
+        }
+
         .law-ref-link {
             color: var(--law-accent);
             text-decoration: underline;
@@ -1732,7 +2122,7 @@ foreach ($toc as $item) {
         }
 
         .footer-note {
-            max-width: 1560px;
+            max-width: min(1920px, calc(100vw - 32px));
             margin: 0 auto;
             padding: 0 24px 44px;
             color: #6b7280;
@@ -1788,6 +2178,19 @@ foreach ($toc as $item) {
             .content-header h1 {
                 font-size: 28px;
             }
+
+            .rule-edit-modal {
+                padding: 12px;
+            }
+
+            .rule-edit-dialog {
+                max-height: calc(100vh - 24px);
+            }
+
+            .rule-edit-textarea {
+                min-height: 200px;
+                font-size: 14px;
+            }
         }
     </style>
 </head>
@@ -1798,50 +2201,16 @@ foreach ($toc as $item) {
                 <div class="brand-mark" aria-hidden="true"></div>
                 <div class="brand-copy">
                     <small>EMPLOYMENT RULES SYSTEM</small>
-                    <strong>취업규칙</strong>
+                    <strong>현대기전 취업규칙</strong>
                 </div>
             </div>
             <div class="user-chip"><?= h(trim((string)($user['name'] ?? $user['login_id'] ?? "\u{AD00}\u{B9AC}\u{C790}"))) ?> 님</div>
-        </div>
-        <div class="search-band">
-            <div class="search-box">
-                <span class="label">HWPX 업로드 자동 반영</span>
-                <span class="hint">최신 취업규칙 문서를 업로드하면 본문, 목차, 관련 법령 링크가 자동으로 정리됩니다.</span>
-            </div>
         </div>
     </header>
 
     <main class="layout">
         <aside class="sidebar">
-            <h2>문서 정보</h2>
             <div class="sidebar-scroll" id="sidebar-scroll-area">
-                <ul class="meta-list">
-                    <li>
-                        <strong>문서명</strong>
-                        <span><?php echo ($current ? '취업규칙' : '업로드 대기 중'); ?></span>
-                    </li>
-                    <li>
-                        <strong>반영 상태</strong>
-                        <span><?php echo ($current ? '게시 중' : '초안 미반영'); ?></span>
-                    </li>
-                    <li>
-                        <strong>반영 일시</strong>
-                        <span><?= h((string)($current['uploaded_at'] ?? '-')) ?></span>
-                    </li>
-                    <li>
-                        <strong>반영자</strong>
-                        <span><?= h((string)($current['uploaded_by'] ?? '-')) ?></span>
-                    </li>
-                    <li>
-                        <strong>원본 파일</strong>
-                        <?php if (!empty($current['source_path']) && !empty($current['source_name'])): ?>
-                            <a href="<?= h((string)$current['source_path']) ?>" target="_blank" rel="noopener"><?= h((string)$current['source_name']) ?></a>
-                        <?php else: ?>
-                            <span>-</span>
-                        <?php endif; ?>
-                    </li>
-                </ul>
-
                 <?php if ($tocGroups !== [] || $appendixGroups !== [] || $annexGroups !== []): ?>
                     <div class="toc">
                         <div class="toc-header">
@@ -1960,33 +2329,11 @@ foreach ($toc as $item) {
         </aside>
         
         <section class="main">
-            <div class="upload-card">
-                <h2>취업규칙 파일 업로드</h2>
-                <p>HWPX 파일을 등록하면 문서 내용을 파싱해 본문/목차를 자동 반영합니다. 업로드 후 화면에서 즉시 확인할 수 있습니다.</p>
-                <form class="upload-form" method="post" enctype="multipart/form-data">
-                    <label class="file-input">
-                        <input type="file" name="draft_file" accept=".hwpx" required>
-                    </label>
-                    <button class="button" type="submit">업로드 후 취업규칙 반영</button>
-                </form>
-                <?php if (is_array($flash)): ?>
-                    <div class="flash <?= h((string)($flash['type'] ?? 'success')) ?>"><?= h((string)($flash['message'] ?? '')) ?></div>
-                <?php endif; ?>
-            </div>
-
             <article class="content-card">
                 <?php if ($current): ?>
                     <div class="content-header">
                         <span class="badge">최신 반영본</span>
                         <h1>취업규칙</h1>
-                        <?php if ($summary !== ''): ?>
-                            <p><?= h($summary) ?></p>
-                        <?php else: ?>
-                            <p>요약 정보가 없습니다. HWPX 파일을 업로드해 내용을 반영해 주세요.</p>
-                        <?php endif; ?>
-                        <div class="content-header-meta">
-                            <span class="law-link-status" id="law-link-status">법령 링크 감지 0건</span>
-                        </div>
                     </div>
                     <div class="document">
                         <?= $renderedContentHtml ?>
@@ -2020,7 +2367,30 @@ foreach ($toc as $item) {
         </aside>
     </main>
 
-    <div class="footer-note">취업규칙 문서는 관리자 권한으로만 반영됩니다. 변경이 필요한 경우 최신 HWPX 파일을 다시 업로드해 주세요.</div>
+    <div class="rule-edit-modal" id="rule-edit-modal" aria-hidden="true">
+        <div class="rule-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="rule-edit-title">
+            <div class="rule-edit-head">
+                <h3 id="rule-edit-title">조문 내용 수정</h3>
+                <button type="button" class="rule-edit-close" id="rule-edit-close" aria-label="닫기">&times;</button>
+            </div>
+            <div class="rule-edit-body">
+                <div class="rule-edit-group">
+                    <label for="rule-edit-textarea">조문(제목 + 본문)</label>
+                    <textarea id="rule-edit-textarea" class="rule-edit-textarea"></textarea>
+                </div>
+                <div class="rule-edit-group">
+                    <label for="rule-edit-basis-textarea">관련근거</label>
+                    <textarea id="rule-edit-basis-textarea" class="rule-edit-textarea secondary" placeholder="예: 근로기준법 제93조, 산업안전보건법 제41조"></textarea>
+                </div>
+            </div>
+            <div class="rule-edit-foot">
+                <button type="button" class="rule-edit-btn" id="rule-edit-cancel">취소</button>
+                <button type="button" class="rule-edit-btn primary" id="rule-edit-save">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer-note">취업규칙 문서는 관리자 권한으로만 수정할 수 있습니다.</div>
     <script>
         (function () {
             var toggles = document.querySelectorAll('[data-toc-toggle]');
@@ -2038,7 +2408,7 @@ foreach ($toc as $item) {
 
             function buildLawSearchUrl(query) {
                 var normalizedQuery = normalizeLawReference(query);
-                var matched = normalizedQuery.match(/(.+?(?:\uBC95|\uC2DC\uD589\uB839|\uC2DC\uD589\uADDC\uCE59))\s*\uC81C\s*(\d+)\s*\uC870(?:\s*\uC758\s*(\d+))?/);
+                var matched = normalizedQuery.match(/(.+?(?:\uBC95\uB960|\uBC95|\uC2DC\uD589\uB839|\uC2DC\uD589\uADDC\uCE59))\s*\uC81C\s*(\d+)\s*\uC870(?:\s*\uC758\s*(\d+))?(?:\s*\uC81C\s*(\d+)\s*\uD56D(?:\s*\uC81C\s*(\d+)\s*\uD638)?)?/);
                 if (!matched) {
                     return 'https://www.law.go.kr/lsSc.do?menuId=1&query=' + encodeURIComponent(normalizedQuery) + '&subMenuId=15&tabMenuId=81';
                 }
@@ -2070,7 +2440,54 @@ foreach ($toc as $item) {
                 return String(text || '')
                     .replace(/[\u300C\u300D"']/g, '')
                     .replace(/\s+/g, ' ')
+                    .replace(/[\s,.;:]+$/g, '')
                     .trim();
+            }
+
+            function splitRelatedBasisItems(text) {
+                var source = String(text || '')
+                    .replace(/^\s*\[?\s*\uAD00\uB828\uADFC\uAC70\s*[:\uFF1A]?\s*/u, '')
+                    .replace(/\]\s*$/u, '');
+
+                var citationMatches = source.match(/([\uAC00-\uD7A3A-Za-z0-9\s\(\)\-\u00B7\u318D]+?(?:\uBC95\uB960|\uBC95|\uC2DC\uD589\uB839|\uC2DC\uD589\uADDC\uCE59)\s*\uC81C\s*\d+\s*\uC870(?:\s*\uC758\s*\d+)?(?:\s*\uC81C\s*\d+\s*\uD56D(?:\s*\uC81C\s*\d+\s*\uD638)?)?)/gu);
+                if (citationMatches && citationMatches.length > 0) {
+                    return citationMatches
+                        .map(function (item) {
+                            return normalizeLawReference(item);
+                        })
+                        .filter(function (item) {
+                            return item !== '';
+                        });
+                }
+
+                var rawItems = source.split(/[,;\n]+/);
+                var output = [];
+                var lastLawName = '';
+
+                rawItems.forEach(function (item) {
+                    var normalized = normalizeLawReference(item);
+                    if (!normalized) {
+                        return;
+                    }
+
+                    var lawMatch = normalized.match(/(.+?(?:\uBC95\uB960|\uBC95|\uC2DC\uD589\uB839|\uC2DC\uD589\uADDC\uCE59))\s*(\uC81C\s*\d+\s*\uC870(?:\s*\uC758\s*\d+)?)/u);
+                    if (lawMatch) {
+                        lastLawName = normalizeLawReference(lawMatch[1] || '');
+                        output.push(normalizeLawReference((lawMatch[1] || '') + ' ' + (lawMatch[2] || '')));
+                        return;
+                    }
+
+                    if (/^\uC81C\s*\d+\s*\uC870(?:\s*\uC758\s*\d+)?/u.test(normalized) && lastLawName) {
+                        output.push(normalizeLawReference(lastLawName + ' ' + normalized));
+                        return;
+                    }
+
+                    output.push(normalized);
+                });
+
+                return output.filter(function (item) {
+                    return item !== '';
+                });
             }
 
             function padNumber(value, size) {
@@ -2096,12 +2513,111 @@ foreach ($toc as $item) {
                 };
             }
 
+            function buildLawAnchorHtmlFromItem(itemText) {
+                var normalized = normalizeLawReference(itemText);
+                if (!normalized) {
+                    return '';
+                }
+
+                var matched = normalized.match(/(.+?(?:\uBC95\uB960|\uBC95|\uC2DC\uD589\uB839|\uC2DC\uD589\uADDC\uCE59))\s*\uC81C\s*(\d+)\s*\uC870(?:\s*\uC758\s*(\d+))?((?:\s*\uC81C\s*\d+\s*\uD56D(?:\s*\uC81C\s*\d+\s*\uD638)?)?)/u);
+                if (!matched) {
+                    return escapeHtml(normalized);
+                }
+
+                var lawName = normalizeLawReference(matched[1] || '');
+                var articleNumber = parseInt(matched[2] || '0', 10);
+                var articleSubNumber = parseInt(matched[3] || '0', 10);
+                var extraClause = normalizeLawReference(matched[4] || '');
+                if (!lawName || !articleNumber) {
+                    return escapeHtml(normalized);
+                }
+
+                var labelText = lawName + ' ' + '\uC81C' + articleNumber + '\uC870' + (articleSubNumber ? '\uC758' + articleSubNumber : '');
+                if (extraClause) {
+                    labelText += ' ' + extraClause;
+                }
+                var queryText = normalizeLawReference(labelText);
+                var linkData = {
+                    href: buildLawSearchUrl(queryText),
+                    queryText: queryText,
+                    labelText: labelText,
+                };
+
+                return '<a class="law-ref-link" href="'
+                    + escapeHtml(linkData.href)
+                    + '" target="_blank" rel="noopener" data-law-query="'
+                    + escapeHtml(linkData.queryText)
+                    + '">'
+                    + escapeHtml(linkData.labelText)
+                    + '</a>';
+            }
+
+            function linkRelatedBasisReferences(root) {
+                if (!root) {
+                    return;
+                }
+
+                root.querySelectorAll('p').forEach(function (element) {
+                    var rawText = String(element.textContent || '').trim();
+                    if (!/^\[?\s*\uAD00\uB828\uADFC\uAC70\s*[:\uFF1A]?/u.test(rawText)) {
+                        return;
+                    }
+
+                    var items = splitRelatedBasisItems(rawText);
+                    if (items.length === 0) {
+                        return;
+                    }
+
+                    element.classList.add('related-basis');
+                    element.innerHTML = '\uAD00\uB828\uADFC\uAC70: ' + items.map(function (item) {
+                        return buildLawAnchorHtmlFromItem(item);
+                    }).join(', ');
+                });
+            }
+
+            function rebuildArticleRelatedBasisLinks(root, articleNo) {
+                if (!root || !articleNo) {
+                    return;
+                }
+
+                var headingPattern = new RegExp('^\\s*\\uC81C\\s*' + String(articleNo) + '\\s*\\uC870(?:\\s*\\uC758\\s*\\d+)?');
+
+                root.querySelectorAll('h3').forEach(function (heading) {
+                    var headingText = String(heading.textContent || '').trim();
+                    if (!headingPattern.test(headingText)) {
+                        return;
+                    }
+
+                    var current = heading.nextElementSibling;
+                    while (current) {
+                        if (current.tagName === 'H2' || current.tagName === 'H3') {
+                            break;
+                        }
+
+                        if (current.tagName === 'P') {
+                            var text = String(current.textContent || '').trim();
+                            if (/^\[?\s*\uAD00\uB828\uADFC\uAC70\s*[:\uFF1A]?/u.test(text)) {
+                                current.classList.add('related-basis');
+                                var items = splitRelatedBasisItems(text);
+                                current.innerHTML = items.length > 0
+                                    ? '\uAD00\uB828\uADFC\uAC70: ' + items.map(function (item) {
+                                        return buildLawAnchorHtmlFromItem(item);
+                                    }).join(', ')
+                                    : '관련근거:';
+                            }
+                        }
+
+                        current = current.nextElementSibling;
+                    }
+                });
+            }
+
             function linkLawReferences(root) {
                 if (!root) {
                     return;
                 }
 
-                var pattern = /([^\[\]\n,;:<]*?(?:\uBC95|\uC2DC\uD589\uB839|\uC2DC\uD589\uADDC\uCE59)\s*\uC81C\s*\d+\s*\uC870(?:\s*\uC758\s*\d+)?)/g;
+                var pattern = /([^\[\]\n,;:<]*?(?:\uBC95\uB960|\uBC95|\uC2DC\uD589\uB839|\uC2DC\uD589\uADDC\uCE59)\s*\uC81C\s*\d+\s*\uC870(?:\s*\uC758\s*\d+)?(?:\s*\uC81C\s*\d+\s*\uD56D(?:\s*\uC81C\s*\d+\s*\uD638)?)?)/g;
                 root.querySelectorAll('p, h2, h3, td').forEach(function (element) {
                     if (element.querySelector('a')) {
                         return;
@@ -2128,11 +2644,16 @@ foreach ($toc as $item) {
                     return 0;
                 }
 
-                var citationPattern = /([^\[\]\n;:<]*?(?:\uBC95|\uC2DC\uD589\uB839|\uC2DC\uD589\uADDC\uCE59))\s*\uC81C\s*(\d+)\s*\uC870(?:\s*\uC758\s*(\d+))?((?:\s*,\s*\uC81C\s*\d+\s*\uC870(?:\s*\uC758\s*\d+)?)*)/g;
-                var trailingPattern = /(\s*,\s*)\uC81C\s*(\d+)\s*\uC870(?:\s*\uC758\s*(\d+))?/g;
+                var citationPattern = /([^\[\]\n;:<]*?(?:\uBC95\uB960|\uBC95|\uC2DC\uD589\uB839|\uC2DC\uD589\uADDC\uCE59))\s*\uC81C\s*(\d+)\s*\uC870(?:\s*\uC758\s*(\d+))?(?:\s*\uC81C\s*(\d+)\s*\uD56D(?:\s*\uC81C\s*(\d+)\s*\uD638)?)?((?:\s*,\s*\uC81C\s*\d+\s*\uC870(?:\s*\uC758\s*\d+)?(?:\s*\uC81C\s*\d+\s*\uD56D(?:\s*\uC81C\s*\d+\s*\uD638)?)?)*)/g;
+                var trailingPattern = /(\s*,\s*)\uC81C\s*(\d+)\s*\uC870(?:\s*\uC758\s*(\d+))?(?:\s*\uC81C\s*(\d+)\s*\uD56D(?:\s*\uC81C\s*(\d+)\s*\uD638)?)?/g;
                 var linkCount = 0;
 
                 root.querySelectorAll('p, h2, h3, td').forEach(function (element) {
+                    var plainText = String(element.textContent || '').trim();
+                    if (/^\[?\s*\uAD00\uB828\uADFC\uAC70\s*[:\uFF1A]?/u.test(plainText) || element.classList.contains('related-basis')) {
+                        return;
+                    }
+
                     if (element.querySelector('a')) {
                         return;
                     }
@@ -2144,29 +2665,74 @@ foreach ($toc as $item) {
                     }
 
                     citationPattern.lastIndex = 0;
-                    var replacedHtml = escapeHtml(text).replace(citationPattern, function (matchedText, lawNameText, articleNumber, articleSubNumber, trailingArticles) {
-                        var lawName = normalizeLawReference(lawNameText);
+                    var replacedHtml = escapeHtml(text).replace(citationPattern, function (matchedText, lawNameText, articleNumber, articleSubNumber, paragraphNumber, itemNumber, trailingArticles) {
+                        var rawLawName = normalizeLawReference(lawNameText);
+                        var lawName = rawLawName;
+                        var stopWords = ['\uBCF8', '\uC774', '\uD574\uB2F9', '\uB3D9', '\uADDC\uC815\uC740', '\uADDC\uC815', '\uC870\uBB38\uC740', '\uC870\uBB38', '\uBC0F', '\uC640', '\uACFC'];
+                        var parts = rawLawName.split(' ').filter(Boolean);
+                        for (var i = 0; i < parts.length; i++) {
+                            var candidate = parts.slice(i).join(' ');
+                            if (!/(\uBC95\uB960|\uBC95|\uC2DC\uD589\uB839|\uC2DC\uD589\uADDC\uCE59)$/u.test(candidate)) {
+                                continue;
+                            }
+                            if (stopWords.indexOf(parts[i]) >= 0) {
+                                continue;
+                            }
+                            lawName = candidate;
+                            break;
+                        }
+
+                        var prefixText = '';
+                        var prefixIndex = rawLawName.lastIndexOf(lawName);
+                        if (prefixIndex > 0) {
+                            prefixText = rawLawName.slice(0, prefixIndex);
+                        }
+
                         var firstArticleNumber = parseInt(articleNumber || '0', 10);
                         var firstArticleSubNumber = parseInt(articleSubNumber || '0', 10);
+                        var firstParagraphNumber = parseInt(paragraphNumber || '0', 10);
+                        var firstItemNumber = parseInt(itemNumber || '0', 10);
                         if (!lawName || !firstArticleNumber) {
                             return escapeHtml(matchedText);
                         }
 
                         var firstLabelText = normalizeLawReference(
-                            lawName + ' ' + '\uC81C' + firstArticleNumber + '\uC870' + (firstArticleSubNumber ? '\uC758' + firstArticleSubNumber : '')
+                            lawName
+                            + ' '
+                            + '\uC81C' + firstArticleNumber + '\uC870'
+                            + (firstArticleSubNumber ? '\uC758' + firstArticleSubNumber : '')
+                            + (firstParagraphNumber ? ' \uC81C' + firstParagraphNumber + '\uD56D' : '')
+                            + (firstItemNumber ? ' \uC81C' + firstItemNumber + '\uD638' : '')
                         );
-                        var firstLink = buildLawReferenceLink(lawName, firstArticleNumber, firstArticleSubNumber, firstLabelText);
+                        var firstLink = {
+                            href: buildLawSearchUrl(firstLabelText),
+                            queryText: firstLabelText,
+                            labelText: firstLabelText,
+                        };
                         linkCount += 1;
 
-                        var trailingHtml = escapeHtml(trailingArticles || '').replace(trailingPattern, function (subMatchedText, delimiter, nextArticleNumber, nextArticleSubNumber) {
+                        var trailingHtml = escapeHtml(trailingArticles || '').replace(trailingPattern, function (subMatchedText, delimiter, nextArticleNumber, nextArticleSubNumber, nextParagraphNumber, nextItemNumber) {
                             var nextArticle = parseInt(nextArticleNumber || '0', 10);
                             var nextSubArticle = parseInt(nextArticleSubNumber || '0', 10);
+                            var nextParagraph = parseInt(nextParagraphNumber || '0', 10);
+                            var nextItem = parseInt(nextItemNumber || '0', 10);
                             if (!nextArticle) {
                                 return escapeHtml(subMatchedText);
                             }
 
-                            var nextLabelText = '\uC81C' + nextArticle + '\uC870' + (nextSubArticle ? '\uC758' + nextSubArticle : '');
-                            var nextLink = buildLawReferenceLink(lawName, nextArticle, nextSubArticle, nextLabelText);
+                            var nextLabelText = normalizeLawReference(
+                                lawName
+                                + ' '
+                                + '\uC81C' + nextArticle + '\uC870'
+                                + (nextSubArticle ? '\uC758' + nextSubArticle : '')
+                                + (nextParagraph ? ' \uC81C' + nextParagraph + '\uD56D' : '')
+                                + (nextItem ? ' \uC81C' + nextItem + '\uD638' : '')
+                            );
+                            var nextLink = {
+                                href: buildLawSearchUrl(nextLabelText),
+                                queryText: nextLabelText,
+                                labelText: nextLabelText,
+                            };
                             linkCount += 1;
 
                             return escapeHtml(delimiter)
@@ -2179,7 +2745,8 @@ foreach ($toc as $item) {
                                 + '</a>';
                         });
 
-                        return '<a class="law-ref-link" href="'
+                        return escapeHtml(prefixText)
+                            + '<a class="law-ref-link" href="'
                             + firstLink.href
                             + '" target="_blank" rel="noopener" data-law-query="'
                             + escapeHtml(firstLink.queryText)
@@ -2195,10 +2762,65 @@ foreach ($toc as $item) {
                 return linkCount;
             }
 
-            var detectedLawLinkCount = linkLawReferencesSafe(document.querySelector('.document'));
+            var documentRoot = document.querySelector('.document');
             var lawLinkStatus = document.getElementById('law-link-status');
-            if (lawLinkStatus) {
-                lawLinkStatus.textContent = '\uBC95\uB839 \uB9C1\uD06C \uAC10\uC9C0 ' + detectedLawLinkCount + '\uAC74';
+
+            function buildPersistableDocumentHtml() {
+                if (!documentRoot) {
+                    return '';
+                }
+
+                var clone = documentRoot.cloneNode(true);
+                clone.querySelectorAll('a.law-ref-link').forEach(function (anchor) {
+                    var textNode = document.createTextNode(anchor.textContent || '');
+                    anchor.replaceWith(textNode);
+                });
+
+                clone.querySelectorAll('[data-bound-law-click]').forEach(function (node) {
+                    node.removeAttribute('data-bound-law-click');
+                });
+
+                return clone.innerHTML;
+            }
+
+            function persistCurrentDocumentEdits() {
+                if (!documentRoot) {
+                    return Promise.reject(new Error('\uBCF8\uBB38 \uC601\uC5ED\uC744 \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.'));
+                }
+
+                return fetch('index.php?action=save_edits', {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        content_html: buildPersistableDocumentHtml()
+                    })
+                })
+                    .then(function (response) {
+                        return response.json()
+                            .catch(function () {
+                                return {
+                                    success: false,
+                                    message: '\uC800\uC7A5 \uC751\uB2F5\uC744 \uD574\uC11D\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.'
+                                };
+                            })
+                            .then(function (payload) {
+                                if (!response.ok || !payload.success) {
+                                    throw new Error(payload.message || '\uBCC0\uACBD\uC0AC\uD56D\uC744 \uC800\uC7A5\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.');
+                                }
+                                return payload;
+                            });
+                    });
+            }
+
+            function updateLawLinkStatusCount() {
+                if (!lawLinkStatus || !documentRoot) {
+                    return;
+                }
+
+                lawLinkStatus.textContent = '\uBC95\uB839 \uB9C1\uD06C \uAC10\uC9C0 ' + documentRoot.querySelectorAll('.law-ref-link').length + '\uAC74';
             }
 
             var lawPanelContent = document.getElementById('law-panel-content');
@@ -2212,7 +2834,9 @@ foreach ($toc as $item) {
                 }
 
                 lawPanelContent.className = 'law-panel-content ' + className;
-                lawPanelContent.innerHTML = '<div><strong>' + escapeHtml(title) + '</strong><span>' + escapeHtml(description) + '</span></div>';
+                lawPanelContent.innerHTML = '<div><strong>' + escapeHtml(title) + '</strong>'
+                    + (description ? '<span>' + escapeHtml(description) + '</span>' : '')
+                    + '</div>';
             }
 
             function renderLawPanelResult(payload) {
@@ -2384,8 +3008,8 @@ foreach ($toc as $item) {
                 lawPanelOpenLink.href = openUrl || buildLawSearchUrl(queryText);
                 renderLawPanelState(
                     'law-panel-loading',
-                    '\uBC95\uB839 \uBD88\uB7EC\uC624\uB294 \uC911',
-                    '\uC120\uD0DD\uD55C \uC870\uBB38\uC744 \uBC95\uC81C\uCC98 Open API\uB85C \uC870\uD68C\uD558\uACE0 \uC788\uC2B5\uB2C8\uB2E4.'
+                    '\uBD88\uB7EC\uC624\uB294 \uC911',
+                    ''
                 );
 
                 fetch('index.php?action=law_api&query=' + encodeURIComponent(queryText), {
@@ -2422,17 +3046,305 @@ foreach ($toc as $item) {
                     });
             }
 
-            document.querySelectorAll('.document .law-ref-link').forEach(function (link) {
-                link.addEventListener('click', function (event) {
-                    var queryText = String(link.dataset.lawQuery || link.textContent || '').trim();
-                    if (!queryText || !lawPanelContent || !lawPanelQuery || !lawPanelOpenLink) {
+            function bindLawRefLinkEvents() {
+                if (!documentRoot) {
+                    return;
+                }
+
+                documentRoot.querySelectorAll('.law-ref-link').forEach(function (link) {
+                    if (link.dataset.boundLawClick === '1') {
                         return;
                     }
 
-                    event.preventDefault();
-                    loadLawPanel(queryText, link.href);
+                    link.dataset.boundLawClick = '1';
+                    link.addEventListener('click', function (event) {
+                        var queryText = normalizeLawReference(String(link.dataset.lawQuery || link.textContent || ''));
+                        if (!queryText || !lawPanelContent || !lawPanelQuery || !lawPanelOpenLink) {
+                            return;
+                        }
+
+                        event.preventDefault();
+                        loadLawPanel(queryText, link.href);
+                    });
                 });
-            });
+            }
+
+            function refreshLawReferences() {
+                if (!documentRoot) {
+                    return;
+                }
+
+                linkRelatedBasisReferences(documentRoot);
+                rebuildArticleRelatedBasisLinks(documentRoot, 2);
+                linkLawReferencesSafe(documentRoot);
+                bindLawRefLinkEvents();
+                updateLawLinkStatusCount();
+            }
+
+            function setupClauseEditorModal() {
+                if (!documentRoot) {
+                    return;
+                }
+
+                var modal = document.getElementById('rule-edit-modal');
+                var closeBtn = document.getElementById('rule-edit-close');
+                var cancelBtn = document.getElementById('rule-edit-cancel');
+                var saveBtn = document.getElementById('rule-edit-save');
+                var textarea = document.getElementById('rule-edit-textarea');
+                var basisTextarea = document.getElementById('rule-edit-basis-textarea');
+                var editingClause = null;
+
+                if (!modal || !closeBtn || !cancelBtn || !saveBtn || !textarea || !basisTextarea) {
+                    return;
+                }
+
+                function closeModal() {
+                    modal.classList.remove('is-open');
+                    modal.setAttribute('aria-hidden', 'true');
+                    editingClause = null;
+                }
+
+                function isArticleHeading(node) {
+                    if (!node || node.tagName !== 'H3') {
+                        return false;
+                    }
+
+                    return /^\s*\uC81C\s*\d+\s*\uC870(?:\s*\uC758\s*\d+)?/.test((node.textContent || '').trim());
+                }
+
+                function collectClauseNodes(headingNode) {
+                    var nodes = [headingNode];
+                    var current = headingNode.nextElementSibling;
+                    while (current) {
+                        if (current.tagName === 'H2' || current.tagName === 'H3') {
+                            break;
+                        }
+
+                        nodes.push(current);
+                        current = current.nextElementSibling;
+                    }
+
+                    return nodes;
+                }
+
+                function openModal(clause) {
+                    editingClause = clause;
+                    var clauseLines = clause.nodes
+                        .map(function (node) {
+                            return (node.textContent || '').trim();
+                        })
+                        .filter(function (line) {
+                            return line !== '';
+                        });
+
+                    var contentLines = [];
+                    var basisLines = [];
+
+                    function extractInlineBasis(line) {
+                        var extracted = [];
+                        var cleaned = line.replace(/\[\s*\uAD00\uB828\s*\uADFC\uAC70\s*[:\uFF1A]\s*([^\]]+)\]/gu, function (_, basisText) {
+                            var normalized = String(basisText || '').trim();
+                            if (normalized !== '') {
+                                extracted.push(normalized);
+                            }
+                            return '';
+                        });
+
+                        return {
+                            cleaned: cleaned.trim(),
+                            extracted: extracted,
+                        };
+                    }
+
+                    clauseLines.forEach(function (line) {
+                        if (/^\s*\[?\s*\uAD00\uB828\s*\uADFC\uAC70\s*[:\uFF1A]?/u.test(line)) {
+                            var extracted = line
+                                .replace(/^\s*\[?\s*\uAD00\uB828\s*\uADFC\uAC70\s*[:\uFF1A]?\s*/u, '')
+                                .replace(/\]\s*$/u, '')
+                                .trim();
+                            if (extracted !== '') {
+                                splitRelatedBasisItems(extracted).forEach(function (item) {
+                                    basisLines.push(item);
+                                });
+                            }
+                            return;
+                        }
+
+                        var inlineSplit = extractInlineBasis(line);
+                        inlineSplit.extracted.forEach(function (basisText) {
+                            splitRelatedBasisItems(basisText).forEach(function (item) {
+                                basisLines.push(item);
+                            });
+                        });
+                        if (inlineSplit.cleaned !== '') {
+                            contentLines.push(inlineSplit.cleaned);
+                        }
+                    });
+
+                    textarea.value = contentLines.join('\n');
+                    basisTextarea.value = Array.from(new Set(basisLines)).join('\n');
+
+                    modal.classList.add('is-open');
+                    modal.setAttribute('aria-hidden', 'false');
+                    textarea.focus();
+                    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+                }
+
+                documentRoot.querySelectorAll('h3').forEach(function (node) {
+                    if (isArticleHeading(node)) {
+                        node.classList.add('rule-editable');
+                    }
+                });
+
+                documentRoot.addEventListener('click', function (event) {
+                    if (event.target.closest('.law-ref-link')) {
+                        return;
+                    }
+
+                    var target = event.target.closest('h3');
+                    if (!target || !documentRoot.contains(target) || !isArticleHeading(target)) {
+                        return;
+                    }
+
+                    openModal({
+                        heading: target,
+                        nodes: collectClauseNodes(target),
+                    });
+                });
+
+                closeBtn.addEventListener('click', closeModal);
+                cancelBtn.addEventListener('click', closeModal);
+
+                saveBtn.addEventListener('click', function () {
+                    if (!editingClause || !editingClause.heading) {
+                        closeModal();
+                        return;
+                    }
+
+                    var lines = textarea.value
+                        .replace(/\r\n?/g, '\n')
+                        .split('\n')
+                        .map(function (line) {
+                            return line.trim();
+                        })
+                        .filter(function (line) {
+                            return line !== '';
+                        });
+
+                    var basisLines = basisTextarea.value
+                        .replace(/\r\n?/g, '\n')
+                        .split('\n')
+                        .map(function (line) {
+                            return line.trim();
+                        })
+                        .filter(function (line) {
+                            return line !== '';
+                        });
+
+                    var normalizedLines = [];
+                    lines.forEach(function (line) {
+                        var movedInline = [];
+                        var cleanedLine = line.replace(/\[\s*\uAD00\uB828\s*\uADFC\uAC70\s*[:\uFF1A]\s*([^\]]+)\]/gu, function (_, basisText) {
+                            var normalized = String(basisText || '').trim();
+                            if (normalized !== '') {
+                                movedInline.push(normalized);
+                            }
+                            return '';
+                        }).trim();
+
+                        movedInline.forEach(function (basisText) {
+                            splitRelatedBasisItems(basisText).forEach(function (item) {
+                                basisLines.push(item);
+                            });
+                        });
+
+                        if (/^\s*\[?\s*\uAD00\uB828\s*\uADFC\uAC70\s*[:\uFF1A]?/u.test(cleanedLine)) {
+                            var extracted = cleanedLine
+                                .replace(/^\s*\[?\s*\uAD00\uB828\s*\uADFC\uAC70\s*[:\uFF1A]?\s*/u, '')
+                                .replace(/\]\s*$/u, '')
+                                .trim();
+                            if (extracted !== '') {
+                                splitRelatedBasisItems(extracted).forEach(function (item) {
+                                    basisLines.push(item);
+                                });
+                            }
+                            return;
+                        }
+
+                        if (cleanedLine !== '') {
+                            normalizedLines.push(cleanedLine);
+                        }
+                    });
+
+                    lines = normalizedLines;
+
+                    if (lines.length === 0) {
+                        alert('내용을 입력해 주세요.');
+                        textarea.focus();
+                        return;
+                    }
+
+                    var headingNode = editingClause.heading;
+                    var oldNodes = editingClause.nodes || [headingNode];
+                    var headingText = lines.shift();
+
+                    headingNode.textContent = headingText;
+
+                    oldNodes.slice(1).forEach(function (node) {
+                        if (node && node.parentNode) {
+                            node.parentNode.removeChild(node);
+                        }
+                    });
+
+                    var insertBeforeNode = headingNode.nextElementSibling;
+                    lines.forEach(function (line) {
+                        var p = document.createElement('p');
+                        p.textContent = line;
+                        headingNode.parentNode.insertBefore(p, insertBeforeNode);
+                    });
+
+                    basisLines = Array.from(new Set(basisLines));
+
+                    if (basisLines.length > 0) {
+                        var basisParagraph = document.createElement('p');
+                        basisParagraph.className = 'related-basis';
+                        basisParagraph.textContent = '\uAD00\uB828\uADFC\uAC70: ' + basisLines.join(', ');
+                        headingNode.parentNode.insertBefore(basisParagraph, insertBeforeNode);
+                    }
+                    refreshLawReferences();
+
+                    var originalSaveText = saveBtn.textContent;
+                    saveBtn.disabled = true;
+                    saveBtn.textContent = '\uC800\uC7A5 \uC911...';
+
+                    persistCurrentDocumentEdits()
+                        .then(function () {
+                            closeModal();
+                        })
+                        .catch(function (error) {
+                            alert(error && error.message ? error.message : '\uC800\uC7A5\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4. \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694.');
+                        })
+                        .finally(function () {
+                            saveBtn.disabled = false;
+                            saveBtn.textContent = originalSaveText;
+                        });
+                });
+
+                modal.addEventListener('click', function (event) {
+                    if (event.target === modal) {
+                        closeModal();
+                    }
+                });
+
+                document.addEventListener('keydown', function (event) {
+                    if (event.key === 'Escape' && modal.classList.contains('is-open')) {
+                        closeModal();
+                    }
+                });
+            }
+
+            refreshLawReferences();
+            setupClauseEditorModal();
         }());
     </script>
 </body>
