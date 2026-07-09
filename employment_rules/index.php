@@ -1353,6 +1353,12 @@ foreach ($toc as $item) {
             margin-top: 4px;
         }
 
+        .topbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
         .user-chip {
             padding: 10px 14px;
             border: 1px solid rgba(255,255,255,0.22);
@@ -1897,6 +1903,23 @@ foreach ($toc as $item) {
             flex-wrap: wrap;
         }
 
+        .content-header-button {
+            border: 1px solid #184d94;
+            border-radius: 12px;
+            background: #1d4d93;
+            color: #fff;
+            padding: 10px 14px;
+            font: inherit;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 10px 24px rgba(18, 70, 134, 0.16);
+        }
+
+        .content-header-button:hover {
+            filter: brightness(1.03);
+        }
+
         .law-link-status {
             display: inline-flex;
             align-items: center;
@@ -2024,6 +2047,22 @@ foreach ($toc as $item) {
             gap: 8px;
         }
 
+        .rule-edit-group.is-hidden {
+            display: none;
+        }
+
+        .rule-edit-select {
+            width: 100%;
+            min-height: 46px;
+            border: 1px solid #cdd9ea;
+            border-radius: 12px;
+            padding: 10px 12px;
+            font: inherit;
+            font-size: 14px;
+            color: #0f172a;
+            background: #fff;
+        }
+
         .rule-edit-body label {
             font-size: 13px;
             color: #475569;
@@ -2072,6 +2111,13 @@ foreach ($toc as $item) {
             border-color: #184d94;
             background: #1d4d93;
             color: #fff;
+        }
+
+        .rule-edit-btn.danger {
+            margin-right: auto;
+            border-color: #d9b6b6;
+            background: #fff4f4;
+            color: #9a1f1f;
         }
 
         .law-ref-link {
@@ -2204,7 +2250,10 @@ foreach ($toc as $item) {
                     <strong>현대기전 취업규칙</strong>
                 </div>
             </div>
-            <div class="user-chip"><?= h(trim((string)($user['name'] ?? $user['login_id'] ?? "\u{AD00}\u{B9AC}\u{C790}"))) ?> 님</div>
+            <div class="topbar-actions">
+                <button type="button" class="content-header-button" id="rule-add-article">새 조항 추가</button>
+                <div class="user-chip"><?= h(trim((string)($user['name'] ?? $user['login_id'] ?? "\u{AD00}\u{B9AC}\u{C790}"))) ?> 님</div>
+            </div>
         </div>
     </header>
 
@@ -2379,11 +2428,16 @@ foreach ($toc as $item) {
                     <textarea id="rule-edit-textarea" class="rule-edit-textarea"></textarea>
                 </div>
                 <div class="rule-edit-group">
+                    <label for="rule-edit-insert-after">새 조항 위치</label>
+                    <select id="rule-edit-insert-after" class="rule-edit-select"></select>
+                </div>
+                <div class="rule-edit-group">
                     <label for="rule-edit-basis-textarea">관련근거</label>
                     <textarea id="rule-edit-basis-textarea" class="rule-edit-textarea secondary" placeholder="예: 근로기준법 제93조, 산업안전보건법 제41조"></textarea>
                 </div>
             </div>
             <div class="rule-edit-foot">
+                <button type="button" class="rule-edit-btn danger" id="rule-edit-delete">삭제</button>
                 <button type="button" class="rule-edit-btn" id="rule-edit-cancel">취소</button>
                 <button type="button" class="rule-edit-btn primary" id="rule-edit-save">저장</button>
             </div>
@@ -2393,18 +2447,27 @@ foreach ($toc as $item) {
     <div class="footer-note">취업규칙 문서는 관리자 권한으로만 수정할 수 있습니다.</div>
     <script>
         (function () {
-            var toggles = document.querySelectorAll('[data-toc-toggle]');
-            toggles.forEach(function (toggle) {
-                toggle.addEventListener('click', function () {
-                    var group = toggle.closest('[data-toc-group]');
-                    if (!group) {
+            function bindTocToggleEvents(scope) {
+                var root = scope || document;
+                root.querySelectorAll('[data-toc-toggle]').forEach(function (toggle) {
+                    if (toggle.dataset.boundTocToggle === '1') {
                         return;
                     }
 
-                    var isCollapsed = group.classList.toggle('is-collapsed');
-                    toggle.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+                    toggle.dataset.boundTocToggle = '1';
+                    toggle.addEventListener('click', function () {
+                        var group = toggle.closest('[data-toc-group]');
+                        if (!group) {
+                            return;
+                        }
+
+                        var isCollapsed = group.classList.toggle('is-collapsed');
+                        toggle.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+                    });
                 });
-            });
+            }
+
+            bindTocToggleEvents();
 
             function buildLawSearchUrl(query) {
                 var normalizedQuery = normalizeLawReference(query);
@@ -2764,6 +2827,182 @@ foreach ($toc as $item) {
 
             var documentRoot = document.querySelector('.document');
             var lawLinkStatus = document.getElementById('law-link-status');
+            var tocList = document.getElementById('toc-list');
+
+            function isArticleHeading(node) {
+                if (!node || node.tagName !== 'H3') {
+                    return false;
+                }
+
+                return /^\s*(?:#+\s*)?\uC81C\s*\d+\s*\uC870(?:\s*\uC758\s*\d+)?/.test((node.textContent || '').trim());
+            }
+
+            function collectClauseNodes(headingNode) {
+                var nodes = [headingNode];
+                var current = headingNode.nextElementSibling;
+                while (current) {
+                    if (current.tagName === 'H2' || current.tagName === 'H3') {
+                        break;
+                    }
+
+                    nodes.push(current);
+                    current = current.nextElementSibling;
+                }
+
+                return nodes;
+            }
+
+            function getArticleHeadingNodes() {
+                if (!documentRoot) {
+                    return [];
+                }
+
+                return Array.prototype.filter.call(documentRoot.querySelectorAll('h3'), function (node) {
+                    return isArticleHeading(node);
+                });
+            }
+
+            function normalizeHeadingText(text) {
+                return String(text || '').replace(/\s+/g, ' ').trim();
+            }
+
+            function slugifyHeading(text, index) {
+                var slug = String(text || '')
+                    .trim()
+                    .replace(/[^a-zA-Z0-9\uAC00-\uD7A3\-_]+/g, '-')
+                    .replace(/^-+|-+$/g, '');
+                if (!slug) {
+                    slug = 'section-' + index;
+                }
+                return slug + '-' + index;
+            }
+
+            function formatArticleHeadingText(articleNumber, headingText) {
+                var remainder = normalizeHeadingText(headingText).replace(/^(?:#+\s*)?\uC81C\s*\d+\s*\uC870(?:\s*\uC758\s*\d+)?\s*/u, '');
+                var prefix = '\uC81C' + articleNumber + '\uC870';
+                if (!remainder) {
+                    return prefix;
+                }
+
+                return prefix + (/^\(/.test(remainder) ? '' : ' ') + remainder;
+            }
+
+            function markArticleHeadingsEditable() {
+                getArticleHeadingNodes().forEach(function (node) {
+                    node.classList.add('rule-editable');
+                });
+            }
+
+            function renumberArticleHeadings() {
+                var nextNumber = 1;
+                getArticleHeadingNodes().forEach(function (node) {
+                    node.textContent = formatArticleHeadingText(nextNumber, node.textContent || '');
+                    nextNumber += 1;
+                });
+            }
+
+            function buildTocGroupsFromDocument() {
+                var groups = {
+                    chapters: [],
+                    appendix: [],
+                    annex: [],
+                };
+                var currentCollection = 'chapters';
+                var currentGroup = null;
+
+                if (!documentRoot) {
+                    return groups;
+                }
+
+                documentRoot.querySelectorAll('h2, h3').forEach(function (node, index) {
+                    var level = node.tagName === 'H2' ? 2 : 3;
+                    var title = normalizeHeadingText(node.textContent || '');
+                    if (!title) {
+                        return;
+                    }
+
+                    var id = slugifyHeading(title, index + 1);
+                    node.id = id;
+
+                    var item = {
+                        id: id,
+                        title: title,
+                        level: level,
+                    };
+                    var isAppendixHeading = /^\uBD80\uCE59(?:\s|\(|$)/.test(title);
+                    var isAnnexHeading = /^\uBCC4\uC9C0(?:\s*\uC11C\uC2DD)?(?:\s|\(|$)/.test(title);
+
+                    if (level === 2 || !currentGroup) {
+                        currentCollection = isAppendixHeading ? 'appendix' : (isAnnexHeading ? 'annex' : 'chapters');
+                        currentGroup = {
+                            heading: item,
+                            items: [],
+                        };
+                        groups[currentCollection].push(currentGroup);
+                        return;
+                    }
+
+                    currentGroup.items.push(item);
+                });
+
+                return groups;
+            }
+
+            function buildTocGroupHtml(groups, domIdPrefix) {
+                return groups.map(function (group, groupIndex) {
+                    var heading = group.heading || {};
+                    var items = Array.isArray(group.items) ? group.items : [];
+                    var domId = domIdPrefix + '-' + groupIndex;
+                    var itemsHtml = items.map(function (item) {
+                        var levelClass = 'level-' + (item.level || 3);
+                        return '<li><a class="' + escapeHtml(levelClass) + '" href="#' + escapeHtml(item.id || '') + '">' + escapeHtml(item.title || '') + '</a></li>';
+                    }).join('');
+
+                    return ''
+                        + '<div class="toc-group is-collapsed" data-toc-group>'
+                        + '  <button type="button" class="toc-group-toggle" data-toc-toggle aria-expanded="false" aria-controls="' + escapeHtml(domId) + '">'
+                        + '    <span>' + escapeHtml(heading.title || '') + '</span>'
+                        + '    <span class="chevron">&#9662;</span>'
+                        + '  </button>'
+                        + '  <ul class="toc-group-items" id="' + escapeHtml(domId) + '">'
+                        + '    <li><a class="level-2" href="#' + escapeHtml(heading.id || '') + '">' + escapeHtml(heading.title || '') + '</a></li>'
+                        + itemsHtml
+                        + '  </ul>'
+                        + '</div>';
+                }).join('');
+            }
+
+            function rebuildTocFromDocument() {
+                if (!tocList) {
+                    return;
+                }
+
+                var groups = buildTocGroupsFromDocument();
+                var html = buildTocGroupHtml(groups.chapters, 'toc-group-items');
+
+                if (groups.appendix.length > 0) {
+                    html += '<div class="toc-header" style="margin-top:16px;"><h3>부칙</h3></div>';
+                    html += buildTocGroupHtml(groups.appendix, 'toc-appendix-items');
+                }
+
+                if (groups.annex.length > 0) {
+                    html += '<div class="toc-header" style="margin-top:16px;"><h3>별지 서식</h3></div>';
+                    html += buildTocGroupHtml(groups.annex, 'toc-annex-items');
+                }
+
+                tocList.innerHTML = html;
+                bindTocToggleEvents(tocList);
+            }
+
+            function syncDocumentStructure() {
+                if (!documentRoot) {
+                    return;
+                }
+
+                renumberArticleHeadings();
+                markArticleHeadingsEditable();
+                rebuildTocFromDocument();
+            }
 
             function buildPersistableDocumentHtml() {
                 if (!documentRoot) {
@@ -3089,138 +3328,69 @@ foreach ($toc as $item) {
                 var modal = document.getElementById('rule-edit-modal');
                 var closeBtn = document.getElementById('rule-edit-close');
                 var cancelBtn = document.getElementById('rule-edit-cancel');
+                var deleteBtn = document.getElementById('rule-edit-delete');
+                var addArticleBtn = document.getElementById('rule-add-article');
                 var saveBtn = document.getElementById('rule-edit-save');
                 var textarea = document.getElementById('rule-edit-textarea');
+                var insertAfterSelect = document.getElementById('rule-edit-insert-after');
+                var insertAfterGroup = insertAfterSelect ? insertAfterSelect.closest('.rule-edit-group') : null;
                 var basisTextarea = document.getElementById('rule-edit-basis-textarea');
+                var modalTitle = document.getElementById('rule-edit-title');
                 var editingClause = null;
 
-                if (!modal || !closeBtn || !cancelBtn || !saveBtn || !textarea || !basisTextarea) {
+                if (!modal || !closeBtn || !cancelBtn || !deleteBtn || !saveBtn || !textarea || !insertAfterSelect || !basisTextarea || !modalTitle || !insertAfterGroup || !addArticleBtn) {
                     return;
+                }
+
+                function setModalBusyState(isBusy, activeButton, pendingText) {
+                    [deleteBtn, cancelBtn, saveBtn, closeBtn].forEach(function (button) {
+                        button.disabled = isBusy;
+                    });
+
+                    [deleteBtn, saveBtn].forEach(function (button) {
+                        if (!button.dataset.originalText) {
+                            button.dataset.originalText = button.textContent;
+                        }
+                        button.textContent = isBusy && button === activeButton
+                            ? pendingText
+                            : button.dataset.originalText;
+                    });
                 }
 
                 function closeModal() {
                     modal.classList.remove('is-open');
                     modal.setAttribute('aria-hidden', 'true');
                     editingClause = null;
+                    setModalBusyState(false);
                 }
 
-                function isArticleHeading(node) {
-                    if (!node || node.tagName !== 'H3') {
-                        return false;
-                    }
-
-                    return /^\s*\uC81C\s*\d+\s*\uC870(?:\s*\uC758\s*\d+)?/.test((node.textContent || '').trim());
+                function setModalMode(mode) {
+                    var isInsertMode = mode === 'insert';
+                    modalTitle.textContent = isInsertMode ? '새 조항 추가' : '조문 내용 수정';
+                    saveBtn.textContent = isInsertMode ? '추가' : '저장';
+                    saveBtn.dataset.originalText = saveBtn.textContent;
+                    deleteBtn.style.display = isInsertMode ? 'none' : '';
+                    insertAfterGroup.classList.toggle('is-hidden', !isInsertMode);
                 }
 
-                function collectClauseNodes(headingNode) {
-                    var nodes = [headingNode];
-                    var current = headingNode.nextElementSibling;
-                    while (current) {
-                        if (current.tagName === 'H2' || current.tagName === 'H3') {
-                            break;
+                function populateInsertAfterOptions(selectedHeading) {
+                    var articleNodes = getArticleHeadingNodes();
+                    insertAfterSelect.innerHTML = '';
+
+                    articleNodes.forEach(function (node, index) {
+                        var option = document.createElement('option');
+                        option.value = String(index);
+                        option.textContent = normalizeHeadingText(node.textContent || '') + ' 뒤';
+                        if (selectedHeading && node === selectedHeading) {
+                            option.selected = true;
                         }
-
-                        nodes.push(current);
-                        current = current.nextElementSibling;
-                    }
-
-                    return nodes;
-                }
-
-                function openModal(clause) {
-                    editingClause = clause;
-                    var clauseLines = clause.nodes
-                        .map(function (node) {
-                            return (node.textContent || '').trim();
-                        })
-                        .filter(function (line) {
-                            return line !== '';
-                        });
-
-                    var contentLines = [];
-                    var basisLines = [];
-
-                    function extractInlineBasis(line) {
-                        var extracted = [];
-                        var cleaned = line.replace(/\[\s*\uAD00\uB828\s*\uADFC\uAC70\s*[:\uFF1A]\s*([^\]]+)\]/gu, function (_, basisText) {
-                            var normalized = String(basisText || '').trim();
-                            if (normalized !== '') {
-                                extracted.push(normalized);
-                            }
-                            return '';
-                        });
-
-                        return {
-                            cleaned: cleaned.trim(),
-                            extracted: extracted,
-                        };
-                    }
-
-                    clauseLines.forEach(function (line) {
-                        if (/^\s*\[?\s*\uAD00\uB828\s*\uADFC\uAC70\s*[:\uFF1A]?/u.test(line)) {
-                            var extracted = line
-                                .replace(/^\s*\[?\s*\uAD00\uB828\s*\uADFC\uAC70\s*[:\uFF1A]?\s*/u, '')
-                                .replace(/\]\s*$/u, '')
-                                .trim();
-                            if (extracted !== '') {
-                                splitRelatedBasisItems(extracted).forEach(function (item) {
-                                    basisLines.push(item);
-                                });
-                            }
-                            return;
-                        }
-
-                        var inlineSplit = extractInlineBasis(line);
-                        inlineSplit.extracted.forEach(function (basisText) {
-                            splitRelatedBasisItems(basisText).forEach(function (item) {
-                                basisLines.push(item);
-                            });
-                        });
-                        if (inlineSplit.cleaned !== '') {
-                            contentLines.push(inlineSplit.cleaned);
-                        }
+                        insertAfterSelect.appendChild(option);
                     });
 
-                    textarea.value = contentLines.join('\n');
-                    basisTextarea.value = Array.from(new Set(basisLines)).join('\n');
-
-                    modal.classList.add('is-open');
-                    modal.setAttribute('aria-hidden', 'false');
-                    textarea.focus();
-                    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+                    insertAfterSelect.disabled = articleNodes.length === 0;
                 }
 
-                documentRoot.querySelectorAll('h3').forEach(function (node) {
-                    if (isArticleHeading(node)) {
-                        node.classList.add('rule-editable');
-                    }
-                });
-
-                documentRoot.addEventListener('click', function (event) {
-                    if (event.target.closest('.law-ref-link')) {
-                        return;
-                    }
-
-                    var target = event.target.closest('h3');
-                    if (!target || !documentRoot.contains(target) || !isArticleHeading(target)) {
-                        return;
-                    }
-
-                    openModal({
-                        heading: target,
-                        nodes: collectClauseNodes(target),
-                    });
-                });
-
-                closeBtn.addEventListener('click', closeModal);
-                cancelBtn.addEventListener('click', closeModal);
-
-                saveBtn.addEventListener('click', function () {
-                    if (!editingClause || !editingClause.heading) {
-                        closeModal();
-                        return;
-                    }
-
+                function getClauseDraftFromModal() {
                     var lines = textarea.value
                         .replace(/\r\n?/g, '\n')
                         .split('\n')
@@ -3276,20 +3446,45 @@ foreach ($toc as $item) {
                         }
                     });
 
-                    lines = normalizedLines;
-
-                    if (lines.length === 0) {
-                        alert('내용을 입력해 주세요.');
-                        textarea.focus();
-                        return;
+                    if (normalizedLines.length === 0) {
+                        return null;
                     }
 
-                    var headingNode = editingClause.heading;
-                    var oldNodes = editingClause.nodes || [headingNode];
-                    var headingText = lines.shift();
+                    return {
+                        headingText: normalizedLines[0],
+                        bodyLines: normalizedLines.slice(1),
+                        basisLines: Array.from(new Set(basisLines)),
+                    };
+                }
 
-                    headingNode.textContent = headingText;
+                function buildClauseDomNodes(draft) {
+                    var nodes = [];
+                    var headingNode = document.createElement('h3');
+                    headingNode.className = 'rule-editable';
+                    headingNode.textContent = draft.headingText;
+                    nodes.push(headingNode);
 
+                    draft.bodyLines.forEach(function (line) {
+                        var p = document.createElement('p');
+                        p.textContent = line;
+                        nodes.push(p);
+                    });
+
+                    if (draft.basisLines.length > 0) {
+                        var basisParagraph = document.createElement('p');
+                        basisParagraph.className = 'related-basis';
+                        basisParagraph.textContent = '\uAD00\uB828\uADFC\uAC70: ' + draft.basisLines.join(', ');
+                        nodes.push(basisParagraph);
+                    }
+
+                    return nodes;
+                }
+
+                function replaceExistingClause(clause, draft) {
+                    var headingNode = clause.heading;
+                    var oldNodes = clause.nodes || [headingNode];
+
+                    headingNode.textContent = draft.headingText;
                     oldNodes.slice(1).forEach(function (node) {
                         if (node && node.parentNode) {
                             node.parentNode.removeChild(node);
@@ -3297,25 +3492,47 @@ foreach ($toc as $item) {
                     });
 
                     var insertBeforeNode = headingNode.nextElementSibling;
-                    lines.forEach(function (line) {
+                    draft.bodyLines.forEach(function (line) {
                         var p = document.createElement('p');
                         p.textContent = line;
                         headingNode.parentNode.insertBefore(p, insertBeforeNode);
                     });
 
-                    basisLines = Array.from(new Set(basisLines));
-
-                    if (basisLines.length > 0) {
+                    if (draft.basisLines.length > 0) {
                         var basisParagraph = document.createElement('p');
                         basisParagraph.className = 'related-basis';
-                        basisParagraph.textContent = '\uAD00\uB828\uADFC\uAC70: ' + basisLines.join(', ');
+                        basisParagraph.textContent = '\uAD00\uB828\uADFC\uAC70: ' + draft.basisLines.join(', ');
                         headingNode.parentNode.insertBefore(basisParagraph, insertBeforeNode);
                     }
-                    refreshLawReferences();
+                }
 
-                    var originalSaveText = saveBtn.textContent;
-                    saveBtn.disabled = true;
-                    saveBtn.textContent = '\uC800\uC7A5 \uC911...';
+                function insertClauseAfterHeading(afterHeading, draft) {
+                    if (!afterHeading || !afterHeading.parentNode) {
+                        return;
+                    }
+
+                    var parentNode = afterHeading.parentNode;
+                    var insertBeforeNode = afterHeading.nextElementSibling;
+                    while (insertBeforeNode && insertBeforeNode.tagName !== 'H2' && insertBeforeNode.tagName !== 'H3') {
+                        insertBeforeNode = insertBeforeNode.nextElementSibling;
+                    }
+
+                    buildClauseDomNodes(draft).forEach(function (node) {
+                        parentNode.insertBefore(node, insertBeforeNode);
+                    });
+                }
+
+                function persistModalMutation(activeButton, pendingText, mutation) {
+                    setModalBusyState(true, activeButton, pendingText);
+                    try {
+                        mutation();
+                        syncDocumentStructure();
+                        refreshLawReferences();
+                    } catch (error) {
+                        setModalBusyState(false);
+                        alert(error && error.message ? error.message : '\uBCC0\uACBD\uC744 \uCC98\uB9AC\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.');
+                        return;
+                    }
 
                     persistCurrentDocumentEdits()
                         .then(function () {
@@ -3325,9 +3542,165 @@ foreach ($toc as $item) {
                             alert(error && error.message ? error.message : '\uC800\uC7A5\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4. \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694.');
                         })
                         .finally(function () {
-                            saveBtn.disabled = false;
-                            saveBtn.textContent = originalSaveText;
+                            setModalBusyState(false);
                         });
+                }
+
+                function openModal(clause) {
+                    editingClause = clause;
+                    setModalMode(clause && clause.mode ? clause.mode : 'edit');
+                    var clauseLines = clause.nodes
+                        .map(function (node) {
+                            return (node.textContent || '').trim();
+                        })
+                        .filter(function (line) {
+                            return line !== '';
+                        });
+
+                    var contentLines = [];
+                    var basisLines = [];
+
+                    function extractInlineBasis(line) {
+                        var extracted = [];
+                        var cleaned = line.replace(/\[\s*\uAD00\uB828\s*\uADFC\uAC70\s*[:\uFF1A]\s*([^\]]+)\]/gu, function (_, basisText) {
+                            var normalized = String(basisText || '').trim();
+                            if (normalized !== '') {
+                                extracted.push(normalized);
+                            }
+                            return '';
+                        });
+
+                        return {
+                            cleaned: cleaned.trim(),
+                            extracted: extracted,
+                        };
+                    }
+
+                    clauseLines.forEach(function (line) {
+                        if (/^\s*\[?\s*\uAD00\uB828\s*\uADFC\uAC70\s*[:\uFF1A]?/u.test(line)) {
+                            var extracted = line
+                                .replace(/^\s*\[?\s*\uAD00\uB828\s*\uADFC\uAC70\s*[:\uFF1A]?\s*/u, '')
+                                .replace(/\]\s*$/u, '')
+                                .trim();
+                            if (extracted !== '') {
+                                splitRelatedBasisItems(extracted).forEach(function (item) {
+                                    basisLines.push(item);
+                                });
+                            }
+                            return;
+                        }
+
+                        var inlineSplit = extractInlineBasis(line);
+                        inlineSplit.extracted.forEach(function (basisText) {
+                            splitRelatedBasisItems(basisText).forEach(function (item) {
+                                basisLines.push(item);
+                            });
+                        });
+                        if (inlineSplit.cleaned !== '') {
+                            contentLines.push(inlineSplit.cleaned);
+                        }
+                    });
+
+                    textarea.value = contentLines.join('\n');
+                    basisTextarea.value = Array.from(new Set(basisLines)).join('\n');
+                    populateInsertAfterOptions(clause.heading);
+
+                    modal.classList.add('is-open');
+                    modal.setAttribute('aria-hidden', 'false');
+                    textarea.focus();
+                    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+                }
+
+                function openInsertModal() {
+                    var articleNodes = getArticleHeadingNodes();
+                    if (articleNodes.length === 0) {
+                        alert('삽입할 기존 조항이 없습니다.');
+                        return;
+                    }
+
+                    openModal({
+                        mode: 'insert',
+                        heading: articleNodes[articleNodes.length - 1],
+                        nodes: [{ textContent: '' }],
+                    });
+                    textarea.value = '';
+                    basisTextarea.value = '';
+                    populateInsertAfterOptions(articleNodes[articleNodes.length - 1]);
+                }
+
+                markArticleHeadingsEditable();
+
+                documentRoot.addEventListener('click', function (event) {
+                    if (event.target.closest('.law-ref-link')) {
+                        return;
+                    }
+
+                    var target = event.target.closest('h3');
+                    if (!target || !documentRoot.contains(target) || !isArticleHeading(target)) {
+                        return;
+                    }
+
+                    openModal({
+                        heading: target,
+                        nodes: collectClauseNodes(target),
+                    });
+                });
+
+                closeBtn.addEventListener('click', closeModal);
+                cancelBtn.addEventListener('click', closeModal);
+                addArticleBtn.addEventListener('click', openInsertModal);
+
+                deleteBtn.addEventListener('click', function () {
+                    if (!editingClause || editingClause.mode === 'insert' || !editingClause.heading) {
+                        closeModal();
+                        return;
+                    }
+
+                    if (!window.confirm('\uC774 \uC870\uD56D\uC744 \uC0AD\uC81C\uD560\uAE4C\uC694?')) {
+                        return;
+                    }
+
+                    persistModalMutation(deleteBtn, '\uC0AD\uC81C \uC911...', function () {
+                        (editingClause.nodes || []).forEach(function (node) {
+                            if (node && node.parentNode) {
+                                node.parentNode.removeChild(node);
+                            }
+                        });
+                    });
+                });
+
+                saveBtn.addEventListener('click', function () {
+                    if (!editingClause || !editingClause.heading) {
+                        closeModal();
+                        return;
+                    }
+
+                    var draft = getClauseDraftFromModal();
+                    if (!draft) {
+                        alert(editingClause.mode === 'insert' ? '새 조항 내용을 입력해 주세요.' : '내용을 입력해 주세요.');
+                        textarea.focus();
+                        return;
+                    }
+
+                    if (editingClause.mode === 'insert') {
+                        var articleNodes = getArticleHeadingNodes();
+                        var targetIndex = parseInt(insertAfterSelect.value || '-1', 10);
+                        var targetHeading = articleNodes[targetIndex] || editingClause.heading;
+                        if (!targetHeading) {
+                            alert('\uC0BD\uC785\uD560 \uC870\uD56D \uC704\uCE58\uB97C \uC120\uD0DD\uD574 \uC8FC\uC138\uC694.');
+                            insertAfterSelect.focus();
+                            return;
+                        }
+
+                        persistModalMutation(saveBtn, '\uCD94\uAC00 \uC911...', function () {
+                            insertClauseAfterHeading(targetHeading, draft);
+                        });
+                        return;
+                    }
+
+                    persistModalMutation(saveBtn, '\uC800\uC7A5 \uC911...', function () {
+                        replaceExistingClause(editingClause, draft);
+                    });
                 });
 
                 modal.addEventListener('click', function (event) {
