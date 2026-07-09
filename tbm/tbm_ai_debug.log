@@ -4912,3 +4912,33 @@
 [2026-07-07 00:01:02] [이미지 정리] 미사용 fallback 삭제: output/images/article_acf9083bd25e614bc235f82aec1555e9.jpg
 [2026-07-07 00:01:02] [이미지 정리] 삭제: output/images/siren_86851b35a1e406e5.jpg
 [2026-07-07 00:01:02] [이미지 정리] 총 1개 미사용 파일 삭제
+[2026-07-08 00:00:01] [캐시 정리] 30일 이전 캐시 1건 삭제
+[2026-07-08 00:00:01] [1순위] KOSHA 사이렌 수집 시작
+[2026-07-08 00:00:03] [KOSHA enrich 시작] title=(260707)중대재해 발생 알림(1)
+[2026-07-08 00:00:03] [KOSHA enrich 상태] has_image_file=N / has_image_base64=Y
+[2026-07-08 00:00:03] [KOSHA 이미지 저장 성공] output/images/siren_58bfaefddd097f44.jpg
+[2026-07-08 00:00:03] [KOSHA 이미지 crop 성공] output/images/crop_4c67d8852b114842ce25.jpg
+[2026-07-08 00:00:03] [KOSHA crop 시도 완료]
+[2026-07-08 00:00:03] [KOSHA OCR 시작] image_file=output/images/crop_4c67d8852b114842ce25.jpg
+[2026-07-08 00:00:03] [KOSHA OCR 대상] poster_image=output/images/siren_58bfaefddd097f44.jpg
+[2026-07-08 00:00:16] [KOSHA 후보] title=(260707)중대재해 발생 알림(1) / summary_len=103 / prevention_len=44 / image=Y / ocr_ok=Y / vision=N
+[2026-07-08 00:00:16] [KOSHA enrich 시작] title=(260707)중대재해 발생 알림(1)
+[2026-07-08 00:00:16] [KOSHA enrich 상태] has_image_file=Y / has_image_base64=Y
+[2026-07-08 00:00:16] [KOSHA 저장 스킵] image_file 이미 있거나 image_base64 없음
+[2026-07-08 00:00:16] [KOSHA OCR 시작] image_file=output/images/crop_4c67d8852b114842ce25.jpg
+[2026-07-08 00:00:16] [KOSHA OCR 대상] poster_image=output/images/siren_58bfaefddd097f44.jpg
+[2026-07-08 00:00:16] [1순위 선택] KOSHA siren_score=0 / title=(260707)중대재해 발생 알림(1) / summary_len=103 / prevention_len=44
+[2026-07-08 00:00:17] [fallback 이미지] 네이버 성공: https://t1.daumcdn.net/cafeattach/Uzlo/686bef56b1653aa5139de4b2197b8d834ab52c28
+[2026-07-08 00:00:30] [이미지 정리] 미사용 fallback 삭제: output/images/article_9f716264602fa2f26cb72e5198010111.jpg
+[2026-07-08 00:00:30] [이미지 정리] 삭제: output/images/siren_58bfaefddd097f44.jpg
+[2026-07-08 00:00:30] [이미지 정리] 총 1개 미사용 파일 삭제
+[2026-07-09 00:00:01] [캐시 정리] 30일 이전 캐시 1건 삭제
+[2026-07-09 00:00:01] [1순위] KOSHA 사이렌 수집 시작
+[2026-07-09 00:00:03] [1순위 실패] KOSHA 사용 가능 항목 없음 → CSI 사고사례로 전환
+[2026-07-09 00:00:13] [점수 1위] score=32  incident_score=9  title=이동식 비계 해체 중 추락 사고
+[2026-07-09 00:00:13] [점수 2위] score=30  incident_score=9  title=가시설 작업 중 협착 사고
+[2026-07-09 00:00:13] [점수 3위] score=27  incident_score=9  title=보행 중 넘어짐
+[2026-07-09 00:00:13] [점수 4위] score=26  incident_score=9  title=청소작업 중 넘어짐
+[2026-07-09 00:00:13] [점수 5위] score=25  incident_score=9  title=앰코테크놀로지코리아 송도공장 증설공사 절단작업 중 베임사고
+[2026-07-09 00:00:13] [최종 선택] score=27  title=보행 중 넘어짐
+[2026-07-09 00:00:13] [CSI 이미지] 원본 이미지 URL 확인: https://www.csi.go.kr/com/imageViewProc.do?file_no=nYjcp1sshJ62I2hp%2FvG5WQ%3D%3D

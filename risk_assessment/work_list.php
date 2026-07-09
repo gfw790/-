@@ -762,6 +762,11 @@ function report_team_context(array $report): string
       return true;
     }
 
+    $userRole = (string)($user['role'] ?? '');
+    if (in_array($userRole, ['safety_manager', 'administrator'], true)) {
+      return true;
+    }
+
     if (!auth_can_manage($user)) {
       return false;
     }
@@ -2696,6 +2701,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
                       $hazardReviewCompleted = (bool)($report['hazard_review_completed'] ?? false);
                       $allTasksCompleted = $workInputCompleted && $hazardReviewCompleted;
                   }
+                  $canDeleteReport = $canManage && work_list_user_can_delete_report($user, $report, $allTasksCompleted);
                 ?>
                 <?php if ($canWorkerOpen && !$allTasksCompleted): ?>
                   <?php if ($isAdmin): ?>
@@ -2716,6 +2722,13 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
                   <span class="sub-text">작업지휘자 입력 대기</span>
                 <?php elseif ($allTasksCompleted): ?>
                   <span class="sub-text">완료</span>
+                <?php endif; ?>
+                <?php if ($canDeleteReport): ?>
+                  <form method="post" onsubmit="return window.confirm('이 작업을 삭제할까요? 완료된 작업문서는 삭제할 수 없습니다.');">
+                    <input type="hidden" name="action" value="delete_report">
+                    <input type="hidden" name="report_id" value="<?= (int)$report['report_id'] ?>">
+                    <button type="submit" class="btn-danger">삭제</button>
+                  </form>
                 <?php endif; ?>
               </div>
             </article>
@@ -2786,6 +2799,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
                             $hazardReviewCompleted = (bool)($report['hazard_review_completed'] ?? false);
                             $allTasksCompleted = $workInputCompleted && $hazardReviewCompleted;
                         }
+                        $canDeleteReport = $canManage && work_list_user_can_delete_report($user, $report, $allTasksCompleted);
                       ?>
                       <?php if ($canWorkerOpen && !$allTasksCompleted): ?>
                         <?php if ($isAdmin): ?>
@@ -2806,6 +2820,13 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
                         <span class="sub-text">작업지휘자 입력 대기</span>
                       <?php elseif ($allTasksCompleted): ?>
                         <span class="sub-text">완료</span>
+                      <?php endif; ?>
+                      <?php if ($canDeleteReport): ?>
+                        <form method="post" onsubmit="return window.confirm('이 작업을 삭제할까요? 완료된 작업문서는 삭제할 수 없습니다.');">
+                          <input type="hidden" name="action" value="delete_report">
+                          <input type="hidden" name="report_id" value="<?= (int)$report['report_id'] ?>">
+                          <button type="submit" class="btn-danger">삭제</button>
+                        </form>
                       <?php endif; ?>
                     </div>
                   </td>

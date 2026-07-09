@@ -101,6 +101,43 @@ function status_sort_item_entries(array $entries): array
     return $entries;
 }
 
+function status_group_item_entries(array $entries): array
+{
+    $grouped = [];
+    foreach ($entries as $entry) {
+        $assignedDate = status_date_only($entry['assigned_at'] ?? '', '-');
+        $quantity = max(1, (int)($entry['quantity'] ?? 1));
+        if (!isset($grouped[$assignedDate])) {
+            $grouped[$assignedDate] = [
+                'assigned_at' => $assignedDate,
+                'quantity' => 0,
+                'gear_uid' => '',
+                'linkable' => false,
+            ];
+        }
+
+        $grouped[$assignedDate]['quantity'] += $quantity;
+        $gearUid = sg_normalize_text($entry['gear_uid'] ?? '');
+        if ($gearUid !== '' && $quantity === 1 && !$grouped[$assignedDate]['linkable']) {
+            $grouped[$assignedDate]['gear_uid'] = $gearUid;
+            $grouped[$assignedDate]['linkable'] = true;
+        } elseif ($quantity > 1 || $gearUid === '') {
+            $grouped[$assignedDate]['gear_uid'] = '';
+            $grouped[$assignedDate]['linkable'] = false;
+        }
+    }
+
+    $result = array_values($grouped);
+    usort($result, static function (array $a, array $b): int {
+        return strcmp(
+            status_date_only($a['assigned_at'] ?? '', ''),
+            status_date_only($b['assigned_at'] ?? '', '')
+        );
+    });
+
+    return $result;
+}
+
 function status_json_attr($value): string
 {
     $json = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -158,39 +195,47 @@ foreach ($dailyReceipts as $receipt) {
 $teams = array_values($teams);
 sort($teams);
 
-$employeeRows = [];
+$employeeRowsMap = [];
+$initializeEmployeeCells = static function () use ($gearTypes): array {
+    $cells = [];
+    foreach ($gearTypes as $gearType) {
+        $cells[$gearType] = [];
+    }
+    return $cells;
+};
 foreach ($employeeGroups as $group) {
     $teamName = sg_normalize_text($group['employee_team'] ?? '');
     if ($teamFilter !== '' && $teamName !== $teamFilter) {
         continue;
     }
 
-    $cells = [];
-    foreach ($gearTypes as $gearType) {
-        $cells[$gearType] = [];
+    $employeeName = sg_normalize_text($group['employee_name'] ?? '');
+    $rowKey = $employeeName . '|' . $teamName;
+    if (!isset($employeeRowsMap[$rowKey])) {
+        $employeeRowsMap[$rowKey] = [
+            'employee_name' => $employeeName,
+            'employee_team' => $teamName,
+            'assigned_count' => 0,
+            'cells' => $initializeEmployeeCells(),
+        ];
     }
 
     foreach ((array)($group['assigned_items'] ?? []) as $item) {
         $gearType = sg_normalize_text($item['gear_type'] ?? '');
-        if ($gearType === '' || !isset($cells[$gearType])) {
+        if ($gearType === '' || !isset($employeeRowsMap[$rowKey]['cells'][$gearType])) {
             continue;
         }
 
         $assignedAt = sg_normalize_text($item['assigned_at'] ?? '');
         if ($assignedAt !== '') {
-            $cells[$gearType][] = [
+            $employeeRowsMap[$rowKey]['cells'][$gearType][] = [
                 'assigned_at' => $assignedAt,
                 'gear_uid' => sg_normalize_text($item['id'] ?? ''),
+                'quantity' => 1,
             ];
+            $employeeRowsMap[$rowKey]['assigned_count']++;
         }
     }
-
-    $employeeRows[] = [
-        'employee_name' => sg_normalize_text($group['employee_name'] ?? ''),
-        'employee_team' => $teamName,
-        'assigned_count' => count((array)($group['assigned_items'] ?? [])),
-        'cells' => $cells,
-    ];
 }
 
 foreach ($dailyReceipts as $receipt) {
@@ -199,44 +244,45 @@ foreach ($dailyReceipts as $receipt) {
     if ($workerName === '') {
         continue;
     }
+    if ($workerName === 'CSV 보정') {
+        continue;
+    }
     if ($teamFilter !== '' && $workerTeam !== $teamFilter) {
         continue;
     }
 
-    $cells = [];
-    foreach ($gearTypes as $gearType) {
-        $cells[$gearType] = [];
+    $rowKey = $workerName . '|' . $workerTeam;
+    if (!isset($employeeRowsMap[$rowKey])) {
+        $employeeRowsMap[$rowKey] = [
+            'employee_name' => $workerName,
+            'employee_team' => $workerTeam,
+            'assigned_count' => 0,
+            'cells' => $initializeEmployeeCells(),
+        ];
     }
 
-    $assignedCount = 0;
     foreach ((array)($receipt['items'] ?? []) as $receiptItem) {
         $gearType = sg_normalize_text($receiptItem['gear_label'] ?? '');
         if ($gearType === '') {
             $gearType = sg_normalize_text($receiptItem['item_name'] ?? '');
         }
-        if ($gearType === '' || !isset($cells[$gearType])) {
+        if ($gearType === '' || !isset($employeeRowsMap[$rowKey]['cells'][$gearType])) {
             continue;
         }
 
         $assignedAt = sg_normalize_text($receiptItem['assigned_date'] ?? sg_normalize_text($receipt['issue_date'] ?? ''));
         $quantity = max(1, (int)($receiptItem['quantity'] ?? 1));
-        $assignedCount += $quantity;
+        $employeeRowsMap[$rowKey]['assigned_count'] += $quantity;
 
-        for ($index = 0; $index < $quantity; $index++) {
-            $cells[$gearType][] = [
-                'assigned_at' => $assignedAt,
-                'gear_uid' => '',
-            ];
-        }
+        $employeeRowsMap[$rowKey]['cells'][$gearType][] = [
+            'assigned_at' => $assignedAt,
+            'gear_uid' => '',
+            'quantity' => $quantity,
+        ];
     }
-
-    $employeeRows[] = [
-        'employee_name' => $workerName,
-        'employee_team' => $workerTeam,
-        'assigned_count' => $assignedCount,
-        'cells' => $cells,
-    ];
 }
+
+$employeeRows = array_values($employeeRowsMap);
 
 usort($employeeRows, static function (array $a, array $b): int {
     $teamCompare = strcmp($a['employee_team'], $b['employee_team']);
@@ -268,6 +314,8 @@ foreach ($allItems as $item) {
             'total_count' => 0,
             'current_count' => 0,
             'issued_count' => 0,
+            'item_issued_count' => 0,
+            'receipt_issued_count' => 0,
             'returned_count' => 0,
             'disposed_count' => 0,
             'purchase_dates' => [],
@@ -313,7 +361,7 @@ foreach ($allItems as $item) {
     $isIssued = ($status === '지급됨') || (!$isHiddenStatus && ($assignedEmployeeName !== '' || $assignedAt !== ''));
 
     if ($isIssued) {
-        $inventoryMap[$rowKey]['issued_count']++;
+        $inventoryMap[$rowKey]['item_issued_count']++;
         if ($assignedAt !== '') {
             $inventoryMap[$rowKey]['issued_dates'][] = $assignedAt;
             $issuedDateKey = status_date_only($assignedAt, '');
@@ -374,6 +422,8 @@ foreach ($dailyReceipts as $receipt) {
                 'total_count' => 0,
                 'current_count' => 0,
                 'issued_count' => 0,
+                'item_issued_count' => 0,
+                'receipt_issued_count' => 0,
                 'returned_count' => 0,
                 'disposed_count' => 0,
                 'purchase_dates' => [],
@@ -386,7 +436,7 @@ foreach ($dailyReceipts as $receipt) {
 
         $quantity = max(1, (int)($receiptItem['quantity'] ?? 1));
         $assignedAt = sg_normalize_text($receiptItem['assigned_date'] ?? $receiptDate);
-        $inventoryMap[$rowKey]['issued_count'] += $quantity;
+        $inventoryMap[$rowKey]['receipt_issued_count'] += $quantity;
 
         if ($assignedAt !== '') {
             $issuedDateKey = status_date_only($assignedAt, '');
@@ -409,6 +459,14 @@ foreach ($dailyReceipts as $receipt) {
         }
     }
 }
+
+foreach ($inventoryMap as &$inventoryRow) {
+    $receiptIssuedCount = (int)($inventoryRow['receipt_issued_count'] ?? 0);
+    $itemIssuedCount = (int)($inventoryRow['item_issued_count'] ?? 0);
+    $inventoryRow['issued_count'] = $receiptIssuedCount > 0 ? $receiptIssuedCount : $itemIssuedCount;
+    $inventoryRow['stock_count'] = (int)($inventoryRow['total_count'] ?? 0) - (int)($inventoryRow['issued_count'] ?? 0);
+}
+unset($inventoryRow);
 
 $inventoryRows = array_values($inventoryMap);
 usort($inventoryRows, static function (array $a, array $b): int {
@@ -869,6 +927,7 @@ foreach ($employeeRows as $row) {
                 <div class="actions">
                     <a class="button soft" href="/safety_gear/index.php">관리 페이지</a>
                     <a class="button soft" href="/safety_gear/report.php">지급 이력서</a>
+                    <a class="button soft" href="/safety_gear/monthly_receipt_print.php">월별 일괄출력</a>
                     <button class="button" type="button" onclick="window.print()">인쇄</button>
                 </div>
             </div>
@@ -1016,7 +1075,7 @@ foreach ($employeeRows as $row) {
                                         <td><?= (int)($row['issued_count'] ?? 0) ?></td>
                                         <td><?= (int)($row['returned_count'] ?? 0) ?></td>
                                         <td><?= (int)($row['disposed_count'] ?? 0) ?></td>
-                                        <td><?= (int)($row['current_count'] ?? 0) ?></td>
+                                        <td><?= (int)($row['stock_count'] ?? ($row['current_count'] ?? 0)) ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                             </tbody>
@@ -1051,7 +1110,7 @@ foreach ($employeeRows as $row) {
                                             <div class="person-team"><?= h(status_value($row['employee_team'] ?? '소속 미지정')) ?></div>
                                         </td>
                                         <?php foreach ($gearTypes as $gearType): ?>
-                                            <?php $entries = status_sort_item_entries((array)($row['cells'][$gearType] ?? [])); ?>
+                                            <?php $entries = status_group_item_entries(status_sort_item_entries((array)($row['cells'][$gearType] ?? []))); ?>
                                             <td>
                                                 <?php if (empty($entries)): ?>
                                                     <span class="muted">-</span>
@@ -1061,15 +1120,19 @@ foreach ($employeeRows as $row) {
                                                             <?php
                                                             $assignedDate = status_date_only($entry['assigned_at'] ?? '', '-');
                                                             $entryGearUid = sg_normalize_text($entry['gear_uid'] ?? '');
+                                                            $entryQuantity = max(1, (int)($entry['quantity'] ?? 1));
+                                                            $entryLabel = $entryQuantity > 1
+                                                                ? $assignedDate . ' (' . $entryQuantity . ')'
+                                                                : $assignedDate;
                                                             ?>
                                                             <?php if ($entryGearUid !== ''): ?>
                                                                 <button
                                                                     type="button"
                                                                     class="date-chip button-chip"
                                                                     onclick="window.location.href='/safety_gear/index.php?gear_uid=<?= h(rawurlencode($entryGearUid)) ?>'"
-                                                                ><?= h($assignedDate) ?></button>
+                                                                ><?= h($entryLabel) ?></button>
                                                             <?php else: ?>
-                                                                <span class="date-chip"><?= h($assignedDate) ?></span>
+                                                                <span class="date-chip"><?= h($entryLabel) ?></span>
                                                             <?php endif; ?>
                                                         <?php endforeach; ?>
                                                     </div>
@@ -1125,6 +1188,56 @@ foreach ($employeeRows as $row) {
     </div>
     <script>
         (function () {
+            const replacements = new Map([
+                ['?덉쟾蹂댄샇援??꾪솴', '안전보호구 현황'],
+                ['???섏씠吏???덉쟾愿由ъ옄 ?먮뒗 愿由ъ옄留??묎렐?????덉뒿?덈떎.', '이 페이지는 안전관리자 또는 관리자만 접근할 수 있습니다.'],
+                ['?묒뾽紐⑸줉?쇰줈 ?뚯븘媛湲?/a>', '작업목록으로 돌아가기'],
+                ['蹂댄샇援?醫낅쪟', '보호구 종류'],
+                ['?꾩껜', '전체'],
+                ['?щ엺 / ?', '이름 / 팀'],
+                ['誘몄???', '미지정'],
+                ['?뚯냽 誘몄???', '소속 미지정'],
+                ['誘몃텇瑜??덈ぉ', '미분류 품목'],
+                ['誘몄?湲?', '미지급'],
+                ['吏湲됱옄 ?뺣낫媛 ?놁뒿?덈떎.', '지급자 정보가 없습니다.'],
+                ['?: ', '팀: '],
+                ['吏湲됱씪?? ', '지급일시: '],
+                ['?앸퀎媛? ', '식별값: '],
+                ['援щℓ?쇱떆: ', '구매일시: '],
+                ['?낃퀬 ?곸꽭 ?뺣낫媛 ?놁뒿?덈떎.', '입고 상세 정보가 없습니다.'],
+            ]);
+
+            function normalizeBrokenText(value) {
+                let text = String(value || '');
+                replacements.forEach(function (replacement, broken) {
+                    text = text.split(broken).join(replacement);
+                });
+                return text;
+            }
+
+            function normalizeTextNodes(root) {
+                const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+                const nodes = [];
+                while (walker.nextNode()) {
+                    nodes.push(walker.currentNode);
+                }
+                nodes.forEach(function (node) {
+                    const normalized = normalizeBrokenText(node.nodeValue || '');
+                    if (normalized !== node.nodeValue) {
+                        node.nodeValue = normalized;
+                    }
+                });
+            }
+
+            window.statusNormalizeBrokenText = normalizeBrokenText;
+
+            if (document.title) {
+                document.title = normalizeBrokenText(document.title);
+            }
+            normalizeTextNodes(document.body);
+        })();
+
+        (function () {
             const modal = document.getElementById('issuedPeopleModal');
             const modalClose = document.getElementById('issuedPeopleModalClose');
             const modalSubtitle = document.getElementById('issuedPeopleModalSubtitle');
@@ -1150,7 +1263,7 @@ foreach ($employeeRows as $row) {
             }
 
             function openModal(productLabel, issuedDate, issuedPeople) {
-                modalSubtitle.textContent = productLabel + ' / ' + issuedDate;
+                modalSubtitle.textContent = normalizeBrokenText(productLabel + ' / ' + issuedDate);
                 modalList.innerHTML = '';
 
                 if (!Array.isArray(issuedPeople) || !issuedPeople.length) {
@@ -1173,6 +1286,7 @@ foreach ($employeeRows as $row) {
                                 '구매일시: ' + escapeHtml(person.purchased_at || '-') + '<br>'
                             );
                         }
+                        item.innerHTML = normalizeBrokenText(item.innerHTML);
                         if (person.gear_uid) {
                             item.addEventListener('click', function () {
                                 window.location.href = '/safety_gear/index.php?gear_uid=' + encodeURIComponent(person.gear_uid);
@@ -1236,6 +1350,13 @@ foreach ($employeeRows as $row) {
                     .replace(/'/g, '&#039;');
             }
 
+            function normalizeBrokenText(value) {
+                if (typeof window.statusNormalizeBrokenText === 'function') {
+                    return window.statusNormalizeBrokenText(value);
+                }
+                return String(value || '');
+            }
+
             function closeModal() {
                 modal.classList.remove('open');
                 modal.hidden = true;
@@ -1247,12 +1368,15 @@ foreach ($employeeRows as $row) {
                 if (!employeeName && !teamName) {
                     return '미지급';
                 }
+                if (!employeeName && !teamName) {
+                    return '미지급';
+                }
 
                 return teamName ? employeeName + ' (' + teamName + ')' : employeeName;
             }
 
             function openModal(productLabel, purchaseDate, items) {
-                modalSubtitle.textContent = productLabel + ' / ' + purchaseDate;
+                modalSubtitle.textContent = normalizeBrokenText(productLabel + ' / ' + purchaseDate);
                 modalBody.innerHTML = '';
 
                 if (!Array.isArray(items) || !items.length) {
@@ -1260,6 +1384,7 @@ foreach ($employeeRows as $row) {
                 } else {
                     items.forEach(function (item) {
                         const row = document.createElement('tr');
+                        row.innerHTML = normalizeBrokenText(row.innerHTML);
                         if (item.gear_uid) {
                             row.className = 'clickable';
                         }

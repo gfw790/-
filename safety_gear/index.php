@@ -17,22 +17,18 @@ if (!auth_can_manage($user)) {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>蹂댄샇援ш?由?/title>
+        <title>蹂댄샇援?愿由?/title>
         <style>
-            body { font-family: "Malgun Gothic", sans-serif; background:#f3f7fb; color:#122033; margin:0; padding:32px; }
-            .panel { max-width:720px; margin:0 auto; background:#fff; border:1px solid #d7e0ea; border-radius:20px; padding:24px; }
-            .actions { margin-top:16px; display:flex; gap:10px; flex-wrap:wrap; }
-            .button { display:inline-flex; align-items:center; justify-content:center; padding:10px 14px; border-radius:12px; background:#0f766e; color:#fff; text-decoration:none; }
-            .button.secondary { background:#e2e8f0; color:#0f172a; }
+            body { margin: 0; padding: 32px; font-family: "Malgun Gothic", sans-serif; background: #f3f7fb; color: #122033; }
+            .panel { max-width: 720px; margin: 0 auto; background: #fff; border: 1px solid #d7e0ea; border-radius: 20px; padding: 24px; }
+            .button { display: inline-flex; align-items: center; justify-content: center; padding: 10px 14px; border-radius: 12px; background: #0f766e; color: #fff; text-decoration: none; }
         </style>
     </head>
     <body>
         <div class="panel">
-            <h1>蹂댄샇援ш?由?/h1>
-            <p>???섏씠吏???덉쟾愿由ъ옄 ?먮뒗 愿由ш텒???ъ슜?먮쭔 ?묎렐?????덉뒿?덈떎.</p>
-            <div class="actions">
-                <a class="button secondary" href="/risk_assessment/work_list.php">?묒뾽紐⑸줉?쇰줈 ?뚯븘媛湲?/a>
-            </div>
+            <h1>蹂댄샇援?愿由?/h1>
+            <p>???섏씠吏??愿由ъ옄 ?먮뒗 愿由?沅뚰븳???덈뒗 ?ъ슜?먮쭔 ?묎렐?????덉뒿?덈떎.</p>
+            <a class="button" href="/risk_assessment/work_list.php">?묒뾽 紐⑸줉?쇰줈 ?대룞</a>
         </div>
     </body>
     </html>
@@ -45,7 +41,7 @@ if (!auth_can_manage($user)) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>?덉쟾蹂댄샇援?愿由?/title>
+    <title>蹂댄샇援?愿由?/title>
     <style>
         :root {
             --bg: #edf3f8;
@@ -57,9 +53,11 @@ if (!auth_can_manage($user)) {
             --accent-soft: #ccfbf1;
             --secondary: #e2e8f0;
             --danger: #b91c1c;
+            --warning: #b45309;
         }
 
         * { box-sizing: border-box; }
+
         body {
             margin: 0;
             font-family: "Malgun Gothic", sans-serif;
@@ -69,11 +67,13 @@ if (!auth_can_manage($user)) {
                 linear-gradient(180deg, #f8fbfd 0%, var(--bg) 100%);
         }
 
+        a { color: inherit; }
+
         .page {
-            width: min(1360px, calc(100vw - 28px));
+            width: min(1400px, calc(100vw - 28px));
             margin: 18px auto 28px;
             display: grid;
-            grid-template-columns: minmax(0, 820px) 480px;
+            grid-template-columns: minmax(0, 860px) minmax(320px, 480px);
             gap: 18px;
         }
 
@@ -86,53 +86,13 @@ if (!auth_can_manage($user)) {
         }
 
         h1, h2, h3 { margin: 0; }
+
         .lead {
             margin: 8px 0 0;
             color: var(--muted);
             font-size: 14px;
             line-height: 1.6;
         }
-
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 12px;
-        }
-
-        .full { grid-column: 1 / -1; }
-        .field { display: grid; gap: 6px; }
-        .field label {
-            font-size: 12px;
-            color: var(--muted);
-            font-weight: 700;
-        }
-
-        input, select, textarea, button { font: inherit; }
-        input[type="text"], input[type="date"], input[type="datetime-local"], input[type="number"], select, textarea {
-            width: 100%;
-            border: 1px solid var(--line);
-            border-radius: 12px;
-            padding: 10px 12px;
-            background: #fff;
-        }
-
-        textarea {
-            min-height: 92px;
-            resize: vertical;
-        }
-
-        button {
-            border: 0;
-            border-radius: 12px;
-            padding: 10px 14px;
-            cursor: pointer;
-            background: var(--accent);
-            color: #fff;
-        }
-
-        button.secondary { background: var(--secondary); color: #0f172a; }
-        button.ghost { background: var(--accent-soft); color: #115e59; }
-        button.danger { background: var(--danger); }
 
         .row {
             display: flex;
@@ -145,13 +105,98 @@ if (!auth_can_manage($user)) {
             flex: 1 1 220px;
         }
 
-        .status {
-            margin-top: 12px;
-            padding: 12px 14px;
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .full {
+            grid-column: 1 / -1;
+        }
+
+        .field {
+            display: grid;
+            gap: 6px;
+        }
+
+        .field label {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--muted);
+        }
+
+        input, select, textarea, button {
+            font: inherit;
+        }
+
+        input[type="text"],
+        input[type="date"],
+        input[type="number"],
+        textarea,
+        select {
+            width: 100%;
+            border: 1px solid var(--line);
             border-radius: 12px;
+            padding: 10px 12px;
+            background: #fff;
+        }
+
+        textarea {
+            min-height: 92px;
+            resize: vertical;
+        }
+
+        .button,
+        button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 0;
+            border-radius: 12px;
+            padding: 10px 14px;
+            text-decoration: none;
+            cursor: pointer;
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .button.secondary,
+        button.secondary {
+            background: var(--secondary);
+            color: #0f172a;
+        }
+
+        .button.ghost,
+        button.ghost {
+            background: var(--accent-soft);
+            color: #115e59;
+        }
+
+        .button.danger,
+        button.danger {
+            background: var(--danger);
+            color: #fff;
+        }
+
+        .status-box {
+            margin-top: 14px;
+            border-radius: 12px;
+            padding: 12px 14px;
             background: #f8fafc;
             color: #334155;
             font-size: 13px;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 8px;
+            border-radius: 999px;
+            background: #ecfeff;
+            color: #155e75;
+            font-size: 12px;
+            font-weight: 700;
         }
 
         .scanner {
@@ -182,17 +227,6 @@ if (!auth_can_manage($user)) {
             line-height: 1.6;
         }
 
-        .badge {
-            display: inline-flex;
-            align-items: center;
-            padding: 4px 8px;
-            border-radius: 999px;
-            background: #ecfeff;
-            color: #155e75;
-            font-size: 12px;
-            font-weight: 700;
-        }
-
         .qr-box {
             display: grid;
             place-items: center;
@@ -200,6 +234,7 @@ if (!auth_can_manage($user)) {
             border-radius: 16px;
             min-height: 190px;
             background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+            overflow: hidden;
         }
 
         .qr-box img {
@@ -209,11 +244,24 @@ if (!auth_can_manage($user)) {
             display: block;
         }
 
-        .history-list, .recent-list {
+        .section-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .count {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .history-list,
+        .recent-list {
             display: grid;
             gap: 10px;
             margin-top: 14px;
-            max-height: 320px;
+            max-height: 360px;
             overflow: auto;
         }
 
@@ -222,20 +270,6 @@ if (!auth_can_manage($user)) {
             background: #f8fafc;
             border-radius: 0 12px 12px 0;
             padding: 10px 12px;
-        }
-
-        .bulk-box {
-            margin-top: 18px;
-            border: 1px solid var(--line);
-            border-radius: 16px;
-            background: #f8fafc;
-            padding: 14px;
-        }
-
-        .history-meta, .recent-meta {
-            font-size: 12px;
-            color: var(--muted);
-            line-height: 1.5;
         }
 
         .recent-item {
@@ -255,25 +289,38 @@ if (!auth_can_manage($user)) {
             margin-bottom: 4px;
         }
 
-        .section-head {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .section-head .count {
+        .meta {
             color: var(--muted);
             font-size: 12px;
+            line-height: 1.6;
         }
 
-        @media (max-width: 1160px) {
+        .bulk-box {
+            margin-top: 18px;
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            background: #f8fafc;
+            padding: 14px;
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 8px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .pill.ready { background: #dcfce7; color: #166534; }
+        .pill.issued { background: #dbeafe; color: #1d4ed8; }
+        .pill.warning { background: #fef3c7; color: #92400e; }
+        .pill.hidden { background: #e5e7eb; color: #374151; }
+
+        @media (max-width: 1180px) {
             .page {
                 grid-template-columns: 1fr;
             }
-        }
-
-        @media (max-width: 1024px) {
         }
 
         @media (max-width: 760px) {
@@ -287,14 +334,22 @@ if (!auth_can_manage($user)) {
     <div class="page">
         <section class="panel">
             <div class="row" style="justify-content:flex-end; margin-bottom:8px;">
-                <a class="btn-secondary" href="/risk_assessment/work_list.php">?묒뾽紐⑸줉</a>
+                <a class="button secondary" href="/risk_assessment/work_list.php">?묒뾽 紐⑸줉</a>
+                <a class="button secondary" href="/safety_gear/monthly_receipt_print.php">월별 일괄출력</a>
             </div>
-            <h1>?덉쟾蹂댄샇援?愿由?/h1>
-            <p class="lead">諛붿퐫???먮뒗 QR 肄붾뱶瑜??ㅼ틪???깅줉?섍퀬, 蹂댄샇援?醫낅쪟쨌援щℓ泥샕룰뎄留ㅺ?寃㈑룹?湲됱옄쨌?곹깭쨌?대젰???④퍡 愿由ы빀?덈떎. 援ъ“??RFID/NFC ?뺤옣??媛?ν븳 ?뺥깭濡??댁뼱 ?먯뿀?듬땲??</p>
+
+            <h1>蹂댄샇援?愿由?/h1>
+            <p class="lead">諛붿퐫???먮뒗 QR 湲곕컲?쇰줈 蹂댄샇援щ? ?깅줉?섍퀬 吏湲??대젰源뚯? 愿由ы빀?덈떎. 源⑥쭊 臾몄옄???놁씠 議고쉶, ??? ?쇨큵 ?깅줉??媛?ν븯?꾨줉 ?섏씠吏瑜??ㅼ떆 ?뺣━?덉뒿?덈떎.</p>
+
+            <div class="row" style="margin-top:14px;">
+                <a class="button ghost" href="/safety_gear/status.php">蹂댄샇援??꾪솴</a>
+                <a class="button secondary" href="/safety_gear/report.php">?대젰 議고쉶</a>
+                <a class="button secondary" href="/safety_gear/receipt_batch_print.php">?섎졊 ?뺤씤??異쒕젰</a>
+            </div>
 
             <div class="grid" style="margin-top:16px;">
                 <div class="field">
-                    <label for="template_select">?쒗뭹 ?쒗뵆由?/label>
+                    <label for="template_select">?쒗뵆由??좏깮</label>
                     <select id="template_select">
                         <option value="">?좏깮 ????/option>
                     </select>
@@ -302,11 +357,12 @@ if (!auth_can_manage($user)) {
                 <div class="field">
                     <label for="template_name">?쒗뵆由??대쫫</label>
                     <div class="row">
-                        <input id="template_name" class="grow" type="text" placeholder="?? K2 ?덉쟾紐?湲곕낯??>
+                        <input id="template_name" class="grow" type="text" placeholder="?? ?덉쟾紐?湲곕낯??>
                         <button id="saveTemplateButton" type="button" class="ghost">?쒗뵆由????/button>
                         <button id="deleteTemplateButton" type="button" class="secondary">?쒗뵆由???젣</button>
                     </div>
                 </div>
+
                 <div class="field">
                     <label for="identifier_type">?앸퀎 諛⑹떇</label>
                     <select id="identifier_type">
@@ -320,65 +376,96 @@ if (!auth_can_manage($user)) {
                 <div class="field">
                     <label for="identifier_value">?앸퀎媛?/label>
                     <div class="row">
-                        <input id="identifier_value" class="grow" type="text" placeholder="?ㅼ틪 ?먮뒗 吏곸젒 ?낅젰">
-                        <button id="generateInternalKeyButton" type="button" class="ghost">?대? ???앹꽦</button>
+                        <input id="identifier_value" class="grow" type="text" placeholder="?ㅼ틪?섍굅??吏곸젒 ?낅젰">
+                        <button id="generateInternalKeyButton" type="button" class="ghost">?대?踰덊샇 ?앹꽦</button>
                     </div>
                 </div>
+
                 <div class="field">
                     <label for="gear_type">蹂댄샇援?醫낅쪟</label>
-                    <input id="gear_type" type="text" placeholder="?? ?덉쟾紐? ?덉쟾踰⑦듃, 諛⑹쭊留덉뒪??>
+                    <select id="gear_type">
+                        <option value="">?좏깮?섏꽭??/option>
+                    </select>
+                    <div class="row">
+                        <input id="gear_type_new_name" class="grow" type="text" placeholder="??蹂댄샇援?醫낅쪟 ?낅젰">
+                        <button id="addGearTypeButton" type="button" class="ghost">醫낅쪟 異붽?</button>
+                        <button id="deleteGearTypeButton" type="button" class="secondary">醫낅쪟 ??젣</button>
+                    </div>
                 </div>
                 <div class="field">
                     <label for="item_name">?덈챸</label>
                     <input id="item_name" type="text" placeholder="?? ?덉쟾紐?>
                 </div>
+
                 <div class="field">
-                    <label for="model_name">紐⑤뜽</label>
-                    <input id="model_name" type="text" placeholder="?? K2 ?붿씠??>
+                    <label for="spec_name">洹쒓꺽</label>
+                    <input id="spec_name" type="text" list="spec_name_list" placeholder="?? ABS, 諛⑹닔?? 6硫댁껜">
+                    <datalist id="spec_name_list"></datalist>
                 </div>
+                <div class="field">
+                    <label for="model_name">紐⑤뜽紐?/label>
+                    <input id="model_name" type="text" placeholder="?? K2-01">
+                </div>
+
+                <div class="field">
+                    <label for="kcs_cert_no">KCS ?몄쬆踰덊샇</label>
+                    <input id="kcs_cert_no" type="text" placeholder="?? KCS-2026-000123">
+                </div>
+                <div class="field">
+                    <label for="manufacturer_name">?쒖“??/label>
+                    <input id="manufacturer_name" type="text" placeholder="?? K2, 3M">
+                </div>
+
                 <div class="field">
                     <label for="purchase_vendor">援щℓ泥?/label>
                     <input id="purchase_vendor" type="text" placeholder="?? ?덉쟾留덊듃">
                 </div>
                 <div class="field">
-                    <label for="purchase_price">援щℓ媛寃?/label>
-                    <input id="purchase_price" type="text" placeholder="?? 15000" inputmode="numeric">
+                    <label for="purchase_price">援щℓ湲덉븸</label>
+                    <input id="purchase_price" type="text" inputmode="numeric" placeholder="?? 15000">
                 </div>
+
                 <div class="field">
                     <label for="purchased_at">援щℓ??/label>
                     <input id="purchased_at" type="date">
                 </div>
-<div class="field">
+                <div class="field">
                     <label for="status">?곹깭</label>
                     <input id="status" type="text" readonly>
                 </div>
+
                 <div class="field">
-                    <label for="assigned_employee_id">吏湲됱옄</label>
+                    <label for="assigned_employee_id">吏湲???곸옄</label>
                     <select id="assigned_employee_id">
                         <option value="">?좏깮 ????/option>
                     </select>
                 </div>
                 <div class="field">
-                    <label for="assigned_team">吏湲됲?</label>
-                    <input id="assigned_team" type="text" placeholder="吏곸썝 ?좏깮 ???먮룞 ?낅젰">
+                    <label for="assigned_team_select">吏湲?遺??/label>
+                    <select id="assigned_team_select">
+                        <option value="">?좏깮 ????/option>
+                    </select>
                 </div>
+
+                <div class="field">
+                    <label for="assigned_employee_name">吏湲???곸옄 ?대쫫</label>
+                    <div class="row">
+                        <input id="assigned_employee_name" class="grow" type="text" placeholder="吏곸젒 ?낅젰 媛??>
+                        <button id="clearAssigneeButton" type="button" class="secondary">吏湲??뺣낫 鍮꾩?</button>
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="assigned_team">吏湲?遺?쒕챸</label>
+                    <input id="assigned_team" type="text" placeholder="吏곸젒 ?낅젰 媛??>
+                </div>
+
                 <div class="field">
                     <label for="assigned_at">吏湲됱씪</label>
-                    <select id="assigned_team_select" style="margin-top:6px;">
-                        <option value="">? ?좏깮</option>
-                    </select>
                     <input id="assigned_at" type="date">
-                </div>
-                <div class="field">
-                    <label for="assigned_employee_name">吏湲됱옄紐?/label>
-                    <div class="row">
-                        <input id="assigned_employee_name" class="grow" type="text" placeholder="吏곸썝 ?좏깮 ???먮룞 ?낅젰">
-                        <button id="clearAssigneeButton" type="button" class="secondary">吏湲됱옄 ??젣</button>
-                    </div>
                 </div>
                 <div class="field full">
                     <label for="notes">硫붾え</label>
-                    <textarea id="notes" placeholder="異붽? 硫붾え瑜??낅젰?섏꽭??"></textarea>
+                    <textarea id="notes" placeholder="異붽? 硫붾え瑜??낅젰?섏꽭??></textarea>
                 </div>
             </div>
 
@@ -386,11 +473,8 @@ if (!auth_can_manage($user)) {
                 <button id="saveButton" type="button">???/button>
                 <button id="newButton" type="button" class="secondary">?좉퇋 ?낅젰</button>
                 <button id="findButton" type="button" class="secondary">?앸퀎媛?議고쉶</button>
-                <button id="initialIssueButton" type="button" class="ghost">珥덇린 吏湲??깅줉</button>
+                <button id="initialIssueButton" type="button" class="ghost">吏湲???ぉ 吏湲?泥섎━</button>
                 <button id="deleteButton" type="button" class="danger">??젣</button>
-                <a href="/safety_gear/report.php" class="button secondary">?대젰??議고쉶/異쒕젰</a>
-                <a href="/safety_gear/receipt_batch_print.php" class="button secondary">媛쒖씤蹂??뺤씤???쇨큵異쒕젰</a>
-                <a href="/safety_gear/status.php" class="button secondary">?덉쟾蹂댄샇援??꾪솴</a>
                 <label class="hint" style="display:flex; align-items:center; gap:6px; margin-left:4px;">
                     <input id="continuousMode" type="checkbox">
                     ?곗냽 ?깅줉 紐⑤뱶
@@ -404,13 +488,13 @@ if (!auth_can_manage($user)) {
                         <button id="startScanButton" type="button">移대찓???ㅼ틪 ?쒖옉</button>
                         <button id="stopScanButton" type="button" class="secondary">移대찓??以묒?</button>
                     </div>
-                    <div class="hint" style="color:#cbd5e1; margin-top:8px;">BarcodeDetector瑜?吏?먰븯??釉뚮씪?곗??먯꽌??移대찓???ㅼ틪??媛?ν븯怨? 洹몃젃吏 ?딆쑝硫?吏곸젒 ?낅젰?쇰줈???깅줉?????덉뒿?덈떎.</div>
+                    <div class="hint" style="margin-top:8px; color:#cbd5e1;">吏??釉뚮씪?곗??먯꽌??諛붿퐫?쒖? QR??諛붾줈 ?쎌쓣 ???덉뒿?덈떎. 吏?먮릺吏 ?딆쑝硫??앸퀎媛믪쓣 吏곸젒 ?낅젰?대룄 ?⑸땲??</div>
                 </div>
             </div>
 
-            <div id="statusBox" class="status">以鍮꾨릺?덉뒿?덈떎. ?ㅼ틪?섍굅???앸퀎媛믪쓣 ?낅젰??二쇱꽭??</div>
+            <div id="statusBox" class="status-box">以鍮꾨릺?덉뒿?덈떎. ?앸퀎媛믪쓣 ?낅젰?섍굅??理쒓렐 ?깅줉 紐⑸줉?먯꽌 ??ぉ???좏깮?섏꽭??</div>
 
-            <h3 style="margin-top:22px;">異붿쟻 ?대젰</h3>
+            <h3 style="margin-top:22px;">?대젰 愿由?/h3>
             <div class="grid" style="margin-top:12px;">
                 <div class="field">
                     <label for="history_type">?대젰 醫낅쪟</label>
@@ -431,7 +515,7 @@ if (!auth_can_manage($user)) {
                 <div class="field full">
                     <label for="history_note">?대젰 ?댁슜</label>
                     <div class="row">
-                        <input id="history_note" class="grow" type="text" placeholder="?? ?띻만??吏湲? ?멸? ?먭? ?꾨즺">
+                        <input id="history_note" class="grow" type="text" placeholder="?? ?⑥긽??吏湲? ?몄쿃 ?꾨즺, ?먭린 泥섎━">
                         <button id="addHistoryButton" type="button" class="ghost">?대젰 異붽?</button>
                         <button id="cancelHistoryEditButton" type="button" class="secondary" hidden>?섏젙 痍⑥냼</button>
                     </div>
@@ -440,20 +524,20 @@ if (!auth_can_manage($user)) {
             <div id="historyList" class="history-list"></div>
 
             <div class="bulk-box">
-                <h3>?낃퀬 ?섎웾 ?쇨큵 ?깅줉</h3>
-                <p class="hint" style="margin:8px 0 12px;">?꾩옱 ?낅젰??蹂댄샇援?湲곕낯?뺣낫瑜?湲곗??쇰줈, ?섎웾留뚰겮 ?대?肄붾뱶瑜??먮룞 ?앹꽦????踰덉뿉 ?낃퀬 ?깅줉?⑸땲??</p>
+                <h3>?섎웾 湲곗? ?낃퀬 ?깅줉</h3>
+                <p class="hint" style="margin:8px 0 12px;">?꾩옱 ?낅젰??蹂댄샇援?湲곕낯 ?뺣낫濡??대? 愿由щ쾲?몃? ?먮룞 ?앹꽦???щ윭 嫄댁쓣 ??踰덉뿉 ?낃퀬 ?깅줉?⑸땲??</p>
                 <div class="field">
                     <label for="bulk_quantity">?낃퀬 ?섎웾</label>
                     <input id="bulk_quantity" type="number" min="1" step="1" value="1" placeholder="?? 10">
                 </div>
                 <div class="row" style="margin-top:10px;">
-                    <button id="bulkReceiveButton" type="button" class="ghost">?낃퀬 ?섎웾 ?쇨큵 ?깅줉</button>
+                    <button id="bulkReceiveButton" type="button" class="ghost">?섎웾 湲곗? ?낃퀬 ?깅줉</button>
                 </div>
             </div>
 
             <div class="bulk-box">
                 <h3>湲곗〈 吏湲됲뭹 ?쇨큵 ?깅줉</h3>
-                <p class="hint" style="margin:8px 0 12px;">?꾩옱 ?낅젰??蹂댄샇援?湲곕낯?뺣낫? 吏湲됱옄 ?뺣낫瑜?湲곗??쇰줈, ?앸퀎媛믩쭔 ?щ윭 以꾨줈 ?ｌ뼱 ??踰덉뿉 `吏湲됰맖` ?곹깭濡??깅줉?⑸땲??</p>
+                <p class="hint" style="margin:8px 0 12px;">?앸퀎媛믪쓣 以꾨쭏???낅젰?섎㈃ ?꾩옱 湲곕낯 ?뺣낫? 吏湲???곸옄瑜?湲곗??쇰줈 ?щ윭 嫄댁쓣 利됱떆 吏湲??곹깭濡??깅줉?⑸땲??</p>
                 <div class="field">
                     <label for="bulk_identifiers">?앸퀎媛?紐⑸줉</label>
                     <textarea id="bulk_identifiers" placeholder="??以꾩뿉 ?섎굹???낅젰&#10;BARCODE-001&#10;BARCODE-002&#10;BARCODE-003"></textarea>
@@ -470,22 +554,23 @@ if (!auth_can_manage($user)) {
                 <h2>?좏깮 ??ぉ</h2>
                 <div id="currentItemBadge" class="badge">?좉퇋 ?깅줉 紐⑤뱶</div>
             </div>
+
             <div class="qr-box" style="margin-top:14px;">
                 <img id="qrImage" alt="QR 肄붾뱶" hidden>
-                <div id="qrEmpty" class="hint">?앸퀎媛믪씠 ?덉쑝硫?QR 誘몃━蹂닿린媛 ?쒖떆?⑸땲??</div>
+                <div id="qrEmpty" class="hint">?앸퀎媛믪쓣 ?낅젰?섎㈃ QR 肄붾뱶媛 ?ш린???쒖떆?⑸땲??</div>
             </div>
 
             <div class="section-head" style="margin-top:22px;">
-                <h3>?깅줉 紐⑸줉</h3>
+                <h3>理쒓렐 ?깅줉 紐⑸줉</h3>
                 <span id="recentCount" class="count"></span>
             </div>
             <div class="row" style="margin-top:10px;">
-                <input id="searchInput" class="grow" type="text" placeholder="?앸퀎媛? 蹂댄샇援? 援щℓ泥? 吏湲됱옄 寃??>
+                <input id="searchInput" class="grow" type="text" placeholder="?앸퀎媛? 蹂댄샇援?醫낅쪟, 援щℓ泥? 吏湲???곸옄 寃??>
                 <button id="searchButton" type="button" class="secondary">寃??/button>
                 <button id="searchResetButton" type="button" class="secondary">珥덇린??/button>
                 <button id="exportButton" type="button" class="ghost">CSV ?ㅼ슫濡쒕뱶</button>
             </div>
-            <div class="hint" style="margin-top:8px;">理쒓렐 ?섏젙???쒖꽌濡?蹂댁엯?덈떎. ??ぉ???꾨Ⅴ硫??곸꽭媛 ?쇱そ??梨꾩썙吏묐땲??</div>
+            <div class="hint" style="margin-top:8px;">紐⑸줉 ??ぉ???꾨Ⅴ硫?諛붾줈 ?섏젙 紐⑤뱶濡?遺덈윭?듬땲??</div>
             <div id="recentList" class="recent-list"></div>
         </aside>
     </div>
@@ -495,154 +580,6 @@ if (!auth_can_manage($user)) {
         const exportEndpoint = 'export.php';
         const qrEndpoint = 'qr.php';
 
-        function ensureGearTypeField() {
-            const original = document.getElementById('gear_type');
-            if (!original) {
-                return null;
-            }
-            if (original.tagName === 'SELECT') {
-                return original;
-            }
-
-            const select = document.createElement('select');
-            select.id = 'gear_type';
-            select.innerHTML = '<option value="">蹂댄샇援?醫낅쪟 ?좏깮</option>';
-
-            if (original.value) {
-                const option = document.createElement('option');
-                option.value = original.value;
-                option.textContent = original.value;
-                select.appendChild(option);
-                select.value = original.value;
-            }
-
-            original.parentNode.replaceChild(select, original);
-
-            const field = select.closest('.field');
-            if (field && !document.getElementById('gearTypeTools')) {
-                const tools = document.createElement('div');
-                tools.id = 'gearTypeTools';
-                tools.className = 'row';
-                tools.style.marginTop = '6px';
-                tools.innerHTML =
-                    '<input id="gear_type_new_name" class="grow" type="text" placeholder="??蹂댄샇援?醫낅쪟 ?낅젰">' +
-                    '<button id="addGearTypeButton" type="button" class="ghost">紐⑸줉 異붽?</button>' +
-                    '<button id="deleteGearTypeButton" type="button" class="secondary">?좏깮 ??젣</button>';
-                field.appendChild(tools);
-            }
-
-            return select;
-        }
-
-        ensureGearTypeField();
-
-        function ensureSpecField() {
-            let specInput = document.getElementById('spec_name');
-            if (specInput) {
-                specInput.setAttribute('list', 'spec_name_list');
-                if (!document.getElementById('spec_name_list')) {
-                    const existingList = document.createElement('datalist');
-                    existingList.id = 'spec_name_list';
-                    specInput.parentNode.appendChild(existingList);
-                }
-                return specInput;
-            }
-
-            const modelField = document.getElementById('model_name') ? document.getElementById('model_name').closest('.field') : null;
-            if (!modelField || !modelField.parentNode) {
-                return null;
-            }
-
-            const specField = document.createElement('div');
-            specField.className = 'field';
-
-            const specLabel = document.createElement('label');
-            specLabel.setAttribute('for', 'spec_name');
-            specLabel.textContent = '洹쒓꺽';
-
-            specInput = document.createElement('input');
-            specInput.id = 'spec_name';
-            specInput.type = 'text';
-            specInput.setAttribute('list', 'spec_name_list');
-            specInput.placeholder = '?? ABS, 6?몄튂, ?꾩껜??;
-
-            const specList = document.createElement('datalist');
-            specList.id = 'spec_name_list';
-
-            specField.appendChild(specLabel);
-            specField.appendChild(specInput);
-            specField.appendChild(specList);
-            modelField.parentNode.insertBefore(specField, modelField);
-
-            return specInput;
-        }
-
-        ensureSpecField();
-
-        function ensureKcsField() {
-            let kcsInput = document.getElementById('kcs_cert_no');
-            if (kcsInput) {
-                return kcsInput;
-            }
-
-            const purchaseVendorField = document.getElementById('purchase_vendor') ? document.getElementById('purchase_vendor').closest('.field') : null;
-            if (!purchaseVendorField || !purchaseVendorField.parentNode) {
-                return null;
-            }
-
-            const kcsField = document.createElement('div');
-            kcsField.className = 'field';
-
-            const kcsLabel = document.createElement('label');
-            kcsLabel.setAttribute('for', 'kcs_cert_no');
-            kcsLabel.textContent = 'KCS ?덉쟾?몄쬆踰덊샇';
-
-            kcsInput = document.createElement('input');
-            kcsInput.id = 'kcs_cert_no';
-            kcsInput.type = 'text';
-            kcsInput.placeholder = '?? KCS-2026-000123';
-
-            kcsField.appendChild(kcsLabel);
-            kcsField.appendChild(kcsInput);
-            purchaseVendorField.parentNode.insertBefore(kcsField, purchaseVendorField);
-
-            return kcsInput;
-        }
-
-        ensureKcsField();
-
-        function ensureManufacturerField() {
-            let manufacturerInput = document.getElementById('manufacturer_name');
-            if (manufacturerInput) {
-                return manufacturerInput;
-            }
-
-            const purchaseVendorField = document.getElementById('purchase_vendor') ? document.getElementById('purchase_vendor').closest('.field') : null;
-            if (!purchaseVendorField || !purchaseVendorField.parentNode) {
-                return null;
-            }
-
-            const manufacturerField = document.createElement('div');
-            manufacturerField.className = 'field';
-
-            const manufacturerLabel = document.createElement('label');
-            manufacturerLabel.setAttribute('for', 'manufacturer_name');
-            manufacturerLabel.textContent = '?쒖“??;
-
-            manufacturerInput = document.createElement('input');
-            manufacturerInput.id = 'manufacturer_name';
-            manufacturerInput.type = 'text';
-            manufacturerInput.placeholder = '?? K2, 3M, ?좏븳?대쾶由?;
-
-            manufacturerField.appendChild(manufacturerLabel);
-            manufacturerField.appendChild(manufacturerInput);
-            purchaseVendorField.parentNode.insertBefore(manufacturerField, purchaseVendorField);
-
-            return manufacturerInput;
-        }
-
-        ensureManufacturerField();
-
         const state = {
             items: [],
             employees: [],
@@ -651,9 +588,9 @@ if (!auth_can_manage($user)) {
             currentItemId: '',
             currentTemplateId: '',
             currentHistoryId: 0,
+            searchQuery: '',
             stream: null,
-            scanTimer: null,
-            searchQuery: ''
+            scanTimer: null
         };
 
         const fields = {
@@ -663,10 +600,9 @@ if (!auth_can_manage($user)) {
             identifierValue: document.getElementById('identifier_value'),
             gearType: document.getElementById('gear_type'),
             gearTypeNewName: document.getElementById('gear_type_new_name'),
-            addGearTypeButton: document.getElementById('addGearTypeButton'),
-            deleteGearTypeButton: document.getElementById('deleteGearTypeButton'),
             itemName: document.getElementById('item_name'),
             specName: document.getElementById('spec_name'),
+            specNameList: document.getElementById('spec_name_list'),
             modelName: document.getElementById('model_name'),
             kcsCertNo: document.getElementById('kcs_cert_no'),
             manufacturerName: document.getElementById('manufacturer_name'),
@@ -676,7 +612,6 @@ if (!auth_can_manage($user)) {
             status: document.getElementById('status'),
             assignedEmployeeId: document.getElementById('assigned_employee_id'),
             assignedEmployeeName: document.getElementById('assigned_employee_name'),
-            clearAssigneeButton: document.getElementById('clearAssigneeButton'),
             assignedTeam: document.getElementById('assigned_team'),
             assignedTeamSelect: document.getElementById('assigned_team_select'),
             assignedAt: document.getElementById('assigned_at'),
@@ -693,41 +628,12 @@ if (!auth_can_manage($user)) {
             currentItemBadge: document.getElementById('currentItemBadge'),
             qrImage: document.getElementById('qrImage'),
             qrEmpty: document.getElementById('qrEmpty'),
-            scannerVideo: document.getElementById('scannerVideo'),
             searchInput: document.getElementById('searchInput'),
-            continuousMode: document.getElementById('continuousMode'),
             bulkIdentifiers: document.getElementById('bulk_identifiers'),
-            bulkQuantity: document.getElementById('bulk_quantity')
+            bulkQuantity: document.getElementById('bulk_quantity'),
+            continuousMode: document.getElementById('continuousMode'),
+            scannerVideo: document.getElementById('scannerVideo')
         };
-
-        function setStatus(message, isError) {
-            fields.statusBox.textContent = message;
-            fields.statusBox.style.color = isError ? '#991b1b' : '#334155';
-            fields.statusBox.style.background = isError ? '#fee2e2' : '#f8fafc';
-        }
-
-        async function apiRequest(params, method) {
-            const requestMethod = method || 'GET';
-            let url = apiEndpoint;
-            const options = {
-                method: requestMethod,
-                headers: { 'Accept': 'application/json' }
-            };
-
-            if (requestMethod === 'GET') {
-                url += '?' + new URLSearchParams(params || {}).toString();
-            } else {
-                options.headers['Content-Type'] = 'application/x-www-form-urlencoded; charset=UTF-8';
-                options.body = new URLSearchParams(params || {}).toString();
-            }
-
-            const response = await fetch(url, options);
-            const payload = await response.json();
-            if (!response.ok || !payload || payload.ok !== true) {
-                throw new Error(payload && payload.message ? payload.message : '?붿껌 泥섎━ 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.');
-            }
-            return payload;
-        }
 
         function escapeHtml(value) {
             return String(value || '')
@@ -738,210 +644,275 @@ if (!auth_can_manage($user)) {
                 .replace(/'/g, '&#039;');
         }
 
-        function formatDateOnly(value) {
-            const raw = String(value || '').trim();
-            if (!raw) {
+        function formatNumberWithComma(value) {
+            const digits = String(value || '').replace(/[^\d]/g, '');
+            if (!digits) {
                 return '';
             }
-            return raw.slice(0, 10);
+            return Number(digits).toLocaleString('ko-KR');
+        }
+
+        function removeCommas(value) {
+            return String(value || '').replace(/[^\d.]/g, '');
         }
 
         function getTodayDate() {
             return new Date().toISOString().slice(0, 10);
         }
 
-        function formatNumberWithComma(num) {
-            const str = String(num || '').replace(/,/g, '').trim();
-            if (!str || isNaN(str)) {
+        function formatDateOnly(value) {
+            const text = String(value || '').trim();
+            if (!text) {
                 return '';
             }
-            return Math.floor(Number(str)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+            return text.slice(0, 10);
         }
 
-        function removeCommas(str) {
-            return String(str || '').replace(/,/g, '').trim();
+        function setStatus(message, isError) {
+            fields.statusBox.textContent = String(message || '');
+            fields.statusBox.style.background = isError ? '#fee2e2' : '#f8fafc';
+            fields.statusBox.style.color = isError ? '#991b1b' : '#334155';
         }
 
-        function updateQrPreview() {
-            const value = String(fields.identifierValue.value || '').trim();
-            if (!value) {
-                fields.qrImage.hidden = true;
-                fields.qrEmpty.hidden = false;
-                return;
-            }
-            fields.qrImage.src = qrEndpoint + '?data=' + encodeURIComponent(value);
-            fields.qrImage.hidden = false;
-            fields.qrEmpty.hidden = true;
-        }
+        async function apiRequest(params, method = 'GET') {
+            const requestMethod = String(method || 'GET').toUpperCase();
+            let url = apiEndpoint;
+            const options = { method: requestMethod };
 
-        function renderEmployees() {
-            const select = fields.assignedEmployeeId;
-            select.innerHTML = '<option value="">?좏깮 ????/option>';
-            state.employees.forEach(function (employee) {
-                const option = document.createElement('option');
-                option.value = employee.id;
-                option.textContent = '[' + (employee.team || '-') + '] ' + employee.name + (employee.position ? ' / ' + employee.position : '');
-                option.dataset.name = employee.name || '';
-                option.dataset.team = employee.team || '';
-                select.appendChild(option);
-            });
-        }
-
-        function ensureAssignedTeamSelectPlacement() {
-            if (!fields.assignedTeamSelect || !fields.assignedTeam || !fields.assignedTeam.parentNode) {
-                return;
-            }
-            if (fields.assignedTeam.nextElementSibling !== fields.assignedTeamSelect) {
-                fields.assignedTeam.parentNode.insertBefore(fields.assignedTeamSelect, fields.assignedTeam.nextSibling);
-            }
-        }
-
-        function renderAssignedTeams() {
-            if (!fields.assignedTeamSelect) {
-                return;
+            if (requestMethod === 'GET') {
+                const searchParams = new URLSearchParams();
+                Object.keys(params || {}).forEach(function (key) {
+                    if (params[key] !== undefined && params[key] !== null) {
+                        searchParams.set(key, String(params[key]));
+                    }
+                });
+                url += '?' + searchParams.toString();
+            } else {
+                const formData = new URLSearchParams();
+                Object.keys(params || {}).forEach(function (key) {
+                    if (params[key] !== undefined && params[key] !== null) {
+                        formData.set(key, String(params[key]));
+                    }
+                });
+                options.headers = {
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+                };
+                options.body = formData.toString();
             }
 
-            const currentValue = String(fields.assignedTeam.value || '').trim();
-            const teams = [];
-            const seen = new Set();
+            const response = await fetch(url, options);
+            let payload = null;
+            try {
+                payload = await response.json();
+            } catch (error) {
+                throw new Error('?쒕쾭 ?묐떟???댁꽍?섏? 紐삵뻽?듬땲??');
+            }
 
-            state.employees.forEach(function (employee) {
-                const teamName = String(employee.team || '').trim();
-                if (!teamName || seen.has(teamName)) {
-                    return;
-                }
-                seen.add(teamName);
-                teams.push(teamName);
-            });
+            if (!response.ok || !payload || payload.ok === false) {
+                throw new Error((payload && payload.message) ? payload.message : '?붿껌 泥섎━ 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.');
+            }
 
-            teams.sort(function (a, b) {
-                return a.localeCompare(b, 'ko');
-            });
-
-            fields.assignedTeamSelect.innerHTML = '<option value="">? ?좏깮</option>';
-            teams.forEach(function (teamName) {
-                const option = document.createElement('option');
-                option.value = teamName;
-                option.textContent = teamName;
-                fields.assignedTeamSelect.appendChild(option);
-            });
-
-            fields.assignedTeamSelect.value = seen.has(currentValue) ? currentValue : '';
+            return payload;
         }
 
         function renderTemplates() {
+            const currentValue = String(state.currentTemplateId || '');
             fields.templateSelect.innerHTML = '<option value="">?좏깮 ????/option>';
+
             state.templates.forEach(function (template) {
                 const option = document.createElement('option');
-                option.value = template.id;
-                option.textContent = template.template_name + ' / ' + template.gear_type;
+                option.value = String(template.id || '');
+                option.textContent = template.template_name || '(?대쫫 ?놁쓬)';
                 fields.templateSelect.appendChild(option);
             });
-            if (state.currentTemplateId) {
-                fields.templateSelect.value = state.currentTemplateId;
+
+            fields.templateSelect.value = currentValue;
+        }
+
+        function buildTeamOptions() {
+            const teams = Array.from(new Set(state.employees
+                .map(function (employee) { return String(employee.team || '').trim(); })
+                .filter(Boolean)))
+                .sort(function (a, b) { return a.localeCompare(b, 'ko'); });
+
+            const currentValue = String(fields.assignedTeam.value || '').trim();
+            fields.assignedTeamSelect.innerHTML = '<option value="">?좏깮 ????/option>';
+
+            teams.forEach(function (team) {
+                const option = document.createElement('option');
+                option.value = team;
+                option.textContent = team;
+                fields.assignedTeamSelect.appendChild(option);
+            });
+
+            if (currentValue) {
+                fields.assignedTeamSelect.value = currentValue;
             }
         }
 
+        function renderEmployees() {
+            const currentEmployeeId = String(fields.assignedEmployeeId.value || '');
+            fields.assignedEmployeeId.innerHTML = '<option value="">?좏깮 ????/option>';
+
+            state.employees.forEach(function (employee) {
+                const option = document.createElement('option');
+                option.value = String(employee.id || '');
+                option.textContent = [employee.name || '', employee.team ? '(' + employee.team + ')' : ''].join(' ').trim();
+                option.dataset.name = employee.name || '';
+                option.dataset.team = employee.team || '';
+                fields.assignedEmployeeId.appendChild(option);
+            });
+
+            fields.assignedEmployeeId.value = currentEmployeeId;
+            buildTeamOptions();
+        }
+
         function renderGearTypes() {
-            const select = fields.gearType;
-            const currentValue = String(select.value || '').trim();
-            select.innerHTML = '<option value="">蹂댄샇援?醫낅쪟 ?좏깮</option>';
+            const currentValue = String(fields.gearType.value || '');
+            fields.gearType.innerHTML = '<option value="">?좏깮?섏꽭??/option>';
 
             state.gearTypes.forEach(function (type) {
                 const option = document.createElement('option');
                 option.value = type.name || '';
                 option.textContent = type.name || '';
                 option.dataset.id = type.id || '';
-                option.dataset.inUse = type.in_use ? '1' : '0';
-                select.appendChild(option);
+                fields.gearType.appendChild(option);
             });
 
             if (currentValue) {
-                const hasOption = state.gearTypes.some(function (type) {
-                    return String(type.name || '') === currentValue;
-                });
-                if (!hasOption) {
-                    const option = document.createElement('option');
-                    option.value = currentValue;
-                    option.textContent = currentValue;
-                    option.dataset.id = '';
-                    option.dataset.inUse = '1';
-                    select.appendChild(option);
-                }
-                select.value = currentValue;
+                fields.gearType.value = currentValue;
             }
         }
 
-        function renderSpecOptions() {
-            const dataList = document.getElementById('spec_name_list');
-            if (!dataList) {
-                return;
-            }
-
-            const currentValue = String(fields.specName.value || '').trim();
+        function refreshSpecSuggestions() {
             const candidates = new Set();
 
             state.items.forEach(function (item) {
-                const specName = String(item.spec_name || '').trim();
-                const modelName = String(item.model_name || '').trim();
-                if (specName) {
-                    candidates.add(specName);
-                }
-                if (modelName) {
-                    candidates.add(modelName);
+                const spec = String(item.spec_name || '').trim();
+                if (spec) {
+                    candidates.add(spec);
                 }
             });
 
             state.templates.forEach(function (template) {
-                const specName = String(template.spec_name || '').trim();
-                const modelName = String(template.model_name || '').trim();
-                if (specName) {
-                    candidates.add(specName);
-                }
-                if (modelName) {
-                    candidates.add(modelName);
+                const spec = String(template.spec_name || '').trim();
+                if (spec) {
+                    candidates.add(spec);
                 }
             });
 
-            const sorted = Array.from(candidates).sort(function (a, b) {
+            fields.specNameList.innerHTML = '';
+            Array.from(candidates).sort(function (a, b) {
                 return a.localeCompare(b, 'ko');
-            });
-
-            dataList.innerHTML = '';
-            sorted.forEach(function (value) {
+            }).forEach(function (spec) {
                 const option = document.createElement('option');
-                option.value = value;
-                dataList.appendChild(option);
+                option.value = spec;
+                fields.specNameList.appendChild(option);
             });
+        }
 
-            if (currentValue) {
-                fields.specName.value = currentValue;
+        function statusPillClass(status) {
+            const value = String(status || '').trim();
+            if (value === '?ъ슜 媛??) {
+                return 'ready';
             }
+            if (value === '吏湲됰맖') {
+                return 'issued';
+            }
+            if (value === '?먭린' || value === '諛섎궔') {
+                return 'hidden';
+            }
+            return 'warning';
         }
 
         function renderHistory(history) {
             fields.historyList.innerHTML = '';
-            const items = Array.isArray(history) ? history : [];
-            if (!items.length) {
-                fields.historyList.innerHTML = '<div class="history-item"><div class="history-meta">?대젰???놁뒿?덈떎.</div><div>??????대젰??異붽??????덉뒿?덈떎.</div></div>';
+            const entries = Array.isArray(history) ? history.slice() : [];
+
+            if (!entries.length) {
+                fields.historyList.innerHTML = '<div class="history-item"><div class="recent-title">?깅줉???대젰???놁뒿?덈떎.</div><div class="meta">??ぉ????ν븯嫄곕굹 ?대젰??異붽???二쇱꽭??</div></div>';
                 return;
             }
 
-            items.forEach(function (entry) {
-                const element = document.createElement('div');
-                element.className = 'history-item';
-                element.innerHTML =
-                    '<div class="history-meta">' + escapeHtml(entry.timestamp || '') + ' / ' + escapeHtml(entry.type || '') + '</div>' +
-                    '<div>' + escapeHtml(entry.note || '') + '</div>' +
-                    '<div class="row" style="margin-top:8px;"><button type="button" class="secondary history-edit-button">?섏젙</button></div>';
-                const editButton = element.querySelector('.history-edit-button');
-                if (editButton) {
-                    editButton.addEventListener('click', function () {
-                        startHistoryEdit(entry);
-                    });
-                }
-                fields.historyList.appendChild(element);
+            entries.forEach(function (entry) {
+                const item = document.createElement('div');
+                item.className = 'history-item';
+                item.innerHTML =
+                    '<div class="row" style="justify-content:space-between; align-items:flex-start;">' +
+                        '<div>' +
+                            '<div class="recent-title">' + escapeHtml(entry.type || '-') + '</div>' +
+                            '<div class="meta">' + escapeHtml(formatDateOnly(entry.timestamp || '') || '-') + '</div>' +
+                        '</div>' +
+                        '<button type="button" class="secondary" data-history-edit="' + escapeHtml(String(entry.history_id || 0)) + '">?섏젙</button>' +
+                    '</div>' +
+                    '<div class="meta" style="margin-top:8px;">' +
+                        escapeHtml(entry.note || '-') +
+                        ((entry.employee_name || entry.employee_team) ? ('\n?대떦: ' + escapeHtml([entry.employee_name || '', entry.employee_team || ''].filter(Boolean).join(' / '))) : '') +
+                    '</div>';
+                fields.historyList.appendChild(item);
             });
+
+            fields.historyList.querySelectorAll('[data-history-edit]').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    const historyId = Number(this.getAttribute('data-history-edit') || '0');
+                    const target = entries.find(function (entry) {
+                        return Number(entry.history_id || 0) === historyId;
+                    }) || null;
+                    if (target) {
+                        startHistoryEdit(target);
+                    }
+                });
+            });
+        }
+
+        function renderRecentList() {
+            const list = state.searchQuery
+                ? state.items.slice()
+                : state.items.slice(0, 100);
+
+            fields.recentList.innerHTML = '';
+            fields.recentCount.textContent = '珥?' + list.length + '嫄?;
+
+            if (!list.length) {
+                fields.recentList.innerHTML = '<div class="recent-item"><div class="recent-title">?쒖떆????ぉ???놁뒿?덈떎.</div><div class="meta">寃??議곌굔??諛붽씀嫄곕굹 ????ぉ???깅줉?섏꽭??</div></div>';
+                return;
+            }
+
+            list.forEach(function (item) {
+                const node = document.createElement('div');
+                node.className = 'recent-item';
+                node.innerHTML =
+                    '<div class="row" style="justify-content:space-between; align-items:flex-start;">' +
+                        '<div class="recent-title">' + escapeHtml(item.product_name || item.item_name || item.gear_type || '誘몃텇瑜?) + '</div>' +
+                        '<span class="pill ' + statusPillClass(item.status) + '">' + escapeHtml(item.status || '-') + '</span>' +
+                    '</div>' +
+                    '<div class="meta">' +
+                        '?앸퀎媛? ' + escapeHtml(item.identifier_value || '-') + '<br>' +
+                        '醫낅쪟: ' + escapeHtml(item.gear_type || '-') + '<br>' +
+                        '援щℓ泥? ' + escapeHtml(item.purchase_vendor || '-') + '<br>' +
+                        '吏湲???곸옄: ' + escapeHtml(item.assigned_employee_name || '-') + '<br>' +
+                        '理쒖쥌 ?섏젙: ' + escapeHtml(item.updated_at || '-') +
+                    '</div>';
+                node.addEventListener('click', function () {
+                    fillForm(item);
+                    setStatus('??ぉ??遺덈윭?붿뒿?덈떎.', false);
+                });
+                fields.recentList.appendChild(node);
+            });
+        }
+
+        function updateQrPreview() {
+            const value = String(fields.identifierValue.value || '').trim();
+            if (!value) {
+                fields.qrImage.hidden = true;
+                fields.qrImage.removeAttribute('src');
+                fields.qrEmpty.hidden = false;
+                return;
+            }
+
+            fields.qrImage.src = qrEndpoint + '?data=' + encodeURIComponent(value);
+            fields.qrImage.hidden = false;
+            fields.qrEmpty.hidden = true;
         }
 
         function resetHistoryForm() {
@@ -953,25 +924,25 @@ if (!auth_can_manage($user)) {
             fields.cancelHistoryEditButton.hidden = true;
         }
 
-        function startHistoryEdit(entry) {
-            if (!entry || !entry.history_id) {
-                return;
-            }
-
-            state.currentHistoryId = Number(entry.history_id) || 0;
-            fields.historyType.value = entry.type || '?낃퀬';
-            fields.historyAt.value = formatDateOnly(entry.timestamp || '') || getTodayDate();
-            fields.historyNote.value = entry.note || '';
-            fields.addHistoryButton.textContent = '?대젰 ?섏젙 ???;
-            fields.cancelHistoryEditButton.hidden = false;
-            fields.historyNote.focus();
+        function clearAssigneeSelection() {
+            fields.assignedEmployeeId.value = '';
+            fields.assignedEmployeeName.value = '';
+            fields.assignedTeam.value = '';
+            fields.assignedTeamSelect.value = '';
+            fields.assignedAt.value = '';
         }
 
         function clearForm() {
             state.currentItemId = '';
+            state.currentHistoryId = 0;
+            state.currentTemplateId = '';
+
+            fields.templateSelect.value = '';
+            fields.templateName.value = '';
             fields.identifierType.value = 'barcode';
             fields.identifierValue.value = '';
             fields.gearType.value = '';
+            fields.gearTypeNewName.value = '';
             fields.itemName.value = '';
             fields.specName.value = '';
             fields.modelName.value = '';
@@ -981,40 +952,31 @@ if (!auth_can_manage($user)) {
             fields.purchasePrice.value = '';
             fields.purchasedAt.value = '';
             fields.status.value = '?ъ슜 媛??;
-            fields.assignedEmployeeId.value = '';
-            fields.assignedEmployeeName.value = '';
-            fields.assignedTeam.value = '';
-            if (fields.assignedTeamSelect) {
-                fields.assignedTeamSelect.value = '';
-            }
-            fields.assignedAt.value = '';
+            clearAssigneeSelection();
             fields.notes.value = '';
+
             resetHistoryForm();
-            fields.currentItemBadge.textContent = '?좉퇋 ?깅줉 紐⑤뱶';
             renderHistory([]);
             updateQrPreview();
+            fields.currentItemBadge.textContent = '?좉퇋 ?깅줉 紐⑤뱶';
         }
 
         function clearForContinuousRegistration() {
             state.currentItemId = '';
             fields.identifierValue.value = '';
-            fields.assignedEmployeeId.value = '';
-            fields.assignedEmployeeName.value = '';
-            fields.assignedTeam.value = '';
-            if (fields.assignedTeamSelect) {
-                fields.assignedTeamSelect.value = '';
-            }
-            fields.assignedAt.value = '';
+            fields.status.value = '?ъ슜 媛??;
+            clearAssigneeSelection();
             resetHistoryForm();
-            fields.currentItemBadge.textContent = '?곗냽 ?깅줉 ?湲?;
             renderHistory([]);
             updateQrPreview();
+            fields.currentItemBadge.textContent = '?곗냽 ?깅줉 ?湲?;
             fields.identifierValue.focus();
         }
 
         function fillForm(item) {
             const entry = item || {};
-            state.currentItemId = entry.id || '';
+            state.currentItemId = String(entry.id || '');
+
             fields.identifierType.value = entry.identifier_type || 'barcode';
             fields.identifierValue.value = entry.identifier_value || '';
             fields.gearType.value = entry.gear_type || '';
@@ -1025,30 +987,31 @@ if (!auth_can_manage($user)) {
             fields.manufacturerName.value = entry.manufacturer_name || '';
             fields.purchaseVendor.value = entry.purchase_vendor || '';
             fields.purchasePrice.value = formatNumberWithComma(entry.purchase_price || '');
-            fields.purchasedAt.value = entry.purchased_at || '';
+            fields.purchasedAt.value = formatDateOnly(entry.purchased_at || '');
             fields.status.value = entry.status || '?ъ슜 媛??;
             fields.assignedEmployeeId.value = entry.assigned_employee_id || '';
             fields.assignedEmployeeName.value = entry.assigned_employee_name || '';
             fields.assignedTeam.value = entry.assigned_team || '';
-            if (fields.assignedTeamSelect) {
-                fields.assignedTeamSelect.value = entry.assigned_team || '';
-            }
+            fields.assignedTeamSelect.value = entry.assigned_team || '';
             fields.assignedAt.value = formatDateOnly(entry.assigned_at || '');
             fields.notes.value = entry.notes || '';
+
             resetHistoryForm();
-            fields.currentItemBadge.textContent = state.currentItemId ? '?깅줉 ??ぉ ?섏젙 紐⑤뱶' : '?좉퇋 ?깅줉 紐⑤뱶';
             renderHistory(entry.history || []);
             updateQrPreview();
+            fields.currentItemBadge.textContent = '?깅줉 ??ぉ ?섏젙 紐⑤뱶';
         }
 
         function applyTemplate(template) {
             const entry = template || null;
-            state.currentTemplateId = entry ? (entry.id || '') : '';
+            state.currentTemplateId = entry ? String(entry.id || '') : '';
             fields.templateSelect.value = state.currentTemplateId;
             fields.templateName.value = entry ? (entry.template_name || '') : '';
+
             if (!entry) {
                 return;
             }
+
             fields.gearType.value = entry.gear_type || '';
             fields.itemName.value = entry.item_name || '';
             fields.specName.value = entry.spec_name || '';
@@ -1061,53 +1024,20 @@ if (!auth_can_manage($user)) {
             fields.notes.value = entry.notes || '';
         }
 
-        function renderRecentList() {
-            const visibleItems = state.searchQuery ? state.items.slice() : state.items.filter(function (item) {
-                return String(item.status || '').trim() !== '吏湲됰맖';
-            });
-            fields.recentList.innerHTML = '';
-            fields.recentCount.textContent = '珥?' + visibleItems.length + '嫄?;
-            fields.recentCount.textContent = '珥?' + state.items.length + '嫄?;
-
-            fields.recentCount.textContent = '珥?' + visibleItems.length + '嫄?;
-            if (!visibleItems.length) {
-                fields.recentList.innerHTML = '<div class="recent-item"><div class="recent-title">?깅줉??蹂댄샇援ш? ?놁뒿?덈떎.</div><div class="recent-meta">泥???ぉ???깅줉??二쇱꽭??</div></div>';
-                return;
-            }
-
-            visibleItems.forEach(function (item) {
-                const node = document.createElement('div');
-                node.className = 'recent-item';
-                node.innerHTML =
-                    '<div class="recent-title">' + escapeHtml(item.gear_type || '誘몃텇瑜?) + '</div>' +
-                    '<div class="recent-meta">' +
-                    '?앸퀎媛? ' + escapeHtml(item.identifier_value || '') + '<br>' +
-                    '援щℓ泥? ' + escapeHtml(item.purchase_vendor || '-') + '<br>' +
-                    '吏湲됱옄: ' + escapeHtml(item.assigned_employee_name || '-') + '<br>' +
-                    '?곹깭: ' + escapeHtml(item.status || '-') +
-                    '</div>';
-                node.querySelector('.recent-meta').insertAdjacentHTML('afterbegin', '援щℓ?? ' + escapeHtml(item.purchased_at || '-') + '<br>');
-                node.addEventListener('click', function () {
-                    fillForm(item);
-                    setStatus('??ぉ??遺덈윭?붿뒿?덈떎.', false);
-                });
-                fields.recentList.appendChild(node);
-            });
+        function startHistoryEdit(entry) {
+            state.currentHistoryId = Number(entry.history_id || 0);
+            fields.historyType.value = entry.type || '?낃퀬';
+            fields.historyAt.value = formatDateOnly(entry.timestamp || '') || getTodayDate();
+            fields.historyNote.value = entry.note || '';
+            fields.addHistoryButton.textContent = '?대젰 ?섏젙 ???;
+            fields.cancelHistoryEditButton.hidden = false;
+            fields.historyNote.focus();
         }
 
         async function loadEmployees() {
             const payload = await apiRequest({ action: 'employees' });
             state.employees = Array.isArray(payload.employees) ? payload.employees : [];
             renderEmployees();
-            ensureAssignedTeamSelectPlacement();
-            renderAssignedTeams();
-        }
-
-        async function loadTemplates() {
-            const payload = await apiRequest({ action: 'templates' });
-            state.templates = Array.isArray(payload.templates) ? payload.templates : [];
-            renderTemplates();
-            renderSpecOptions();
         }
 
         async function loadGearTypes() {
@@ -1116,21 +1046,83 @@ if (!auth_can_manage($user)) {
             renderGearTypes();
         }
 
+        async function loadTemplates() {
+            const payload = await apiRequest({ action: 'templates' });
+            state.templates = Array.isArray(payload.templates) ? payload.templates : [];
+            renderTemplates();
+            refreshSpecSuggestions();
+        }
+
         async function loadItems() {
-            const payload = await apiRequest({ action: 'list', q: state.searchQuery });
+            const payload = await apiRequest({
+                action: 'list',
+                q: state.searchQuery
+            });
             state.items = Array.isArray(payload.items) ? payload.items : [];
             renderRecentList();
-            renderSpecOptions();
+            refreshSpecSuggestions();
         }
 
-        async function loadItemById(itemId) {
-            const payload = await apiRequest({ action: 'get', id: itemId });
+        async function loadItemById(id) {
+            const payload = await apiRequest({
+                action: 'get',
+                id: id
+            });
             fillForm(payload.item || null);
-            setStatus('??ぉ??遺덈윭?붿뒿?덈떎.', false);
         }
 
-        function buildSaveParams() {
-            return {
+        async function findByIdentifier() {
+            const identifier = String(fields.identifierValue.value || '').trim();
+            if (!identifier) {
+                setStatus('癒쇱? ?앸퀎媛믪쓣 ?낅젰??二쇱꽭??', true);
+                return;
+            }
+
+            const payload = await apiRequest({
+                action: 'find',
+                identifier: identifier
+            });
+
+            if (!payload.found) {
+                state.currentItemId = '';
+                renderHistory([]);
+                fields.currentItemBadge.textContent = '?좉퇋 ?깅줉 紐⑤뱶';
+                updateQrPreview();
+                setStatus('?깅줉?섏? ?딆? ?앸퀎媛믪엯?덈떎. ????ぉ?쇰줈 ??ν븷 ???덉뒿?덈떎.', false);
+                return;
+            }
+
+            fillForm(payload.item || null);
+            setStatus('湲곗〈 ?깅줉 ??ぉ??李얠븯?듬땲??', false);
+        }
+
+        async function createInternalKey() {
+            const payload = await apiRequest({
+                action: 'create_internal_key',
+                purchased_at: fields.purchasedAt.value
+            });
+            fields.identifierType.value = payload.identifier_type || 'internal';
+            fields.identifierValue.value = payload.identifier_value || '';
+            updateQrPreview();
+            setStatus('?대? 愿由щ쾲?몃? ?앹꽦?덉뒿?덈떎.', false);
+        }
+
+        function syncAssigneeFromSelect() {
+            const selected = fields.assignedEmployeeId.options[fields.assignedEmployeeId.selectedIndex];
+            if (!selected || !fields.assignedEmployeeId.value) {
+                return;
+            }
+            fields.assignedEmployeeName.value = selected.dataset.name || '';
+            fields.assignedTeam.value = selected.dataset.team || '';
+            if (!fields.assignedAt.value) {
+                fields.assignedAt.value = getTodayDate();
+            }
+            buildTeamOptions();
+            fields.assignedTeamSelect.value = fields.assignedTeam.value;
+        }
+
+        async function saveCurrentItem() {
+            const payload = await apiRequest({
                 action: 'save_item',
                 id: state.currentItemId,
                 identifier_type: fields.identifierType.value,
@@ -1144,30 +1136,32 @@ if (!auth_can_manage($user)) {
                 purchase_vendor: fields.purchaseVendor.value.trim(),
                 purchase_price: removeCommas(fields.purchasePrice.value),
                 purchased_at: fields.purchasedAt.value,
+                status: fields.status.value.trim(),
                 assigned_employee_id: fields.assignedEmployeeId.value,
                 assigned_employee_name: fields.assignedEmployeeName.value.trim(),
                 assigned_team: fields.assignedTeam.value.trim(),
-                assigned_at: fields.assignedAt.value || '',
+                assigned_at: fields.assignedAt.value,
                 notes: fields.notes.value.trim()
-            };
-        }
+            }, 'POST');
 
-        async function saveCurrentItem() {
-            const payload = await apiRequest(buildSaveParams(), 'POST');
             state.items = Array.isArray(payload.items) ? payload.items : [];
             renderRecentList();
+            refreshSpecSuggestions();
+
+            if (payload.item) {
+                fillForm(payload.item);
+            }
+
             if (fields.continuousMode.checked) {
                 clearForContinuousRegistration();
-                setStatus('??λ릺?덉뒿?덈떎. ?ㅼ쓬 ?앸퀎媛믪쓣 諛붾줈 ?ㅼ틪?섍굅???낅젰??二쇱꽭??', false);
-                return;
             }
-            fillForm(payload.item || null);
-            setStatus(payload.message || '??λ릺?덉뒿?덈떎.', false);
+
+            setStatus('??ぉ????ν뻽?듬땲??', false);
         }
 
         async function runInitialIssue() {
             if (!state.currentItemId) {
-                setStatus('珥덇린 吏湲?泥섎━????ぉ??癒쇱? 遺덈윭? 二쇱꽭??', true);
+                setStatus('癒쇱? ??λ맂 ??ぉ???좏깮??二쇱꽭??', true);
                 return;
             }
 
@@ -1177,14 +1171,14 @@ if (!auth_can_manage($user)) {
                 assigned_employee_id: fields.assignedEmployeeId.value,
                 assigned_employee_name: fields.assignedEmployeeName.value.trim(),
                 assigned_team: fields.assignedTeam.value.trim(),
-                assigned_at: fields.assignedAt.value || '',
-                history_note: '?쒖뒪???꾩엯 ??吏湲??꾨즺???덈ぉ??珥덇린 ?깅줉'
+                assigned_at: fields.assignedAt.value || getTodayDate(),
+                history_note: fields.historyNote.value.trim()
             }, 'POST');
 
             state.items = Array.isArray(payload.items) ? payload.items : [];
-            fillForm(payload.item || null);
             renderRecentList();
-            setStatus(payload.message || '珥덇린 吏湲??깅줉???꾨즺?섏뿀?듬땲??', false);
+            fillForm(payload.item || null);
+            setStatus('吏湲?泥섎━瑜??꾨즺?덉뒿?덈떎.', false);
         }
 
         async function runBulkInitialIssue() {
@@ -1205,13 +1199,14 @@ if (!auth_can_manage($user)) {
                 assigned_employee_id: fields.assignedEmployeeId.value,
                 assigned_employee_name: fields.assignedEmployeeName.value.trim(),
                 assigned_team: fields.assignedTeam.value.trim(),
-                assigned_at: fields.assignedAt.value || ''
+                assigned_at: fields.assignedAt.value || getTodayDate()
             }, 'POST');
 
             state.items = Array.isArray(payload.items) ? payload.items : [];
             renderRecentList();
             fields.bulkIdentifiers.value = '';
-            setStatus(payload.message || '湲곗〈 吏湲됲뭹 ?쇨큵 ?깅줉???꾨즺?섏뿀?듬땲??', false);
+            refreshSpecSuggestions();
+            setStatus('湲곗〈 吏湲됲뭹 ?쇨큵 ?깅줉???꾨즺?덉뒿?덈떎.', false);
         }
 
         async function runBulkStockReceive() {
@@ -1232,78 +1227,41 @@ if (!auth_can_manage($user)) {
 
             state.items = Array.isArray(payload.items) ? payload.items : [];
             renderRecentList();
+            refreshSpecSuggestions();
             fields.bulkQuantity.value = '1';
             fields.identifierType.value = 'internal';
             fields.identifierValue.value = Array.isArray(payload.created_identifiers) && payload.created_identifiers.length
                 ? payload.created_identifiers[0]
                 : '';
             updateQrPreview();
-            setStatus(payload.message || '?낃퀬 ?섎웾 ?쇨큵 ?깅줉???꾨즺?섏뿀?듬땲??', false);
-        }
-
-        async function findByIdentifier() {
-            const identifier = fields.identifierValue.value.trim();
-            if (!identifier) {
-                setStatus('癒쇱? ?앸퀎媛믪쓣 ?낅젰??二쇱꽭??', true);
-                return;
-            }
-
-            const payload = await apiRequest({ action: 'find', identifier: identifier });
-            if (!payload.found) {
-                state.currentItemId = '';
-                fields.currentItemBadge.textContent = '?좉퇋 ?깅줉 紐⑤뱶';
-                renderHistory([]);
-                updateQrPreview();
-                setStatus('?깅줉?섏? ?딆? ?앸퀎媛믪엯?덈떎. ?좉퇋 ?뺣낫濡???ν븷 ???덉뒿?덈떎.', false);
-                return;
-            }
-
-            fillForm(payload.item || null);
-            setStatus('湲곗〈 ?깅줉 ??ぉ??李얠븯?듬땲??', false);
+            setStatus('?섎웾 湲곗? ?낃퀬 ?깅줉???꾨즺?덉뒿?덈떎.', false);
         }
 
         async function addHistory() {
             if (!state.currentItemId) {
-                setStatus('癒쇱? 蹂댄샇援щ? ??ν빐 二쇱꽭??', true);
+                setStatus('癒쇱? ??λ맂 ??ぉ???좏깮??二쇱꽭??', true);
                 return;
             }
 
-            const isEditingHistory = state.currentHistoryId > 0;
+            const action = state.currentHistoryId > 0 ? 'update_history' : 'add_history';
             const payload = await apiRequest({
-                action: isEditingHistory ? 'update_history' : 'add_history',
+                action: action,
                 id: state.currentItemId,
-                history_id: isEditingHistory ? state.currentHistoryId : '',
+                history_id: state.currentHistoryId,
                 history_type: fields.historyType.value,
-                history_at: fields.historyAt.value || '',
                 history_note: fields.historyNote.value.trim(),
-                status: fields.status.value
+                history_at: fields.historyAt.value || getTodayDate(),
+                status: fields.status.value.trim(),
+                assigned_employee_id: fields.assignedEmployeeId.value,
+                assigned_employee_name: fields.assignedEmployeeName.value.trim(),
+                assigned_team: fields.assignedTeam.value.trim()
             }, 'POST');
 
             state.items = Array.isArray(payload.items) ? payload.items : [];
+            renderRecentList();
             fillForm(payload.item || null);
-            renderRecentList();
             resetHistoryForm();
-            setStatus(payload.message || (isEditingHistory ? '?대젰???섏젙?섏뿀?듬땲??' : '?대젰??異붽??섏뿀?듬땲??'), false);
-        }
-
-        async function deleteCurrentItem() {
-            if (!state.currentItemId) {
-                setStatus('??젣????ぉ??癒쇱? ?좏깮??二쇱꽭??', true);
-                return;
-            }
-            if (!window.confirm('?좏깮??蹂댄샇援???ぉ????젣?좉퉴??')) {
-                return;
-            }
-
-            const payload = await apiRequest({
-                action: 'delete_item',
-                id: state.currentItemId
-            }, 'POST');
-
-            state.items = Array.isArray(payload.items) ? payload.items : [];
-            clearForm();
-            renderRecentList();
-            setStatus(payload.message || '??젣?섏뿀?듬땲??', false);
+            setStatus(state.currentHistoryId > 0 ? '?대젰???섏젙?덉뒿?덈떎.' : '?대젰??異붽??덉뒿?덈떎.', false);
         }
 
         async function saveTemplate() {
@@ -1319,7 +1277,7 @@ if (!auth_can_manage($user)) {
                 manufacturer_name: fields.manufacturerName.value.trim(),
                 purchase_vendor: fields.purchaseVendor.value.trim(),
                 purchase_price: removeCommas(fields.purchasePrice.value),
-                status: fields.status.value,
+                status: fields.status.value.trim(),
                 notes: fields.notes.value.trim()
             }, 'POST');
 
@@ -1327,55 +1285,10 @@ if (!auth_can_manage($user)) {
             const savedTemplate = state.templates.find(function (template) {
                 return template.template_name === fields.templateName.value.trim();
             }) || null;
-            state.currentTemplateId = savedTemplate ? savedTemplate.id : '';
+            state.currentTemplateId = savedTemplate ? String(savedTemplate.id || '') : '';
             renderTemplates();
-            setStatus(payload.message || '?쒗뵆由우씠 ??λ릺?덉뒿?덈떎.', false);
-        }
-
-        async function saveGearType() {
-            const typeName = String(fields.gearTypeNewName.value || '').trim();
-            if (!typeName) {
-                setStatus('??蹂댄샇援?醫낅쪟紐낆쓣 ?낅젰??二쇱꽭??', true);
-                fields.gearTypeNewName.focus();
-                return;
-            }
-
-            const payload = await apiRequest({
-                action: 'save_gear_type',
-                type_name: typeName
-            }, 'POST');
-
-            state.gearTypes = Array.isArray(payload.gear_types) ? payload.gear_types : [];
-            renderGearTypes();
-            fields.gearType.value = typeName;
-            fields.gearTypeNewName.value = '';
-            setStatus(payload.message || '蹂댄샇援?醫낅쪟媛 ??λ릺?덉뒿?덈떎.', false);
-        }
-
-        async function deleteGearType() {
-            const selected = fields.gearType.options[fields.gearType.selectedIndex];
-            const typeName = String(fields.gearType.value || '').trim();
-            const typeId = selected ? String(selected.dataset.id || '') : '';
-
-            if (!typeName) {
-                setStatus('??젣??蹂댄샇援?醫낅쪟瑜?癒쇱? ?좏깮??二쇱꽭??', true);
-                return;
-            }
-
-            if (!window.confirm('?좏깮??蹂댄샇援?醫낅쪟瑜?紐⑸줉?먯꽌 ??젣?좉퉴??')) {
-                return;
-            }
-
-            const payload = await apiRequest({
-                action: 'delete_gear_type',
-                type_id: typeId,
-                type_name: typeName
-            }, 'POST');
-
-            state.gearTypes = Array.isArray(payload.gear_types) ? payload.gear_types : [];
-            fields.gearType.value = '';
-            renderGearTypes();
-            setStatus(payload.message || '蹂댄샇援?醫낅쪟媛 ??젣?섏뿀?듬땲??', false);
+            refreshSpecSuggestions();
+            setStatus('?쒗뵆由우쓣 ??ν뻽?듬땲??', false);
         }
 
         async function deleteTemplate() {
@@ -1396,33 +1309,87 @@ if (!auth_can_manage($user)) {
             state.currentTemplateId = '';
             fields.templateName.value = '';
             renderTemplates();
-            setStatus(payload.message || '?쒗뵆由우씠 ??젣?섏뿀?듬땲??', false);
+            refreshSpecSuggestions();
+            setStatus('?쒗뵆由우쓣 ??젣?덉뒿?덈떎.', false);
         }
 
-        async function createInternalKey() {
+        async function saveGearType() {
+            const typeName = String(fields.gearTypeNewName.value || '').trim();
+            if (!typeName) {
+                setStatus('異붽???蹂댄샇援?醫낅쪟紐낆쓣 ?낅젰??二쇱꽭??', true);
+                fields.gearTypeNewName.focus();
+                return;
+            }
+
             const payload = await apiRequest({
-                action: 'create_internal_key',
-                purchased_at: fields.purchasedAt.value
-            });
-            fields.identifierType.value = payload.identifier_type || 'internal';
-            fields.identifierValue.value = payload.identifier_value || '';
-            updateQrPreview();
-            setStatus('?대? 愿由ы궎瑜??앹꽦?덉뒿?덈떎.', false);
+                action: 'save_gear_type',
+                type_name: typeName
+            }, 'POST');
+
+            state.gearTypes = Array.isArray(payload.gear_types) ? payload.gear_types : [];
+            renderGearTypes();
+            fields.gearType.value = typeName;
+            fields.gearTypeNewName.value = '';
+            setStatus('蹂댄샇援?醫낅쪟瑜???ν뻽?듬땲??', false);
         }
 
-        async function applySearch() {
+        async function deleteGearType() {
+            const selected = fields.gearType.options[fields.gearType.selectedIndex];
+            const typeName = String(fields.gearType.value || '').trim();
+            const typeId = selected ? String(selected.dataset.id || '') : '';
+
+            if (!typeName) {
+                setStatus('??젣??蹂댄샇援?醫낅쪟瑜?癒쇱? ?좏깮??二쇱꽭??', true);
+                return;
+            }
+            if (!window.confirm('?좏깮??蹂댄샇援?醫낅쪟瑜???젣?좉퉴??')) {
+                return;
+            }
+
+            const payload = await apiRequest({
+                action: 'delete_gear_type',
+                type_id: typeId,
+                type_name: typeName
+            }, 'POST');
+
+            state.gearTypes = Array.isArray(payload.gear_types) ? payload.gear_types : [];
+            fields.gearType.value = '';
+            renderGearTypes();
+            setStatus('蹂댄샇援?醫낅쪟瑜???젣?덉뒿?덈떎.', false);
+        }
+
+        async function deleteCurrentItem() {
+            if (!state.currentItemId) {
+                setStatus('??젣????ぉ??癒쇱? ?좏깮??二쇱꽭??', true);
+                return;
+            }
+            if (!window.confirm('?좏깮??蹂댄샇援???ぉ????젣?좉퉴??')) {
+                return;
+            }
+
+            const payload = await apiRequest({
+                action: 'delete_item',
+                id: state.currentItemId
+            }, 'POST');
+
+            state.items = Array.isArray(payload.items) ? payload.items : [];
+            clearForm();
+            renderRecentList();
+            setStatus('??ぉ????젣?덉뒿?덈떎.', false);
+        }
+
+        function applySearch() {
             state.searchQuery = String(fields.searchInput.value || '').trim();
-            await loadItems();
-            setStatus(state.searchQuery ? '寃??寃곌낵瑜?遺덈윭?붿뒿?덈떎.' : '?꾩껜 紐⑸줉??遺덈윭?붿뒿?덈떎.', false);
+            return loadItems().then(function () {
+                setStatus(state.searchQuery ? '寃??寃곌낵瑜?遺덈윭?붿뒿?덈떎.' : '?꾩껜 紐⑸줉??遺덈윭?붿뒿?덈떎.', false);
+            });
         }
 
         function resetSearch() {
             fields.searchInput.value = '';
             state.searchQuery = '';
-            loadItems().then(function () {
-                setStatus('寃?됱쓣 珥덇린?뷀뻽?듬땲??', false);
-            }).catch(function (error) {
-                setStatus(error.message || '紐⑸줉???ㅼ떆 遺덈윭?ㅼ? 紐삵뻽?듬땲??', true);
+            return loadItems().then(function () {
+                setStatus('寃??議곌굔??珥덇린?뷀뻽?듬땲??', false);
             });
         }
 
@@ -1438,21 +1405,22 @@ if (!auth_can_manage($user)) {
                 return;
             }
             if (!('BarcodeDetector' in window)) {
-                setStatus('??釉뚮씪?곗???BarcodeDetector瑜?吏?먰븯吏 ?딆뒿?덈떎. 吏곸젒 ?낅젰?쇰줈 ?깅줉??二쇱꽭??', true);
+                setStatus('??釉뚮씪?곗????ㅼ떆媛?諛붿퐫???ㅼ틪??吏?먰븯吏 ?딆뒿?덈떎. ?앸퀎媛믪쓣 吏곸젒 ?낅젰??二쇱꽭??', true);
                 return;
             }
-
-            const detector = new BarcodeDetector({
-                formats: ['qr_code', 'code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e']
-            });
 
             stopScanner();
 
             try {
+                const detector = new BarcodeDetector({
+                    formats: ['qr_code', 'code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e']
+                });
+
                 state.stream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: { ideal: 'environment' } },
                     audio: false
                 });
+
                 fields.scannerVideo.srcObject = state.stream;
                 await fields.scannerVideo.play();
 
@@ -1463,26 +1431,25 @@ if (!auth_can_manage($user)) {
                             return;
                         }
 
-                        const code = codes[0];
-                        const rawValue = String(code.rawValue || '').trim();
+                        const rawValue = String(codes[0].rawValue || '').trim();
                         if (!rawValue) {
                             return;
                         }
 
                         fields.identifierValue.value = rawValue;
-                        fields.identifierType.value = (String(code.format || '').toLowerCase() === 'qr_code') ? 'qr' : 'barcode';
+                        fields.identifierType.value = String(codes[0].format || '').toLowerCase() === 'qr_code' ? 'qr' : 'barcode';
                         updateQrPreview();
                         stopScanner();
                         setStatus('肄붾뱶瑜??몄떇?덉뒿?덈떎. 湲곗〈 ?깅줉 ?щ?瑜?議고쉶?⑸땲??', false);
                         await findByIdentifier();
                     } catch (error) {
-                        setStatus('移대찓???ㅼ틪 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
+                        setStatus('?ㅼ틪 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
                     }
                 }, 700);
 
-                setStatus('移대찓?쇨? ?쒖옉?섏뿀?듬땲?? 肄붾뱶瑜??붾㈃ 以묒븰??留욎떠 二쇱꽭??', false);
+                setStatus('移대찓?쇰? ?쒖옉?덉뒿?덈떎. 肄붾뱶瑜??붾㈃ 以묒븰??留욎떠 二쇱꽭??', false);
             } catch (error) {
-                setStatus('移대찓??沅뚰븳???녾굅???쒖옉???ㅽ뙣?덉뒿?덈떎.', true);
+                setStatus('移대찓?쇰? ?쒖옉?섏? 紐삵뻽?듬땲??', true);
             }
         }
 
@@ -1504,210 +1471,138 @@ if (!auth_can_manage($user)) {
 
         fields.identifierValue.addEventListener('input', updateQrPreview);
         fields.purchasePrice.addEventListener('input', function () {
-            const cursorPos = this.selectionStart;
-            const oldValue = this.value;
-            const digitsOnly = this.value.replace(/[^\d]/g, '');
-            this.value = digitsOnly ? formatNumberWithComma(digitsOnly) : '';
-            
-            const newLength = this.value.length;
-            const oldLength = oldValue.length;
-            const diff = newLength - oldLength;
-            
-            if (oldValue.length > 0) {
-                const newPos = Math.max(0, cursorPos + diff);
-                this.setSelectionRange(newPos, newPos);
+            this.value = formatNumberWithComma(this.value);
+        });
+        fields.assignedEmployeeId.addEventListener('change', syncAssigneeFromSelect);
+        fields.assignedTeamSelect.addEventListener('change', function () {
+            if (this.value) {
+                fields.assignedTeam.value = this.value;
             }
         });
-
-        function clearAssigneeSelection() {
-            fields.assignedEmployeeId.value = '';
-            fields.assignedEmployeeName.value = '';
-            fields.assignedTeam.value = '';
-            fields.assignedAt.value = '';
-            if (fields.assignedTeamSelect) {
-                fields.assignedTeamSelect.value = '';
+        fields.assignedEmployeeName.addEventListener('input', function () {
+            if (!this.value.trim()) {
+                fields.assignedEmployeeId.value = '';
             }
-        }
-
-        fields.assignedEmployeeId.addEventListener('change', function () {
-            const selected = this.options[this.selectedIndex];
-            if (!selected || !this.value) {
-                clearAssigneeSelection();
-                return;
-            }
-            fields.assignedEmployeeName.value = selected.dataset.name || '';
-            fields.assignedTeam.value = selected.dataset.team || '';
-            if (fields.assignedTeamSelect) {
-                fields.assignedTeamSelect.value = fields.assignedTeam.value || '';
-            }
-            if (!fields.assignedAt.value) {
-                fields.assignedAt.value = new Date().toISOString().slice(0, 10);
-            }
-        });
-
-        function applyManualAssigneeState() {
-            const hasManualAssigneeName = String(fields.assignedEmployeeName.value || '').trim() !== '';
-            if (!hasManualAssigneeName) {
-                clearAssigneeSelection();
-                return;
-            }
-
-            const hasManualAssignee = hasManualAssigneeName
-                || String(fields.assignedTeam.value || '').trim() !== '';
-            if (!hasManualAssignee) {
-                return;
-            }
-            fields.assignedEmployeeId.value = '';
-            if (!fields.assignedAt.value) {
-                fields.assignedAt.value = new Date().toISOString().slice(0, 10);
-            }
-        }
-
-        fields.assignedEmployeeName.addEventListener('input', applyManualAssigneeState);
-        fields.assignedTeam.addEventListener('input', applyManualAssigneeState);
-        fields.clearAssigneeButton.addEventListener('click', function () {
-            clearAssigneeSelection();
-            setStatus('吏湲됱옄 ?뺣낫媛 鍮꾩썙議뚯뒿?덈떎. ??ν븯硫?臾쇳뭹? ?좎??섍퀬 吏湲됱옄留???젣?⑸땲??', false);
         });
         fields.historyType.addEventListener('change', function () {
-            const historyStatusMap = {
-                '??': '?? ??',
-                '??': '???',
-                '??': '??',
-                '??': '?? ??',
-                '??': '?? ?',
-                '??': '??'
+            const map = {
+                '?낃퀬': '?ъ슜 媛??,
+                '吏湲?: '吏湲됰맖',
+                '?뚯닔': '諛섎궔',
+                '?먭?': '?먭? ?꾩슂',
+                '?섎━': '?섎━ 以?,
+                '?먭린': '?먭린'
             };
-            if (historyStatusMap[this.value]) {
-                fields.status.value = historyStatusMap[this.value];
+            if (map[this.value]) {
+                fields.status.value = map[this.value];
             }
         });
-                if (fields.assignedTeamSelect) {
-            fields.assignedTeamSelect.addEventListener('change', function () {
-                if (!this.value) {
-                    return;
-                }
-                fields.assignedTeam.value = this.value;
-                applyManualAssigneeState();
-            });
-        }
 
-        document.getElementById('saveButton').addEventListener('click', async function () {
-            try {
-                await saveCurrentItem();
-            } catch (error) {
+        document.getElementById('saveButton').addEventListener('click', function () {
+            saveCurrentItem().catch(function (error) {
                 setStatus(error.message || '???以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
-            }
+            });
         });
 
         document.getElementById('newButton').addEventListener('click', function () {
             clearForm();
-            fields.templateName.value = '';
-            state.currentTemplateId = '';
-            renderTemplates();
             setStatus('?좉퇋 ?낅젰 紐⑤뱶濡??꾪솚?덉뒿?덈떎.', false);
         });
 
-        document.getElementById('findButton').addEventListener('click', async function () {
-            try {
-                await findByIdentifier();
-            } catch (error) {
+        document.getElementById('findButton').addEventListener('click', function () {
+            findByIdentifier().catch(function (error) {
                 setStatus(error.message || '議고쉶 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
-            }
+            });
         });
 
-        document.getElementById('initialIssueButton').addEventListener('click', async function () {
-            try {
-                await runInitialIssue();
-            } catch (error) {
-                setStatus(error.message || '珥덇린 吏湲??깅줉 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
-            }
+        document.getElementById('initialIssueButton').addEventListener('click', function () {
+            runInitialIssue().catch(function (error) {
+                setStatus(error.message || '吏湲?泥섎━ 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
+            });
         });
 
-        document.getElementById('deleteButton').addEventListener('click', async function () {
-            try {
-                await deleteCurrentItem();
-            } catch (error) {
+        document.getElementById('deleteButton').addEventListener('click', function () {
+            deleteCurrentItem().catch(function (error) {
                 setStatus(error.message || '??젣 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
-            }
+            });
         });
 
-        fields.addHistoryButton.addEventListener('click', async function () {
-            try {
-                await addHistory();
-            } catch (error) {
-                setStatus(error.message || '?대젰 異붽? 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
-            }
+        fields.addHistoryButton.addEventListener('click', function () {
+            addHistory().catch(function (error) {
+                setStatus(error.message || '?대젰 ???以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
+            });
         });
 
         fields.cancelHistoryEditButton.addEventListener('click', function () {
             resetHistoryForm();
-            setStatus('?대젰 ?섏젙??痍⑥냼?섏뿀?듬땲??', false);
+            setStatus('?대젰 ?섏젙 紐⑤뱶瑜?痍⑥냼?덉뒿?덈떎.', false);
         });
 
-        document.getElementById('generateInternalKeyButton').addEventListener('click', async function () {
-            try {
-                await createInternalKey();
-            } catch (error) {
-                setStatus(error.message || '?대? ???앹꽦 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
-            }
+        document.getElementById('generateInternalKeyButton').addEventListener('click', function () {
+            createInternalKey().catch(function (error) {
+                setStatus(error.message || '?대?踰덊샇 ?앹꽦 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
+            });
         });
 
-        document.getElementById('searchButton').addEventListener('click', async function () {
-            try {
-                await applySearch();
-            } catch (error) {
+        document.getElementById('saveTemplateButton').addEventListener('click', function () {
+            saveTemplate().catch(function (error) {
+                setStatus(error.message || '?쒗뵆由????以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
+            });
+        });
+
+        document.getElementById('deleteTemplateButton').addEventListener('click', function () {
+            deleteTemplate().catch(function (error) {
+                setStatus(error.message || '?쒗뵆由???젣 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
+            });
+        });
+
+        document.getElementById('addGearTypeButton').addEventListener('click', function () {
+            saveGearType().catch(function (error) {
+                setStatus(error.message || '蹂댄샇援?醫낅쪟 ???以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
+            });
+        });
+
+        document.getElementById('deleteGearTypeButton').addEventListener('click', function () {
+            deleteGearType().catch(function (error) {
+                setStatus(error.message || '蹂댄샇援?醫낅쪟 ??젣 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
+            });
+        });
+
+        document.getElementById('searchButton').addEventListener('click', function () {
+            applySearch().catch(function (error) {
                 setStatus(error.message || '寃??以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
-            }
+            });
         });
 
-        document.getElementById('searchResetButton').addEventListener('click', resetSearch);
+        document.getElementById('searchResetButton').addEventListener('click', function () {
+            resetSearch().catch(function (error) {
+                setStatus(error.message || '珥덇린??以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
+            });
+        });
+
         document.getElementById('exportButton').addEventListener('click', downloadExport);
-        document.getElementById('bulkInitialIssueButton').addEventListener('click', async function () {
-            try {
-                await runBulkInitialIssue();
-            } catch (error) {
+
+        document.getElementById('bulkInitialIssueButton').addEventListener('click', function () {
+            runBulkInitialIssue().catch(function (error) {
                 setStatus(error.message || '湲곗〈 吏湲됲뭹 ?쇨큵 ?깅줉 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
-            }
+            });
         });
-        document.getElementById('bulkReceiveButton').addEventListener('click', async function () {
-            try {
-                await runBulkStockReceive();
-            } catch (error) {
-                setStatus(error.message || '?낃퀬 ?섎웾 ?쇨큵 ?깅줉 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
-            }
+
+        document.getElementById('bulkReceiveButton').addEventListener('click', function () {
+            runBulkStockReceive().catch(function (error) {
+                setStatus(error.message || '?섎웾 湲곗? ?낃퀬 ?깅줉 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
+            });
         });
+
         document.getElementById('bulkClearButton').addEventListener('click', function () {
             fields.bulkIdentifiers.value = '';
         });
-        document.getElementById('saveTemplateButton').addEventListener('click', async function () {
-            try {
-                await saveTemplate();
-            } catch (error) {
-                setStatus(error.message || '?쒗뵆由????以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
-            }
+
+        document.getElementById('clearAssigneeButton').addEventListener('click', function () {
+            clearAssigneeSelection();
+            setStatus('吏湲???곸옄 ?뺣낫瑜?鍮꾩썱?듬땲??', false);
         });
-        fields.addGearTypeButton.addEventListener('click', async function () {
-            try {
-                await saveGearType();
-            } catch (error) {
-                setStatus(error.message || '蹂댄샇援?醫낅쪟 ??μ쓣 泥섎━?섏? 紐삵뻽?듬땲??', true);
-            }
-        });
-        fields.deleteGearTypeButton.addEventListener('click', async function () {
-            try {
-                await deleteGearType();
-            } catch (error) {
-                setStatus(error.message || '蹂댄샇援?醫낅쪟 ??젣瑜?泥섎━?섏? 紐삵뻽?듬땲??', true);
-            }
-        });
-        document.getElementById('deleteTemplateButton').addEventListener('click', async function () {
-            try {
-                await deleteTemplate();
-            } catch (error) {
-                setStatus(error.message || '?쒗뵆由???젣 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.', true);
-            }
-        });
+
         document.getElementById('startScanButton').addEventListener('click', startScanner);
         document.getElementById('stopScanButton').addEventListener('click', function () {
             stopScanner();
@@ -1720,14 +1615,15 @@ if (!auth_can_manage($user)) {
                 document.getElementById('searchButton').click();
             }
         });
+
         fields.templateSelect.addEventListener('change', function () {
             state.currentTemplateId = String(this.value || '');
             const selected = state.templates.find(function (template) {
-                return template.id === state.currentTemplateId;
+                return String(template.id || '') === state.currentTemplateId;
             }) || null;
             applyTemplate(selected);
             if (selected) {
-                setStatus('?쒗뵆由??댁슜??遺덈윭?붿뒿?덈떎. ?앸퀎媛믩쭔 ?낅젰?섎㈃ 諛붾줈 ?깅줉?????덉뒿?덈떎.', false);
+                setStatus('?쒗뵆由??댁슜??遺덈윭?붿뒿?덈떎.', false);
             }
         });
 
@@ -1740,13 +1636,16 @@ if (!auth_can_manage($user)) {
                 await loadGearTypes();
                 await loadTemplates();
                 await loadItems();
+
                 const params = new URLSearchParams(window.location.search);
                 const gearUid = String(params.get('gear_uid') || '').trim();
                 if (gearUid) {
                     await loadItemById(gearUid);
+                    setStatus('?붿껌????ぉ??遺덈윭?붿뒿?덈떎.', false);
                     return;
                 }
-                setStatus('以鍮꾨릺?덉뒿?덈떎. ?ㅼ틪?섍굅???앸퀎媛믪쓣 ?낅젰??二쇱꽭??', false);
+
+                setStatus('以鍮꾨릺?덉뒿?덈떎. ?앸퀎媛믪쓣 ?낅젰?섍굅??理쒓렐 ?깅줉 紐⑸줉?먯꽌 ??ぉ???좏깮?섏꽭??', false);
             } catch (error) {
                 setStatus(error.message || '珥덇린 ?곗씠?곕? 遺덈윭?ㅼ? 紐삵뻽?듬땲??', true);
             }
