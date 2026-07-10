@@ -2811,7 +2811,7 @@ foreach ($toc as $item) {
                                     ? '\uAD00\uB828\uADFC\uAC70: ' + items.map(function (item) {
                                         return buildLawAnchorHtmlFromItem(item);
                                     }).join(', ')
-                                    : '??㉱??節뗭젎濾?';
+                                    : '\uAD00\uB828\uADFC\uAC70 \uC5C6\uC74C';
                             }
                         }
 
