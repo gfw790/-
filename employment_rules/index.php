@@ -2401,7 +2401,7 @@ foreach ($toc as $item) {
             </div>
             <div class="topbar-actions">
                 <button type="button" class="content-header-button" id="rule-add-article">새 조항 추가</button>
-                <a class="content-header-button content-header-button-secondary" href="/risk_assessment/work_list.php">&#47700;&#51064;&#51004;&#47196; &#46028;&#50500;&#44032;&#44592;</a>
+                <a class="content-header-button content-header-button-secondary" href="/risk_assessment/work_list.php">메인으로 돌아가기</a>
                 <div class="user-chip"><?= h(trim((string)($user['name'] ?? $user['login_id'] ?? "\u{AD00}\u{B9AC}\u{C790}"))) ?> 님</div>
             </div>
         </div>
@@ -2556,12 +2556,12 @@ foreach ($toc as $item) {
                             class="law-panel-search-input"
                             id="law-panel-search-input"
                             type="search"
-                            placeholder="&#50696;: &#44540;&#47196;&#44592;&#51456;&#48277; / &#44540;&#47196;&#44592;&#51456;&#48277; &#51228;93&#51312;"
-                            aria-label="&#44288;&#47144; &#48277;&#51312;&#47928; &#44160;&#49353;"
+                            placeholder="예: 근로기준법 / 근로기준법 제93조"
+                            aria-label="관련 법조문 검색"
                             autocomplete="off"
                             spellcheck="false"
                         >
-                        <button class="law-panel-search-button" type="submit">&#44160;&#49353;</button>
+                        <button class="law-panel-search-button" type="submit">검색</button>
                     </form>
                     <div class="law-panel-query" id="law-panel-query">아직 선택한 법령이 없습니다.</div>
                     <a class="law-panel-link" id="law-panel-open-link" href="https://www.law.go.kr/" target="_blank" rel="noopener">법제처 원문 열기</a>
