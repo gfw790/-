@@ -241,26 +241,38 @@ function employment_rules_parse_law_reference(string $query): ?array
         return null;
     }
 
-    if (preg_match('/(.+?(?:\x{BC95}\x{B960}|\x{BC95}|\x{C2DC}\x{D589}\x{B839}|\x{C2DC}\x{D589}\x{ADDC}\x{CE59}))\s*\x{C81C}\s*(\d+)\s*\x{C870}(?:\s*\x{C758}\s*(\d+))?(?:\s*\x{C81C}\s*(\d+)\s*\x{D56D}(?:\s*\x{C81C}\s*(\d+)\s*\x{D638})?)?/u', $query, $matches) !== 1) {
-        return null;
+    if (preg_match('/^(.+?)\s*\x{C81C}\s*(\d+)\s*\x{C870}(?:\s*\x{C758}\s*(\d+))?(?:\s*\x{C81C}\s*(\d+)\s*\x{D56D}(?:\s*\x{C81C}\s*(\d+)\s*\x{D638})?)?$/u', $query, $matches) === 1) {
+        $lawName = employment_rules_normalize_law_reference((string)($matches[1] ?? ''));
+        $articleNo = (int)($matches[2] ?? 0);
+        $articleSubNo = (int)($matches[3] ?? 0);
+        $paragraphNo = (int)($matches[4] ?? 0);
+        $itemNo = (int)($matches[5] ?? 0);
+        if ($lawName === '' || $articleNo <= 0) {
+            return null;
+        }
+
+        return [
+            'query' => $query,
+            'law_name' => $lawName,
+            'article_no' => $articleNo,
+            'article_sub_no' => $articleSubNo,
+            'paragraph_no' => $paragraphNo,
+            'item_no' => $itemNo,
+        ];
     }
 
-    $lawName = employment_rules_normalize_law_reference((string)($matches[1] ?? ''));
-    $articleNo = (int)($matches[2] ?? 0);
-    $articleSubNo = (int)($matches[3] ?? 0);
-    $paragraphNo = (int)($matches[4] ?? 0);
-    $itemNo = (int)($matches[5] ?? 0);
-    if ($lawName === '' || $articleNo <= 0) {
+    $lawName = $query;
+    if ($lawName === '') {
         return null;
     }
 
     return [
         'query' => $query,
         'law_name' => $lawName,
-        'article_no' => $articleNo,
-        'article_sub_no' => $articleSubNo,
-        'paragraph_no' => $paragraphNo,
-        'item_no' => $itemNo,
+        'article_no' => 0,
+        'article_sub_no' => 0,
+        'paragraph_no' => 0,
+        'item_no' => 0,
     ];
 }
 
@@ -276,7 +288,7 @@ function employment_rules_build_law_article_url(string $lawName, int $articleNo,
 function employment_rules_build_law_search_url(string $query): string
 {
     $reference = employment_rules_parse_law_reference($query);
-    if ($reference !== null) {
+    if ($reference !== null && (int)($reference['article_no'] ?? 0) > 0) {
         return employment_rules_build_law_article_url(
             (string)$reference['law_name'],
             (int)$reference['article_no'],
@@ -384,8 +396,8 @@ function employment_rules_pick_law_search_result(array $items, string $lawName):
             continue;
         }
 
-        $candidateName = employment_rules_normalize_law_title((string)($item['법령명한글'] ?? ''));
-        $candidateAlias = employment_rules_normalize_law_title((string)($item['법령약칭명'] ?? ''));
+        $candidateName = employment_rules_normalize_law_title((string)($item["\u{BC95}\u{B839}\u{BA85}\u{D55C}\u{AE00}"] ?? ""));
+        $candidateAlias = employment_rules_normalize_law_title((string)($item["\u{BC95}\u{B839}\u{C57D}\u{CE6D}\u{BA85}"] ?? ""));
         if ($candidateName === $normalizedLawName || $candidateAlias === $normalizedLawName) {
             return $item;
         }
@@ -396,11 +408,11 @@ function employment_rules_pick_law_search_result(array $items, string $lawName):
             continue;
         }
 
-        $candidateName = employment_rules_normalize_law_title((string)($item['법령명한글'] ?? ''));
-        $candidateAlias = employment_rules_normalize_law_title((string)($item['법령약칭명'] ?? ''));
+        $candidateName = employment_rules_normalize_law_title((string)($item["\u{BC95}\u{B839}\u{BA85}\u{D55C}\u{AE00}"] ?? ""));
+        $candidateAlias = employment_rules_normalize_law_title((string)($item["\u{BC95}\u{B839}\u{C57D}\u{CE6D}\u{BA85}"] ?? ""));
         if (
-            ($candidateName !== '' && str_contains($candidateName, $normalizedLawName))
-            || ($candidateAlias !== '' && str_contains($candidateAlias, $normalizedLawName))
+            ($candidateName !== "" && str_contains($candidateName, $normalizedLawName))
+            || ($candidateAlias !== "" && str_contains($candidateAlias, $normalizedLawName))
         ) {
             return $item;
         }
@@ -412,8 +424,8 @@ function employment_rules_pick_law_search_result(array $items, string $lawName):
 function employment_rules_format_law_date(string $value): string
 {
     $value = trim($value);
-    if ($value === '') {
-        return '';
+    if ($value === "") {
+        return "";
     }
 
     if (preg_match('/^(\d{4})(\d{2})(\d{2})$/', $value, $matches) === 1) {
@@ -429,14 +441,27 @@ function employment_rules_collect_law_text_lines(mixed $node, array &$lines): vo
         return;
     }
 
-    foreach (['조문내용', '항내용', '호내용', '목내용'] as $textKey) {
-        $value = employment_rules_normalize_whitespace(trim((string)($node[$textKey] ?? '')));
-        if ($value !== '' && !in_array($value, $lines, true)) {
+    foreach (["\u{C870}\u{BB38}\u{B0B4}\u{C6A9}", "\u{D56D}\u{B0B4}\u{C6A9}", "\u{D638}\u{B0B4}\u{C6A9}", "\u{BAA9}\u{B0B4}\u{C6A9}"] as $textKey) {
+        $value = $node[$textKey] ?? "";
+        if (is_array($value)) {
+            $fragments = [];
+            array_walk_recursive($value, static function ($part) use (&$fragments): void {
+                if (is_scalar($part) || $part === null) {
+                    $text = trim((string)$part);
+                    if ($text !== "") {
+                        $fragments[] = $text;
+                    }
+                }
+            });
+            $value = implode(" ", $fragments);
+        }
+        $value = employment_rules_normalize_whitespace(trim((string)$value));
+        if ($value !== "" && !in_array($value, $lines, true)) {
             $lines[] = $value;
         }
     }
 
-    foreach (['항', '호', '목'] as $childKey) {
+    foreach (["\u{D56D}", "\u{D638}", "\u{BAA9}"] as $childKey) {
         foreach (employment_rules_value_list($node[$childKey] ?? []) as $child) {
             employment_rules_collect_law_text_lines($child, $lines);
         }
@@ -502,11 +527,40 @@ function employment_rules_pick_law_article_unit(array $articleUnits): ?array
     return isset($articleUnits[0]) && is_array($articleUnits[0]) ? $articleUnits[0] : null;
 }
 
+function employment_rules_collect_full_law_lines(array $articleUnits): array
+{
+    $lines = [];
+
+    foreach ($articleUnits as $unit) {
+        if (!is_array($unit)) {
+            continue;
+        }
+
+        $unitLines = [];
+        employment_rules_collect_law_text_lines($unit, $unitLines);
+        foreach ($unitLines as $value) {
+            $value = employment_rules_normalize_whitespace(trim((string)$value));
+            if ($value === '' || in_array($value, $lines, true)) {
+                continue;
+            }
+
+            $lines[] = $value;
+        }
+    }
+
+    return $lines;
+}
+
 function employment_rules_build_law_api_payload(string $query): array
+{
+    return employment_rules_build_law_api_payload_v2($query);
+}
+
+function employment_rules_build_law_api_payload_v2(string $query): array
 {
     $reference = employment_rules_parse_law_reference($query);
     if ($reference === null) {
-        throw new InvalidArgumentException('법령명과 조문 번호를 함께 입력해 주세요.');
+        throw new InvalidArgumentException("\u{BC95}\u{B839}\u{BA85}\u{C744} \u{C785}\u{B825}\u{D574} \u{C8FC}\u{C138}\u{C694}. \u{C870}\u{BB38}\u{BC88}\u{D638}\u{B97C} \u{D568}\u{AED8} \u{C785}\u{B825}\u{D558}\u{BA74} \u{D574}\u{B2F9} \u{C870}\u{BB38}\u{C744}, \u{BC95}\u{B839}\u{BA85}\u{B9CC} \u{C785}\u{B825}\u{D558}\u{BA74} \u{C804}\u{CCB4} \u{BC95}\u{B839}\u{C744} \u{BCF4}\u{C5EC}\u{B4DC}\u{B9BD}\u{B2C8}\u{B2E4}.");
     }
 
     $searchUrl = employment_rules_build_open_api_url('lawSearch.do', [
@@ -520,43 +574,95 @@ function employment_rules_build_law_api_payload(string $query): array
     $searchItems = employment_rules_value_list($searchRoot['law'] ?? []);
     $selectedLaw = employment_rules_pick_law_search_result($searchItems, (string)$reference['law_name']);
     if (!is_array($selectedLaw)) {
-        throw new RuntimeException('법제처에서 해당 법령을 찾지 못했습니다.');
+        throw new RuntimeException("\u{BC95}\u{C81C}\u{CC98}\u{C5D0}\u{C11C} \u{D574}\u{B2F9} \u{BC95}\u{B839}\u{C744} \u{CC3E}\u{C9C0} \u{BABB}\u{D588}\u{C2B5}\u{B2C8}\u{B2E4}.");
     }
 
-    $lawId = trim((string)($selectedLaw['법령ID'] ?? $selectedLaw['id'] ?? ''));
+    $lawId = trim((string)($selectedLaw["\u{BC95}\u{B839}ID"] ?? $selectedLaw['id'] ?? ''));
     if ($lawId === '') {
-        throw new RuntimeException('법령 ID를 확인하지 못했습니다.');
+        throw new RuntimeException("\u{BC95}\u{B839} ID\u{B97C} \u{D655}\u{C778}\u{D558}\u{C9C0} \u{BABB}\u{D588}\u{C2B5}\u{B2C8}\u{B2E4}.");
     }
 
-    $detailUrl = employment_rules_build_open_api_url('lawService.do', [
-        'OC' => employment_rules_law_api_oc(),
-        'target' => 'lawjosub',
-        'type' => 'JSON',
-        'ID' => $lawId,
-        'JO' => employment_rules_build_law_article_code((int)$reference['article_no'], (int)$reference['article_sub_no'], true),
-    ]);
-    $detailData = employment_rules_fetch_remote_json($detailUrl);
-    $lawData = is_array($detailData['법령'] ?? null) ? $detailData['법령'] : [];
-    if ($lawData === []) {
-        throw new RuntimeException('선택한 조문의 상세 내용을 불러오지 못했습니다.');
-    }
-
-    $baseInfo = is_array($lawData['기본정보'] ?? null) ? $lawData['기본정보'] : [];
-    $articleUnits = employment_rules_value_list($lawData['조문']['조문단위'] ?? []);
-    $articleUnit = employment_rules_pick_law_article_unit($articleUnits);
-    if (!is_array($articleUnit)) {
-        throw new RuntimeException('조문 본문을 찾지 못했습니다.');
-    }
-
-    $articleTitle = trim((string)($articleUnit['조문제목'] ?? ''));
-    $articleLabel = employment_rules_build_law_article_label(
-        (int)$reference['article_no'],
-        (int)$reference['article_sub_no'],
-        $articleTitle
-    );
-
+    $articleNo = (int)($reference['article_no'] ?? 0);
+    $articleSubNo = (int)($reference['article_sub_no'] ?? 0);
     $paragraphNo = (int)($reference['paragraph_no'] ?? 0);
     $itemNo = (int)($reference['item_no'] ?? 0);
+
+    $detailParams = [
+        'OC' => employment_rules_law_api_oc(),
+        'target' => $articleNo > 0 ? 'lawjosub' : 'eflaw',
+        'type' => 'JSON',
+        'ID' => $lawId,
+    ];
+    if ($articleNo > 0) {
+        $detailParams['JO'] = employment_rules_build_law_article_code($articleNo, $articleSubNo, true);
+    }
+
+    $detailUrl = employment_rules_build_open_api_url('lawService.do', $detailParams);
+    $detailData = employment_rules_fetch_remote_json($detailUrl);
+    $lawData = is_array($detailData["\u{BC95}\u{B839}"] ?? null) ? $detailData["\u{BC95}\u{B839}"] : [];
+    if ($lawData === []) {
+        throw new RuntimeException($articleNo > 0
+            ? "\u{C120}\u{D0DD}\u{D55C} \u{C870}\u{BB38}\u{C758} \u{C0C1}\u{C138} \u{B0B4}\u{C6A9}\u{C744} \u{BD88}\u{B7EC}\u{C624}\u{C9C0} \u{BABB}\u{D588}\u{C2B5}\u{B2C8}\u{B2E4}."
+            : "\u{C120}\u{D0DD}\u{D55C} \u{BC95}\u{B839}\u{C758} \u{C804}\u{CCB4} \u{B0B4}\u{C6A9}\u{C744} \u{BD88}\u{B7EC}\u{C624}\u{C9C0} \u{BABB}\u{D588}\u{C2B5}\u{B2C8}\u{B2E4}."
+        );
+    }
+
+    $baseInfo = is_array($lawData["\u{AE30}\u{BCF8}\u{C815}\u{BCF4}"] ?? null) ? $lawData["\u{AE30}\u{BCF8}\u{C815}\u{BCF4}"] : [];
+    $articleUnits = employment_rules_value_list($lawData["\u{C870}\u{BB38}"]["\u{C870}\u{BB38}\u{B2E8}\u{C704}"] ?? []);
+
+    $lawName = trim((string)($baseInfo["\u{BC95}\u{B839}\u{BA85}_\u{D55C}\u{AE00}"] ?? $selectedLaw["\u{BC95}\u{B839}\u{BA85}\u{D55C}\u{AE00}"] ?? $reference['law_name']));
+    $ministry = employment_rules_extract_content_value($baseInfo["\u{C18C}\u{AD00}\u{BD80}\u{CC98}"] ?? '');
+    $lawKind = employment_rules_extract_content_value($baseInfo["\u{BC95}\u{C885}\u{AD6C}\u{BD84}"] ?? '');
+    $effectiveAt = employment_rules_format_law_date((string)($baseInfo["\u{C2DC}\u{D589}\u{C77C}\u{C790}"] ?? ''));
+    $promulgationAt = employment_rules_format_law_date((string)($baseInfo["\u{ACF5}\u{D3EC}\u{C77C}\u{C790}"] ?? ''));
+    $promulgationNo = ltrim(trim((string)($baseInfo["\u{ACF5}\u{D3EC}\u{BC88}\u{D638}"] ?? '')), '0');
+    $revisionType = trim((string)($baseInfo["\u{C81C}\u{AC1C}\u{C815}\u{AD6C}\u{BD84}"] ?? ''));
+    $contactPhone = trim((string)($baseInfo["\u{C804}\u{D654}\u{BC88}\u{D638}"] ?? ''));
+
+    if ($articleNo <= 0) {
+        $bodyLines = employment_rules_collect_full_law_lines($articleUnits);
+        if ($bodyLines === []) {
+            throw new RuntimeException("\u{BC95}\u{B839} \u{C804}\u{CCB4} \u{BCF8}\u{BB38}\u{C744} \u{CC3E}\u{C9C0} \u{BABB}\u{D588}\u{C2B5}\u{B2C8}\u{B2E4}.");
+        }
+
+        $articleCount = 0;
+        foreach ($articleUnits as $unit) {
+            if (!is_array($unit)) {
+                continue;
+            }
+
+            if (trim((string)($unit["\u{C870}\u{BB38}\u{C5EC}\u{BD80}"] ?? '')) === "\u{C870}\u{BB38}") {
+                $articleCount++;
+            }
+        }
+
+        return [
+            'query' => (string)$reference['query'],
+            'law_name' => $lawName,
+            'article_label' => $lawName,
+            'article_title' => '',
+            'law_kind' => $lawKind,
+            'ministry' => $ministry,
+            'effective_at' => $effectiveAt,
+            'promulgation_at' => $promulgationAt,
+            'promulgation_no' => $promulgationNo,
+            'revision_type' => $revisionType,
+            'contact_phone' => $contactPhone,
+            'body_lines' => $bodyLines,
+            'open_url' => employment_rules_build_law_search_url((string)$reference['law_name']),
+            'law_id' => $lawId,
+            'is_full_law' => true,
+            'article_count' => $articleCount > 0 ? $articleCount : count($bodyLines),
+        ];
+    }
+
+    $articleUnit = employment_rules_pick_law_article_unit($articleUnits);
+    if (!is_array($articleUnit)) {
+        throw new RuntimeException("\u{C870}\u{BB38} \u{BCF8}\u{BB38}\u{C744} \u{CC3E}\u{C9C0} \u{BABB}\u{D588}\u{C2B5}\u{B2C8}\u{B2E4}.");
+    }
+
+    $articleTitle = trim((string)($articleUnit["\u{C870}\u{BB38}\u{C81C}\u{BAA9}"] ?? ''));
+    $articleLabel = employment_rules_build_law_article_label($articleNo, $articleSubNo, $articleTitle);
     if ($paragraphNo > 0) {
         $articleLabel .= ' ' . "\u{C81C}" . $paragraphNo . "\u{D56D}";
     }
@@ -566,14 +672,14 @@ function employment_rules_build_law_api_payload(string $query): array
 
     $bodySourceNode = $articleUnit;
     if ($paragraphNo > 0) {
-        $paragraphUnits = employment_rules_value_list($articleUnit['항'] ?? []);
-        $selectedParagraph = employment_rules_pick_child_unit_by_number($paragraphUnits, '항번호', $paragraphNo);
+        $paragraphUnits = employment_rules_value_list($articleUnit["\u{D56D}"] ?? []);
+        $selectedParagraph = employment_rules_pick_child_unit_by_number($paragraphUnits, "\u{D56D}\u{BC88}\u{D638}", $paragraphNo);
         if (is_array($selectedParagraph)) {
             $bodySourceNode = $selectedParagraph;
 
             if ($itemNo > 0) {
-                $itemUnits = employment_rules_value_list($selectedParagraph['호'] ?? []);
-                $selectedItem = employment_rules_pick_child_unit_by_number($itemUnits, '호번호', $itemNo);
+                $itemUnits = employment_rules_value_list($selectedParagraph["\u{D638}"] ?? []);
+                $selectedItem = employment_rules_pick_child_unit_by_number($itemUnits, "\u{D638}\u{BC88}\u{D638}", $itemNo);
                 if (is_array($selectedItem)) {
                     $bodySourceNode = $selectedItem;
                 }
@@ -584,25 +690,15 @@ function employment_rules_build_law_api_payload(string $query): array
     $bodyLines = [];
     employment_rules_collect_law_text_lines($bodySourceNode, $bodyLines);
     if ($bodyLines !== [] && $paragraphNo <= 0) {
-        $bodyLines[0] = employment_rules_strip_article_heading(
-            (string)$bodyLines[0],
-            (int)$reference['article_no'],
-            (int)$reference['article_sub_no'],
-            $articleTitle
-        );
+        $bodyLines[0] = employment_rules_strip_article_heading((string)$bodyLines[0], $articleNo, $articleSubNo, $articleTitle);
         if ($bodyLines[0] === '') {
             array_shift($bodyLines);
         }
     }
 
-    $lawName = trim((string)($baseInfo['법령명_한글'] ?? $selectedLaw['법령명한글'] ?? $reference['law_name']));
-    $ministry = employment_rules_extract_content_value($baseInfo['소관부처'] ?? '');
-    $lawKind = employment_rules_extract_content_value($baseInfo['법종구분'] ?? '');
-    $effectiveAt = employment_rules_format_law_date((string)($baseInfo['시행일자'] ?? $articleUnit['조문시행일자'] ?? ''));
-    $promulgationAt = employment_rules_format_law_date((string)($baseInfo['공포일자'] ?? ''));
-    $promulgationNo = ltrim(trim((string)($baseInfo['공포번호'] ?? '')), '0');
-    $revisionType = trim((string)($baseInfo['제개정구분'] ?? ''));
-    $contactPhone = trim((string)($baseInfo['전화번호'] ?? ''));
+    if ($effectiveAt === '') {
+        $effectiveAt = employment_rules_format_law_date((string)($articleUnit["\u{C870}\u{BB38}\u{C2DC}\u{D589}\u{C77C}\u{C790}"] ?? ''));
+    }
 
     return [
         'query' => (string)$reference['query'],
@@ -617,12 +713,9 @@ function employment_rules_build_law_api_payload(string $query): array
         'revision_type' => $revisionType,
         'contact_phone' => $contactPhone,
         'body_lines' => array_values(array_filter($bodyLines, static fn ($line): bool => trim((string)$line) !== '')),
-        'open_url' => employment_rules_build_law_article_url(
-            (string)$reference['law_name'],
-            (int)$reference['article_no'],
-            (int)$reference['article_sub_no']
-        ),
+        'open_url' => employment_rules_build_law_article_url((string)$reference['law_name'], $articleNo, $articleSubNo),
         'law_id' => $lawId,
+        'is_full_law' => false,
     ];
 }
 
@@ -632,11 +725,11 @@ if (($_GET['action'] ?? '') === 'law_api') {
 
     try {
         if ($query === '' || mb_strlen($query, 'UTF-8') > 200) {
-            throw new InvalidArgumentException('법령명을 포함한 검색어를 입력해 주세요.');
+            throw new InvalidArgumentException('법령 검색어를 1자 이상 200자 이하로 입력해 주세요.');
         }
 
         echo json_encode(
-            array_merge(['success' => true], employment_rules_build_law_api_payload($query)),
+            array_merge(['success' => true], employment_rules_build_law_api_payload_v2($query)),
             JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
         );
     } catch (Throwable $e) {
@@ -654,7 +747,7 @@ if (($_GET['action'] ?? '') === 'law_proxy') {
     if ($query === '' || mb_strlen($query, 'UTF-8') > 200) {
         http_response_code(400);
         header('Content-Type: text/html; charset=UTF-8');
-        echo '<!DOCTYPE html><html lang="ko"><meta charset="UTF-8"><body style="font-family:Malgun Gothic,sans-serif;padding:24px;">법령명을 포함한 검색어를 입력해 주세요.</body></html>';
+        echo '<!DOCTYPE html><html lang="ko"><meta charset="UTF-8"><body style="font-family:Malgun Gothic,sans-serif;padding:24px;">법령 검색어를 1자 이상 200자 이하로 입력해 주세요.</body></html>';
         exit;
     }
 
@@ -987,7 +1080,7 @@ function employment_rules_parse_hwpx(string $path): array
 {
     $zip = new ZipArchive();
     if ($zip->open($path) !== true) {
-        throw new RuntimeException('HWPX 파일을 열 수 없습니다.');
+    throw new RuntimeException('HWPX 파일을 열 수 없습니다.');
     }
 
     try {
@@ -1020,7 +1113,7 @@ function employment_rules_parse_hwpx(string $path): array
 
         $plainText = trim(strip_tags(str_replace(['</p>', '</h2>', '</h3>'], ["\n", "\n", "\n"], $built['html'])));
         if ($plainText === '') {
-            throw new RuntimeException('문서에서 본문 텍스트를 추출하지 못했습니다. HWPX 파일 형식과 내용을 확인해 주세요.');
+            throw new RuntimeException('문서에서 추출 가능한 본문이 없습니다. HWPX 파일 내용을 확인해 주세요.');
         }
 
         $lines = preg_split("/\n+/u", $plainText) ?: [];
@@ -1052,18 +1145,18 @@ function employment_rules_handle_upload(array $user): void
 {
     $file = $_FILES['draft_file'] ?? null;
     if (!is_array($file) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-        throw new RuntimeException('업로드할 HWPX 파일을 선택해 주세요.');
+    throw new RuntimeException('업로드할 HWPX 파일을 선택해 주세요.');
     }
 
     $originalName = trim((string)($file['name'] ?? ''));
     $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
     if ($extension !== 'hwpx') {
-        throw new RuntimeException('HWPX 형식의 파일만 업로드할 수 있습니다.');
+        throw new RuntimeException('HWPX 확장자 파일만 업로드할 수 있습니다.');
     }
 
     $tmpName = (string)($file['tmp_name'] ?? '');
     if (!is_uploaded_file($tmpName)) {
-        throw new RuntimeException('업로드된 파일을 확인하지 못했습니다.');
+        throw new RuntimeException('업로드된 임시 파일을 확인하지 못했습니다.');
     }
 
     $uploadRoot = employment_rules_upload_root();
@@ -1175,7 +1268,7 @@ if (($_GET['action'] ?? '') === 'save_edits') {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         employment_rules_handle_upload($user);
-        employment_rules_flash('success', 'HWPX 파일을 업로드하고 취업규칙을 반영했습니다.');
+        employment_rules_flash('success', 'HWPX 파일을 업로드하여 취업규칙을 반영했습니다.');
     } catch (Throwable $e) {
         employment_rules_flash('error', $e->getMessage());
     }
@@ -1335,7 +1428,7 @@ foreach ($toc as $item) {
             width: 48px;
             height: 48px;
             border-radius: 14px;
-            background: url("현대기전 로고.png") center / 72% 72% no-repeat;
+            background: url("현대기전_로고.png") center / 72% 72% no-repeat;
             box-shadow: none;
         }
 
@@ -1645,6 +1738,46 @@ foreach ($toc as $item) {
             font-size: 13px;
             line-height: 1.5;
             word-break: keep-all;
+        }
+
+        .law-panel-search {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 8px;
+        }
+
+        .law-panel-search-input {
+            width: 100%;
+            min-width: 0;
+            min-height: 40px;
+            padding: 0 12px;
+            border-radius: 12px;
+            border: 1px solid #cdd9eb;
+            background: #fff;
+            color: #17345c;
+            font-size: 13px;
+            outline: none;
+        }
+
+        .law-panel-search-input:focus {
+            border-color: #2d63ae;
+            box-shadow: 0 0 0 3px rgba(45, 99, 174, 0.14);
+        }
+
+        .law-panel-search-button {
+            min-height: 40px;
+            padding: 0 14px;
+            border: 0;
+            border-radius: 12px;
+            background: #dfeafb;
+            color: #1d4d93;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .law-panel-search-button:hover {
+            filter: brightness(0.98);
         }
 
         .law-panel-link {
@@ -2390,7 +2523,7 @@ foreach ($toc as $item) {
                 <?php else: ?>
                     <div class="empty-state">
                         <strong>아직 반영된 취업규칙이 없습니다.</strong>
-                        <div>상단 업로드 영역에서 .hwpx 파일을 등록하면 본문과 목차가 자동으로 반영됩니다.</div>
+                        <div>취업규칙 본문 데이터가 없습니다.</div>
                     </div>
                 <?php endif; ?>
             </article>
@@ -2401,6 +2534,18 @@ foreach ($toc as $item) {
                 <h2>관련 법조문</h2>
                 <p>본문의 법령 링크를 누르면 선택한 조문을 이 영역에서 바로 확인할 수 있습니다.</p>
                 <div class="law-panel-meta">
+                    <form class="law-panel-search" id="law-panel-search-form" action="#" method="get" novalidate>
+                        <input
+                            class="law-panel-search-input"
+                            id="law-panel-search-input"
+                            type="search"
+                            placeholder="&#50696;: &#44540;&#47196;&#44592;&#51456;&#48277; / &#44540;&#47196;&#44592;&#51456;&#48277; &#51228;93&#51312;"
+                            aria-label="&#44288;&#47144; &#48277;&#51312;&#47928; &#44160;&#49353;"
+                            autocomplete="off"
+                            spellcheck="false"
+                        >
+                        <button class="law-panel-search-button" type="submit">&#44160;&#49353;</button>
+                    </form>
                     <div class="law-panel-query" id="law-panel-query">아직 선택한 법령이 없습니다.</div>
                     <a class="law-panel-link" id="law-panel-open-link" href="https://www.law.go.kr/" target="_blank" rel="noopener">법제처 원문 열기</a>
                 </div>
@@ -2433,7 +2578,7 @@ foreach ($toc as $item) {
                 </div>
                 <div class="rule-edit-group">
                     <label for="rule-edit-basis-textarea">관련근거</label>
-                    <textarea id="rule-edit-basis-textarea" class="rule-edit-textarea secondary" placeholder="예: 근로기준법 제93조, 산업안전보건법 제41조"></textarea>
+                    <textarea id="rule-edit-basis-textarea" class="rule-edit-textarea secondary" placeholder="예: 근로기준법 제93조, 산업안전보건법 제41조 제1항"></textarea>
                 </div>
             </div>
             <div class="rule-edit-foot">
@@ -2666,7 +2811,7 @@ foreach ($toc as $item) {
                                     ? '\uAD00\uB828\uADFC\uAC70: ' + items.map(function (item) {
                                         return buildLawAnchorHtmlFromItem(item);
                                     }).join(', ')
-                                    : '관련근거:';
+                                    : '??㉱??節뗭젎濾?';
                             }
                         }
 
@@ -2694,7 +2839,7 @@ foreach ($toc as $item) {
 
                     pattern.lastIndex = 0;
                     var replacedHtml = escapeHtml(text).replace(pattern, function (matchedText) {
-                        var queryText = matchedText.replace(/[\[\]"'“”‘’]/g, '').replace(/\s+/g, ' ').trim();
+                        var queryText = matchedText.replace(/[\[\]"']/g, '').replace(/\s+/g, ' ').trim();
                         var href = buildLawSearchUrl(queryText);
                         return '<a class=\"law-ref-link\" href=\"' + href + '\" target=\"_blank\" rel=\"noopener\" data-law-query=\"' + escapeHtml(queryText) + '\">' + escapeHtml(matchedText) + '</a>';
                     });
@@ -3065,114 +3210,30 @@ foreach ($toc as $item) {
             var lawPanelContent = document.getElementById('law-panel-content');
             var lawPanelQuery = document.getElementById('law-panel-query');
             var lawPanelOpenLink = document.getElementById('law-panel-open-link');
+            var lawPanelSearchForm = document.getElementById('law-panel-search-form');
+            var lawPanelSearchInput = document.getElementById('law-panel-search-input');
+            var lawPanelHeading = document.querySelector('.law-panel-head h2');
+            var lawPanelDescription = document.querySelector('.law-panel-head p');
 
-            /*
-            function renderLawPanelState(className, title, description) {
-                if (!lawPanelContent) {
-                    return;
+            function normalizeLawPanelCopy() {
+                if (lawPanelHeading) {
+                    lawPanelHeading.textContent = '\uAD00\uB828 \uBC95\uC870\uBB38';
                 }
-
-                lawPanelContent.className = 'law-panel-content ' + className;
-                lawPanelContent.innerHTML = '<div><strong>' + escapeHtml(title) + '</strong>'
-                    + (description ? '<span>' + escapeHtml(description) + '</span>' : '')
-                    + '</div>';
+                if (lawPanelDescription) {
+                    lawPanelDescription.textContent = '\uBCF8\uBB38\uC758 \uBC95\uB839 \uB9C1\uD06C\uB97C \uB204\uB974\uAC70\uB098 \uC9C1\uC811 \uAC80\uC0C9\uD558\uBA74 \uC120\uD0DD\uD55C \uC870\uBB38\uC744 \uC774 \uC601\uC5ED\uC5D0\uC11C \uBC14\uB85C \uD655\uC778\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.';
+                }
+                if (lawPanelQuery) {
+                    lawPanelQuery.textContent = '\uC544\uC9C1 \uC120\uD0DD\uD55C \uBC95\uB839\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.';
+                }
+                if (lawPanelOpenLink) {
+                    lawPanelOpenLink.textContent = '\uBC95\uC81C\uCC98 \uC6D0\uBB38 \uC5F4\uAE30';
+                }
+                if (lawPanelContent && lawPanelContent.classList.contains('law-panel-placeholder')) {
+                    lawPanelContent.innerHTML = '<div><strong>\uAD00\uB828 \uBC95\uC870\uBB38 \uBCF4\uAE30</strong><span>\uBCF8\uBB38\uC758 \uBC95\uB839 \uB9C1\uD06C\uB97C \uD074\uB9AD\uD558\uAC70\uB098 \uAC80\uC0C9\uD558\uBA74 \uC120\uD0DD\uD55C \uC870\uBB38\uC744 \uC774\uACF3\uC5D0 \uD45C\uC2DC\uD569\uB2C8\uB2E4.</span></div>';
+                }
             }
 
-            function renderLawPanelResult(payload) {
-                if (!lawPanelContent) {
-                    return;
-                }
-
-                var infoItems = [];
-                if (payload.law_kind) {
-                    infoItems.push('<li><strong>법종</strong><span>' + escapeHtml(payload.law_kind) + '</span></li>');
-                }
-                if (payload.ministry) {
-                    infoItems.push('<li><strong>소관부처</strong><span>' + escapeHtml(payload.ministry) + '</span></li>');
-                }
-                if (payload.effective_at) {
-                    infoItems.push('<li><strong>시행일</strong><span>' + escapeHtml(payload.effective_at) + '</span></li>');
-                }
-                if (payload.promulgation_at || payload.promulgation_no || payload.revision_type) {
-                    var promulgationMeta = [];
-                    if (payload.promulgation_no) {
-                        promulgationMeta.push('제' + escapeHtml(payload.promulgation_no) + '호');
-                    }
-                    if (payload.promulgation_at) {
-                        promulgationMeta.push(escapeHtml(payload.promulgation_at));
-                    }
-                    if (payload.revision_type) {
-                        promulgationMeta.push(escapeHtml(payload.revision_type));
-                    }
-                    infoItems.push('<li><strong>공포정보</strong><span>' + promulgationMeta.join(' / ') + '</span></li>');
-                }
-                if (payload.contact_phone) {
-                    infoItems.push('<li><strong>문의전화</strong><span>' + escapeHtml(payload.contact_phone) + '</span></li>');
-                }
-
-                var bodyLines = Array.isArray(payload.body_lines) ? payload.body_lines : [];
-                var bodyHtml = bodyLines.length
-                    ? bodyLines.map(function (line) { return '<p>' + escapeHtml(line) + '</p>'; }).join('')
-                    : '<p>조문 본문을 찾지 못했습니다.</p>';
-
-                lawPanelContent.className = 'law-panel-content';
-                lawPanelContent.innerHTML = ''
-                    + '<div class="law-panel-card">'
-                    + '  <div class="law-panel-card-head">'
-                    + '    <h3 class="law-panel-title">' + escapeHtml(payload.article_label || payload.query || '') + '</h3>'
-                    + '    <p class="law-panel-subtitle">' + escapeHtml(payload.law_name || '') + '</p>'
-                    + '  </div>'
-                    + '  <section class="law-panel-section">'
-                    + '    <h3>조문 내용</h3>'
-                    +      bodyHtml
-                    + '  </section>'
-                    + '  <section class="law-panel-section">'
-                    + '    <h3>기본 정보</h3>'
-                    + '    <ul class="law-panel-list">' + infoItems.join('') + '</ul>'
-                    + '  </section>'
-                    + '</div>';
-            }
-
-            function loadLawPanel(queryText, openUrl) {
-                if (!queryText || !lawPanelContent || !lawPanelQuery || !lawPanelOpenLink) {
-                    return;
-                }
-
-                lawPanelQuery.textContent = queryText;
-                lawPanelOpenLink.href = openUrl || buildLawSearchUrl(queryText);
-                renderLawPanelState('law-panel-loading', '법령 불러오는 중', '선택한 조문을 법제처 Open API로 조회하고 있습니다.');
-
-                fetch('index.php?action=law_api&query=' + encodeURIComponent(queryText), {
-                    headers: {
-                        'Accept': 'application/json'
-                    }
-                })
-                    .then(function (response) {
-                        return response.json()
-                            .catch(function () {
-                                return {
-                                    success: false,
-                                    message: '법령 응답을 해석하지 못했습니다.'
-                                };
-                            })
-                            .then(function (payload) {
-                                if (!response.ok || !payload.success) {
-                                    throw new Error(payload.message || '법령 정보를 불러오지 못했습니다.');
-                                }
-
-                                return payload;
-                            });
-                    })
-                    .then(function (payload) {
-                        lawPanelOpenLink.href = payload.open_url || lawPanelOpenLink.href;
-                        renderLawPanelResult(payload);
-                    })
-                    .catch(function (error) {
-                        renderLawPanelState('law-panel-error', '법령 조회 실패', error && error.message ? error.message : '잠시 후 다시 시도해 주세요.');
-                    });
-            }
-
-            */
+            normalizeLawPanelCopy();
 
             function renderLawPanelState(className, title, description) {
                 if (!lawPanelContent) {
@@ -3189,6 +3250,9 @@ foreach ($toc as $item) {
                 }
 
                 var infoItems = [];
+                if (payload.is_full_law) {
+                    infoItems.push('<li><strong>\uBCF4\uAE30\uBC94\uC704</strong><span>\uC804\uCCB4 \uBC95\uB839</span></li>');
+                }
                 if (payload.law_kind) {
                     infoItems.push('<li><strong>\uBC95\uC885</strong><span>' + escapeHtml(payload.law_kind) + '</span></li>');
                 }
@@ -3214,21 +3278,32 @@ foreach ($toc as $item) {
                 if (payload.contact_phone) {
                     infoItems.push('<li><strong>\uBB38\uC758\uC804\uD654</strong><span>' + escapeHtml(payload.contact_phone) + '</span></li>');
                 }
+                if (payload.is_full_law && payload.article_count) {
+                    infoItems.push('<li><strong>\uC870\uBB38\uC218</strong><span>' + escapeHtml(payload.article_count) + '</span></li>');
+                }
 
                 var bodyLines = Array.isArray(payload.body_lines) ? payload.body_lines : [];
                 var bodyHtml = bodyLines.length
                     ? bodyLines.map(function (line) { return '<p>' + escapeHtml(line) + '</p>'; }).join('')
-                    : '<p>\uC870\uBB38 \uBCF8\uBB38\uC744 \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.</p>';
+                    : '<p>' + (payload.is_full_law
+                        ? '\uBC95\uB839 \uC804\uCCB4 \uBCF8\uBB38\uC744 \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.'
+                        : '\uC870\uBB38 \uBCF8\uBB38\uC744 \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.') + '</p>';
+                var headerTitle = payload.article_label || payload.query || '';
+                var headerSubtitle = payload.law_name || '';
+                if (payload.is_full_law && headerSubtitle === headerTitle) {
+                    headerSubtitle = payload.law_kind || '';
+                }
+                var bodySectionTitle = payload.is_full_law ? '\uBC95\uB839 \uC804\uCCB4' : '\uC870\uBB38 \uB0B4\uC6A9';
 
                 lawPanelContent.className = 'law-panel-content';
                 lawPanelContent.innerHTML = ''
                     + '<div class="law-panel-card">'
                     + '  <div class="law-panel-card-head">'
-                    + '    <h3 class="law-panel-title">' + escapeHtml(payload.article_label || payload.query || '') + '</h3>'
-                    + '    <p class="law-panel-subtitle">' + escapeHtml(payload.law_name || '') + '</p>'
+                    + '    <h3 class="law-panel-title">' + escapeHtml(headerTitle) + '</h3>'
+                    + '    <p class="law-panel-subtitle">' + escapeHtml(headerSubtitle) + '</p>'
                     + '  </div>'
                     + '  <section class="law-panel-section">'
-                    + '    <h3>\uC870\uBB38 \uB0B4\uC6A9</h3>'
+                    + '    <h3>' + bodySectionTitle + '</h3>'
                     +      bodyHtml
                     + '  </section>'
                     + '  <section class="law-panel-section">'
@@ -3241,6 +3316,10 @@ foreach ($toc as $item) {
             function loadLawPanel(queryText, openUrl) {
                 if (!queryText || !lawPanelContent || !lawPanelQuery || !lawPanelOpenLink) {
                     return;
+                }
+
+                if (lawPanelSearchInput) {
+                    lawPanelSearchInput.value = queryText;
                 }
 
                 lawPanelQuery.textContent = queryText;
@@ -3283,6 +3362,31 @@ foreach ($toc as $item) {
                             error && error.message ? error.message : '\uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694.'
                         );
                     });
+            }
+
+            if (lawPanelSearchForm && lawPanelSearchInput) {
+                lawPanelSearchForm.addEventListener('submit', function (event) {
+                    event.preventDefault();
+
+                    var queryText = normalizeLawReference(lawPanelSearchInput.value || '');
+                    if (!queryText) {
+                        if (lawPanelQuery) {
+                            lawPanelQuery.textContent = '\uAC80\uC0C9\uC5B4\uB97C \uC785\uB825\uD574 \uC8FC\uC138\uC694.';
+                        }
+                        if (lawPanelOpenLink) {
+                            lawPanelOpenLink.href = 'https://www.law.go.kr/';
+                        }
+                        renderLawPanelState(
+                            'law-panel-error',
+                            '\uAC80\uC0C9\uC5B4 \uC785\uB825 \uD544\uC694',
+                            '\uC608: \uADFC\uB85C\uAE30\uC900\uBC95 \uB610\uB294 \uADFC\uB85C\uAE30\uC900\uBC95 \uC81C93\uC870'
+                        );
+                        lawPanelSearchInput.focus();
+                        return;
+                    }
+
+                    loadLawPanel(queryText, buildLawSearchUrl(queryText));
+                });
             }
 
             function bindLawRefLinkEvents() {
@@ -3366,8 +3470,8 @@ foreach ($toc as $item) {
 
                 function setModalMode(mode) {
                     var isInsertMode = mode === 'insert';
-                    modalTitle.textContent = isInsertMode ? '새 조항 추가' : '조문 내용 수정';
-                    saveBtn.textContent = isInsertMode ? '추가' : '저장';
+                    modalTitle.textContent = isInsertMode ? '\uC0C8 \uC870\uD56D \uCD94\uAC00' : '\uC870\uBB38 \uB0B4\uC6A9 \uC218\uC815';
+                    saveBtn.textContent = isInsertMode ? '\uCD94\uAC00' : '\uC800\uC7A5';
                     saveBtn.dataset.originalText = saveBtn.textContent;
                     deleteBtn.style.display = isInsertMode ? 'none' : '';
                     insertAfterGroup.classList.toggle('is-hidden', !isInsertMode);
@@ -3380,7 +3484,7 @@ foreach ($toc as $item) {
                     articleNodes.forEach(function (node, index) {
                         var option = document.createElement('option');
                         option.value = String(index);
-                        option.textContent = normalizeHeadingText(node.textContent || '') + ' 뒤';
+                        option.textContent = normalizeHeadingText(node.textContent || '') + ' \uB4A4\uC5D0 \uC0BD\uC785';
                         if (selectedHeading && node === selectedHeading) {
                             option.selected = true;
                         }
@@ -3614,7 +3718,7 @@ foreach ($toc as $item) {
                 function openInsertModal() {
                     var articleNodes = getArticleHeadingNodes();
                     if (articleNodes.length === 0) {
-                        alert('삽입할 기존 조항이 없습니다.');
+                        alert('\uC0BD\uC785\uD560 \uAE30\uC900 \uC870\uD56D\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.');
                         return;
                     }
 
@@ -3677,7 +3781,9 @@ foreach ($toc as $item) {
 
                     var draft = getClauseDraftFromModal();
                     if (!draft) {
-                        alert(editingClause.mode === 'insert' ? '새 조항 내용을 입력해 주세요.' : '내용을 입력해 주세요.');
+                        alert(editingClause.mode === 'insert'
+                            ? '\uC0C8 \uC870\uD56D \uB0B4\uC6A9\uC744 \uC785\uB825\uD574 \uC8FC\uC138\uC694.'
+                            : '\uC218\uC815\uD560 \uB0B4\uC6A9\uC744 \uC785\uB825\uD574 \uC8FC\uC138\uC694.');
                         textarea.focus();
                         return;
                     }
