@@ -1428,7 +1428,7 @@ foreach ($toc as $item) {
             width: 48px;
             height: 48px;
             border-radius: 14px;
-            background: url("현대기전_로고.png") center / 72% 72% no-repeat;
+            background: url("현대기전 로고.png") center / 72% 72% no-repeat;
             box-shadow: none;
         }
 
