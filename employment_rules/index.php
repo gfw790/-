@@ -1450,6 +1450,8 @@ foreach ($toc as $item) {
             display: flex;
             align-items: center;
             gap: 12px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
         }
 
         .user-chip {
@@ -2037,6 +2039,9 @@ foreach ($toc as $item) {
         }
 
         .content-header-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             border: 1px solid #184d94;
             border-radius: 12px;
             background: #1d4d93;
@@ -2051,6 +2056,17 @@ foreach ($toc as $item) {
 
         .content-header-button:hover {
             filter: brightness(1.03);
+            text-decoration: none;
+        }
+
+        .content-header-button-secondary {
+            background: rgba(255, 255, 255, 0.14);
+            border-color: rgba(255, 255, 255, 0.36);
+            box-shadow: none;
+        }
+
+        .content-header-button-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
         }
 
         .law-link-status {
@@ -2385,6 +2401,7 @@ foreach ($toc as $item) {
             </div>
             <div class="topbar-actions">
                 <button type="button" class="content-header-button" id="rule-add-article">새 조항 추가</button>
+                <a class="content-header-button content-header-button-secondary" href="/risk_assessment/work_list.php">&#47700;&#51064;&#51004;&#47196; &#46028;&#50500;&#44032;&#44592;</a>
                 <div class="user-chip"><?= h(trim((string)($user['name'] ?? $user['login_id'] ?? "\u{AD00}\u{B9AC}\u{C790}"))) ?> 님</div>
             </div>
         </div>
