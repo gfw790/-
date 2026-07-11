@@ -134,6 +134,171 @@ function work_report_upload_public_base(): string
     return '/uploads/2026/work_report';
 }
 
+function work_report_temp_directory(): string
+{
+    return __DIR__ . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'work_report_temp';
+}
+
+function is_work_report_temp_path(string $filePath): bool
+{
+    $normalized = str_replace('\\', '/', trim($filePath));
+    return str_starts_with($normalized, 'uploads/work_report_temp/');
+}
+
+function decode_pasted_work_photo(string $dataUrl): ?array
+{
+    if (!preg_match('#^data:image/(png|jpeg|jpg|gif|webp|bmp);base64,(.+)$#', trim($dataUrl), $matches)) {
+        return null;
+    }
+
+    $binary = base64_decode($matches[2], true);
+    if ($binary === false || $binary === '') {
+        return null;
+    }
+
+    $mimeType = strtolower((string)(new finfo(FILEINFO_MIME_TYPE))->buffer($binary));
+    if (!str_starts_with($mimeType, 'image/')) {
+        return null;
+    }
+
+    return [
+        'ext' => $matches[1] === 'jpeg' ? 'jpg' : $matches[1],
+        'binary' => $binary,
+    ];
+}
+
+function save_uploaded_temp_work_report_image(array $uploadedFile, string $loginId): array
+{
+    $tmpName = (string)($uploadedFile['tmp_name'] ?? '');
+    $uploadError = (int)($uploadedFile['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($uploadError !== UPLOAD_ERR_OK || $tmpName === '' || !is_uploaded_file($tmpName)) {
+        throw new RuntimeException('업로드한 임시 이미지를 확인할 수 없습니다.');
+    }
+
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $mimeType = strtolower((string)$finfo->file($tmpName));
+    if (!str_starts_with($mimeType, 'image/')) {
+        throw new RuntimeException('유효한 이미지 파일만 붙여넣을 수 있습니다.');
+    }
+
+    $originalName = trim((string)($uploadedFile['name'] ?? ''));
+    $ext = strtolower((string)pathinfo($originalName, PATHINFO_EXTENSION));
+    if (!in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'], true)) {
+        $ext = match ($mimeType) {
+            'image/png' => 'png',
+            'image/gif' => 'gif',
+            'image/webp' => 'webp',
+            'image/bmp', 'image/x-ms-bmp' => 'bmp',
+            default => 'jpg',
+        };
+    }
+    if ($ext === 'jpeg') {
+        $ext = 'jpg';
+    }
+
+    $uploadDir = work_report_temp_directory();
+    ensure_directory_exists($uploadDir);
+
+    $safeLoginId = preg_replace('/[^A-Za-z0-9_-]/', '', $loginId) ?: 'user';
+    $fileName = sprintf('tmp_%s_%s.%s', $safeLoginId, bin2hex(random_bytes(8)), $ext);
+    $fullPath = $uploadDir . DIRECTORY_SEPARATOR . $fileName;
+    if (!move_uploaded_file($tmpName, $fullPath)) {
+        throw new RuntimeException('임시 이미지를 저장하지 못했습니다.');
+    }
+
+    return [
+        'file_name' => $fileName,
+        'file_path' => 'uploads/work_report_temp/' . $fileName,
+        'preview_url' => 'uploads/work_report_temp/' . $fileName,
+    ];
+}
+
+function delete_temp_work_report_image(string $filePath): void
+{
+    if ($filePath === '' || !is_work_report_temp_path($filePath)) {
+        return;
+    }
+
+    $fullPath = __DIR__ . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $filePath);
+    if (is_file($fullPath)) {
+        @unlink($fullPath);
+    }
+}
+
+function move_temp_work_report_image_to_final(string $filePath, int $reportId): ?array
+{
+    if ($filePath === '' || !is_work_report_temp_path($filePath)) {
+        return null;
+    }
+
+    $sourcePath = __DIR__ . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $filePath);
+    if (!is_file($sourcePath)) {
+        return null;
+    }
+
+    $ext = strtolower((string)pathinfo($sourcePath, PATHINFO_EXTENSION));
+    if ($ext === '') {
+        $ext = 'jpg';
+    }
+
+    $fileName = generate_work_report_image_name($reportId, $ext);
+    $targetPath = work_report_upload_dir() . DIRECTORY_SEPARATOR . $fileName;
+    if (!@rename($sourcePath, $targetPath)) {
+        if (!@copy($sourcePath, $targetPath)) {
+            throw new RuntimeException('임시 이미지를 최종 저장하지 못했습니다.');
+        }
+        @unlink($sourcePath);
+    }
+
+    return [
+        'file_name' => $fileName,
+        'file_path' => work_report_upload_public_base() . '/' . $fileName,
+        'full_path' => $targetPath,
+    ];
+}
+
+function next_work_report_image_sort_no(PDO $pdo, int $reportId): int
+{
+    $stmt = $pdo->prepare("SELECT COALESCE(MAX(sort_no), 0) FROM work_report_image WHERE report_id = :report_id");
+    $stmt->execute([':report_id' => $reportId]);
+    return (int)$stmt->fetchColumn() + 1;
+}
+
+function generate_work_report_image_name(int $reportId, string $extension): string
+{
+    return sprintf(
+        'report_%d_%s_%s.%s',
+        $reportId,
+        date('YmdHis'),
+        bin2hex(random_bytes(4)),
+        $extension === 'jpeg' ? 'jpg' : $extension
+    );
+}
+
+function insert_work_report_image_record(
+    PDO $pdo,
+    int $reportId,
+    string $displayName,
+    ?string $description,
+    string $relativePath,
+    int $sortNo
+): void {
+    $stmt = $pdo->prepare("
+        INSERT INTO work_report_image (
+            report_id, file_name, description, file_path, sort_no
+        ) VALUES (
+            :report_id, :file_name, :description, :file_path, :sort_no
+        )
+    ");
+    $stmt->execute([
+        ':report_id' => $reportId,
+        ':file_name' => $displayName,
+        ':description' => $description !== '' ? $description : null,
+        ':file_path' => $relativePath,
+        ':sort_no' => $sortNo,
+    ]);
+}
+
 function resolve_stored_file_path(string $filePath): string
 {
     $normalized = trim($filePath);
@@ -692,86 +857,220 @@ if (!user_can_view_report($user, $report)) {
     exit('이 작업 상세를 볼 권한이 없습니다.');
 }
 
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && ($_POST['action'] ?? '') === 'upload_pasted_work_photo') {
+    header('Content-Type: application/json; charset=UTF-8');
+
+    try {
+        if (empty($_FILES['image_file']) || !is_array($_FILES['image_file'])) {
+            throw new RuntimeException('업로드할 클립보드 이미지가 없습니다.');
+        }
+
+        $uploaded = save_uploaded_temp_work_report_image(
+            $_FILES['image_file'],
+            trim((string)($user['login_id'] ?? 'user'))
+        );
+        echo json_encode([
+            'success' => true,
+            'file_name' => $uploaded['file_name'],
+            'file_path' => $uploaded['file_path'],
+            'preview_url' => $uploaded['preview_url'],
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    } catch (Throwable $e) {
+        http_response_code(400);
+        echo json_encode([
+            'success' => false,
+            'message' => $e->getMessage(),
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+    exit;
+}
+
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && ($_POST['action'] ?? '') === 'delete_pasted_work_photo') {
+    header('Content-Type: application/json; charset=UTF-8');
+
+    try {
+        delete_temp_work_report_image((string)($_POST['file_path'] ?? ''));
+        echo json_encode([
+            'success' => true,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    } catch (Throwable $e) {
+        http_response_code(400);
+        echo json_encode([
+            'success' => false,
+            'message' => $e->getMessage(),
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+    exit;
+}
+
 $flashMessage = isset($_SESSION['work_list_detail_flash']) ? (string)$_SESSION['work_list_detail_flash'] : '';
 $errorMessage = isset($_SESSION['work_list_detail_error']) ? (string)$_SESSION['work_list_detail_error'] : '';
 unset($_SESSION['work_list_detail_flash'], $_SESSION['work_list_detail_error']);
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && ($_POST['action'] ?? '') === 'upload_work_photo') {
-    if (!isset($_FILES['work_photo']) || !is_array($_FILES['work_photo'])) {
-        $errorMessage = '업로드할 사진을 찾을 수 없습니다.';
-    } else {
-        $uploadedFile = $_FILES['work_photo'];
-        $photoDescription = trim((string)($_POST['photo_description'] ?? ''));
-        if (function_exists('mb_substr')) {
-            $photoDescription = mb_substr($photoDescription, 0, 255, 'UTF-8');
-        } else {
-            $photoDescription = substr($photoDescription, 0, 255);
+    $uploadedFile = isset($_FILES['work_photo']) && is_array($_FILES['work_photo']) ? $_FILES['work_photo'] : null;
+    $pastedImagesRaw = json_decode((string)($_POST['pasted_images'] ?? '[]'), true);
+    if (!is_array($pastedImagesRaw)) {
+        $pastedImagesRaw = [];
+    }
+    $pastedTempPaths = [];
+    $pastedInlineImages = [];
+    foreach ($pastedImagesRaw as $item) {
+        if (is_string($item)) {
+            $value = trim($item);
+            if ($value === '') {
+                continue;
+            }
+            if (is_work_report_temp_path($value)) {
+                $pastedTempPaths[] = $value;
+                continue;
+            }
+            if (str_starts_with($value, 'data:image/')) {
+                $pastedInlineImages[] = $value;
+            }
+            continue;
         }
-        $tmpName = (string)($uploadedFile['tmp_name'] ?? '');
-        $originalName = trim((string)($uploadedFile['name'] ?? ''));
-        $uploadError = (int)($uploadedFile['error'] ?? UPLOAD_ERR_NO_FILE);
+        if (is_array($item)) {
+            $value = trim((string)($item['file_path'] ?? ''));
+            if ($value !== '' && is_work_report_temp_path($value)) {
+                $pastedTempPaths[] = $value;
+            }
+        }
+    }
 
-        if ($uploadError !== UPLOAD_ERR_OK || $tmpName === '' || !is_uploaded_file($tmpName)) {
-            $errorMessage = '사진 업로드에 실패했습니다.';
-        } else {
-            $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
-            $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
-            if (!in_array($extension, $allowedExtensions, true)) {
-                $errorMessage = '이미지 파일만 업로드할 수 있습니다.';
-            } else {
+    $photoDescription = trim((string)($_POST['photo_description'] ?? ''));
+    if (function_exists('mb_substr')) {
+        $photoDescription = mb_substr($photoDescription, 0, 255, 'UTF-8');
+    } else {
+        $photoDescription = substr($photoDescription, 0, 255);
+    }
+
+    $savedPaths = [];
+    $processedCount = 0;
+    $hasUploadedFile = $uploadedFile !== null
+        && (int)($uploadedFile['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE;
+
+    if (!$hasUploadedFile && $pastedTempPaths === [] && $pastedInlineImages === []) {
+        $errorMessage = '사진을 선택하거나 클립보드 이미지를 붙여넣어 주세요.';
+    } else {
+        try {
+            $uploadDir = work_report_upload_dir();
+            ensure_directory_exists($uploadDir);
+            $sortNo = next_work_report_image_sort_no($pdo, $reportId);
+
+            $pdo->beginTransaction();
+
+            if ($hasUploadedFile) {
+                $tmpName = (string)($uploadedFile['tmp_name'] ?? '');
+                $originalName = trim((string)($uploadedFile['name'] ?? ''));
+                $uploadError = (int)($uploadedFile['error'] ?? UPLOAD_ERR_NO_FILE);
+
+                if ($uploadError !== UPLOAD_ERR_OK || $tmpName === '' || !is_uploaded_file($tmpName)) {
+                    throw new RuntimeException('사진 업로드에 실패했습니다.');
+                }
+
+                $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+                $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
+                if (!in_array($extension, $allowedExtensions, true)) {
+                    throw new RuntimeException('이미지 파일만 업로드할 수 있습니다.');
+                }
+
                 $finfo = new finfo(FILEINFO_MIME_TYPE);
                 $mimeType = strtolower((string)$finfo->file($tmpName));
                 if (!str_starts_with($mimeType, 'image/')) {
-                    $errorMessage = '유효한 이미지 파일만 업로드할 수 있습니다.';
-                } else {
-                    try {
-                        $uploadDir = work_report_upload_dir();
-                        ensure_directory_exists($uploadDir);
+                    throw new RuntimeException('유효한 이미지 파일만 업로드할 수 있습니다.');
+                }
 
-                        $safeBaseName = preg_replace('/[^A-Za-z0-9._-]/', '_', pathinfo($originalName, PATHINFO_FILENAME)) ?: 'work_photo';
-                        $safeBaseName = trim((string)$safeBaseName, '._-');
-                        if ($safeBaseName === '') {
-                            $safeBaseName = 'work_photo';
-                        }
+                $fileName = generate_work_report_image_name($reportId, $extension);
+                $fullPath = $uploadDir . DIRECTORY_SEPARATOR . $fileName;
+                if (!move_uploaded_file($tmpName, $fullPath)) {
+                    throw new RuntimeException('업로드 파일을 저장하지 못했습니다.');
+                }
 
-                        $fileName = sprintf(
-                            'report_%d_%s_%s.%s',
-                            $reportId,
-                            date('YmdHis'),
-                            bin2hex(random_bytes(4)),
-                            $extension === 'jpeg' ? 'jpg' : $extension
-                        );
-                        $fullPath = $uploadDir . DIRECTORY_SEPARATOR . $fileName;
-                        if (!move_uploaded_file($tmpName, $fullPath)) {
-                            throw new RuntimeException('업로드 파일을 저장하지 못했습니다.');
-                        }
+                $savedPaths[] = $fullPath;
+                insert_work_report_image_record(
+                    $pdo,
+                    $reportId,
+                    $originalName !== '' ? $originalName : $fileName,
+                    $photoDescription,
+                    work_report_upload_public_base() . '/' . $fileName,
+                    $sortNo
+                );
+                $sortNo++;
+                $processedCount++;
+            }
 
-                        $relativePath = work_report_upload_public_base() . '/' . $fileName;
-                        $sortStmt = $pdo->prepare("SELECT COALESCE(MAX(sort_no), 0) FROM work_report_image WHERE report_id = :report_id");
-                        $sortStmt->execute([':report_id' => $reportId]);
-                        $sortNo = (int)$sortStmt->fetchColumn() + 1;
+            foreach ($pastedTempPaths as $index => $tempPath) {
+                $movedImage = move_temp_work_report_image_to_final($tempPath, $reportId);
+                if ($movedImage === null) {
+                    throw new RuntimeException('임시 붙여넣기 이미지를 찾지 못했습니다. 다시 붙여넣어 주세요.');
+                }
 
-                        $insertStmt = $pdo->prepare("
-                            INSERT INTO work_report_image (
-                                report_id, file_name, description, file_path, sort_no
-                            ) VALUES (
-                                :report_id, :file_name, :description, :file_path, :sort_no
-                            )
-                        ");
-                        $insertStmt->execute([
-                            ':report_id' => $reportId,
-                            ':file_name' => $originalName !== '' ? $originalName : $fileName,
-                            ':description' => $photoDescription !== '' ? $photoDescription : null,
-                            ':file_path' => $relativePath,
-                            ':sort_no' => $sortNo,
-                        ]);
+                $savedPaths[] = $movedImage['full_path'];
+                $pastedExt = strtolower((string)pathinfo((string)$movedImage['file_name'], PATHINFO_EXTENSION));
+                if ($pastedExt === '') {
+                    $pastedExt = 'jpg';
+                }
 
-                        $flashMessage = '작업사진이 저장되었습니다.';
-                    } catch (Throwable $e) {
-                        $errorMessage = '작업사진 저장 중 오류가 발생했습니다: ' . $e->getMessage();
-                    }
+                insert_work_report_image_record(
+                    $pdo,
+                    $reportId,
+                    sprintf('clipboard_image_%02d.%s', $index + 1, $pastedExt),
+                    $photoDescription,
+                    (string)$movedImage['file_path'],
+                    $sortNo
+                );
+                $sortNo++;
+                $processedCount++;
+            }
+
+            foreach ($pastedInlineImages as $index => $dataUrl) {
+                if (!is_string($dataUrl) || trim($dataUrl) === '') {
+                    continue;
+                }
+
+                $decodedImage = decode_pasted_work_photo($dataUrl);
+                if ($decodedImage === null) {
+                    throw new RuntimeException('붙여넣은 이미지 형식을 확인하지 못했습니다.');
+                }
+
+                $fileName = generate_work_report_image_name($reportId, (string)$decodedImage['ext']);
+                $fullPath = $uploadDir . DIRECTORY_SEPARATOR . $fileName;
+                if (file_put_contents($fullPath, $decodedImage['binary']) === false) {
+                    throw new RuntimeException('붙여넣은 이미지를 저장하지 못했습니다.');
+                }
+
+                $savedPaths[] = $fullPath;
+                insert_work_report_image_record(
+                    $pdo,
+                    $reportId,
+                    sprintf('clipboard_image_%02d.%s', $index + count($pastedTempPaths) + 1, $decodedImage['ext']),
+                    $photoDescription,
+                    work_report_upload_public_base() . '/' . $fileName,
+                    $sortNo
+                );
+                $sortNo++;
+                $processedCount++;
+            }
+
+            if ($processedCount === 0) {
+                throw new RuntimeException('사진을 선택하거나 클립보드 이미지를 붙여넣어 주세요.');
+            }
+
+            $pdo->commit();
+            $flashMessage = $processedCount > 1
+                ? sprintf('작업사진 %d장이 저장되었습니다.', $processedCount)
+                : '작업사진이 저장되었습니다.';
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            foreach ($savedPaths as $savedPath) {
+                if (is_file($savedPath)) {
+                    @unlink($savedPath);
                 }
             }
+            $errorMessage = '작업사진 저장 중 오류가 발생했습니다: ' . $e->getMessage();
         }
     }
 
@@ -845,6 +1144,7 @@ $pageTitle = trim((string)($report['work_title'] ?? '')) ?: '작업 상세';
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="assets/print-preview.css?v=20260711-14">
 <title><?= h($pageTitle) ?> | 작업 상세</title>
 <style>
   :root {
@@ -1165,9 +1465,93 @@ $pageTitle = trim((string)($report['work_title'] ?? '')) ?: '작업 상세';
   .upload-form input[type="text"]::placeholder {
     color: var(--text-dim);
   }
+  .upload-paste-zone {
+    flex: 1 1 100%;
+    display: grid;
+    gap: 6px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    border: 1px dashed rgba(111, 168, 255, 0.45);
+    background: rgba(255,255,255,0.04);
+    outline: none;
+    cursor: text;
+  }
+  .upload-paste-zone:focus {
+    border-color: rgba(111, 168, 255, 0.92);
+    box-shadow: 0 0 0 3px rgba(111, 168, 255, 0.18);
+  }
+  .upload-paste-zone strong {
+    color: var(--text);
+    font-size: 13px;
+  }
+  .upload-paste-zone span {
+    color: var(--text-dim);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .upload-paste-zone kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    padding: 2px 6px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.18);
+    background: rgba(12, 18, 28, 0.78);
+    color: var(--text);
+    font-size: 11px;
+    font-family: inherit;
+  }
+  .upload-paste-preview {
+    flex: 1 1 100%;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+  }
+  .upload-paste-preview[hidden] {
+    display: none !important;
+  }
+  .upload-paste-card {
+    position: relative;
+    margin: 0;
+    padding: 10px;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.04);
+  }
+  .upload-paste-card img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.05);
+  }
+  .upload-paste-card figcaption {
+    margin-top: 8px;
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+  .upload-paste-remove {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(9, 14, 24, 0.82);
+    color: #fff;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .upload-paste-remove:hover {
+    background: rgba(32, 44, 64, 0.96);
+  }
   .photo-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(216px, 1fr));
     gap: 14px;
   }
   .photo-card {
@@ -1179,7 +1563,7 @@ $pageTitle = trim((string)($report['work_title'] ?? '')) ?: '작업 상세';
   .photo-thumb {
     display: block;
     width: 100%;
-    aspect-ratio: 4 / 3;
+    aspect-ratio: 40 / 33;
     object-fit: cover;
     background: rgba(255,255,255,0.04);
   }
@@ -1496,6 +1880,7 @@ $pageTitle = trim((string)($report['work_title'] ?? '')) ?: '작업 상세';
         <div class="subtitle"><?= h($report['work_date']) ?> · <?= h($report['work_place']) ?> · <?= h($report['team_name_display'] !== '' ? $report['team_name_display'] : '-') ?></div>
       </div>
       <div class="actions">
+        <button type="button" class="btn" id="detail-print-open">출력</button>
         <a class="btn" href="work_list.php">작업목록으로</a>
       </div>
     </div>
@@ -1681,11 +2066,17 @@ $pageTitle = trim((string)($report['work_title'] ?? '')) ?: '작업 상세';
           <p>사진과 함께 짧은 설명을 적어두고, 등록 후 썸네일에서 바로 확인할 수 있습니다.</p>
         </div>
         <div class="card-body">
-          <form class="upload-form" method="post" enctype="multipart/form-data">
+          <form class="upload-form" id="work-photo-upload-form" method="post" enctype="multipart/form-data">
             <input type="hidden" name="action" value="upload_work_photo">
-            <input type="file" name="work_photo" accept="image/*" required>
-            <input type="text" name="photo_description" maxlength="255" placeholder="작업사진 내용을 간단히 입력하세요">
+            <input type="hidden" name="pasted_images" id="work-photo-pasted-images" value="[]">
+            <input type="file" id="work-photo-input" name="work_photo" accept="image/*">
+            <input type="text" id="work-photo-description" name="photo_description" maxlength="255" placeholder="작업사진 내용을 간단히 입력하세요">
             <button type="submit" class="btn">사진 저장</button>
+            <div class="upload-paste-zone" id="work-photo-paste-zone" tabindex="0">
+              <strong>클립보드에서 붙여넣기 가능</strong>
+              <span>이미지를 복사한 뒤 이 영역이나 설명 입력칸에서 <kbd>Ctrl</kbd> + <kbd>V</kbd>를 누르면 업로드 목록에 추가됩니다.</span>
+            </div>
+            <div class="upload-paste-preview" id="work-photo-paste-preview" hidden></div>
           </form>
 
           <?php if (!empty($images)): ?>
@@ -1743,6 +2134,224 @@ $pageTitle = trim((string)($report['work_title'] ?? '')) ?: '작업 상세';
       </div>
     </div>
   </div>
+  <div class="print-preview-modal" id="detail-print-modal" aria-hidden="true">
+    <div class="print-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="detail-print-title">
+      <div class="print-preview-head">
+        <div class="print-preview-copy">
+          <h2 id="detail-print-title">작업상세내용 출력 템플릿</h2>
+          <p>현재 상세 데이터를 A4 문서 형식으로 미리 확인한 뒤 인쇄할 수 있습니다.</p>
+        </div>
+        <div class="print-preview-actions">
+          <button type="button" class="btn" id="detail-print-run">출력</button>
+          <button type="button" class="btn" id="detail-print-close">닫기</button>
+        </div>
+      </div>
+      <div class="print-preview-body">
+        <article class="print-paper" style="--print-page-width:210mm; --print-page-height:297mm; --print-margin-top:25mm; --print-margin-right:20mm; --print-margin-bottom:20mm; --print-margin-left:20mm; --print-footer-height:10mm;">
+          <div class="print-doc-head">
+            <div>
+              <div class="print-doc-kicker">WORK DETAIL REPORT</div>
+              <h1 class="print-doc-title">일일 작업일지</h1>
+              <div class="print-doc-meta">
+                보고서 번호 WR-<?= (int)$reportId ?>
+                / 작성일시 <?= h(substr((string)$report['created_at'], 0, 16)) ?>
+                / 작성자 <?= h((string)($user['name'] ?? '')) ?>
+              </div>
+            </div>
+            <table class="print-approval-table" aria-label="결재">
+              <tr>
+                <th>검토</th>
+                <th>승인</th>
+              </tr>
+              <tr>
+                <td></td>
+                <td></td>
+              </tr>
+            </table>
+          </div>
+
+          <section class="print-section">
+            <h2 class="print-section-title">기본 정보</h2>
+            <div class="print-info-lines">
+              <div class="print-info-row">
+                <div class="print-info-label">작업명</div>
+                <div class="print-info-value"><?= h($pageTitle) ?></div>
+              </div>
+              <div class="print-info-row">
+                <div class="print-info-label">작업일자</div>
+                <div class="print-info-value"><?= h($report['work_date']) ?></div>
+              </div>
+              <div class="print-info-row">
+                <div class="print-info-label">작업장소</div>
+                <div class="print-info-value"><?= h($report['work_place']) ?></div>
+              </div>
+              <div class="print-info-row">
+                <div class="print-info-label">작업팀 / 작업팀 리더</div>
+                <div class="print-info-value"><?= h($report['team_name_display'] !== '' ? $report['team_name_display'] : '-') ?> / <?= h($report['user_name']) ?></div>
+              </div>
+              <div class="print-info-row">
+                <div class="print-info-label">중장비 사용</div>
+                <div class="print-info-value"><?= $report['use_equipment_yn'] === 'Y' ? '사용' : '미사용' ?></div>
+              </div>
+              <div class="print-info-row">
+                <div class="print-info-label">위험성평가 참여인원</div>
+                <div class="print-info-value"><?= number_format($participantCount) ?>명<?= !empty($participantNames) ? ' / ' . h(implode(', ', $participantNames)) : '' ?></div>
+              </div>
+              <div class="print-info-row">
+                <div class="print-info-label">선택 평가서</div>
+                <div class="print-info-value"><?= number_format(count($selectedUnits)) ?>건</div>
+              </div>
+            </div>
+          </section>
+
+          <section class="print-section">
+            <h2 class="print-section-title">작업 요약</h2>
+            <?php if (!empty($tasks)): ?>
+              <ol class="print-list">
+                <?php foreach ($tasks as $task): ?>
+                  <li><?= h($task) ?></li>
+                <?php endforeach; ?>
+              </ol>
+            <?php else: ?>
+              <p class="print-empty">등록된 작업 내용이 없습니다.</p>
+            <?php endif; ?>
+          </section>
+
+          <section class="print-section">
+            <h2 class="print-section-title">공구 및 메모</h2>
+            <div class="print-chip-list">
+              <?php if (!empty($selectedToolLabels)): ?>
+                <?php foreach ($selectedToolLabels as $tool): ?>
+                  <span class="print-chip"><?= h($tool) ?></span>
+                <?php endforeach; ?>
+              <?php else: ?>
+                <span class="print-chip">공구 없음</span>
+              <?php endif; ?>
+            </div>
+            <div class="print-note-box" style="margin-top:12px;"><?= format_note_html((string)($report['note_html'] ?? '')) ?></div>
+          </section>
+
+          <section class="print-section" data-print-page-break="before">
+            <h2 class="print-section-title">위험성평가서 CODE</h2>
+            <?php if (!empty($selectedUnits)): ?>
+              <div class="print-table-wrap">
+                <table class="print-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 18%;">CODE</th>
+                      <th style="width: 52%;">평가서명</th>
+                      <th style="width: 30%;">공정</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <?php foreach ($selectedUnits as $unit): ?>
+                      <tr>
+                        <td><?= h(trim((string)($unit['unit_code'] ?? '')) !== '' ? $unit['unit_code'] : '-') ?></td>
+                        <td><?= h(trim((string)($unit['unit_title'] ?? '')) !== '' ? $unit['unit_title'] : '제목 없음') ?></td>
+                        <td><?= h(trim((string)($unit['process_name'] ?? '')) !== '' ? $unit['process_name'] : '-') ?></td>
+                      </tr>
+                    <?php endforeach; ?>
+                  </tbody>
+                </table>
+              </div>
+            <?php else: ?>
+              <p class="print-empty">연결된 위험성평가서가 없습니다.</p>
+            <?php endif; ?>
+          </section>
+
+          <section class="print-section">
+            <h2 class="print-section-title">위험성평가 핵심요약</h2>
+            <?php if (!empty($hazards)): ?>
+              <div class="print-table-wrap">
+                <table class="print-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 22%;">유해위험요인</th>
+                      <th style="width: 20%;">사고유형/상해결과</th>
+                      <th style="width: 38%;">현재 조치</th>
+                      <th style="width: 20%;">조치후 위험도</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <?php foreach ($hazards as $hazard): ?>
+                      <?php
+                        $hazardName = trim((string)($hazard['hazard_name'] ?? '')) !== '' ? (string)$hazard['hazard_name'] : '위험요인 없음';
+                        $accidentType = trim((string)($hazard['accident_type'] ?? ''));
+                        $injuryResult = trim((string)($hazard['injury_result'] ?? ''));
+                        $accidentSummary = $accidentType !== '' || $injuryResult !== ''
+                            ? $accidentType . ($accidentType !== '' && $injuryResult !== '' ? ' / ' : '') . $injuryResult
+                            : '-';
+                        $currentControl = trim((string)($hazard['current_control_text'] ?? '')) !== '' ? (string)$hazard['current_control_text'] : '-';
+                        $postRisk = 'P '
+                            . (trim((string)($hazard['likelihood_current'] ?? '')) !== '' ? (string)$hazard['likelihood_current'] : '-')
+                            . ' / S '
+                            . (trim((string)($hazard['severity_current'] ?? '')) !== '' ? (string)$hazard['severity_current'] : '-')
+                            . ' / R '
+                            . (trim((string)($hazard['risk_score_current'] ?? '')) !== '' ? (string)$hazard['risk_score_current'] : '-');
+                      ?>
+                      <tr>
+                        <td><?= h($hazardName) ?></td>
+                        <td><?= h($accidentSummary) ?></td>
+                        <td><?= nl2br(h($currentControl)) ?></td>
+                        <td><?= h($postRisk) ?></td>
+                      </tr>
+                    <?php endforeach; ?>
+                  </tbody>
+                </table>
+              </div>
+            <?php else: ?>
+              <p class="print-empty">표시할 위험성평가 핵심요약이 없습니다.</p>
+            <?php endif; ?>
+          </section>
+
+          <section class="print-section">
+            <h2 class="print-section-title">작업사진</h2>
+            <?php if (!empty($images)): ?>
+              <div class="print-photo-grid">
+                <?php foreach ($images as $image): ?>
+                  <figure class="print-photo-card">
+                    <img src="<?= h((string)($image['file_path'] ?? '')) ?>" alt="<?= h((string)($image['file_name'] ?? '작업사진')) ?>">
+                    <figcaption class="print-photo-caption"><?= h(trim((string)($image['description'] ?? '')) !== '' ? $image['description'] : ((string)($image['file_name'] ?? '작업사진'))) ?></figcaption>
+                  </figure>
+                <?php endforeach; ?>
+              </div>
+            <?php else: ?>
+              <p class="print-empty">등록된 작업사진이 없습니다.</p>
+            <?php endif; ?>
+          </section>
+
+        </article>
+      </div>
+    </div>
+  </div>
+  <script src="assets/print-preview.js?v=20260711-14"></script>
+  <script>
+    (function () {
+      if (!window.RiskPrintPreview) {
+        return;
+      }
+
+      function buildRiskDetailPrintPreview() {
+        return window.RiskPrintPreview.init({
+          openButton: '#detail-print-open',
+          modal: '#detail-print-modal',
+          closeButton: '#detail-print-close',
+          printButton: '#detail-print-run',
+          paper: '#detail-print-modal .print-paper'
+        });
+      }
+
+      window.__riskDetailPrintPreview = buildRiskDetailPrintPreview();
+      window.openRiskDetailPrintPreview = function () {
+        if (!window.__riskDetailPrintPreview) {
+          window.__riskDetailPrintPreview = buildRiskDetailPrintPreview();
+        }
+        if (window.__riskDetailPrintPreview && window.__riskDetailPrintPreview.open) {
+          window.__riskDetailPrintPreview.open();
+        }
+      };
+    })();
+  </script>
   <script>
     (() => {
       const modal = document.getElementById('unit-preview-modal');
@@ -1998,6 +2607,284 @@ $pageTitle = trim((string)($report['work_title'] ?? '')) ?: '작업 상세';
         summaryPanel.hidden = !nextExpanded;
         toggleButton.querySelector('.toggle-hint').textContent = nextExpanded ? '클릭해서 닫기' : '클릭해서 보기';
       });
+    })();
+
+    (() => {
+      const uploadForm = document.getElementById('work-photo-upload-form');
+      const photoInput = document.getElementById('work-photo-input');
+      const pastedImagesInput = document.getElementById('work-photo-pasted-images');
+      const pasteZone = document.getElementById('work-photo-paste-zone');
+      const pastePreview = document.getElementById('work-photo-paste-preview');
+      if (!uploadForm || !photoInput || !pastedImagesInput || !pasteZone || !pastePreview) {
+        return;
+      }
+
+      const pastedImages = [];
+      let pendingUploadCount = 0;
+      const uploadEndpoint = `${window.location.pathname}${window.location.search}`;
+      const submitButton = uploadForm.querySelector('button[type="submit"]');
+      const pasteZoneDefaultHtml = pasteZone.innerHTML;
+
+      function syncPastedImages() {
+        pastedImagesInput.value = JSON.stringify(pastedImages.map((item) => item.file_path));
+      }
+
+      function updatePasteZoneState() {
+        if (pendingUploadCount > 0) {
+          pasteZone.innerHTML = '<strong>클립보드 이미지 업로드 중</strong><span>붙여넣은 사진을 임시 저장하고 있습니다. 완료될 때까지 잠시만 기다려 주세요.</span>';
+        } else {
+          pasteZone.innerHTML = pasteZoneDefaultHtml;
+        }
+        if (submitButton) {
+          submitButton.disabled = pendingUploadCount > 0;
+        }
+      }
+
+      function renderPastePreview() {
+        if (!pastedImages.length) {
+          pastePreview.hidden = true;
+          pastePreview.innerHTML = '';
+          syncPastedImages();
+          return;
+        }
+
+        pastePreview.hidden = false;
+        pastePreview.innerHTML = pastedImages.map((item, index) => `
+          <figure class="upload-paste-card">
+            <button
+              type="button"
+              class="upload-paste-remove"
+              data-remove-pasted-image="${index}"
+              aria-label="붙여넣은 사진 ${index + 1} 삭제"
+            >&times;</button>
+            <img src="${item.preview_url}" alt="붙여넣은 작업사진 ${index + 1}">
+            <figcaption>${item.file_name || `붙여넣은 사진 ${index + 1}`}</figcaption>
+          </figure>
+        `).join('');
+        syncPastedImages();
+      }
+
+      function loadImageElement(file) {
+        return new Promise((resolve, reject) => {
+          const objectUrl = URL.createObjectURL(file);
+          const image = new Image();
+          image.onload = () => {
+            URL.revokeObjectURL(objectUrl);
+            resolve(image);
+          };
+          image.onerror = () => {
+            URL.revokeObjectURL(objectUrl);
+            reject(new Error('클립보드 이미지를 불러오지 못했습니다.'));
+          };
+          image.src = objectUrl;
+        });
+      }
+
+      function canvasToBlob(canvas, type, quality) {
+        return new Promise((resolve, reject) => {
+          canvas.toBlob((blob) => {
+            if (blob) {
+              resolve(blob);
+              return;
+            }
+            reject(new Error('클립보드 이미지를 압축하지 못했습니다.'));
+          }, type, quality);
+        });
+      }
+
+      async function prepareClipboardFile(file) {
+        const maxUploadBytes = 8 * 1024 * 1024;
+        const shouldCompress = file.size > maxUploadBytes || file.type === 'image/png' || file.type === 'image/bmp';
+        if (!shouldCompress) {
+          return file;
+        }
+
+        const image = await loadImageElement(file);
+        const maxDimension = 2200;
+        const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth || image.width, image.naturalHeight || image.height));
+        const targetWidth = Math.max(1, Math.round((image.naturalWidth || image.width) * scale));
+        const targetHeight = Math.max(1, Math.round((image.naturalHeight || image.height) * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+
+        const context = canvas.getContext('2d');
+        if (!context) {
+          throw new Error('클립보드 이미지를 처리할 수 없습니다.');
+        }
+
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, targetWidth, targetHeight);
+        context.drawImage(image, 0, 0, targetWidth, targetHeight);
+
+        const qualitySteps = [0.9, 0.82, 0.74, 0.66];
+        let compressedBlob = null;
+        for (const quality of qualitySteps) {
+          const nextBlob = await canvasToBlob(canvas, 'image/jpeg', quality);
+          compressedBlob = nextBlob;
+          if (nextBlob.size <= maxUploadBytes) {
+            break;
+          }
+        }
+
+        if (!compressedBlob) {
+          throw new Error('클립보드 이미지를 압축하지 못했습니다.');
+        }
+
+        if (compressedBlob.size > 20 * 1024 * 1024) {
+          throw new Error('붙여넣은 이미지가 너무 큽니다. 원본을 조금 줄여서 다시 시도해 주세요.');
+        }
+
+        const originalBaseName = (file.name || 'clipboard-image').replace(/\.[^.]+$/, '');
+        return new File([compressedBlob], `${originalBaseName}.jpg`, {
+          type: 'image/jpeg',
+          lastModified: Date.now(),
+        });
+      }
+
+      async function uploadPastedFile(file) {
+        const formData = new FormData();
+        formData.append('action', 'upload_pasted_work_photo');
+        formData.append('image_file', file, file.name || 'clipboard-image.png');
+
+        const response = await fetch(uploadEndpoint, {
+          method: 'POST',
+          body: formData,
+          credentials: 'same-origin',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+        });
+
+        let payload;
+        try {
+          payload = await response.json();
+        } catch (error) {
+          throw new Error('클립보드 업로드 응답을 확인하지 못했습니다.');
+        }
+
+        if (!response.ok || !payload || payload.success !== true) {
+          throw new Error(payload && payload.message ? payload.message : '클립보드 이미지를 임시 저장하지 못했습니다.');
+        }
+
+        return payload;
+      }
+
+      async function deletePastedFile(filePath) {
+        const formData = new FormData();
+        formData.append('action', 'delete_pasted_work_photo');
+        formData.append('file_path', filePath);
+
+        const response = await fetch(uploadEndpoint, {
+          method: 'POST',
+          body: formData,
+          credentials: 'same-origin',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+        });
+
+        let payload = null;
+        try {
+          payload = await response.json();
+        } catch (error) {
+          payload = null;
+        }
+
+        if (!response.ok || !payload || payload.success !== true) {
+          throw new Error(payload && payload.message ? payload.message : '임시 사진을 삭제하지 못했습니다.');
+        }
+      }
+
+      async function handleImagePaste(event) {
+        const items = Array.from(event.clipboardData ? event.clipboardData.items || [] : []);
+        const imageItems = items.filter((item) => item.type && item.type.startsWith('image/'));
+        if (!imageItems.length) {
+          return;
+        }
+
+        event.preventDefault();
+        for (const item of imageItems) {
+          const file = item.getAsFile();
+          if (!file) {
+            continue;
+          }
+
+          pendingUploadCount += 1;
+          updatePasteZoneState();
+          try {
+            const preparedFile = await prepareClipboardFile(file);
+            const uploaded = await uploadPastedFile(preparedFile);
+            pastedImages.push({
+              file_path: uploaded.file_path,
+              file_name: uploaded.file_name,
+              preview_url: uploaded.preview_url || uploaded.file_path,
+            });
+          } catch (error) {
+            window.alert(error instanceof Error ? error.message : '클립보드 이미지를 읽지 못했습니다.');
+          } finally {
+            pendingUploadCount = Math.max(0, pendingUploadCount - 1);
+            updatePasteZoneState();
+          }
+        }
+
+        renderPastePreview();
+        pasteZone.focus();
+      }
+
+      uploadForm.addEventListener('paste', (event) => {
+        void handleImagePaste(event);
+      });
+
+      pasteZone.addEventListener('click', () => {
+        pasteZone.focus();
+      });
+
+      pastePreview.addEventListener('click', (event) => {
+        const target = event.target instanceof HTMLElement
+          ? event.target.closest('[data-remove-pasted-image]')
+          : null;
+        if (!target) {
+          return;
+        }
+
+        const removeIndex = Number.parseInt(target.getAttribute('data-remove-pasted-image') || '-1', 10);
+        if (removeIndex < 0 || removeIndex >= pastedImages.length) {
+          return;
+        }
+
+        const [removedImage] = pastedImages.splice(removeIndex, 1);
+        renderPastePreview();
+        if (!removedImage || !removedImage.file_path) {
+          return;
+        }
+
+        deletePastedFile(removedImage.file_path).catch((error) => {
+          window.alert(error instanceof Error ? error.message : '임시 사진을 삭제하지 못했습니다.');
+        });
+      });
+
+      uploadForm.addEventListener('submit', (event) => {
+        if (pendingUploadCount > 0) {
+          event.preventDefault();
+          window.alert('붙여넣은 사진 업로드가 끝날 때까지 잠시만 기다려 주세요.');
+          pasteZone.focus();
+          return;
+        }
+
+        const hasFile = !!(photoInput.files && photoInput.files.length > 0);
+        if (!hasFile && pastedImages.length === 0) {
+          event.preventDefault();
+          window.alert('사진을 선택하거나 클립보드 이미지를 붙여넣어 주세요.');
+          pasteZone.focus();
+          return;
+        }
+
+        syncPastedImages();
+      });
+
+      syncPastedImages();
+      updatePasteZoneState();
     })();
 
     (() => {

@@ -41,6 +41,103 @@ function h(string $value): string
     return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 }
 
+function employment_rules_pdf_autoload_path(): string
+{
+    return dirname(__DIR__) . '/risk_assessment/vendor/autoload.php';
+}
+
+function employment_rules_build_pdf_filename(?array $current = null): string
+{
+    $base = '취업규칙';
+    $updatedAt = trim((string)($current['updated_at'] ?? ''));
+    if ($updatedAt !== '') {
+        $timestamp = strtotime($updatedAt);
+        if ($timestamp !== false) {
+            return $base . '_' . date('Ymd_His', $timestamp) . '.pdf';
+        }
+    }
+
+    return $base . '.pdf';
+}
+
+function employment_rules_build_pdf_html(string $title, string $contentHtml, ?array $current = null): string
+{
+    $updatedAt = trim((string)($current['updated_at'] ?? ''));
+    $updatedBy = trim((string)($current['updated_by'] ?? ''));
+    $metaParts = [];
+    if ($updatedAt !== '') {
+        $metaParts[] = '최종 반영일 ' . h($updatedAt);
+    }
+    if ($updatedBy !== '') {
+        $metaParts[] = '작성자 ' . h($updatedBy);
+    }
+    $metaHtml = $metaParts !== [] ? '<div class="doc-meta">' . implode(' | ', $metaParts) . '</div>' : '';
+
+    return '<!DOCTYPE html>'
+        . '<html lang="ko">'
+        . '<head>'
+        . '<meta charset="UTF-8">'
+        . '<title>' . h($title) . '</title>'
+        . '<style>'
+        . '@page { size: A4; margin: 20mm 16mm 22mm 16mm; }'
+        . 'body { margin: 0; color: #1f2937; font-family: dejavusans, sans-serif; font-size: 11pt; line-height: 1.9; }'
+        . '.document-shell { width: 100%; }'
+        . '.doc-title { margin: 0 0 8mm; text-align: center; font-size: 20pt; font-weight: 700; color: #17315c; letter-spacing: -0.02em; }'
+        . '.doc-meta { margin: 0 0 10mm; text-align: right; color: #5b6777; font-size: 9pt; }'
+        . '.document { margin: 0; padding: 0; }'
+        . '.document h2, .document h3, .document p, .document li, .document table, .document tr, .document td { page-break-inside: avoid; }'
+        . '.document h2 { margin: 0 0 5mm; padding-bottom: 3mm; border-bottom: 0.5mm solid #d7e1ef; font-size: 16pt; color: #17315c; page-break-after: avoid; }'
+        . '.document h2:not(:first-of-type) { page-break-before: always; margin-top: 0; }'
+        . '.document h3 { margin: 7mm 0 3mm; font-size: 13pt; color: #17315c; page-break-after: avoid; }'
+        . '.document p { margin: 0 0 3mm; }'
+        . '.document p.bullet { padding-left: 4mm; color: #374151; }'
+        . '.document p.related-basis { color: #475569; }'
+        . '.document table { width: 100%; border-collapse: collapse; margin: 5mm 0; }'
+        . '.document td, .document th { border: 0.3mm solid #d7e1ef; padding: 2.5mm 3mm; vertical-align: top; font-size: 10pt; }'
+        . '.document a { color: #1f2937; text-decoration: none; }'
+        . '</style>'
+        . '</head>'
+        . '<body>'
+        . '<div class="document-shell">'
+        . '<h1 class="doc-title">' . h($title) . '</h1>'
+        . $metaHtml
+        . '<div class="document">' . $contentHtml . '</div>'
+        . '</div>'
+        . '</body>'
+        . '</html>';
+}
+
+function employment_rules_output_pdf(string $title, string $contentHtml, ?array $current = null): void
+{
+    $autoloadPath = employment_rules_pdf_autoload_path();
+    if (!is_file($autoloadPath)) {
+        throw new RuntimeException('PDF 라이브러리를 찾을 수 없습니다.');
+    }
+
+    require_once $autoloadPath;
+
+    $tempDir = dirname(__DIR__) . '/uploads/tmp';
+    if (!is_dir($tempDir) && !mkdir($tempDir, 0777, true) && !is_dir($tempDir)) {
+        throw new RuntimeException('PDF 임시 폴더를 생성하지 못했습니다.');
+    }
+
+    $mpdf = new \Mpdf\Mpdf([
+        'mode' => 'utf-8',
+        'format' => 'A4',
+        'margin_top' => 20,
+        'margin_right' => 16,
+        'margin_bottom' => 22,
+        'margin_left' => 16,
+        'tempDir' => $tempDir,
+    ]);
+    $mpdf->SetTitle($title);
+    $mpdf->SetAuthor(trim((string)($current['updated_by'] ?? $current['uploaded_by'] ?? '관리자')));
+    $mpdf->SetDisplayMode('fullpage');
+    $mpdf->WriteHTML(employment_rules_build_pdf_html($title, $contentHtml, $current));
+    $mpdf->Output(employment_rules_build_pdf_filename($current), \Mpdf\Output\Destination::DOWNLOAD);
+    exit;
+}
+
 function employment_rules_storage_path(): string
 {
     return __DIR__ . '/data.json';
@@ -1363,6 +1460,16 @@ foreach ($toc as $item) {
         'level' => $level,
     ];
 }
+
+if (($_GET['action'] ?? '') === 'download_pdf') {
+    if (!$current || trim((string)($current['content_html'] ?? '')) === '') {
+        http_response_code(404);
+        echo 'PDF로 다운로드할 취업규칙 문서가 없습니다.';
+        exit;
+    }
+
+    employment_rules_output_pdf($pageTitle, $renderedContentHtml, $current);
+}
 ?>
 <!DOCTYPE html>
 <html lang="ko">
@@ -1384,6 +1491,10 @@ foreach ($toc as $item) {
             --law-gold: #b08a3c;
             --header-sticky-offset: 104px;
             --panel-sticky-gap: 8px;
+            --document-print-margin-top: 20mm;
+            --document-print-margin-right: 16mm;
+            --document-print-margin-bottom: 22mm;
+            --document-print-margin-left: 16mm;
         }
 
         * { box-sizing: border-box; }
@@ -1585,9 +1696,46 @@ foreach ($toc as $item) {
             color: var(--law-heading);
         }
 
-        .toc-header {
+        .toc-search-sticky {
             position: sticky;
             top: 0;
+            z-index: 3;
+            margin-bottom: 12px;
+            padding: 0 0 10px;
+            background: var(--law-card);
+            border-bottom: 1px solid #e8eef7;
+        }
+
+        .toc-search-label {
+            display: block;
+            margin: 0 0 8px;
+            color: #314765;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+
+        .toc-search-input {
+            width: 100%;
+            min-height: 38px;
+            border: 1px solid #cdd9eb;
+            border-radius: 10px;
+            padding: 0 10px;
+            font: inherit;
+            font-size: 13px;
+            color: #17345c;
+            background: #fff;
+            outline: none;
+        }
+
+        .toc-search-input:focus {
+            border-color: #2d63ae;
+            box-shadow: 0 0 0 3px rgba(45, 99, 174, 0.12);
+        }
+
+        .toc-header {
+            position: sticky;
+            top: 68px;
             z-index: 2;
             display: flex;
             align-items: center;
@@ -2069,6 +2217,226 @@ foreach ($toc as $item) {
             background: rgba(255, 255, 255, 0.2);
         }
 
+        .print-preview-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 1250;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: rgba(9, 18, 32, 0.72);
+            backdrop-filter: blur(4px);
+        }
+
+        .print-preview-modal.is-open {
+            display: flex;
+        }
+
+        .print-preview-dialog {
+            width: min(1120px, 100%);
+            max-height: calc(100vh - 48px);
+            overflow: hidden;
+            background: #eef3f9;
+            border: 1px solid #d4deed;
+            border-radius: 20px;
+            box-shadow: 0 28px 64px rgba(10, 25, 46, 0.3);
+            display: grid;
+            grid-template-rows: auto 1fr;
+        }
+
+        .print-preview-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 16px 18px;
+            border-bottom: 1px solid #d8e2f0;
+            background: linear-gradient(180deg, #f9fbfe, #f2f6fb);
+        }
+
+        .print-preview-copy h3 {
+            margin: 0;
+            color: #163965;
+            font-size: 18px;
+        }
+
+        .print-preview-copy p {
+            margin: 6px 0 0;
+            color: #5b6b82;
+            font-size: 13px;
+        }
+
+        .print-preview-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .print-preview-print-button {
+            background: #ffffff !important;
+            color: #163965 !important;
+            border-color: #b7c8de !important;
+            box-shadow: 0 8px 20px rgba(22, 57, 101, 0.12);
+        }
+
+        .print-preview-print-button:hover {
+            background: #f6f9fd !important;
+            color: #102f57 !important;
+        }
+
+        .print-preview-body {
+            overflow: auto;
+            padding: 24px;
+            background:
+                linear-gradient(180deg, rgba(216, 225, 237, 0.42), rgba(238, 243, 249, 0.12)),
+                #eef3f9;
+        }
+
+        .print-preview-paper {
+            width: min(210mm, 100%);
+            margin: 0 auto;
+            display: grid;
+            gap: 24px;
+        }
+
+        .print-preview-page {
+            position: relative;
+            min-height: 297mm;
+            background: #fff;
+            box-shadow: 0 20px 46px rgba(20, 36, 61, 0.18);
+            border: 1px solid #dbe4ef;
+            padding:
+                var(--document-print-margin-top)
+                var(--document-print-margin-right)
+                var(--document-print-margin-bottom)
+                var(--document-print-margin-left);
+            break-after: page;
+            page-break-after: always;
+        }
+
+        .print-preview-page .content-header {
+            padding: 0;
+            margin-bottom: 16px;
+        }
+
+        .print-preview-page .document {
+            padding: 0;
+        }
+
+        .document h2,
+        .document h3,
+        .document p,
+        .document li,
+        .document table,
+        .document tr,
+        .document td {
+            break-inside: avoid-page;
+            break-inside: avoid;
+            page-break-inside: avoid;
+        }
+
+        .document h2,
+        .document h3 {
+            break-after: avoid-page;
+            page-break-after: avoid;
+        }
+
+        .document p,
+        .document li {
+            orphans: 3;
+            widows: 3;
+        }
+
+        .document h2:not(:first-of-type) {
+            break-before: page;
+            page-break-before: always;
+        }
+
+        @media print {
+            @page {
+                size: A4;
+                margin:
+                    var(--document-print-margin-top)
+                    var(--document-print-margin-right)
+                    var(--document-print-margin-bottom)
+                    var(--document-print-margin-left);
+            }
+
+            body {
+                background: #fff;
+            }
+
+            body.print-preview-open > *:not(.print-preview-modal) {
+                display: none !important;
+            }
+
+            .topbar,
+            .sidebar,
+            .law-panel,
+            .upload-card,
+            .flash,
+            .law-link-status,
+            .rule-edit-modal,
+            .print-preview-head {
+                display: none !important;
+            }
+
+            .layout,
+            .main {
+                display: block;
+                max-width: none;
+                margin: 0;
+                padding: 0;
+            }
+
+            .content-card,
+            .document,
+            .content-header {
+                padding: 0;
+                border: 0;
+                box-shadow: none;
+                background: #fff;
+            }
+
+            .print-preview-modal {
+                position: static;
+                display: block !important;
+                padding: 0;
+                background: #fff;
+            }
+
+            .print-preview-dialog,
+            .print-preview-body,
+            .print-preview-paper,
+            .print-preview-page {
+                width: auto;
+                max-height: none;
+                overflow: visible;
+                padding: 0;
+                margin: 0;
+                border: 0;
+                border-radius: 0;
+                box-shadow: none;
+                background: #fff;
+            }
+
+            .print-preview-paper {
+                display: block;
+            }
+
+            .print-preview-page {
+                min-height: auto;
+                background: #fff;
+            }
+
+            .document h2:not(:first-of-type) {
+                margin-top: 0;
+            }
+        }
+
         .law-link-status {
             display: inline-flex;
             align-items: center;
@@ -2401,6 +2769,7 @@ foreach ($toc as $item) {
             </div>
             <div class="topbar-actions">
                 <button type="button" class="content-header-button" id="rule-add-article">새 조항 추가</button>
+                <button type="button" class="content-header-button" id="rule-download-pdf">출력</button>
                 <a class="content-header-button content-header-button-secondary" href="/risk_assessment/work_list.php">메인으로 돌아가기</a>
                 <div class="user-chip"><?= h(trim((string)($user['name'] ?? $user['login_id'] ?? "\u{AD00}\u{B9AC}\u{C790}"))) ?> 님</div>
             </div>
@@ -2411,6 +2780,10 @@ foreach ($toc as $item) {
         <aside class="sidebar">
             <div class="sidebar-scroll" id="sidebar-scroll-area">
                 <?php if ($tocGroups !== [] || $appendixGroups !== [] || $annexGroups !== []): ?>
+                    <div class="toc-search-sticky">
+                        <label for="toc-keyword-search" class="toc-search-label">키워드 검색</label>
+                        <input type="search" id="toc-keyword-search" class="toc-search-input" placeholder="조문 제목으로 검색" autocomplete="off" spellcheck="false">
+                    </div>
                     <div class="toc">
                         <div class="toc-header">
                             <h3>목차</h3>
@@ -2602,6 +2975,25 @@ foreach ($toc as $item) {
                 <button type="button" class="rule-edit-btn danger" id="rule-edit-delete">삭제</button>
                 <button type="button" class="rule-edit-btn" id="rule-edit-cancel">취소</button>
                 <button type="button" class="rule-edit-btn primary" id="rule-edit-save">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="print-preview-modal" id="print-preview-modal" aria-hidden="true">
+        <div class="print-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="print-preview-title">
+            <div class="print-preview-head">
+                <div class="print-preview-copy">
+                    <h3 id="print-preview-title">PDF 문서 미리보기</h3>
+                    <p>문서 배치를 확인한 뒤 출력 또는 PDF 저장을 진행할 수 있습니다.</p>
+                </div>
+                <div class="print-preview-actions">
+                    <button type="button" class="content-header-button" id="print-preview-download">다운로드</button>
+                    <button type="button" class="content-header-button print-preview-print-button" id="print-preview-print">출력</button>
+                    <button type="button" class="content-header-button content-header-button-secondary" id="print-preview-close">닫기</button>
+                </div>
+            </div>
+            <div class="print-preview-body">
+                <div class="print-preview-paper" id="print-preview-paper"></div>
             </div>
         </div>
     </div>
@@ -2873,7 +3265,7 @@ foreach ($toc as $item) {
                 var trailingPattern = /(\s*,\s*)\uC81C\s*(\d+)\s*\uC870(?:\s*\uC758\s*(\d+))?(?:\s*\uC81C\s*(\d+)\s*\uD56D(?:\s*\uC81C\s*(\d+)\s*\uD638)?)?/g;
                 var linkCount = 0;
 
-                root.querySelectorAll('p, h2, h3, td').forEach(function (element) {
+                root.querySelectorAll('td').forEach(function (element) {
                     var plainText = String(element.textContent || '').trim();
                     if (/^\[?\s*\uAD00\uB828\uADFC\uAC70\s*[:\uFF1A]?/u.test(plainText) || element.classList.contains('related-basis')) {
                         return;
@@ -2990,6 +3382,89 @@ foreach ($toc as $item) {
             var documentRoot = document.querySelector('.document');
             var lawLinkStatus = document.getElementById('law-link-status');
             var tocList = document.getElementById('toc-list');
+            var tocSearchInput = document.getElementById('toc-keyword-search');
+
+            function setTocGroupExpanded(group, expanded) {
+                if (!group) {
+                    return;
+                }
+
+                group.classList.toggle('is-collapsed', !expanded);
+                var toggle = group.querySelector('[data-toc-toggle]');
+                if (toggle) {
+                    toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+                }
+            }
+
+            function applyTocKeywordFilter(rawKeyword) {
+                if (!tocList) {
+                    return;
+                }
+
+                var keyword = String(rawKeyword || '').trim().toLowerCase();
+                var hasKeyword = keyword !== '';
+
+                tocList.querySelectorAll('[data-toc-group]').forEach(function (group) {
+                    var headingToggle = group.querySelector('[data-toc-toggle]');
+                    var headingText = headingToggle ? String(headingToggle.textContent || '').toLowerCase() : '';
+                    var headingMatched = hasKeyword && headingText.indexOf(keyword) >= 0;
+                    var visibleItemCount = 0;
+
+                    group.querySelectorAll('.toc-group-items li').forEach(function (item) {
+                        var link = item.querySelector('a');
+                        var itemText = link ? String(link.textContent || '').toLowerCase() : '';
+                        var itemMatched = !hasKeyword || headingMatched || itemText.indexOf(keyword) >= 0;
+                        item.style.display = itemMatched ? '' : 'none';
+                        if (itemMatched) {
+                            visibleItemCount += 1;
+                        }
+                    });
+
+                    var showGroup = !hasKeyword || headingMatched || visibleItemCount > 0;
+                    group.style.display = showGroup ? '' : 'none';
+
+                    if (!hasKeyword) {
+                        if (group.dataset.searchExpanded === '1') {
+                            setTocGroupExpanded(group, false);
+                        }
+                        delete group.dataset.searchExpanded;
+                        return;
+                    }
+
+                    if (showGroup) {
+                        group.dataset.searchExpanded = '1';
+                        setTocGroupExpanded(group, true);
+                    }
+                });
+
+                tocList.querySelectorAll('.toc-header').forEach(function (header) {
+                    if (!hasKeyword) {
+                        header.style.display = '';
+                        return;
+                    }
+
+                    var current = header.nextElementSibling;
+                    var hasVisibleGroup = false;
+                    while (current) {
+                        if (current.classList && current.classList.contains('toc-header')) {
+                            break;
+                        }
+                        if (current.matches && current.matches('[data-toc-group]') && current.style.display !== 'none') {
+                            hasVisibleGroup = true;
+                            break;
+                        }
+                        current = current.nextElementSibling;
+                    }
+
+                    header.style.display = hasVisibleGroup ? '' : 'none';
+                });
+            }
+
+            if (tocSearchInput) {
+                tocSearchInput.addEventListener('input', function () {
+                    applyTocKeywordFilter(tocSearchInput.value);
+                });
+            }
 
             function isArticleHeading(node) {
                 if (!node || node.tagName !== 'H3') {
@@ -3154,6 +3629,7 @@ foreach ($toc as $item) {
 
                 tocList.innerHTML = html;
                 bindTocToggleEvents(tocList);
+                applyTocKeywordFilter(tocSearchInput ? tocSearchInput.value : '');
             }
 
             function syncDocumentStructure() {
@@ -3841,6 +4317,126 @@ foreach ($toc as $item) {
 
             refreshLawReferences();
             setupClauseEditorModal();
+            var pdfBtn = document.getElementById('rule-download-pdf');
+            var printPreviewModal = document.getElementById('print-preview-modal');
+            var printPreviewPaper = document.getElementById('print-preview-paper');
+            var printPreviewCloseBtn = document.getElementById('print-preview-close');
+            var printPreviewPrintBtn = document.getElementById('print-preview-print');
+            var printPreviewDownloadBtn = document.getElementById('print-preview-download');
+
+            function collectChapterSections(container) {
+                var chapters = [];
+                var currentChapter = [];
+
+                Array.prototype.forEach.call(container.children || [], function (node) {
+                    if (node.tagName === 'H2' && currentChapter.length > 0) {
+                        chapters.push(currentChapter);
+                        currentChapter = [];
+                    }
+
+                    currentChapter.push(node);
+                });
+
+                if (currentChapter.length > 0) {
+                    chapters.push(currentChapter);
+                }
+
+                return chapters;
+            }
+
+            function buildPrintPreview() {
+                if (!printPreviewPaper || !documentRoot) {
+                    return;
+                }
+
+                printPreviewPaper.innerHTML = '';
+                var sourceHeader = document.querySelector('.content-header');
+                var documentClone = documentRoot.cloneNode(true);
+                var pageSections = collectChapterSections(documentClone);
+
+                if (pageSections.length === 0) {
+                    pageSections.push([]);
+                }
+
+                pageSections.forEach(function (sectionNodes, index) {
+                    var page = document.createElement('section');
+                    page.className = 'print-preview-page';
+
+                    if (index === 0 && sourceHeader) {
+                        page.appendChild(sourceHeader.cloneNode(true));
+                    }
+
+                    var pageDocument = document.createElement('div');
+                    pageDocument.className = 'document';
+                    sectionNodes.forEach(function (node) {
+                        pageDocument.appendChild(node);
+                    });
+
+                    page.appendChild(pageDocument);
+                    printPreviewPaper.appendChild(page);
+                });
+            }
+
+            function openPrintPreview() {
+                if (!printPreviewModal) {
+                    return;
+                }
+
+                buildPrintPreview();
+                printPreviewModal.classList.add('is-open');
+                printPreviewModal.setAttribute('aria-hidden', 'false');
+                document.body.classList.add('print-preview-open');
+            }
+
+            function closePrintPreview() {
+                if (!printPreviewModal) {
+                    return;
+                }
+
+                printPreviewModal.classList.remove('is-open');
+                printPreviewModal.setAttribute('aria-hidden', 'true');
+                document.body.classList.remove('print-preview-open');
+            }
+
+            if (pdfBtn) {
+                pdfBtn.addEventListener('click', function () {
+                    openPrintPreview();
+                });
+            }
+
+            if (printPreviewCloseBtn) {
+                printPreviewCloseBtn.addEventListener('click', function () {
+                    closePrintPreview();
+                });
+            }
+
+            if (printPreviewPrintBtn) {
+                printPreviewPrintBtn.addEventListener('click', function () {
+                    window.print();
+                });
+            }
+
+            if (printPreviewDownloadBtn) {
+                printPreviewDownloadBtn.addEventListener('click', function () {
+                    var url = new URL(window.location.href);
+                    url.searchParams.set('action', 'download_pdf');
+                    window.location.href = url.toString();
+                });
+            }
+
+            if (printPreviewModal) {
+                printPreviewModal.addEventListener('click', function (event) {
+                    if (event.target === printPreviewModal) {
+                        closePrintPreview();
+                    }
+                });
+            }
+
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape' && printPreviewModal && printPreviewModal.classList.contains('is-open')) {
+                    closePrintPreview();
+                }
+            });
         }());
     </script>
 </body>

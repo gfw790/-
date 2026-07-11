@@ -532,6 +532,16 @@ function render_hazard_completion_badge(array $report): string
     );
 }
 
+function render_view_completion_text(array $report): string
+{
+    $photoCount = (int)($report['attached_photo_count'] ?? 0);
+    if ($photoCount > 0) {
+        return '<span class="sub-text">완료 <span class="photo-indicator" title="작업사진 첨부">@</span></span>';
+    }
+
+    return '<span class="sub-text">완료</span>';
+}
+
 function report_view_content_hidden(array $report): bool
 {
     return (bool)($report['work_input_completed'] ?? false)
@@ -1091,11 +1101,17 @@ $unitTypeOptions = work_list_collect_type_options();
 $workListKeyword = trim((string)($_GET['work_keyword'] ?? ''));
 $workDateFrom = trim((string)($_GET['work_date_from'] ?? ''));
 $workDateTo = trim((string)($_GET['work_date_to'] ?? ''));
+$isDefaultMonthDateRange = false;
 if ($workDateFrom !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $workDateFrom)) {
     $workDateFrom = '';
 }
 if ($workDateTo !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $workDateTo)) {
     $workDateTo = '';
+}
+if ($workDateFrom === '' && $workDateTo === '') {
+  $workDateFrom = date('Y-m-01');
+  $workDateTo = date('Y-m-t');
+  $isDefaultMonthDateRange = true;
 }
 $selectedUnitTypeFilter = trim((string)($_GET['filter_type'] ?? ''));
 if ($selectedUnitTypeFilter !== '' && !array_key_exists($selectedUnitTypeFilter, $unitTypeOptions)) {
@@ -1142,7 +1158,11 @@ if ($workDateFrom !== '' || $workDateTo !== '') {
     ));
 }
 
-$hasWorkListFilter = $selectedUnitTypeFilter !== '' || $selectedMajorFilter !== '' || $selectedCheckedItemFilter !== '' || $workListKeyword !== '' || $workDateFrom !== '' || $workDateTo !== '';
+$hasWorkListFilter = $selectedUnitTypeFilter !== ''
+  || $selectedMajorFilter !== ''
+  || $selectedCheckedItemFilter !== ''
+  || $workListKeyword !== ''
+  || (!$isDefaultMonthDateRange && ($workDateFrom !== '' || $workDateTo !== ''));
 $filteredReportCount = count($reports);
 $workListPerPage = 10;
 $currentWorkListPage = max(1, (int)($_GET['page'] ?? 1));
@@ -1164,40 +1184,59 @@ $workListPagination = render_work_list_pagination(
     ]
 );
 
-$hazardParticipantMap = [];
-if (!empty($pagedReports) && tableExists($pdo, 'work_report_worker_hazard_selection')) {
-    $reportIds = array_values(array_unique(array_map(
-        static fn($row) => (int)($row['report_id'] ?? 0),
-        $pagedReports
-    )));
-    $reportIds = array_values(array_filter($reportIds, static fn($id) => $id > 0));
+$pagedReportIds = array_values(array_unique(array_map(
+    static fn($row) => (int)($row['report_id'] ?? 0),
+    $pagedReports
+)));
+$pagedReportIds = array_values(array_filter($pagedReportIds, static fn($id) => $id > 0));
 
-    if (!empty($reportIds)) {
-        $placeholders = implode(',', array_fill(0, count($reportIds), '?'));
-        $participantStmt = $pdo->prepare("
-            SELECT
-                report_id,
-                user_login_id,
-                user_name
-            FROM work_report_worker_hazard_selection
-            WHERE report_id IN ($placeholders)
-            GROUP BY report_id, user_login_id, user_name
-            ORDER BY user_name ASC, user_login_id ASC
-        ");
-        $participantStmt->execute($reportIds);
-        foreach ($participantStmt->fetchAll() as $participantRow) {
-            $mapReportId = (int)($participantRow['report_id'] ?? 0);
-            if ($mapReportId <= 0) {
-                continue;
-            }
-            if (!isset($hazardParticipantMap[$mapReportId])) {
-                $hazardParticipantMap[$mapReportId] = [];
-            }
-            $hazardParticipantMap[$mapReportId][] = [
-                'user_name' => (string)($participantRow['user_name'] ?? ''),
-                'user_login_id' => (string)($participantRow['user_login_id'] ?? ''),
-            ];
+$hazardParticipantMap = [];
+if (!empty($pagedReportIds) && tableExists($pdo, 'work_report_worker_hazard_selection')) {
+    $placeholders = implode(',', array_fill(0, count($pagedReportIds), '?'));
+    $participantStmt = $pdo->prepare("
+        SELECT
+            report_id,
+            user_login_id,
+            user_name
+        FROM work_report_worker_hazard_selection
+        WHERE report_id IN ($placeholders)
+        GROUP BY report_id, user_login_id, user_name
+        ORDER BY user_name ASC, user_login_id ASC
+    ");
+    $participantStmt->execute($pagedReportIds);
+    foreach ($participantStmt->fetchAll() as $participantRow) {
+        $mapReportId = (int)($participantRow['report_id'] ?? 0);
+        if ($mapReportId <= 0) {
+            continue;
         }
+        if (!isset($hazardParticipantMap[$mapReportId])) {
+            $hazardParticipantMap[$mapReportId] = [];
+        }
+        $hazardParticipantMap[$mapReportId][] = [
+            'user_name' => (string)($participantRow['user_name'] ?? ''),
+            'user_login_id' => (string)($participantRow['user_login_id'] ?? ''),
+        ];
+    }
+}
+
+$attachedPhotoCountMap = [];
+if (!empty($pagedReportIds) && tableExists($pdo, 'work_report_image')) {
+    $placeholders = implode(',', array_fill(0, count($pagedReportIds), '?'));
+    $photoStmt = $pdo->prepare("
+        SELECT
+            report_id,
+            COUNT(*) AS photo_count
+        FROM work_report_image
+        WHERE report_id IN ($placeholders)
+        GROUP BY report_id
+    ");
+    $photoStmt->execute($pagedReportIds);
+    foreach ($photoStmt->fetchAll() as $photoRow) {
+        $mapReportId = (int)($photoRow['report_id'] ?? 0);
+        if ($mapReportId <= 0) {
+            continue;
+        }
+        $attachedPhotoCountMap[$mapReportId] = (int)($photoRow['photo_count'] ?? 0);
     }
 }
 
@@ -1208,6 +1247,7 @@ foreach ($pagedReports as &$report) {
     if ((int)($report['hazard_participant_count'] ?? 0) <= 0 && !empty($participants)) {
         $report['hazard_participant_count'] = count($participants);
     }
+    $report['attached_photo_count'] = (int)($attachedPhotoCountMap[$reportIdKey] ?? 0);
 }
 unset($report);
 
@@ -1237,12 +1277,15 @@ unset($report);
 
 $currentUserName = trim((string)($user['name'] ?? ''));
 $currentUserLoginId = trim((string)($user['login_id'] ?? ''));
+$isJungYeontakAccount = $currentUserLoginId === '6680';
 $canAccessLegacyListPage = $currentUserName === "\u{AE40}\u{B0A8}\u{ADE0}";
 $canAccessMyGearTest = $currentUserName === "\u{AE40}\u{B0A8}\u{ADE0}";
+$canAccessSafetyGearManagement = $canManage && !$isJungYeontakAccount;
 $canAccessEmploymentRules = in_array($currentUserLoginId, [
     '5878',
     '2316',
     '7204',
+    '6680',
 ], true);
 $workListDescription = '저장된 작업리스트를 확인하고 필요한 항목을 다시 열어볼 수 있습니다.';
 ?>
@@ -1273,9 +1316,12 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     background: var(--bg) !important;
     min-height: 100vh;
     color: var(--text) !important;
-    padding: 28px 20px 48px;
+    padding: 24px clamp(12px, 1.5vw, 24px) 40px;
   }
-  .shell { max-width: 1200px; margin: 0 auto; }
+  .shell {
+    width: min(100%, 1880px);
+    margin: 0 auto;
+  }
   .topbar {
     display: flex;
     justify-content: space-between;
@@ -1317,6 +1363,15 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     border: 1px solid var(--border2) !important;
   }
   .btn-secondary:hover { background: rgba(255,255,255,0.12) !important; }
+  .btn-employment-rules {
+    background: rgba(164, 214, 178, 0.22) !important;
+    color: #dff7e6 !important;
+    border-color: rgba(164, 214, 178, 0.52) !important;
+  }
+  .btn-employment-rules:hover {
+    background: rgba(164, 214, 178, 0.32) !important;
+    color: #effcf2 !important;
+  }
   .btn-header-cta {
     background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%) !important;
     color: #fff !important;
@@ -1738,7 +1793,11 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     border: 1px solid rgba(214, 69, 65, 0.35);
     color: #ffd3d1;
   }
-  .table-wrap { overflow-x: auto; padding: 0 18px 18px; background: transparent !important; }
+  .table-wrap {
+    overflow-x: auto;
+    padding: 0 clamp(12px, 1.4vw, 24px) 18px;
+    background: transparent !important;
+  }
   .mobile-list { display: none; padding: 0 16px 16px; }
   .pagination {
     display: flex;
@@ -1830,6 +1889,10 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
   tr:hover td { background: rgba(255,255,255,0.03) !important; }
   .work-title { font-weight: 700; color: var(--text-hi); margin-bottom: 4px; font-size: 14px; }
   .sub-text { color: var(--text-dim); font-size: 12px; line-height: 1.5; }
+  .photo-indicator {
+    color: var(--accent2);
+    font-weight: 800;
+  }
   .unit-code-link {
     display: inline-flex;
     align-items: center;
@@ -2515,7 +2578,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
             <a class="btn-secondary" href="schedule.php?view_team=가스팀">가스팀근무표</a>
           <?php endif; ?>
           <?php if (!$isWorker): ?>
-            <?php if (!$isLeaderOnly && $userRole !== 'safety_manager' && $userRole !== 'administrator'): ?>
+            <?php if (!$isLeaderOnly && $userRole !== 'safety_manager' && $userRole !== 'administrator' && !$isJungYeontakAccount): ?>
               <a class="btn-secondary" href="<?= h($entryPage) ?>">작업 등록</a>
             <?php endif; ?>
             <?php if ($canManage): ?>
@@ -2524,7 +2587,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
           <?php endif; ?>
         <button type="button" class="btn-secondary" onclick="openOrgModal()">조직도</button>
         <a class="btn-secondary" href="../tbm/index.php">TBM일지</a>
-        <?php if ($isOperator): ?>
+        <?php if ($isOperator && !$isJungYeontakAccount): ?>
           <a class="btn-secondary" href="../safety_log/dashboard.php">안전일지</a>
         <?php endif; ?>
         <?php if ($canAccessLegacyListPage): ?>
@@ -2534,9 +2597,9 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
           <a class="btn-secondary" href="/safety_gear/my_gear.php">나의 보호구</a>
         <?php endif; ?>
         <?php if ($canAccessEmploymentRules): ?>
-          <a class="btn-secondary" href="/employment_rules/index.php">취업규칙</a>
+          <a class="btn-secondary btn-employment-rules" href="/employment_rules/index.php">취업규칙</a>
         <?php endif; ?>
-        <?php if ($canManage): ?>
+        <?php if ($canAccessSafetyGearManagement): ?>
           <a class="btn-secondary" href="/safety_gear/index.php">보호구관리</a>
           <?php if (trim((string)auth_display_name($user)) === '김남균'): ?>
             <a class="btn-secondary" href="/material_management/index.php">물질관리</a>
@@ -2608,7 +2671,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
           ])) ?>">초기화</a>
         </form>
         <div class="work-search-meta">
-          <?php if ($workListKeyword !== '' || $workDateFrom !== '' || $workDateTo !== '' || $selectedCheckedItemFilter !== ''): ?>
+          <?php if ($workListKeyword !== '' || $selectedCheckedItemFilter !== '' || !$isDefaultMonthDateRange): ?>
             <?php
               $searchMetaParts = [];
               if ($workListKeyword !== '') {
@@ -2731,7 +2794,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
                 <?php elseif ($isWorker && !$allTasksCompleted): ?>
                   <span class="sub-text">작업지휘자 입력 대기</span>
                 <?php elseif ($allTasksCompleted): ?>
-                  <span class="sub-text">완료</span>
+                  <?= render_view_completion_text($report) ?>
                 <?php endif; ?>
                 <?php if ($canDeleteReport): ?>
                   <form method="post" onsubmit="return window.confirm('이 작업을 삭제할까요? 완료된 작업문서는 삭제할 수 없습니다.');">
@@ -2829,7 +2892,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
                       <?php elseif ($isWorker && !$allTasksCompleted): ?>
                         <span class="sub-text">작업지휘자 입력 대기</span>
                       <?php elseif ($allTasksCompleted): ?>
-                        <span class="sub-text">완료</span>
+                        <?= render_view_completion_text($report) ?>
                       <?php endif; ?>
                       <?php if ($canDeleteReport): ?>
                         <form method="post" onsubmit="return window.confirm('이 작업을 삭제할까요? 완료된 작업문서는 삭제할 수 없습니다.');">
