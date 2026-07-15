@@ -132,6 +132,45 @@ function normalize_unit_ra_id_values($values): array
     return array_values($normalized);
 }
 
+function normalize_work_report_date(string $value): string
+{
+    $value = trim($value);
+    if ($value === '') {
+        return '';
+    }
+
+    $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+    $errors = DateTimeImmutable::getLastErrors();
+    if (!$date || (($errors['warning_count'] ?? 0) > 0) || (($errors['error_count'] ?? 0) > 0)) {
+        return '';
+    }
+
+    return $date->format('Y-m-d');
+}
+
+function expand_work_report_date_range(string $startDate, string $endDate): array
+{
+    $normalizedStartDate = normalize_work_report_date($startDate);
+    $normalizedEndDate = normalize_work_report_date($endDate);
+
+    if ($normalizedStartDate === '' || $normalizedEndDate === '') {
+        throw new RuntimeException('작업기간 날짜 형식을 다시 확인해 주세요.');
+    }
+
+    $start = new DateTimeImmutable($normalizedStartDate);
+    $end = new DateTimeImmutable($normalizedEndDate);
+    if ($start > $end) {
+        throw new RuntimeException('작업종료일은 작업시작일보다 빠를 수 없습니다.');
+    }
+
+    $dates = [];
+    for ($current = $start; $current <= $end; $current = $current->modify('+1 day')) {
+        $dates[] = $current->format('Y-m-d');
+    }
+
+    return $dates;
+}
+
 function build_detail_grouped_state(array $detailTasks, array $detailCodeMap): array
 {
     $grouped = [
@@ -654,6 +693,43 @@ function move_temp_work_report_image_to_final(string $filePath, int $reportId, i
             throw new RuntimeException('첨부 이미지를 최종 저장하지 못했습니다.');
         }
         @unlink($sourcePath);
+    }
+
+    return [
+        'file_name' => $fileName,
+        'file_path' => 'uploads/work_report/' . $fileName,
+    ];
+}
+
+function copy_work_report_image_to_final(string $filePath, int $reportId, int $sortNo): ?array
+{
+    $normalizedPath = str_replace('\\', '/', trim($filePath));
+    if ($normalizedPath === '') {
+        return null;
+    }
+
+    if (!str_starts_with($normalizedPath, 'uploads/work_report_temp/')
+        && !str_starts_with($normalizedPath, 'uploads/work_report/')) {
+        return null;
+    }
+
+    $sourcePath = __DIR__ . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $normalizedPath);
+    if (!is_file($sourcePath)) {
+        return null;
+    }
+
+    $finalDir = __DIR__ . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'work_report';
+    ensure_directory_exists($finalDir);
+
+    $ext = strtolower((string)pathinfo($sourcePath, PATHINFO_EXTENSION));
+    if ($ext === '') {
+        $ext = 'jpg';
+    }
+
+    $fileName = sprintf('report_%d_%02d.%s', $reportId, $sortNo, $ext);
+    $targetPath = $finalDir . DIRECTORY_SEPARATOR . $fileName;
+    if (!@copy($sourcePath, $targetPath)) {
+        throw new RuntimeException('첨부 이미지를 복제 저장하지 못했습니다.');
     }
 
     return [

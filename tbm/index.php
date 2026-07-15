@@ -41,6 +41,24 @@ $teamDisplayMap = [
 // 현재 사용자 표시 레이블
 $userDisplayTeam = tbm_normalize_display_team_name($userTeam);
 $userLabel = $isOperator ? '운영자' : ($userDisplayTeam ?: auth_role_label($userRole));
+$supervisedTeamKeys = [];
+if (!$isOperator && $userTeam !== '') {
+    $supervisedTeamKeys = array_fill_keys(
+        array_map('auth_team_key', auth_supervised_teams($userTeam)),
+        true
+    );
+}
+$teamButtonLabels = [
+    '공사팀 전기-4' => '공사팀 4',
+];
+$tbmButtonTeamKey = static function (string $teamName, string $displayName, bool $isSupervisedTeam): string {
+    $normalizedTeam = auth_normalize_team_name($teamName);
+    if ($isSupervisedTeam && $normalizedTeam === '공사팀 전기-4') {
+        return $normalizedTeam;
+    }
+
+    return $displayName;
+};
 
 // TBM 참석 인명부에서 제외할 이름 (괄호 표기 제거 후 기준)
 $tbmExcludeNames = ['진종철'];
@@ -56,9 +74,11 @@ $allTeams = auth_read_active_teams(); // ['공사팀-전기','공사팀-모터',
 
 foreach ($allTeams as $raTeam) {
     $displayName = tbm_normalize_display_team_name($raTeam);
+    $isSupervisedTeam = isset($supervisedTeamKeys[auth_team_key($raTeam)]);
+    $buttonTeamKey = $tbmButtonTeamKey($raTeam, $displayName, $isSupervisedTeam);
 
-    // 비운영자: 본인 표시팀(통합명 기준)만 표시
-    if (!$isOperator && $displayName !== $userDisplayTeam) {
+    // 비운영자: 본인 표시팀(통합명 기준) + 관리감독 대상 팀 버튼만 표시
+    if (!$isOperator && $displayName !== $userDisplayTeam && !$isSupervisedTeam) {
         continue;
     }
 
@@ -67,8 +87,8 @@ foreach ($allTeams as $raTeam) {
         continue;
     }
 
-    if (!isset($teamMembers[$displayName])) {
-        $teamMembers[$displayName] = [];
+    if (!isset($teamMembers[$buttonTeamKey])) {
+        $teamMembers[$buttonTeamKey] = [];
     }
 
     $names = auth_team_member_names($raTeam, ['worker', 'leader', 'manager']);
@@ -81,7 +101,7 @@ foreach ($allTeams as $raTeam) {
         ) {
             continue;
         }
-        $teamMembers[$displayName][] = ['id' => 0, 'name' => $cleanName, 'position' => ''];
+        $teamMembers[$buttonTeamKey][] = ['id' => 0, 'name' => $cleanName, 'position' => ''];
     }
 }
 
@@ -229,7 +249,13 @@ try {
             continue;
         }
 
-        $teamName = tbm_normalize_display_team_name(auth_normalize_team_name($rawTeamName));
+        $normalizedRawTeam = auth_normalize_team_name($rawTeamName);
+        $displayTeamName = tbm_normalize_display_team_name($normalizedRawTeam);
+        $teamName = $tbmButtonTeamKey(
+            $normalizedRawTeam,
+            $displayTeamName,
+            isset($supervisedTeamKeys[auth_team_key($normalizedRawTeam)])
+        );
         if ($teamName === '') {
             $fallbackRecentDocs[] = $doc;
             continue;
@@ -409,20 +435,21 @@ body { font-family: "Malgun Gothic", sans-serif; margin: 0; background: #f5f6f7;
                 </div>
             </div>
 
-            <?php if ($isOperator): ?>
             <div class="field-group">
                 <label for="image_file">사진 소스</label>
+                <?php if ($isOperator): ?>
                 <div class="file-upload-row" style="margin-bottom:8px;">
                     <input type="file" id="image_upload" name="image_upload" accept="image/jpeg,image/png,image/webp" onchange="handleImageUploadChange(event)">
                     <span id="image-upload-name" class="file-upload-name">업로드 안 함</span>
                 </div>
                 <input type="text" id="image_file" name="image_file" value="<?= h($formImageFile) ?>" placeholder="예) output/images/article_xxx.jpg 또는 https://..." oninput="updateImageSourcePreview()">
                 <div class="field-help">사진 파일을 업로드하면 제출 시 중앙 크롭 후 `output/images`에 저장되고 업로드 파일이 우선 적용됩니다. 아래 미리보기는 실제 TBM 본문 사진칸과 같은 비율로 표시됩니다.</div>
+                <?php else: ?>
+                <input type="hidden" id="image_file" name="image_file" value="<?= h($formImageFile) ?>">
+                <div class="field-help">사진은 공통 TBM 콘텐츠 기준으로 표시되며, 수정은 운영자 계정에서만 가능합니다.</div>
+                <?php endif; ?>
                 <div id="image-source-preview" class="image-source-preview is-empty">사진 소스를 입력하면 미리보기가 표시됩니다.</div>
             </div>
-            <?php else: ?>
-            <input type="hidden" id="image_file" name="image_file" value="<?= h($formImageFile) ?>">
-            <?php endif; ?>
 
             <div class="field-group"><label for="quiz1">안전퀴즈 1번</label><textarea id="quiz1" name="quiz1"><?= h($formQuiz1) ?></textarea></div>
             <div class="field-group"><label for="quiz2">안전퀴즈 2번</label><textarea id="quiz2" name="quiz2"><?= h($formQuiz2) ?></textarea></div>
@@ -455,7 +482,7 @@ body { font-family: "Malgun Gothic", sans-serif; margin: 0; background: #f5f6f7;
             <div style="display:flex; gap:5px; margin-bottom:15px; flex-wrap:wrap;">
                 <?php foreach(array_keys($teamMembers) as $tName): ?>
                     <button type="button" class="btn btn-sm btn-secondary team-btn" data-team-key="<?= h($tName) ?>" onclick="applyTeam('<?= h($tName) ?>')">
-                        <?= h($tName) ?>
+                        <?= h($teamButtonLabels[$tName] ?? $tName) ?>
                     </button>
                 <?php endforeach; ?>
                 <?php if ($isOperator): ?>
