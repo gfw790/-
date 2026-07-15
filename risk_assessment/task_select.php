@@ -141,7 +141,9 @@ function normalize_work_report_date(string $value): string
 
     $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
     $errors = DateTimeImmutable::getLastErrors();
-    if (!$date || (($errors['warning_count'] ?? 0) > 0) || (($errors['error_count'] ?? 0) > 0)) {
+    $warningCount = is_array($errors) ? (int)($errors['warning_count'] ?? 0) : 0;
+    $errorCount = is_array($errors) ? (int)($errors['error_count'] ?? 0) : 0;
+    if (!$date || $warningCount > 0 || $errorCount > 0) {
         return '';
     }
 
@@ -926,6 +928,8 @@ $formErrors = [];
 $formDefaults = [
     'work_title' => '',
     'work_date' => date('Y-m-d'),
+    'work_date_end' => date('Y-m-d'),
+    'work_date_mode' => 'single',
     'work_place' => '',
     'use_equipment_yn' => 'N',
     'selected_tools' => [],
@@ -1248,6 +1252,10 @@ if ($user !== null) {
 
         $formDefaults['work_title'] = trim((string)($_POST['work_title'] ?? ''));
         $formDefaults['work_date'] = trim((string)($_POST['work_date'] ?? ''));
+        $formDefaults['work_date_end'] = trim((string)($_POST['work_date_end'] ?? $formDefaults['work_date']));
+        $formDefaults['work_date_mode'] = $editingReportId > 0
+            ? 'single'
+            : (($_POST['work_date_mode'] ?? 'single') === 'range' ? 'range' : 'single');
         $formDefaults['work_place'] = trim((string)($_POST['work_place'] ?? ''));
         $formDefaults['use_equipment_yn'] = ($_POST['use_equipment_yn'] ?? 'N') === 'Y' ? 'Y' : 'N';
         $formDefaults['selected_tools'] = array_map('intval', $_POST['selected_tools'] ?? []);
@@ -1285,6 +1293,25 @@ if ($user !== null) {
         if ($formDefaults['work_date'] === '') {
             $formErrors[] = '작업일자를 입력해 주세요.';
         }
+        $workDateRange = [];
+        if ($formDefaults['work_date'] !== '') {
+            if ($formDefaults['work_date_mode'] !== 'range' || $formDefaults['work_date_end'] === '') {
+                $formDefaults['work_date_end'] = $formDefaults['work_date'];
+            }
+
+            try {
+                $workDateRange = expand_work_report_date_range(
+                    $formDefaults['work_date'],
+                    ($editingReportId > 0 || $formDefaults['work_date_mode'] !== 'range')
+                        ? $formDefaults['work_date']
+                        : $formDefaults['work_date_end']
+                );
+                $formDefaults['work_date'] = $workDateRange[0] ?? $formDefaults['work_date'];
+                $formDefaults['work_date_end'] = end($workDateRange) ?: $formDefaults['work_date_end'];
+            } catch (Throwable $e) {
+                $formErrors[] = $e->getMessage();
+            }
+        }
         if ($formDefaults['work_place'] === '') {
             $formErrors[] = '작업장소를 입력해 주세요.';
         }
@@ -1297,6 +1324,8 @@ if ($user !== null) {
                 $pdo->beginTransaction();
 
                 $reportId = $editingReportId;
+                $createdReportIds = [];
+                $createdDateRange = $workDateRange;
                 if ($editingReportId > 0) {
                     // 권한 확인: 작성자이거나, leader이면서 saved_report_id가 있는 경우 (기존 작업 열기)
                     $reportCheckStmt = $pdo->prepare("
@@ -1353,46 +1382,6 @@ if ($user !== null) {
                         ->execute([':report_id' => $reportId]);
                     $pdo->prepare("DELETE FROM work_report_tool WHERE report_id = :report_id")
                         ->execute([':report_id' => $reportId]);
-                } else {
-                    $stmt = $pdo->prepare("
-                        INSERT INTO work_report (
-                            unit_ra_id,
-                            role_code,
-                            user_login_id,
-                            user_name,
-                            team_name,
-                            work_title,
-                            work_date,
-                            work_place,
-                            use_equipment_yn,
-                            note_html
-                        ) VALUES (
-                            :unit_ra_id,
-                            :role_code,
-                            :user_login_id,
-                            :user_name,
-                            :team_name,
-                            :work_title,
-                            :work_date,
-                            :work_place,
-                            :use_equipment_yn,
-                            :note_html
-                        )
-                    ");
-                    $stmt->execute([
-                        ':unit_ra_id' => $selectedUnitRaId,
-                        ':role_code' => $pageRole,
-                        ':user_login_id' => $user['login_id'],
-                        ':user_name' => $user['name'],
-                        ':team_name' => $effectiveReportTeamName !== '' ? $effectiveReportTeamName : null,
-                        ':work_title' => $formDefaults['work_title'],
-                        ':work_date' => $formDefaults['work_date'],
-                        ':work_place' => $formDefaults['work_place'],
-                        ':use_equipment_yn' => $formDefaults['use_equipment_yn'],
-                        ':note_html' => $formDefaults['note_html'] !== '' ? $formDefaults['note_html'] : null,
-                    ]);
-
-                    $reportId = (int)$pdo->lastInsertId();
                 }
                 $itemMap = [];
                 $taskSortNo = 1;
@@ -1409,172 +1398,252 @@ if ($user !== null) {
                         ];
                     }
                 }
-
-                $pdo->prepare("DELETE FROM work_report_selected_unit WHERE report_id = :report_id")
-                    ->execute([':report_id' => $reportId]);
-
-                if (!empty($selectedUnitRaIds)) {
-                    $selectedUnitStmt = $pdo->prepare("
-                        INSERT INTO work_report_selected_unit (
-                            report_id, unit_ra_id, sort_no
-                        ) VALUES (
-                            :report_id, :unit_ra_id, :sort_no
-                        )
-                    ");
-                    foreach ($selectedUnitRaIds as $sortNo => $selectedTaskUnitRaId) {
-                        $selectedUnitStmt->execute([
-                            ':report_id' => $reportId,
-                            ':unit_ra_id' => (int)$selectedTaskUnitRaId,
-                            ':sort_no' => $sortNo + 1,
-                        ]);
-                    }
+                $toolMap = [];
+                foreach ($tools as $tool) {
+                    $toolMap[(int)$tool['tool_id']] = $tool;
                 }
+                $selectedUnitStmt = $pdo->prepare("
+                    INSERT INTO work_report_selected_unit (
+                        report_id, unit_ra_id, sort_no
+                    ) VALUES (
+                        :report_id, :unit_ra_id, :sort_no
+                    )
+                ");
+                $taskStmt = $pdo->prepare("
+                    INSERT INTO work_report_task (
+                        report_id, item_id, task_name, sort_no
+                    ) VALUES (
+                        :report_id, :item_id, :task_name, :sort_no
+                    )
+                ");
+                $toolStmt = $pdo->prepare("
+                    INSERT INTO work_report_tool (
+                        report_id, tool_id, tool_name
+                    ) VALUES (
+                        :report_id, :tool_id, :tool_name
+                    )
+                ");
+                $detailStmt = $pdo->prepare("
+                    INSERT INTO work_report_detail (
+                        report_id, task_name, risk_code
+                    ) VALUES (
+                        :report_id, :task_name, :risk_code
+                    )
+                ");
+                $imageInsertStmt = $pdo->prepare("
+                    INSERT INTO work_report_image (
+                        report_id, file_name, file_path, sort_no
+                    ) VALUES (
+                        :report_id, :file_name, :file_path, :sort_no
+                    )
+                ");
+                $workReportInsertStmt = $pdo->prepare("
+                    INSERT INTO work_report (
+                        unit_ra_id,
+                        role_code,
+                        user_login_id,
+                        user_name,
+                        team_name,
+                        work_title,
+                        work_date,
+                        work_place,
+                        use_equipment_yn,
+                        note_html
+                    ) VALUES (
+                        :unit_ra_id,
+                        :role_code,
+                        :user_login_id,
+                        :user_name,
+                        :team_name,
+                        :work_title,
+                        :work_date,
+                        :work_place,
+                        :use_equipment_yn,
+                        :note_html
+                    )
+                ");
 
-                if (!empty($itemMap)) {
-                    $taskStmt = $pdo->prepare("
-                        INSERT INTO work_report_task (
-                            report_id, item_id, task_name, sort_no
-                        ) VALUES (
-                            :report_id, :item_id, :task_name, :sort_no
-                        )
-                    ");
-                    foreach ($itemMap as $taskId => $item) {
-                        $taskStmt->execute([
-                            ':report_id' => $reportId,
-                            ':item_id' => $taskId,
-                            ':task_name' => $item['task_name'],
-                            ':sort_no' => $item['sort_no'],
-                        ]);
+                $saveReportRelations = static function (int $targetReportId, bool $isEditingExisting, bool $copyImagesOnly) use (
+                    $pdo,
+                    $selectedUnitRaIds,
+                    $itemMap,
+                    $formDefaults,
+                    $toolMap,
+                    $showLeaderDetailSection,
+                    $pastedImages,
+                    $selectedUnitStmt,
+                    $taskStmt,
+                    $toolStmt,
+                    $detailStmt,
+                    $imageInsertStmt
+                ): string {
+                    if ($isEditingExisting) {
+                        $pdo->prepare("DELETE FROM work_report_selected_unit WHERE report_id = :report_id")
+                            ->execute([':report_id' => $targetReportId]);
+                        $pdo->prepare("DELETE FROM work_report_detail WHERE report_id = :report_id")
+                            ->execute([':report_id' => $targetReportId]);
                     }
-                }
 
-                if ($formDefaults['use_equipment_yn'] === 'Y' && !empty($formDefaults['selected_tools'])) {
-                    $toolMap = [];
-                    foreach ($tools as $tool) {
-                        $toolMap[(int)$tool['tool_id']] = $tool;
-                    }
-                    $toolStmt = $pdo->prepare("
-                        INSERT INTO work_report_tool (
-                            report_id, tool_id, tool_name
-                        ) VALUES (
-                            :report_id, :tool_id, :tool_name
-                        )
-                    ");
-                    foreach ($formDefaults['selected_tools'] as $toolId) {
-                        if (!isset($toolMap[$toolId])) {
-                            continue;
+                    if (!empty($selectedUnitRaIds)) {
+                        foreach ($selectedUnitRaIds as $sortNo => $selectedTaskUnitRaId) {
+                            $selectedUnitStmt->execute([
+                                ':report_id' => $targetReportId,
+                                ':unit_ra_id' => (int)$selectedTaskUnitRaId,
+                                ':sort_no' => $sortNo + 1,
+                            ]);
                         }
-                        $toolStmt->execute([
-                            ':report_id' => $reportId,
-                            ':tool_id' => $toolId,
-                            ':tool_name' => $toolMap[$toolId]['tool_name'],
-                        ]);
                     }
-                }
 
-                if ($showLeaderDetailSection) {
-                    $pdo->prepare("DELETE FROM work_report_detail WHERE report_id = :report_id")
-                        ->execute([':report_id' => $reportId]);
+                    if (!empty($itemMap)) {
+                        foreach ($itemMap as $taskId => $item) {
+                            $taskStmt->execute([
+                                ':report_id' => $targetReportId,
+                                ':item_id' => $taskId,
+                                ':task_name' => $item['task_name'],
+                                ':sort_no' => $item['sort_no'],
+                            ]);
+                        }
+                    }
 
-                    if (!empty($formDefaults['detail_tasks'])) {
-                        $detailStmt = $pdo->prepare("
-                            INSERT INTO work_report_detail (
-                                report_id, task_name, risk_code
-                            ) VALUES (
-                                :report_id, :task_name, :risk_code
-                            )
-                        ");
+                    if ($formDefaults['use_equipment_yn'] === 'Y' && !empty($formDefaults['selected_tools'])) {
+                        foreach ($formDefaults['selected_tools'] as $toolId) {
+                            if (!isset($toolMap[$toolId])) {
+                                continue;
+                            }
+                            $toolStmt->execute([
+                                ':report_id' => $targetReportId,
+                                ':tool_id' => $toolId,
+                                ':tool_name' => $toolMap[$toolId]['tool_name'],
+                            ]);
+                        }
+                    }
+
+                    if ($showLeaderDetailSection && !empty($formDefaults['detail_tasks'])) {
                         foreach ($formDefaults['detail_tasks'] as $detailTask) {
                             $riskCode = trim((string)($formDefaults['detail_code_map'][$detailTask] ?? ''));
                             $detailStmt->execute([
-                                ':report_id' => $reportId,
+                                ':report_id' => $targetReportId,
                                 ':task_name' => $detailTask,
                                 ':risk_code' => $riskCode !== '' ? $riskCode : null,
                             ]);
                         }
                     }
-                }
 
-                $finalNoteHtml = $formDefaults['note_html'];
-
-                if (!empty($pastedImages)) {
-                    $sortNo = 0;
-                    $imagePathReplacements = [];
-                    if ($editingReportId > 0) {
-                        $sortStmt = $pdo->prepare("SELECT COALESCE(MAX(sort_no), 0) FROM work_report_image WHERE report_id = :report_id");
-                        $sortStmt->execute([':report_id' => $reportId]);
-                        $sortNo = (int)$sortStmt->fetchColumn();
-                    }
-                    $imgStmt = $pdo->prepare("
-                        INSERT INTO work_report_image (
-                            report_id, file_name, file_path, sort_no
-                        ) VALUES (
-                            :report_id, :file_name, :file_path, :sort_no
-                        )
-                    ");
-                    foreach ($pastedImages as $filePath) {
-                        $movedImage = move_temp_work_report_image_to_final($filePath, $reportId, $sortNo + 1);
-                        if ($movedImage === null) {
-                            continue;
+                    $finalNoteHtml = $formDefaults['note_html'];
+                    if (!empty($pastedImages)) {
+                        $sortNo = 0;
+                        $imagePathReplacements = [];
+                        if ($isEditingExisting) {
+                            $sortStmt = $pdo->prepare("SELECT COALESCE(MAX(sort_no), 0) FROM work_report_image WHERE report_id = :report_id");
+                            $sortStmt->execute([':report_id' => $targetReportId]);
+                            $sortNo = (int)$sortStmt->fetchColumn();
                         }
-                        $sortNo++;
-                        $imagePathReplacements[$filePath] = $movedImage['file_path'];
-                        $imgStmt->execute([
-                            ':report_id' => $reportId,
-                            ':file_name' => $movedImage['file_name'],
-                            ':file_path' => $movedImage['file_path'],
-                            ':sort_no' => $sortNo,
-                        ]);
+
+                        foreach ($pastedImages as $filePath) {
+                            $savedImage = $copyImagesOnly
+                                ? copy_work_report_image_to_final($filePath, $targetReportId, $sortNo + 1)
+                                : move_temp_work_report_image_to_final($filePath, $targetReportId, $sortNo + 1);
+                            if ($savedImage === null) {
+                                continue;
+                            }
+                            $sortNo++;
+                            $imagePathReplacements[$filePath] = $savedImage['file_path'];
+                            $imageInsertStmt->execute([
+                                ':report_id' => $targetReportId,
+                                ':file_name' => $savedImage['file_name'],
+                                ':file_path' => $savedImage['file_path'],
+                                ':sort_no' => $sortNo,
+                            ]);
+                        }
+
+                        if (!empty($imagePathReplacements)) {
+                            $finalNoteHtml = str_replace(
+                                array_keys($imagePathReplacements),
+                                array_values($imagePathReplacements),
+                                $formDefaults['note_html']
+                            );
+
+                            $pdo->prepare("
+                                UPDATE work_report
+                                SET note_html = :note_html
+                                WHERE report_id = :report_id
+                            ")->execute([
+                                ':note_html' => $finalNoteHtml !== '' ? $finalNoteHtml : null,
+                                ':report_id' => $targetReportId,
+                            ]);
+                        }
                     }
 
-                    if (!empty($imagePathReplacements)) {
-                        $finalNoteHtml = str_replace(
-                            array_keys($imagePathReplacements),
-                            array_values($imagePathReplacements),
-                            $formDefaults['note_html']
-                        );
-
-                        $pdo->prepare("
-                            UPDATE work_report
-                            SET note_html = :note_html
+                    if ($isEditingExisting) {
+                        $existingImageStmt = $pdo->prepare("
+                            SELECT report_image_id, file_path
+                            FROM work_report_image
                             WHERE report_id = :report_id
-                        ")->execute([
-                            ':note_html' => $finalNoteHtml !== '' ? $finalNoteHtml : null,
-                            ':report_id' => $reportId,
-                        ]);
+                        ");
+                        $existingImageStmt->execute([':report_id' => $targetReportId]);
+                        $existingImages = $existingImageStmt->fetchAll();
+
+                        foreach ($existingImages as $existingImage) {
+                            $savedFilePath = trim((string)($existingImage['file_path'] ?? ''));
+                            if ($savedFilePath === '' || str_contains($finalNoteHtml, $savedFilePath)) {
+                                continue;
+                            }
+
+                            $pdo->prepare("
+                                DELETE FROM work_report_image
+                                WHERE report_image_id = :report_image_id
+                            ")->execute([
+                                ':report_image_id' => (int)($existingImage['report_image_id'] ?? 0),
+                            ]);
+
+                            $savedFullPath = __DIR__ . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $savedFilePath);
+                            if (is_file($savedFullPath)) {
+                                @unlink($savedFullPath);
+                            }
+                        }
                     }
-                }
+
+                    return $finalNoteHtml;
+                };
 
                 if ($editingReportId > 0) {
-                    $existingImageStmt = $pdo->prepare("
-                        SELECT report_image_id, file_path
-                        FROM work_report_image
-                        WHERE report_id = :report_id
-                    ");
-                    $existingImageStmt->execute([':report_id' => $reportId]);
-                    $existingImages = $existingImageStmt->fetchAll();
-
-                    foreach ($existingImages as $existingImage) {
-                        $savedFilePath = trim((string)($existingImage['file_path'] ?? ''));
-                        if ($savedFilePath === '' || str_contains($finalNoteHtml, $savedFilePath)) {
-                            continue;
-                        }
-
-                        $pdo->prepare("
-                            DELETE FROM work_report_image
-                            WHERE report_image_id = :report_image_id
-                        ")->execute([
-                            ':report_image_id' => (int)($existingImage['report_image_id'] ?? 0),
+                    $saveReportRelations($reportId, true, false);
+                } else {
+                    foreach ($createdDateRange as $workDate) {
+                        $workReportInsertStmt->execute([
+                            ':unit_ra_id' => $selectedUnitRaId,
+                            ':role_code' => $pageRole,
+                            ':user_login_id' => $user['login_id'],
+                            ':user_name' => $user['name'],
+                            ':team_name' => $effectiveReportTeamName !== '' ? $effectiveReportTeamName : null,
+                            ':work_title' => $formDefaults['work_title'],
+                            ':work_date' => $workDate,
+                            ':work_place' => $formDefaults['work_place'],
+                            ':use_equipment_yn' => $formDefaults['use_equipment_yn'],
+                            ':note_html' => $formDefaults['note_html'] !== '' ? $formDefaults['note_html'] : null,
                         ]);
-
-                        $savedFullPath = __DIR__ . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $savedFilePath);
-                        if (is_file($savedFullPath)) {
-                            @unlink($savedFullPath);
-                        }
+                        $reportId = (int)$pdo->lastInsertId();
+                        $createdReportIds[] = $reportId;
+                        $saveReportRelations($reportId, false, true);
                     }
                 }
 
                 $pdo->commit();
+                if ($editingReportId <= 0 && !empty($pastedImages)) {
+                    foreach ($pastedImages as $filePath) {
+                        delete_temp_work_report_image($filePath);
+                    }
+                }
+
+                if ($editingReportId <= 0 && count($createdReportIds) > 1) {
+                    header('Location: ' . build_page_url('work_list.php', [
+                        'batch_created_count' => count($createdReportIds),
+                        'batch_created_from' => $createdDateRange[0] ?? '',
+                        'batch_created_to' => $createdDateRange[count($createdDateRange) - 1] ?? '',
+                    ]));
+                    exit;
+                }
+
                 header('Location: ' . build_page_url($selfPage, array_merge($managerContextParams, [
                     'unit_ra_id' => $selectedUnitRaId,
                     'saved_report_id' => $reportId,
@@ -1751,6 +1820,8 @@ if ($user !== null) {
                     : (int)$savedReport['unit_ra_id'];
                 $formDefaults['work_title'] = (string)($savedReport['work_title'] ?? '');
                 $formDefaults['work_date'] = (string)($savedReport['work_date'] ?? date('Y-m-d'));
+                $formDefaults['work_date_end'] = (string)($savedReport['work_date'] ?? date('Y-m-d'));
+                $formDefaults['work_date_mode'] = 'single';
                 $formDefaults['work_place'] = (string)($savedReport['work_place'] ?? '');
                 $formDefaults['use_equipment_yn'] = (string)($savedReport['use_equipment_yn'] ?? 'N');
                 $formDefaults['selected_tools'] = [];
@@ -3653,6 +3724,8 @@ function type_label(string $type): string
               <input type="hidden" name="work_title" value="<?= h($formDefaults['work_title']) ?>">
               <input type="hidden" name="work_place" value="<?= h($formDefaults['work_place']) ?>">
               <input type="hidden" name="work_date" value="<?= h($formDefaults['work_date']) ?>">
+              <input type="hidden" name="work_date_end" value="<?= h($formDefaults['work_date_end']) ?>">
+              <input type="hidden" name="work_date_mode" value="<?= h($formDefaults['work_date_mode']) ?>">
               <input type="hidden" name="use_equipment_yn" value="<?= h($formDefaults['use_equipment_yn']) ?>">
               <?php foreach ($formDefaults['selected_tools'] as $selectedToolId): ?>
                 <input type="hidden" name="selected_tools[]" value="<?= (int)$selectedToolId ?>">
@@ -3671,9 +3744,34 @@ function type_label(string $type): string
                   <input type="text" id="work_place" name="work_place" value="<?= h($formDefaults['work_place']) ?>" placeholder="여기에 작업장소를 적어주세요.">
                 </div>
                 <div class="form-field">
-                  <label for="work_date">작업일자</label>
+                  <label for="work_date"><?= $editingReportId > 0 ? '작업일자' : '작업시작일' ?></label>
                   <input type="date" id="work_date" name="work_date" value="<?= h($formDefaults['work_date']) ?>">
                 </div>
+                <?php if ($editingReportId > 0): ?>
+                  <input type="hidden" name="work_date_mode" value="single">
+                  <input type="hidden" name="work_date_end" value="<?= h($formDefaults['work_date_end']) ?>">
+                <?php else: ?>
+                <div class="form-field full">
+                  <label>입력 방식</label>
+                  <div class="check-item" style="display:flex; gap:16px; flex-wrap:wrap;">
+                    <label>
+                      <input type="radio" name="work_date_mode" value="single" <?= $formDefaults['work_date_mode'] !== 'range' ? 'checked' : '' ?>>
+                      <span class="check-item-body">단일 작업입력</span>
+                    </label>
+                    <label>
+                      <input type="radio" name="work_date_mode" value="range" <?= $formDefaults['work_date_mode'] === 'range' ? 'checked' : '' ?>>
+                      <span class="check-item-body">기간별 작업입력</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="form-field" id="work-date-end-field" style="<?= $formDefaults['work_date_mode'] === 'range' ? '' : 'display:none;' ?>">
+                  <label for="work_date_end">작업종료일</label>
+                  <input type="date" id="work_date_end" name="work_date_end" value="<?= h($formDefaults['work_date_end']) ?>">
+                </div>
+                <div class="form-field full" id="work-date-range-help" style="<?= $formDefaults['work_date_mode'] === 'range' ? '' : 'display:none;' ?>">
+                  <div class="sub-text">기간으로 저장하면 작업목록에는 날짜별로 각각 등록됩니다.</div>
+                </div>
+                <?php endif; ?>
                 <?php if (!($activeGasTeam && auth_can_manage($user))): ?>
                 <div class="form-field full">
                   <label>중장비 사용 여부</label>
@@ -4092,6 +4190,10 @@ function type_label(string $type): string
   const reportForm = document.getElementById('work-report-form');
   const showEntryFormButton = document.getElementById('show-entry-form');
   const printSavedReportButton = document.getElementById('print-saved-report');
+  const workDateModeInputs = Array.from(document.querySelectorAll('input[name="work_date_mode"]'));
+  const workDateEndField = document.getElementById('work-date-end-field');
+  const workDateRangeHelp = document.getElementById('work-date-range-help');
+  const workDateEndInput = document.getElementById('work_date_end');
   const useEquipmentCheckbox = document.getElementById('use_equipment_yn');
   const equipmentToolSection = document.getElementById('equipment-tool-section');
   const equipmentToolCheckboxes = Array.from(document.querySelectorAll('.equipment-tool-checkbox'));
@@ -4131,6 +4233,28 @@ function type_label(string $type): string
   let advancedImageEditorContext = null;
   let advancedImageEditorOriginalDataUrl = '';
   let advancedImageEditorColorDataUrl = '';
+
+  const syncWorkDateMode = () => {
+    if (workDateModeInputs.length === 0) {
+      return;
+    }
+
+    const selectedMode = workDateModeInputs.find((input) => input.checked)?.value || 'single';
+    const isRangeMode = selectedMode === 'range';
+
+    if (workDateEndField) {
+      workDateEndField.style.display = isRangeMode ? '' : 'none';
+    }
+    if (workDateRangeHelp) {
+      workDateRangeHelp.style.display = isRangeMode ? '' : 'none';
+    }
+    if (workDateEndInput && !isRangeMode) {
+      const workDateInput = document.getElementById('work_date');
+      if (workDateInput && workDateInput.value) {
+        workDateEndInput.value = workDateInput.value;
+      }
+    }
+  };
   let advancedImageEditorCurrentDataUrl = '';
   let advancedImageEditorImage = null;
   let advancedImageEditorCropMode = false;
@@ -7792,6 +7916,22 @@ function type_label(string $type): string
   if (useEquipmentCheckbox) {
     useEquipmentCheckbox.addEventListener('change', syncEquipmentToolSection);
     syncEquipmentToolSection();
+  }
+
+  if (workDateModeInputs.length > 0) {
+    workDateModeInputs.forEach((input) => {
+      input.addEventListener('change', syncWorkDateMode);
+    });
+    const workDateInput = document.getElementById('work_date');
+    if (workDateInput && workDateEndInput) {
+      workDateInput.addEventListener('change', () => {
+        const selectedMode = workDateModeInputs.find((input) => input.checked)?.value || 'single';
+        if (selectedMode !== 'range') {
+          workDateEndInput.value = workDateInput.value || '';
+        }
+      });
+    }
+    syncWorkDateMode();
   }
 
   document.querySelectorAll('.major-work-checkbox').forEach((checkbox) => {

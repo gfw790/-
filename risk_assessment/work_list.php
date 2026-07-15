@@ -844,9 +844,18 @@ ensureWorkListTables($pdo);
 $hasSafeWorkStandardNo = columnExists($pdo, 'unit_ra_header', 'safe_work_standard_no');
 
 $errorMessage = '';
-$successMessage = isset($_GET['deleted']) && $_GET['deleted'] === '1'
-    ? '작업이 삭제되었습니다.'
-    : '';
+$successMessage = '';
+if (isset($_GET['deleted']) && $_GET['deleted'] === '1') {
+    $successMessage = '작업이 삭제되었습니다.';
+} elseif (isset($_GET['batch_created_count']) && (int)$_GET['batch_created_count'] > 1) {
+    $batchCreatedCount = (int)$_GET['batch_created_count'];
+    $batchCreatedFrom = trim((string)($_GET['batch_created_from'] ?? ''));
+    $batchCreatedTo = trim((string)($_GET['batch_created_to'] ?? ''));
+    $successMessage = $batchCreatedCount . '건의 작업이 기간 기준으로 등록되었습니다.';
+    if ($batchCreatedFrom !== '' && $batchCreatedTo !== '') {
+        $successMessage .= ' (' . $batchCreatedFrom . ' ~ ' . $batchCreatedTo . ')';
+    }
+}
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && ($_POST['action'] ?? '') === 'delete_report') {
     $deleteReportId = (int)($_POST['report_id'] ?? 0);
