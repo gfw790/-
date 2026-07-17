@@ -1,4 +1,4 @@
-#Fri Jul 17 17:20:54 KST 2026
+#Fri Jul 17 17:26:40 KST 2026
 base.0=A\:\\risk_server\\project\\android-site-app\\app\\build\\intermediates\\dex\\debug\\mergeExtDexDebug\\classes.dex
 base.1=A\:\\risk_server\\project\\android-site-app\\app\\build\\intermediates\\dex\\debug\\mergeProjectDexDebug\\0\\classes.dex
 base.2=A\:\\risk_server\\project\\android-site-app\\app\\build\\intermediates\\dex\\debug\\mergeProjectDexDebug\\13\\classes.dex
