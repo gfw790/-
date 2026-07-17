@@ -508,6 +508,34 @@ function mm_fetch_material_options(PDO $pdo): array
     return $stmt->fetchAll();
 }
 
+function mm_fetch_material_location_stocks(PDO $pdo): array
+{
+    $stmt = $pdo->query("
+        SELECT
+            i.material_id,
+            i.material_name,
+            i.unit_name,
+            COALESCE(NULLIF(TRIM(m.storage_location), ''), '') AS storage_location,
+            SUM(CASE WHEN m.movement_type = 'in' THEN m.quantity ELSE -m.quantity END) AS current_stock
+        FROM material_management_items i
+        INNER JOIN material_management_movements m
+            ON m.material_id = i.material_id
+        WHERE i.is_active = 1
+        GROUP BY
+            i.material_id,
+            i.material_name,
+            i.unit_name,
+            COALESCE(NULLIF(TRIM(m.storage_location), ''), '')
+        HAVING ABS(SUM(CASE WHEN m.movement_type = 'in' THEN m.quantity ELSE -m.quantity END)) > 0.0001
+        ORDER BY
+            i.material_name ASC,
+            storage_location ASC,
+            i.material_id DESC
+    ");
+
+    return $stmt->fetchAll();
+}
+
 function mm_find_material_by_name_and_location(PDO $pdo, string $materialName, string $storageLocation, ?int $excludeMaterialId = null): ?array
 {
     $sql = "

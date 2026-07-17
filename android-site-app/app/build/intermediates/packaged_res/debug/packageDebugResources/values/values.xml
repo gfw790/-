@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:ns1="http://schemas.android.com/tools">
+    <string name="app_name">Risk Site</string>
+    <string name="site_url">http://hd6680.iptime.org/risk_server/project/</string>
+    <style name="Theme.RiskSiteApp" parent="Theme.Material3.Light.NoActionBar">
+        <item name="android:statusBarColor" ns1:targetApi="l">#FFF7F1</item>
+        <item name="colorPrimary">#9A3412</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorSurface">#FFF7F1</item>
+        <item name="colorOnSurface">#1C1917</item>
+    </style>
+</resources>

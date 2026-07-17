@@ -1111,6 +1111,12 @@ $workListKeyword = trim((string)($_GET['work_keyword'] ?? ''));
 $workDateFrom = trim((string)($_GET['work_date_from'] ?? ''));
 $workDateTo = trim((string)($_GET['work_date_to'] ?? ''));
 $isDefaultMonthDateRange = false;
+$currentUserName = trim((string)auth_display_name($user));
+$currentUserTeam = auth_normalize_team_name((string)($user['team'] ?? ''));
+$shouldUseTodayDefaultDateRange = $currentUserName === '진종철'
+    || (function_exists('mb_strpos')
+        ? mb_strpos($currentUserTeam, '공사팀', 0, 'UTF-8') === 0
+        : strpos($currentUserTeam, '공사팀') === 0);
 if ($workDateFrom !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $workDateFrom)) {
     $workDateFrom = '';
 }
@@ -1118,8 +1124,8 @@ if ($workDateTo !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $workDateTo)) {
     $workDateTo = '';
 }
 if ($workDateFrom === '' && $workDateTo === '') {
-  $workDateFrom = date('Y-m-01');
-  $workDateTo = date('Y-m-t');
+  $workDateFrom = $shouldUseTodayDefaultDateRange ? date('Y-m-d') : date('Y-m-01');
+  $workDateTo = $shouldUseTodayDefaultDateRange ? date('Y-m-d') : date('Y-m-t');
   $isDefaultMonthDateRange = true;
 }
 $selectedUnitTypeFilter = trim((string)($_GET['filter_type'] ?? ''));

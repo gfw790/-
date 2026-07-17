@@ -1,0 +1,8 @@
+com.example.risksiteapp-pngs-0 A:\risk_server\project\android-site-app\app\build\generated\res\pngs\debug
+com.example.risksiteapp-resValues-1 A:\risk_server\project\android-site-app\app\build\generated\res\resValues\debug
+com.example.risksiteapp-updated_navigation_xml-2 A:\risk_server\project\android-site-app\app\build\generated\updated_navigation_xml\debug
+com.example.risksiteapp-packageDebugResources-3 A:\risk_server\project\android-site-app\app\build\intermediates\incremental\debug\packageDebugResources\merged.dir
+com.example.risksiteapp-packageDebugResources-4 A:\risk_server\project\android-site-app\app\build\intermediates\incremental\debug\packageDebugResources\stripped.dir
+com.example.risksiteapp-debug-5 A:\risk_server\project\android-site-app\app\build\intermediates\merged_res\debug\mergeDebugResources
+com.example.risksiteapp-debug-6 A:\risk_server\project\android-site-app\app\src\debug\res
+com.example.risksiteapp-main-7 A:\risk_server\project\android-site-app\app\src\main\res

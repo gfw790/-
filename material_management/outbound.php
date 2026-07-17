@@ -6,10 +6,29 @@ require_once __DIR__ . '/common.php';
 $user = mm_authorized_user();
 $pdo = mm_get_pdo();
 $materials = mm_fetch_material_options($pdo);
+$locationStockRows = mm_fetch_material_location_stocks($pdo);
 
 $notice = '';
 $error = '';
 $search = trim((string)($_GET['q'] ?? ''));
+
+$locationStocksByMaterialId = [];
+foreach ($locationStockRows as $locationRow) {
+    $materialId = (int)($locationRow['material_id'] ?? 0);
+    if ($materialId <= 0) {
+        continue;
+    }
+
+    if (!isset($locationStocksByMaterialId[$materialId])) {
+        $locationStocksByMaterialId[$materialId] = [];
+    }
+
+    $locationStocksByMaterialId[$materialId][] = [
+        'storage_location' => trim((string)($locationRow['storage_location'] ?? '')),
+        'current_stock' => (float)($locationRow['current_stock'] ?? 0),
+        'unit_name' => trim((string)($locationRow['unit_name'] ?? '')),
+    ];
+}
 
 $form = [
     'material_id' => '',
@@ -43,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new RuntimeException('출고 수량은 0보다 커야 합니다.');
         }
 
-        $stmt = $pdo->prepare('SELECT material_name, current_stock FROM material_management_items WHERE material_id = :material_id');
+        $stmt = $pdo->prepare('SELECT material_name, current_stock, unit_name, storage_location FROM material_management_items WHERE material_id = :material_id');
         $stmt->execute([':material_id' => $materialId]);
         $material = $stmt->fetch();
         if (!is_array($material)) {
@@ -51,8 +70,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $currentStock = (float)($material['current_stock'] ?? 0);
+        $availableLocationStocks = $locationStocksByMaterialId[$materialId] ?? [];
+        if ($form['storage_location'] === '' && count($availableLocationStocks) === 1) {
+            $form['storage_location'] = trim((string)($availableLocationStocks[0]['storage_location'] ?? ''));
+        }
+        if ($form['storage_location'] === '' && empty($availableLocationStocks)) {
+            $form['storage_location'] = trim((string)($material['storage_location'] ?? ''));
+        }
+
+        $selectedLocationStock = null;
+        if (!empty($availableLocationStocks)) {
+            if ($form['storage_location'] === '' && count($availableLocationStocks) > 1) {
+                throw new RuntimeException('출고할 보관위치를 선택해 주세요.');
+            }
+
+            foreach ($availableLocationStocks as $locationStockRow) {
+                if (trim((string)($locationStockRow['storage_location'] ?? '')) !== $form['storage_location']) {
+                    continue;
+                }
+                $selectedLocationStock = (float)($locationStockRow['current_stock'] ?? 0);
+                break;
+            }
+
+            if ($selectedLocationStock === null) {
+                throw new RuntimeException('선택한 보관위치의 재고 정보를 찾을 수 없습니다.');
+            }
+        }
         if ($currentStock < $quantity) {
             throw new RuntimeException('현재고보다 많이 출고할 수 없습니다.');
+        }
+
+        if ($selectedLocationStock !== null && $selectedLocationStock < $quantity) {
+            throw new RuntimeException('선택한 보관위치의 재고보다 많이 출고할 수 없습니다.');
         }
 
         $pdo->beginTransaction();
@@ -127,6 +176,33 @@ $filteredMaterials = array_values(array_filter($materials, static function (arra
     return mb_stripos($haystack, $search) !== false;
 }));
 
+$filteredLocationRows = array_values(array_filter($locationStockRows, static function (array $row) use ($search): bool {
+    if ($search === '') {
+        return true;
+    }
+
+    $haystack = implode(' ', [
+        (string)($row['material_name'] ?? ''),
+        (string)($row['storage_location'] ?? ''),
+    ]);
+    return mb_stripos($haystack, $search) !== false;
+}));
+
+$materialMetaById = [];
+foreach ($materials as $material) {
+    $materialId = (int)($material['material_id'] ?? 0);
+    if ($materialId <= 0) {
+        continue;
+    }
+
+    $materialMetaById[$materialId] = [
+        'material_name' => (string)($material['material_name'] ?? ''),
+        'current_stock' => (float)($material['current_stock'] ?? 0),
+        'unit_name' => (string)($material['unit_name'] ?? ''),
+        'storage_location' => trim((string)($material['storage_location'] ?? '')),
+    ];
+}
+
 mm_page_header('제품 출고', '등록된 품목의 출고 수량을 기록하고 현재고를 자동 차감합니다.');
 ?>
 <?php if ($notice !== ''): ?><div class="notice"><?= mm_h($notice) ?></div><?php endif; ?>
@@ -189,13 +265,13 @@ mm_page_header('제품 출고', '등록된 품목의 출고 수량을 기록하�
             </tr>
         </thead>
         <tbody>
-            <?php if (empty($filteredMaterials)): ?>
+            <?php if (empty($filteredLocationRows)): ?>
                 <tr><td colspan="4" class="empty">조회된 품목이 없습니다.</td></tr>
             <?php else: ?>
-                <?php foreach ($filteredMaterials as $material): ?>
+                <?php foreach ($filteredLocationRows as $material): ?>
                     <tr>
                         <td><?= mm_h((string)($material['material_name'] ?? '')) ?></td>
-                        <td><?= mm_h((string)($material['storage_location'] ?? '')) ?></td>
+                        <td><?= mm_h(trim((string)($material['storage_location'] ?? '')) !== '' ? (string)$material['storage_location'] : '미지정') ?></td>
                         <td><?= mm_format_quantity($material['current_stock'] ?? 0) ?> <?= mm_h((string)($material['unit_name'] ?? '')) ?></td>
                         <td>
                             <span class="pill <?= (int)($material['is_active'] ?? 1) === 1 ? 'on' : 'off' ?>">
@@ -208,5 +284,113 @@ mm_page_header('제품 출고', '등록된 품목의 출고 수량을 기록하�
         </tbody>
     </table>
 </div>
+<script>
+const materialLocationStockMap = <?= json_encode($locationStocksByMaterialId, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+const materialMetaById = <?= json_encode($materialMetaById, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+const initialMaterialId = <?= json_encode((string)$form['material_id'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+const initialStorageLocation = <?= json_encode((string)$form['storage_location'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+
+const materialSelect = document.getElementById('material_id');
+const storageLocationInput = document.getElementById('storage_location');
+
+const formatQuantity = (value) => {
+    const number = Number(value || 0);
+    return number.toLocaleString('ko-KR', {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+    });
+};
+
+if (materialSelect && storageLocationInput) {
+    const storageSelect = document.createElement('select');
+    storageSelect.id = 'storage_location_select';
+    let preferredStorageLocation = initialStorageLocation;
+
+    const stockHelp = document.createElement('div');
+    stockHelp.id = 'storage-location-stock-help';
+    stockHelp.className = 'hint';
+    stockHelp.style.marginTop = '8px';
+
+    storageLocationInput.type = 'hidden';
+    storageLocationInput.parentNode.insertBefore(storageSelect, storageLocationInput.nextSibling);
+    storageSelect.insertAdjacentElement('afterend', stockHelp);
+
+    const renderLocationOptions = () => {
+        const materialId = String(materialSelect.value || '');
+        const locationRows = Array.isArray(materialLocationStockMap[materialId]) ? materialLocationStockMap[materialId] : [];
+        const materialMeta = materialMetaById[materialId] || {};
+        const fallbackLocation = String(materialMeta.storage_location || '').trim();
+        const unitName = String(materialMeta.unit_name || '');
+
+        storageSelect.innerHTML = '';
+
+        if (materialId === '') {
+            storageSelect.innerHTML = '<option value="">보관위치 선택</option>';
+            storageLocationInput.value = '';
+            stockHelp.textContent = '품목을 선택하면 보관위치별 재고를 불러옵니다.';
+            return;
+        }
+
+        if (locationRows.length === 0) {
+            const option = document.createElement('option');
+            option.value = fallbackLocation;
+            option.textContent = fallbackLocation !== ''
+                ? `${fallbackLocation} / 총재고 ${formatQuantity(materialMeta.current_stock || 0)} ${unitName}`
+                : '미지정';
+            storageSelect.appendChild(option);
+            storageSelect.value = fallbackLocation;
+            storageLocationInput.value = fallbackLocation;
+            stockHelp.textContent = fallbackLocation !== ''
+                ? `등록된 보관위치: ${fallbackLocation}`
+                : '보관위치 이력이 없어 미지정으로 처리됩니다.';
+            return;
+        }
+
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = '보관위치 선택';
+        storageSelect.appendChild(placeholder);
+
+        locationRows.forEach((row) => {
+            const option = document.createElement('option');
+            const location = String(row.storage_location || '');
+            const label = location !== '' ? location : '미지정';
+            option.value = location;
+            option.textContent = `${label} / 재고 ${formatQuantity(row.current_stock || 0)} ${String(row.unit_name || unitName)}`;
+            storageSelect.appendChild(option);
+        });
+
+        const requestedLocation = String(storageLocationInput.value || preferredStorageLocation || '');
+        const matchedRow = locationRows.find((row) => String(row.storage_location || '') === String(requestedLocation || '')) || null;
+        if (matchedRow) {
+            storageSelect.value = String(matchedRow.storage_location || '');
+        } else if (locationRows.length === 1) {
+            storageSelect.value = String(locationRows[0].storage_location || '');
+        }
+
+        const selectedRow = locationRows.find((row) => String(row.storage_location || '') === String(storageSelect.value || '')) || null;
+        storageLocationInput.value = String(storageSelect.value || '');
+        stockHelp.textContent = selectedRow
+            ? `선택 위치 재고: ${formatQuantity(selectedRow.current_stock || 0)} ${String(selectedRow.unit_name || unitName)}`
+            : '보관위치를 선택하면 해당 위치 재고가 표시됩니다.';
+    };
+
+    materialSelect.addEventListener('change', () => {
+        preferredStorageLocation = '';
+        storageLocationInput.value = '';
+        renderLocationOptions();
+    });
+    storageSelect.addEventListener('change', () => {
+        preferredStorageLocation = String(storageSelect.value || '');
+        storageLocationInput.value = String(storageSelect.value || '');
+        renderLocationOptions();
+    });
+
+    if (initialMaterialId !== '') {
+        materialSelect.value = initialMaterialId;
+    }
+    renderLocationOptions();
+}
+</script>
 <?php
 mm_page_footer();
