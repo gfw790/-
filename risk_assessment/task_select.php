@@ -8302,10 +8302,10 @@ function type_label(string $type): string
         <span class="mobile-nav-icon">▣</span>
         <span>게시판</span>
       </a>
-      <button type="button" class="mobile-nav-button" id="mobile-nav-more">
+      <a class="mobile-nav-button" href="more.php">
         <span class="mobile-nav-icon">◎</span>
         <span>더보기</span>
-      </button>
+      </a>
     </div>
   </nav>
   <script>

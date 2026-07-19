@@ -155,10 +155,10 @@
       <span class="board-mobile-nav-icon">▣</span>
       <span>게시판</span>
     </a>
-    <button type="button" class="board-mobile-nav-button" id="board-mobile-nav-more">
+    <a class="board-mobile-nav-button" href="../risk_assessment/more.php">
       <span class="board-mobile-nav-icon">◎</span>
       <span>더보기</span>
-    </button>
+    </a>
   </div>
 </nav>
 <script src="assets/js/board.common-utils.js"></script>

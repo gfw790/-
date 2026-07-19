@@ -1,0 +1,67 @@
+[
+    {
+        "id": "msds_6a5d4551dc1c00.29841085",
+        "material_name": "락카-은색",
+        "manufacturer": "주식회사 럭키산업",
+        "created_date": "2024-04-01",
+        "revised_date": "2026-05-10",
+        "revision_count": "17",
+        "note": "",
+        "stored_name": "msds_20260720_064449_2ae90862.pdf",
+        "original_name": "02.럭키락카-은색.pdf",
+        "uploaded_at": "2026-07-20T06:44:49+09:00",
+        "uploaded_by": "김남균"
+    },
+    {
+        "id": "msds_6a5d464999fe48.47217960",
+        "material_name": "락카-연회색",
+        "manufacturer": "주식회사 럭키산업",
+        "created_date": "2004-04-01",
+        "revised_date": "2026-05-10",
+        "revision_count": "17",
+        "note": "",
+        "stored_name": "msds_20260720_064857_450f53fb.pdf",
+        "original_name": "03.럭키락카-연회색.pdf",
+        "uploaded_at": "2026-07-20T06:48:57+09:00",
+        "uploaded_by": "김남균"
+    },
+    {
+        "id": "msds_6a5d46b6b16c79.36159880",
+        "material_name": "락카-적색",
+        "manufacturer": "주식회사 럭키산업",
+        "created_date": "2004-04-01",
+        "revised_date": "2026-05-10",
+        "revision_count": "17",
+        "note": "",
+        "stored_name": "msds_20260720_065046_23ed63cd.pdf",
+        "original_name": "01.럭키락카-적색.pdf",
+        "uploaded_at": "2026-07-20T06:50:46+09:00",
+        "uploaded_by": "김남균"
+    },
+    {
+        "id": "msds_6a5d46f9e4e435.67054290",
+        "material_name": "락카-징크코트",
+        "manufacturer": "주식회사 럭키산업",
+        "created_date": "2013-03-23",
+        "revised_date": "2025-03-10",
+        "revision_count": "3",
+        "note": "",
+        "stored_name": "msds_20260720_065153_706782db.pdf",
+        "original_name": "04.징크코트(LK-702).pdf",
+        "uploaded_at": "2026-07-20T06:51:53+09:00",
+        "uploaded_by": "김남균"
+    },
+    {
+        "id": "msds_6a5d476eca4e30.32225572",
+        "material_name": "가솔린",
+        "manufacturer": "GS 칼텍스",
+        "created_date": "2008-07-25",
+        "revised_date": "2026-01-08",
+        "revision_count": "13",
+        "note": "",
+        "stored_name": "msds_20260720_065350_cf31e4c0.pdf",
+        "original_name": "10.휘발유.pdf",
+        "uploaded_at": "2026-07-20T06:53:50+09:00",
+        "uploaded_by": "김남균"
+    }
+]

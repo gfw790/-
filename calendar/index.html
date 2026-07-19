@@ -577,6 +577,52 @@
       padding: 14px 18px 18px;
     }
 
+    .event-modal-weather {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+      padding: 12px 14px;
+      border: 1px solid #dce8f3;
+      border-radius: 16px;
+      background: linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%);
+    }
+
+    .event-modal-weather[hidden] {
+      display: none !important;
+    }
+
+    .event-modal-weather .weather-icon {
+      width: 28px;
+      height: 28px;
+    }
+
+    .event-modal-weather .weather-icon svg {
+      width: 28px;
+      height: 28px;
+    }
+
+    .event-modal-weather-main {
+      min-width: 0;
+      display: grid;
+      gap: 3px;
+    }
+
+    .event-modal-weather-title {
+      font-size: 0.88rem;
+      font-weight: 760;
+      color: #17324d;
+      letter-spacing: -0.01em;
+    }
+
+    .event-modal-weather-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 0.76rem;
+      color: #5b718d;
+    }
+
     .event-modal-list {
       display: grid;
       gap: 8px;
@@ -905,11 +951,6 @@
         height: 13px;
       }
 
-      .weather-temp,
-      .weather-pop {
-        font-size: 0.55rem;
-      }
-
       .event-pill {
         font-size: 0.61rem;
         padding: 2px 4px;
@@ -1007,6 +1048,19 @@
       .event-modal-body {
         padding: 12px 14px 16px;
       }
+
+      .event-modal-weather {
+        align-items: flex-start;
+        padding: 10px 12px;
+      }
+
+      .event-modal-weather-title {
+        font-size: 0.82rem;
+      }
+
+      .event-modal-weather-meta {
+        font-size: 0.72rem;
+      }
     }
 
     /* ── 날씨 위젯 ─────────────────────────────────────────────── */
@@ -1037,6 +1091,11 @@
       color: #4e607a;
       font-weight: 650;
       white-space: nowrap;
+    }
+
+    .day .weather-temp,
+    .day .weather-pop {
+      display: none;
     }
 
     .weather-pop {
@@ -1208,6 +1267,13 @@
         <button type="button" class="event-modal-close" id="eventModalCloseBtn" aria-label="일정 목록 닫기">×</button>
       </div>
       <div class="event-modal-body">
+        <div class="event-modal-weather" id="eventModalWeather" hidden>
+          <div class="weather-icon" id="eventModalWeatherIcon" aria-hidden="true"></div>
+          <div class="event-modal-weather-main">
+            <div class="event-modal-weather-title" id="eventModalWeatherTitle"></div>
+            <div class="event-modal-weather-meta" id="eventModalWeatherMeta"></div>
+          </div>
+        </div>
         <div class="event-modal-list" id="eventModalList"></div>
       </div>
     </div>
@@ -1416,6 +1482,10 @@
       var eventFormSectionEl = document.getElementById("eventFormSection");
       var eventModalEl = document.getElementById("eventModal");
       var eventModalTitleEl = document.getElementById("eventModalTitle");
+      var eventModalWeatherEl = document.getElementById("eventModalWeather");
+      var eventModalWeatherIconEl = document.getElementById("eventModalWeatherIcon");
+      var eventModalWeatherTitleEl = document.getElementById("eventModalWeatherTitle");
+      var eventModalWeatherMetaEl = document.getElementById("eventModalWeatherMeta");
       var eventModalListEl = document.getElementById("eventModalList");
       var eventModalCloseBtnEl = document.getElementById("eventModalCloseBtn");
       var openEventFormModalBtnEl = document.getElementById("openEventFormModalBtn");
@@ -2601,6 +2671,7 @@
           return;
         }
         eventModalTitleEl.textContent = selectedDateTitleEl.textContent;
+        renderEventModalWeather(state.selectedDate);
         eventModalListEl.innerHTML = selectedEventListEl.innerHTML;
       }
 
@@ -2928,6 +2999,38 @@
           return item.title + " (" + time + ")";
         }
         return item.title;
+      }
+
+      function renderEventModalWeather(dateKey) {
+        if (!eventModalWeatherEl || !eventModalWeatherIconEl || !eventModalWeatherTitleEl || !eventModalWeatherMetaEl) {
+          return;
+        }
+
+        var weather = state.weatherData[dateKey];
+        if (!weather) {
+          eventModalWeatherEl.hidden = true;
+          eventModalWeatherIconEl.innerHTML = "";
+          eventModalWeatherTitleEl.textContent = "";
+          eventModalWeatherMetaEl.innerHTML = "";
+          return;
+        }
+
+        eventModalWeatherEl.hidden = false;
+        eventModalWeatherIconEl.innerHTML = WEATHER_SVG[weather.code] || "";
+        eventModalWeatherTitleEl.textContent = "날씨 정보";
+        eventModalWeatherMetaEl.innerHTML = "";
+
+        if (weather.tMin !== null && weather.tMin !== undefined && weather.tMax !== null && weather.tMax !== undefined) {
+          var tempEl = document.createElement("span");
+          tempEl.textContent = "기온 " + Math.round(weather.tMin) + "~" + Math.round(weather.tMax) + "도";
+          eventModalWeatherMetaEl.appendChild(tempEl);
+        }
+
+        if (weather.pop !== null && weather.pop !== undefined) {
+          var popEl = document.createElement("span");
+          popEl.textContent = "강수확률 " + weather.pop + "%";
+          eventModalWeatherMetaEl.appendChild(popEl);
+        }
       }
 
       function buildEventTimeLabel(item) {
