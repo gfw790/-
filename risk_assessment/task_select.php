@@ -1329,7 +1329,7 @@ if ($user !== null) {
                 if ($editingReportId > 0) {
                     // 권한 확인: 작성자이거나, leader이면서 saved_report_id가 있는 경우 (기존 작업 열기)
                     $reportCheckStmt = $pdo->prepare("
-                        SELECT report_id
+                        SELECT report_id, user_login_id
                         FROM work_report
                         WHERE report_id = :report_id
                         LIMIT 1
@@ -1937,9 +1937,113 @@ function type_label(string $type): string
     color: var(--text) !important;
     padding: 32px 20px 48px;
   }
+  body.mobile-nav-open {
+    overflow: hidden;
+  }
   .shell {
     max-width: 1180px;
     margin: 0 auto;
+  }
+  .mobile-bottom-nav,
+  .mobile-utility-sheet,
+  .mobile-sheet-scrim {
+    display: none;
+  }
+  .mobile-bottom-nav {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    z-index: 1000;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 20px;
+    background: rgba(10, 17, 28, 0.96);
+    backdrop-filter: blur(14px);
+    box-shadow: 0 18px 40px rgba(0,0,0,0.38);
+    padding: 8px;
+  }
+  .mobile-bottom-nav-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .mobile-nav-link,
+  .mobile-nav-button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-height: 58px;
+    border-radius: 14px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: #c5d8eb;
+    text-decoration: none;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .mobile-nav-link.is-active,
+  .mobile-nav-button.is-active {
+    background: linear-gradient(180deg, rgba(245,166,35,0.2), rgba(245,166,35,0.1));
+    border-color: rgba(245,166,35,0.35);
+    color: #fff4df;
+  }
+  .mobile-nav-icon {
+    font-size: 18px;
+    line-height: 1;
+  }
+  .mobile-sheet-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 1001;
+    background: rgba(5,10,18,0.58);
+  }
+  .mobile-utility-sheet {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: calc(max(10px, env(safe-area-inset-bottom)) + 84px);
+    z-index: 1002;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 22px;
+    background: #101b2b;
+    box-shadow: 0 24px 48px rgba(0,0,0,0.42);
+    padding: 16px;
+  }
+  .mobile-sheet-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .mobile-sheet-title {
+    color: var(--text-hi);
+    font-size: 16px;
+    font-weight: 800;
+  }
+  .mobile-sheet-close {
+    border: none;
+    background: rgba(255,255,255,0.08);
+    color: var(--text-hi);
+    border-radius: 999px;
+    width: 34px;
+    height: 34px;
+    font-size: 18px;
+    cursor: pointer;
+  }
+  .mobile-sheet-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .mobile-sheet-grid .btn-secondary,
+  .mobile-sheet-grid .btn-header-cta {
+    width: 100%;
+    min-height: 46px;
   }
   .hero {
     display: flex;
@@ -3269,7 +3373,10 @@ function type_label(string $type): string
   }
   @media (max-width: 720px) {
     body {
-      padding: 14px 10px 28px;
+      padding: 14px 10px 118px;
+    }
+    .mobile-bottom-nav {
+      display: block;
     }
     .hero {
       grid-template-columns: 1fr;
@@ -8163,6 +8270,68 @@ function type_label(string $type): string
       try { this.showPicker(); } catch(e) {}
     });
   });
+  </script>
+  <div class="mobile-sheet-scrim" id="mobile-sheet-scrim" hidden></div>
+  <div class="mobile-utility-sheet" id="mobile-utility-sheet" hidden>
+    <div class="mobile-sheet-head">
+      <div class="mobile-sheet-title">추가 메뉴</div>
+      <button type="button" class="mobile-sheet-close" id="mobile-sheet-close" aria-label="닫기">&times;</button>
+    </div>
+    <div class="mobile-sheet-grid">
+      <a class="btn-secondary" href="index.php">홈</a>
+      <a class="btn-secondary" href="work_list.php">작업목록</a>
+      <a class="btn-secondary" href="<?= h($boardPageUrl) ?>">게시판</a>
+      <a class="btn-secondary" href="<?= h($selfPage) ?>?logout=1">로그아웃</a>
+    </div>
+  </div>
+  <nav class="mobile-bottom-nav" aria-label="모바일 하단 메뉴">
+    <div class="mobile-bottom-nav-grid">
+      <a class="mobile-nav-link" href="index.php">
+        <span class="mobile-nav-icon">⌂</span>
+        <span>홈</span>
+      </a>
+      <a class="mobile-nav-link" href="../calendar/index.html">
+        <span class="mobile-nav-icon">◫</span>
+        <span>달력</span>
+      </a>
+      <a class="mobile-nav-link" href="work_list.php">
+        <span class="mobile-nav-icon">≡</span>
+        <span>목록</span>
+      </a>
+      <a class="mobile-nav-link" href="<?= h($boardPageUrl) ?>">
+        <span class="mobile-nav-icon">▣</span>
+        <span>게시판</span>
+      </a>
+      <button type="button" class="mobile-nav-button" id="mobile-nav-more">
+        <span class="mobile-nav-icon">◎</span>
+        <span>더보기</span>
+      </button>
+    </div>
+  </nav>
+  <script>
+    (() => {
+      const mobileNavMore = document.getElementById('mobile-nav-more');
+      const mobileSheet = document.getElementById('mobile-utility-sheet');
+      const mobileSheetScrim = document.getElementById('mobile-sheet-scrim');
+      const mobileSheetClose = document.getElementById('mobile-sheet-close');
+
+      const setMobileSheetOpen = (open) => {
+        if (!mobileNavMore || !mobileSheet || !mobileSheetScrim) {
+          return;
+        }
+
+        mobileSheet.hidden = !open;
+        mobileSheetScrim.hidden = !open;
+        mobileNavMore.classList.toggle('is-active', open);
+        document.body.classList.toggle('mobile-nav-open', open);
+      };
+
+      if (mobileNavMore && mobileSheet && mobileSheetScrim && mobileSheetClose) {
+        mobileNavMore.addEventListener('click', () => setMobileSheetOpen(mobileSheet.hidden));
+        mobileSheetClose.addEventListener('click', () => setMobileSheetOpen(false));
+        mobileSheetScrim.addEventListener('click', () => setMobileSheetOpen(false));
+      }
+    })();
   </script>
 </body>
 </html>

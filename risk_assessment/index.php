@@ -6,6 +6,9 @@ $canManage = auth_can_manage($user);
 $canLead = auth_can_lead($user);
 $isWorker = auth_is_worker($user);
 $registrationOpen = auth_is_worker_registration_open();
+$mobileRegisterHref = $isWorker
+    ? 'work_list.php'
+    : ($canLead && !$canManage ? 'leader_task_select.php' : 'task_select.php');
 
 function h($value): string
 {
@@ -138,9 +141,107 @@ $sections = [
       linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
     padding: 34px 18px 44px;
   }
+  body.mobile-nav-open { overflow: hidden; }
   .shell {
     max-width: 1180px;
     margin: 0 auto;
+  }
+  .mobile-bottom-nav,
+  .mobile-utility-sheet,
+  .mobile-sheet-scrim { display: none; }
+  .mobile-bottom-nav {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    z-index: 1000;
+    border: 1px solid rgba(24, 59, 86, 0.10);
+    border-radius: 20px;
+    background: rgba(255,255,255,0.96);
+    backdrop-filter: blur(14px);
+    box-shadow: 0 18px 40px rgba(17, 52, 77, 0.18);
+    padding: 8px;
+  }
+  .mobile-bottom-nav-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .mobile-nav-link,
+  .mobile-nav-button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-height: 58px;
+    border-radius: 14px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: #45627b;
+    text-decoration: none;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .mobile-nav-link.is-active,
+  .mobile-nav-button.is-active {
+    background: linear-gradient(180deg, rgba(35,104,162,0.14), rgba(35,104,162,0.08));
+    border-color: rgba(35,104,162,0.18);
+    color: #17486f;
+  }
+  .mobile-nav-icon { font-size: 18px; line-height: 1; }
+  .mobile-sheet-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 1001;
+    background: rgba(15, 31, 45, 0.32);
+  }
+  .mobile-utility-sheet {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: calc(max(10px, env(safe-area-inset-bottom)) + 84px);
+    z-index: 1002;
+    border: 1px solid rgba(24, 59, 86, 0.10);
+    border-radius: 22px;
+    background: rgba(255,255,255,0.98);
+    box-shadow: 0 24px 48px rgba(17, 52, 77, 0.22);
+    padding: 16px;
+  }
+  .mobile-sheet-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .mobile-sheet-title {
+    color: var(--primary-strong);
+    font-size: 16px;
+    font-weight: 800;
+  }
+  .mobile-sheet-close {
+    border: none;
+    background: rgba(24, 59, 86, 0.08);
+    color: var(--primary-strong);
+    border-radius: 999px;
+    width: 34px;
+    height: 34px;
+    font-size: 18px;
+    cursor: pointer;
+  }
+  .mobile-sheet-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .mobile-sheet-grid a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 46px;
   }
   .hero {
     background: linear-gradient(135deg, rgba(20, 66, 103, 0.96), rgba(38, 104, 156, 0.90));
@@ -150,6 +251,9 @@ $sections = [
     box-shadow: var(--shadow);
     position: relative;
     overflow: hidden;
+  }
+  .is-hidden {
+    display: none !important;
   }
   .hero::after {
     content: "";
@@ -190,6 +294,14 @@ $sections = [
     color: rgba(255,255,255,0.88);
     line-height: 1.7;
     font-size: 15px;
+  }
+  .hero-bar > div > p,
+  .hero .hero-bar > div > p,
+  .hero-bar > div > p:first-of-type {
+    display: none !important;
+    height: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
   }
   .status-panel {
     min-width: 280px;
@@ -386,11 +498,12 @@ $sections = [
     font-size: 13px;
   }
   @media (max-width: 820px) {
-    body { padding: 20px 14px 30px; }
+    body { padding: 20px 14px 120px; }
     .hero { padding: 22px; border-radius: 24px; }
     .hero h1 { font-size: 27px; }
     .section-card { padding: 18px; }
     .section-head h2 { font-size: 19px; }
+    .mobile-bottom-nav { display: block; }
   }
 </style>
 </head>
@@ -400,8 +513,7 @@ $sections = [
       <div class="hero-bar">
         <div>
           <div class="eyebrow">Risk Assessment Navigation</div>
-          <h1>위험성평가 시스템 목차</h1>
-          <p>자주 사용하는 화면을 역할별 흐름과 관리 목적에 맞춰 한곳에 모았습니다. 시작 화면, 작업 목록, 단위평가서 관리, 계정 관리 페이지까지 여기서 바로 이동할 수 있습니다.</p>
+          <h1>위험성평가 시스템 절차</h1>
           <div class="hero-actions">
             <a class="btn-primary" href="<?= h($primaryAction['href']) ?>"><?= h($primaryAction['label']) ?></a>
             <a class="btn-secondary" href="<?= h($secondaryAction['href']) ?>"><?= h($secondaryAction['label']) ?></a>
@@ -420,12 +532,12 @@ $sections = [
       </div>
     </section>
 
-    <div class="guide">
+    <div class="guide is-hidden">
       <strong>안내</strong>
       <p>상세 작성 화면이나 인쇄 화면처럼 별도 선택값이 필요한 페이지는 이 목차에 직접 넣지 않았습니다. 그런 화면들은 `작업 선택`, `작업 목록`, `단위평가서 목록`에서 자연스럽게 이어서 들어가도록 구성하는 편이 안전합니다.</p>
     </div>
 
-    <div class="sections">
+    <div class="sections is-hidden">
       <?php foreach ($sections as $index => $section): ?>
         <section class="section-card">
           <div class="section-head">
@@ -449,9 +561,75 @@ $sections = [
       <?php endforeach; ?>
     </div>
 
-    <div class="foot-note">
+    <div class="foot-note is-hidden">
       루트 URL로 접속했을 때 바로 작업 선택 화면으로 보내던 기존 동작 대신, 이제는 이 목차 페이지가 먼저 열립니다. 필요하시면 다음 단계에서 여기에 검색, 최근 사용 화면, 관리자 전용 바로가기까지 이어서 붙일 수 있습니다.
     </div>
   </div>
+  <div class="mobile-sheet-scrim" id="mobile-sheet-scrim" hidden></div>
+  <div class="mobile-utility-sheet" id="mobile-utility-sheet" hidden>
+    <div class="mobile-sheet-head">
+      <div class="mobile-sheet-title">추가 메뉴</div>
+      <button type="button" class="mobile-sheet-close" id="mobile-sheet-close" aria-label="닫기">&times;</button>
+    </div>
+    <div class="mobile-sheet-grid">
+      <a class="btn-secondary" href="<?= h($primaryAction['href']) ?>"><?= h($primaryAction['label']) ?></a>
+      <a class="btn-secondary" href="<?= h($secondaryAction['href']) ?>"><?= h($secondaryAction['label']) ?></a>
+      <?php if ($registrationOpen): ?>
+        <a class="btn-secondary" href="register_worker.php">회원가입</a>
+      <?php endif; ?>
+      <?php if ($logoutAction !== null): ?>
+        <a class="btn-secondary" href="<?= h($logoutAction['href']) ?>"><?= h($logoutAction['label']) ?></a>
+      <?php endif; ?>
+    </div>
+  </div>
+  <nav class="mobile-bottom-nav" aria-label="모바일 하단 메뉴">
+    <div class="mobile-bottom-nav-grid">
+      <a class="mobile-nav-link is-active" href="index.php">
+        <span class="mobile-nav-icon">⌂</span>
+        <span>홈</span>
+      </a>
+      <a class="mobile-nav-link" href="../calendar/index.html">
+        <span class="mobile-nav-icon">◫</span>
+        <span>달력</span>
+      </a>
+      <a class="mobile-nav-link" href="work_list.php">
+        <span class="mobile-nav-icon">≡</span>
+        <span>목록</span>
+      </a>
+      <a class="mobile-nav-link" href="../board/index.php">
+        <span class="mobile-nav-icon">▣</span>
+        <span>게시판</span>
+      </a>
+      <button type="button" class="mobile-nav-button" id="mobile-nav-more">
+        <span class="mobile-nav-icon">◎</span>
+        <span>더보기</span>
+      </button>
+    </div>
+  </nav>
+  <script>
+    (() => {
+      const mobileNavMore = document.getElementById('mobile-nav-more');
+      const mobileSheet = document.getElementById('mobile-utility-sheet');
+      const mobileSheetScrim = document.getElementById('mobile-sheet-scrim');
+      const mobileSheetClose = document.getElementById('mobile-sheet-close');
+
+      const setMobileSheetOpen = (open) => {
+        if (!mobileNavMore || !mobileSheet || !mobileSheetScrim) {
+          return;
+        }
+
+        mobileSheet.hidden = !open;
+        mobileSheetScrim.hidden = !open;
+        mobileNavMore.classList.toggle('is-active', open);
+        document.body.classList.toggle('mobile-nav-open', open);
+      };
+
+      if (mobileNavMore && mobileSheet && mobileSheetScrim && mobileSheetClose) {
+        mobileNavMore.addEventListener('click', () => setMobileSheetOpen(mobileSheet.hidden));
+        mobileSheetClose.addEventListener('click', () => setMobileSheetOpen(false));
+        mobileSheetScrim.addEventListener('click', () => setMobileSheetOpen(false));
+      }
+    })();
+  </script>
 </body>
 </html>

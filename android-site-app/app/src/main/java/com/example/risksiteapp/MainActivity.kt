@@ -4,8 +4,11 @@ import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.os.Bundle
 import android.view.View
+import android.widget.Toast
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -16,6 +19,16 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var swipeRefresh: SwipeRefreshLayout
+
+    private fun hideLoading() {
+        findViewById<View>(R.id.progressBar).visibility = View.GONE
+        swipeRefresh.isRefreshing = false
+    }
+
+    private fun showLoadError(message: String) {
+        hideLoading()
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -49,8 +62,38 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
-                findViewById<View>(R.id.progressBar).visibility = View.GONE
-                swipeRefresh.isRefreshing = false
+                hideLoading()
+            }
+
+            override fun onReceivedError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                error: WebResourceError?
+            ) {
+                if (request?.isForMainFrame == true) {
+                    val description = error?.description?.toString()?.takeIf { it.isNotBlank() }
+                    showLoadError(
+                        getString(
+                            R.string.site_load_error_with_reason,
+                            description ?: getString(R.string.site_load_error_unknown)
+                        )
+                    )
+                }
+            }
+
+            override fun onReceivedHttpError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                errorResponse: WebResourceResponse?
+            ) {
+                if (request?.isForMainFrame == true) {
+                    showLoadError(
+                        getString(
+                            R.string.site_load_http_error,
+                            errorResponse?.statusCode ?: 0
+                        )
+                    )
+                }
             }
         }
 

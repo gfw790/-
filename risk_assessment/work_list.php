@@ -731,7 +731,9 @@ $canManage = auth_can_manage($user);
 $canLead = auth_can_lead($user);
 $isWorker = auth_is_worker($user);
 $isLeaderOnly = $canLead && !$canManage;
-$entryPage = $canLead && !$canManage ? 'leader_task_select.php' : 'task_select.php';
+$entryPage = $canLead && !$canManage
+    ? 'leader_task_select.php'
+    : 'task_select.php';
 $adminManagerTeams = $isAdmin ? auth_read_teams() : [];
 $managerShortcutTeams = [];
 if ($canManage && !$isAdmin) {
@@ -1106,6 +1108,18 @@ foreach ($reports as &$report) {
 unset($report);
 
 $reports = filter_reports_for_user($reports, $user);
+$todayWorkDate = date('Y-m-d');
+$todayRegisteredReportCount = count(array_filter(
+    $reports,
+    static fn(array $report): bool => trim((string)($report['work_date'] ?? '')) === $todayWorkDate
+));
+$todayLeaderPendingReportCount = count(array_filter(
+    $reports,
+    static fn(array $report): bool =>
+        trim((string)($report['work_date'] ?? '')) === $todayWorkDate
+        && (bool)($report['requires_leader_input'] ?? false)
+        && !(bool)($report['work_input_completed'] ?? false)
+));
 $unitTypeOptions = work_list_collect_type_options();
 $workListKeyword = trim((string)($_GET['work_keyword'] ?? ''));
 $workDateFrom = trim((string)($_GET['work_date_from'] ?? ''));
@@ -1333,6 +1347,9 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     color: var(--text) !important;
     padding: 24px clamp(12px, 1.5vw, 24px) 40px;
   }
+  body.mobile-nav-open {
+    overflow: hidden;
+  }
   .shell {
     width: min(100%, 1880px);
     margin: 0 auto;
@@ -1347,10 +1364,191 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     padding-bottom: 18px;
     border-bottom: 1px solid var(--border);
   }
+  .topbar-main {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
   .topbar-label { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 4px; }
   .topbar-title { font-size: 22px; font-weight: 900; color: var(--text-hi); line-height: 1.2; }
   .topbar-title span { color: var(--accent2); }
   .identity { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .identity-caption {
+    color: var(--text-dim);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .desktop-action-cloud {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .mobile-quick-panel { display: none; }
+  .mobile-quick-section {
+    margin-top: 8px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015)),
+      rgba(255,255,255,0.02);
+  }
+  .mobile-quick-label {
+    font-size: 11px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+  }
+  .mobile-quick-grid,
+  .mobile-more-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .mobile-quick-grid .btn-secondary,
+  .mobile-more-grid .btn-secondary,
+  .mobile-quick-grid .btn-header-cta,
+  .mobile-more-grid .btn-header-cta {
+    width: 100%;
+    min-height: 46px;
+    padding: 12px 14px;
+  }
+  .mobile-more-actions {
+    margin-top: 12px;
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+  }
+  .mobile-more-actions summary {
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-hi);
+  }
+  .mobile-more-actions summary::-webkit-details-marker { display: none; }
+  .mobile-more-actions summary::after {
+    content: '열기';
+    color: var(--accent2);
+    font-size: 12px;
+    font-weight: 800;
+  }
+  .mobile-more-actions[open] summary::after { content: '접기'; }
+  .mobile-more-grid {
+    margin-top: 12px;
+    padding-top: 4px;
+  }
+  .mobile-bottom-nav,
+  .mobile-utility-sheet,
+  .mobile-sheet-scrim {
+    display: none;
+  }
+  .mobile-bottom-spacer {
+    display: none;
+  }
+  .mobile-bottom-nav {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    z-index: 1000;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 20px;
+    background: rgba(10, 17, 28, 0.96);
+    backdrop-filter: blur(14px);
+    box-shadow: 0 18px 40px rgba(0,0,0,0.38);
+    padding: 8px;
+  }
+  .mobile-bottom-nav-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .mobile-nav-link,
+  .mobile-nav-button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-height: 58px;
+    border-radius: 14px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: #c5d8eb;
+    text-decoration: none;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .mobile-nav-link.is-active,
+  .mobile-nav-button.is-active {
+    background: linear-gradient(180deg, rgba(245,166,35,0.2), rgba(245,166,35,0.1));
+    border-color: rgba(245,166,35,0.35);
+    color: #fff4df;
+  }
+  .mobile-nav-icon {
+    font-size: 18px;
+    line-height: 1;
+  }
+  .mobile-sheet-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 1001;
+    background: rgba(5,10,18,0.58);
+  }
+  .mobile-utility-sheet {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: calc(max(10px, env(safe-area-inset-bottom)) + 84px);
+    z-index: 1002;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 22px;
+    background: #101b2b;
+    box-shadow: 0 24px 48px rgba(0,0,0,0.42);
+    padding: 16px;
+  }
+  .mobile-sheet-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .mobile-sheet-title {
+    color: var(--text-hi);
+    font-size: 16px;
+    font-weight: 800;
+  }
+  .mobile-sheet-close {
+    border: none;
+    background: rgba(255,255,255,0.08);
+    color: var(--text-hi);
+    border-radius: 999px;
+    width: 34px;
+    height: 34px;
+    font-size: 18px;
+    cursor: pointer;
+  }
+  .mobile-sheet-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .mobile-sheet-grid .btn-secondary,
+  .mobile-sheet-grid .btn-header-cta,
+  .mobile-sheet-grid .btn-employment-rules {
+    width: 100%;
+    min-height: 46px;
+  }
   .role-badge {
     display: inline-flex;
     align-items: center;
@@ -1458,15 +1656,38 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
   .panel-head p { color: var(--text-dim); font-size: 13px; }
   .work-search-form {
     display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: stretch;
+    margin-top: 16px;
+  }
+  .work-search-primary-row {
+    display: flex;
     gap: 10px;
     align-items: center;
     flex-wrap: wrap;
-    margin-top: 16px;
   }
   .work-search-box {
     position: relative;
     flex: 1 1 320px;
     min-width: 220px;
+  }
+  .work-search-primary-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .work-search-toggle {
+    display: none;
+  }
+  .work-search-advanced {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .work-search-advanced.is-hidden {
+    display: none;
   }
   .work-search-input {
     width: 100%;
@@ -1496,6 +1717,38 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     margin-top: 10px;
     color: var(--text-dim);
     font-size: 12px;
+  }
+  .today-empty-notice {
+    margin-top: 14px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    border: 1px solid rgba(245, 166, 35, 0.28);
+    background: rgba(245, 166, 35, 0.10);
+    color: #ffe7bf;
+    line-height: 1.6;
+    font-size: 13px;
+  }
+  .today-empty-notice strong {
+    display: block;
+    margin-bottom: 4px;
+    color: #fff4df;
+    font-size: 14px;
+  }
+  .leader-pending-notice {
+    margin-top: 12px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    border: 1px solid rgba(58, 127, 193, 0.30);
+    background: rgba(58, 127, 193, 0.12);
+    color: #dbeeff;
+    line-height: 1.6;
+    font-size: 13px;
+  }
+  .leader-pending-notice strong {
+    display: block;
+    margin-bottom: 4px;
+    color: #eef7ff;
+    font-size: 14px;
   }
   .search-entry-actions {
     display: flex;
@@ -2230,10 +2483,59 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
   }
   @media (max-width: 720px) {
     body { padding: 18px 12px 36px; }
+    body { padding-bottom: 110px; }
+    .topbar { margin-bottom: 18px; }
+    .topbar-main { width: 100%; }
+    .topbar-label { display: none; }
+    .topbar-title { font-size: 28px; }
+    .identity {
+      width: 100%;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .desktop-action-cloud { display: none; }
+    .mobile-quick-panel { display: block; width: 100%; }
+    .mobile-bottom-nav,
+    .mobile-bottom-spacer { display: block; }
     .panel-head h1 { font-size: 20px; }
     .panel-head, .mobile-list { padding-left: 14px; padding-right: 14px; }
-    .work-search-form { align-items: stretch; }
+    .work-search-primary-row {
+      flex-direction: column;
+      align-items: stretch;
+    }
     .work-search-input { flex-basis: 100%; min-width: 0; }
+    .work-search-primary-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .work-search-primary-actions .btn-secondary { width: 100%; }
+    .work-search-toggle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 11px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border2);
+      background: rgba(255,255,255,0.04);
+      color: var(--text-hi);
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .work-search-toggle::after {
+      content: '열기';
+      color: var(--accent2);
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .work-search-toggle[aria-expanded="true"]::after { content: '접기'; }
+    .work-search-advanced {
+      display: none;
+      margin-top: 4px;
+    }
+    .work-search-advanced.is-open {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+    }
     .work-filter-field { flex-basis: 100%; min-width: 0; }
     .table-wrap { display: none; }
     .mobile-list { display: block; }
@@ -2544,40 +2846,179 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
   }
   .org-has-phone:hover { color:#9a6200; background: rgba(245,166,35,0.16); }
   @media (max-width: 720px) {
-    .org-modal-shell { width: min(100%, 100%); }
-    .org-modal-head { align-items: flex-start; }
-    .org-modal-title-wrap h2 { font-size: 18px; }
-    .org-modal-body { padding: 14px 12px 16px; max-height: calc(100vh - 110px); }
-    .org-chart-surface { --org-team-top-width: 96px; --org-team-child-width: 136px; padding: 14px 10px 10px; }
-    .org-teams-row { gap: 12px; }
-    .org-team-col { padding-top: 28px; }
-    .org-team-col::before { height: 28px; }
-    .org-team-card { min-width: 96px; }
-    .org-team-children-wrap { padding-top: 14px; }
-    .org-team-children-row { gap: 12px; }
+    .org-modal-shell {
+      width: calc(100vw - 12px);
+      max-height: calc(100dvh - 12px);
+      border-radius: 18px;
+    }
+    .org-modal-head {
+      align-items: center;
+      padding: 10px 12px 8px;
+      gap: 8px;
+    }
+    .org-modal-title-wrap {
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+    .org-modal-title-wrap h2 {
+      font-size: 15px;
+      line-height: 1.25;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .org-modal-sub {
+      display: none;
+    }
+    .org-modal-head .modal-head-actions {
+      width: auto;
+      flex: 0 0 auto;
+      gap: 6px;
+    }
+    .org-modal-head .btn-secondary {
+      min-height: 34px;
+      padding: 0 10px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .org-modal-head #org-modal-print {
+      display: none;
+    }
+    .org-modal-head .modal-close {
+      min-width: 34px;
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      font-size: 18px;
+    }
+    .org-modal-body {
+      padding: 10px 10px 14px;
+      max-height: calc(100dvh - 64px);
+      overflow: auto;
+    }
+    .org-current-count {
+      position: static;
+      margin-bottom: 8px;
+      min-height: 30px;
+      padding: 0 10px;
+      font-size: 11px;
+    }
+    .org-chart-surface {
+      --org-team-top-width: 100%;
+      --org-team-child-width: 100%;
+      padding: 12px 10px;
+      overflow: visible;
+    }
+    .org-chart {
+      align-items: stretch;
+      gap: 12px;
+    }
+    .org-node,
+    .org-node-safety,
+    .org-node-ceo {
+      width: 100%;
+    }
+    .org-node-name {
+      font-size: 14px;
+      padding: 9px 14px 10px;
+      word-break: keep-all;
+    }
+    .org-vert,
+    .org-junction-hline,
+    .org-teams-row::before,
+    .org-team-col::before,
     .org-team-children-wrap::before,
-    .org-subteam-col::before { height: 14px; }
+    .org-team-children-row::before,
+    .org-subteam-col::before {
+      display: none;
+    }
+    .org-safety-junction,
+    .org-junction-stem,
+    .org-junction-branch {
+      position: static;
+      transform: none;
+      width: 100%;
+    }
+    .org-junction-branch {
+      display: block;
+    }
+    .org-teams-wrap {
+      overflow: visible;
+      padding-bottom: 0;
+    }
+    .org-teams-row {
+      width: 100%;
+      margin: 0;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .org-team-col,
+    .org-subteam-col {
+      width: 100%;
+      flex: 1 1 auto;
+      padding-top: 0;
+    }
+    .org-team-card {
+      min-width: 0;
+      border-radius: 14px;
+    }
+    .org-team-head {
+      padding: 11px 12px;
+      font-size: 13px;
+    }
+    .org-team-body {
+      padding: 12px;
+    }
+    .org-team-children-wrap,
+    .org-team-children-row {
+      width: 100%;
+      min-width: 0;
+      padding-top: 0;
+      margin-top: 10px;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .org-team-card-child {
+      border: 1px solid rgba(27, 53, 86, 0.12);
+      box-shadow: none;
+      background: #f7fbff;
+    }
+    .org-role-sec {
+      padding: 8px 0 7px;
+    }
+    .org-member-name {
+      font-size: 13px;
+      line-height: 1.45;
+    }
   }
   #org-phone-tip {
     position:fixed; z-index:99999; display:none;
     background:var(--accent);
     border-radius:10px; padding:10px 16px;
     box-shadow:0 6px 28px rgba(0,0,0,.7);
-    font-size:13px; white-space:nowrap; pointer-events:none;
+    font-size:13px; white-space:nowrap; pointer-events:auto;
   }
   #org-phone-tip .tip-name { color:rgba(255,255,255,.8); font-size:11px; margin-bottom:3px; }
-  #org-phone-tip .tip-phone { color:#fff; font-weight:800; font-size:16px; letter-spacing:.04em; }
+  #org-phone-tip .tip-phone {
+    color:#fff;
+    font-weight:800;
+    font-size:16px;
+    letter-spacing:.04em;
+    text-decoration:none;
+  }
 </style>
 </head>
 <body>
   <div class="shell">
     <div class="topbar">
-      <div>
+      <div class="topbar-main">
         <div class="topbar-label">WORK MANAGEMENT · LIST</div>
         <div class="topbar-title">작업 <span>목록</span></div>
-      </div>
         <div class="identity">
-        <span style="color:var(--text-hi);font-size:14px;font-weight:700"><?= h(auth_display_name($user)) ?></span>
+          <div>
+            <div style="color:var(--text-hi);font-size:14px;font-weight:700"><?= h(auth_display_name($user)) ?></div>
+            <div class="identity-caption">휴대폰에서는 자주 쓰는 메뉴를 먼저 보여주고, 나머지는 접어서 볼 수 있게 정리했습니다.</div>
+          </div>
           <?php
             $userTeamKey = auth_team_key((string)($user['team'] ?? ''));
             $isGasTeam   = ($userTeamKey === auth_team_key('가스팀'));
@@ -2586,6 +3027,9 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
             // 팀에 작업지휘자(leader)가 없으면 작업자가 직접 열기 가능
             $teamHasNoLeader = empty(auth_team_members((string)($user['team'] ?? ''), ['leader']));
           ?>
+        </div>
+      </div>
+      <div class="desktop-action-cloud">
           <?php if ($isGasTeam): ?>
             <a class="btn-secondary" href="schedule.php">근무일정표</a>
           <?php endif; ?>
@@ -2627,6 +3071,56 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
         <button type="button" class="btn-secondary" onclick="openPwModal()">비밀번호변경</button>
         <a class="btn-secondary" href="<?= h($entryPage) ?>?logout=1">로그아웃</a>
       </div>
+      <div class="mobile-quick-panel">
+        <div class="mobile-quick-section">
+          <div class="mobile-quick-label">Quick Menu</div>
+          <div class="mobile-quick-grid">
+            <?php if (!$isWorker && !$isLeaderOnly && $userRole !== 'safety_manager' && $userRole !== 'administrator' && !$isJungYeontakAccount): ?>
+              <a class="btn-secondary" href="<?= h($entryPage) ?>">작업 등록</a>
+            <?php endif; ?>
+            <a class="btn-secondary btn-header-cta" href="../board/index.php">게시판</a>
+            <a class="btn-secondary" href="../tbm/index.php">TBM일지</a>
+            <button type="button" class="btn-secondary" onclick="openOrgModal()">조직도</button>
+          </div>
+          <details class="mobile-more-actions">
+            <summary>전체 메뉴 보기</summary>
+            <div class="mobile-more-grid">
+              <?php if ($isGasTeam): ?>
+                <a class="btn-secondary" href="schedule.php">근무일정표</a>
+              <?php endif; ?>
+              <?php if ($isElectricalManager || $isOperator): ?>
+                <a class="btn-secondary" href="schedule.php?view_team=가스팀">가스팀근무표</a>
+              <?php endif; ?>
+              <?php if (!$isWorker && $canManage): ?>
+                <a class="btn-secondary" href="register_worker.php">계정관리</a>
+              <?php endif; ?>
+              <?php if ($isOperator && !$isJungYeontakAccount): ?>
+                <a class="btn-secondary" href="../safety_log/dashboard.php">안전일지</a>
+              <?php endif; ?>
+              <?php if ($canAccessLegacyListPage): ?>
+                <a class="btn-secondary" href="list.html">평가서 등록</a>
+              <?php endif; ?>
+              <?php if ($canAccessMyGearTest): ?>
+                <a class="btn-secondary" href="/safety_gear/my_gear.php">나의 보호구</a>
+              <?php endif; ?>
+              <?php if ($canAccessEmploymentRules): ?>
+                <a class="btn-secondary btn-employment-rules" href="/employment_rules/index.php">취업규칙</a>
+              <?php endif; ?>
+              <?php if ($canAccessSafetyGearManagement): ?>
+                <a class="btn-secondary" href="/safety_gear/index.php">보호구관리</a>
+                <?php if (trim((string)auth_display_name($user)) === '김남균'): ?>
+                  <a class="btn-secondary" href="/material_management/index.php">물질관리</a>
+                <?php endif; ?>
+              <?php endif; ?>
+              <a class="btn-secondary" href="../near_miss/">아차사고</a>
+              <a class="btn-secondary" href="../calendar/index.html">달력</a>
+              <a class="btn-secondary" href="hazard_review.php">수시위험성평가</a>
+              <button type="button" class="btn-secondary" onclick="openPwModal()">비밀번호변경</button>
+              <a class="btn-secondary" href="<?= h($entryPage) ?>?logout=1">로그아웃</a>
+            </div>
+          </details>
+        </div>
+      </div>
     </div>
 
     <div class="panel">
@@ -2635,56 +3129,73 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
         <h1>작업 <span>목록</span></h1>
         <p><?= h($workListDescription) ?></p>
         <div class="unit-db-search-title">작업목록 검색</div>
+        <?php $hasAdvancedSearch = $selectedCheckedItemFilter !== '' || !$isDefaultMonthDateRange; ?>
         <form class="work-search-form" method="get" autocomplete="off">
-          <div class="work-search-box">
-            <input
-              type="search"
-              name="work_keyword"
-              class="work-search-input"
-              placeholder="작업명, 장소, 팀명, 작업유형 검색"
-              value="<?= h($workListKeyword) ?>"
-            >
+          <div class="work-search-primary-row">
+            <div class="work-search-box">
+              <input
+                type="search"
+                name="work_keyword"
+                class="work-search-input"
+                placeholder="작업명, 장소, 팀명, 작업유형 검색"
+                value="<?= h($workListKeyword) ?>"
+              >
+            </div>
+            <div class="work-search-primary-actions">
+              <button type="submit" class="btn-secondary">검색</button>
+              <a class="btn-secondary" href="<?= h(build_page_url('work_list.php', [
+                  'filter_type' => $selectedUnitTypeFilter,
+                  'filter_major' => $selectedMajorFilter,
+              ])) ?>">초기화</a>
+            </div>
           </div>
-          <input
-            type="date"
-            name="work_date_from"
-            class="work-search-input"
-            value="<?= h($workDateFrom) ?>"
-            aria-label="작업일자 시작일"
-            style="flex:0 1 170px; min-width:160px;"
+          <button
+            type="button"
+            class="work-search-toggle"
+            id="work-search-toggle"
+            aria-expanded="<?= $hasAdvancedSearch ? 'true' : 'false' ?>"
+            aria-controls="work-search-advanced"
+          >기간/선택항목 더보기</button>
+          <div
+            class="work-search-advanced<?= $hasAdvancedSearch ? ' is-open' : ' is-hidden' ?>"
+            id="work-search-advanced"
           >
-          <input
-            type="date"
-            name="work_date_to"
-            class="work-search-input"
-            value="<?= h($workDateTo) ?>"
-            aria-label="작업일자 종료일"
-            style="flex:0 1 170px; min-width:160px;"
-          >
-          <select
-            name="filter_checked_item"
-            class="work-filter-select"
-            aria-label="작업지휘자 선택 항목"
-            style="flex:0 1 240px; min-width:220px;"
-          >
-            <option value="">작업지휘자 선택 항목 전체</option>
-            <?php foreach ($checkedItemOptions as $checkedItemOption): ?>
-              <option value="<?= h($checkedItemOption) ?>" <?= $selectedCheckedItemFilter === $checkedItemOption ? 'selected' : '' ?>>
-                <?= h($checkedItemOption) ?>
-              </option>
-            <?php endforeach; ?>
-          </select>
+            <input
+              type="date"
+              name="work_date_from"
+              class="work-search-input"
+              value="<?= h($workDateFrom) ?>"
+              aria-label="작업일자 시작일"
+              style="flex:0 1 170px; min-width:160px;"
+            >
+            <input
+              type="date"
+              name="work_date_to"
+              class="work-search-input"
+              value="<?= h($workDateTo) ?>"
+              aria-label="작업일자 종료일"
+              style="flex:0 1 170px; min-width:160px;"
+            >
+            <select
+              name="filter_checked_item"
+              class="work-filter-select"
+              aria-label="작업지휘자 선택 항목"
+              style="flex:0 1 240px; min-width:220px;"
+            >
+              <option value="">작업지휘자 선택 항목 전체</option>
+              <?php foreach ($checkedItemOptions as $checkedItemOption): ?>
+                <option value="<?= h($checkedItemOption) ?>" <?= $selectedCheckedItemFilter === $checkedItemOption ? 'selected' : '' ?>>
+                  <?= h($checkedItemOption) ?>
+                </option>
+              <?php endforeach; ?>
+            </select>
+          </div>
           <?php if ($selectedUnitTypeFilter !== ''): ?>
             <input type="hidden" name="filter_type" value="<?= h($selectedUnitTypeFilter) ?>">
           <?php endif; ?>
           <?php if ($selectedMajorFilter !== ''): ?>
             <input type="hidden" name="filter_major" value="<?= h($selectedMajorFilter) ?>">
           <?php endif; ?>
-          <button type="submit" class="btn-secondary">검색</button>
-          <a class="btn-secondary" href="<?= h(build_page_url('work_list.php', [
-              'filter_type' => $selectedUnitTypeFilter,
-              'filter_major' => $selectedMajorFilter,
-          ])) ?>">초기화</a>
         </form>
         <div class="work-search-meta">
           <?php if ($workListKeyword !== '' || $selectedCheckedItemFilter !== '' || !$isDefaultMonthDateRange): ?>
@@ -2705,6 +3216,18 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
             작업명, 장소, 팀명, 작업유형, 위험성평가번호, 작업지휘자 선택 항목과 작업일자로 검색할 수 있습니다.
           <?php endif; ?>
         </div>
+        <?php if ($todayRegisteredReportCount === 0): ?>
+          <div class="today-empty-notice">
+            <strong>오늘 등록된 작업이 없습니다.</strong>
+            오늘 날짜 기준으로 아직 등록된 작업이 보이지 않습니다. 작업을 새로 등록하거나 날짜 조건을 다시 확인해 주세요.
+          </div>
+        <?php endif; ?>
+        <?php if ($todayLeaderPendingReportCount > 0): ?>
+          <div class="leader-pending-notice">
+            <strong>작업지휘자 입력 대기 작업이 있습니다.</strong>
+            오늘 등록된 작업 중 <?= number_format($todayLeaderPendingReportCount) ?>건은 관리감독자 등록 후에도 작업지휘자 입력이 아직 완료되지 않았습니다.
+          </div>
+        <?php endif; ?>
         <div class="search-entry-actions">
           <button type="button" class="search-entry-button" id="open-standard-search-modal">작업표준서검색</button>
           <button type="button" class="search-entry-button" id="open-unit-db-search-modal">위험성평가서검색</button>
@@ -2776,6 +3299,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
                   $adminManagerOpenParams = [
                       'unit_ra_id' => (int)$report['unit_ra_id'],
                       'saved_report_id' => (int)$report['report_id'],
+                      'edit_report_id' => (int)$report['report_id'],
                   ];
                   if (($report['team_name_context'] ?? '') !== '') {
                       $adminManagerOpenParams['manager_team'] = (string)$report['team_name_context'];
@@ -2800,12 +3324,16 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
                     <?php $managerOpenParams = [
                         'unit_ra_id' => (int)$report['unit_ra_id'],
                         'saved_report_id' => (int)$report['report_id'],
+                        'edit_report_id' => (int)$report['report_id'],
                     ];
                     if ($canManage && ($report['team_name_context'] ?? '') !== '') {
                         $managerOpenParams['manager_team'] = (string)$report['team_name_context'];
                     }
+                    $openHref = $isWorker
+                        ? build_page_url('hazard_survey.php', ['report_id' => (int)$report['report_id']])
+                        : build_page_url($reportEntryPage, $managerOpenParams);
                     ?>
-                    <a class="btn-secondary" href="<?= h(build_page_url($reportEntryPage, $managerOpenParams)) ?>">열기</a>
+                    <a class="btn-secondary" href="<?= h($openHref) ?>">열기</a>
                   <?php endif; ?>
                 <?php elseif ($isWorker && !$allTasksCompleted): ?>
                   <span class="sub-text">작업지휘자 입력 대기</span>
@@ -2874,6 +3402,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
                         $adminManagerOpenParams = [
                             'unit_ra_id' => (int)$report['unit_ra_id'],
                             'saved_report_id' => (int)$report['report_id'],
+                            'edit_report_id' => (int)$report['report_id'],
                         ];
                         if (($report['team_name_context'] ?? '') !== '') {
                             $adminManagerOpenParams['manager_team'] = (string)$report['team_name_context'];
@@ -2898,12 +3427,16 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
                           <?php $managerOpenParams = [
                               'unit_ra_id' => (int)$report['unit_ra_id'],
                               'saved_report_id' => (int)$report['report_id'],
+                              'edit_report_id' => (int)$report['report_id'],
                           ];
                           if ($canManage && ($report['team_name_context'] ?? '') !== '') {
                               $managerOpenParams['manager_team'] = (string)$report['team_name_context'];
                           }
+                          $openHref = $isWorker
+                              ? build_page_url('hazard_survey.php', ['report_id' => (int)$report['report_id']])
+                              : build_page_url($reportEntryPage, $managerOpenParams);
                           ?>
-                          <a class="btn-secondary" href="<?= h(build_page_url($reportEntryPage, $managerOpenParams)) ?>">열기</a>
+                          <a class="btn-secondary" href="<?= h($openHref) ?>">열기</a>
                         <?php endif; ?>
                       <?php elseif ($isWorker && !$allTasksCompleted): ?>
                         <span class="sub-text">작업지휘자 입력 대기</span>
@@ -2927,7 +3460,58 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
         <?= $workListPagination ?>
       <?php endif; ?>
     </div>
+
+    <div class="mobile-bottom-spacer" aria-hidden="true"></div>
   </div>
+  <div class="mobile-sheet-scrim" id="mobile-sheet-scrim" hidden></div>
+  <div class="mobile-utility-sheet" id="mobile-utility-sheet" hidden>
+    <div class="mobile-sheet-head">
+      <div class="mobile-sheet-title">내정보 / 바로가기</div>
+      <button type="button" class="mobile-sheet-close" id="mobile-sheet-close" aria-label="닫기">&times;</button>
+    </div>
+    <div class="mobile-sheet-grid">
+      <button type="button" class="btn-secondary" onclick="openOrgModal()">조직도</button>
+      <button type="button" class="btn-secondary" onclick="openPwModal()">비밀번호변경</button>
+      <?php if ($canAccessMyGearTest): ?>
+        <a class="btn-secondary" href="/safety_gear/my_gear.php">나의 보호구</a>
+      <?php endif; ?>
+      <?php if ($canAccessEmploymentRules): ?>
+        <a class="btn-secondary btn-employment-rules" href="/employment_rules/index.php">취업규칙</a>
+      <?php endif; ?>
+      <?php if ($canAccessSafetyGearManagement): ?>
+        <a class="btn-secondary" href="/safety_gear/index.php">보호구관리</a>
+      <?php endif; ?>
+      <?php if (trim((string)auth_display_name($user)) === '김남균' && $canAccessSafetyGearManagement): ?>
+        <a class="btn-secondary" href="/material_management/index.php">물질관리</a>
+      <?php endif; ?>
+      <a class="btn-secondary" href="../calendar/index.html">달력</a>
+      <a class="btn-secondary" href="<?= h($entryPage) ?>?logout=1">로그아웃</a>
+    </div>
+  </div>
+  <nav class="mobile-bottom-nav" aria-label="모바일 하단 메뉴">
+    <div class="mobile-bottom-nav-grid">
+      <a class="mobile-nav-link" href="index.php">
+        <span class="mobile-nav-icon">⌂</span>
+        <span>홈</span>
+      </a>
+      <a class="mobile-nav-link" href="../calendar/index.html">
+        <span class="mobile-nav-icon">◫</span>
+        <span>달력</span>
+      </a>
+      <a class="mobile-nav-link is-active" href="work_list.php">
+        <span class="mobile-nav-icon">≡</span>
+        <span>목록</span>
+      </a>
+      <a class="mobile-nav-link" href="../board/index.php">
+        <span class="mobile-nav-icon">▣</span>
+        <span>게시판</span>
+      </a>
+      <button type="button" class="mobile-nav-button" id="mobile-nav-more">
+        <span class="mobile-nav-icon">◎</span>
+        <span>내정보</span>
+      </button>
+    </div>
+  </nav>
   <div class="modal-backdrop" id="standard-search-modal" aria-hidden="true">
     <div class="unit-preview-modal search-tool-modal" role="dialog" aria-modal="true" aria-labelledby="standard-search-modal-title">
       <div class="unit-preview-head">
@@ -3105,7 +3689,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
   <!-- 전화번호 팝업 -->
   <div id="org-phone-tip" aria-hidden="true">
     <div class="tip-name" id="org-tip-name"></div>
-    <div class="tip-phone" id="org-tip-phone"></div>
+    <a class="tip-phone" id="org-tip-phone" href="#"></a>
   </div>
 
   <!-- 조직도 모달 -->
@@ -3277,6 +3861,39 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
 
   <script>
     (() => {
+      const workSearchToggle = document.getElementById('work-search-toggle');
+      const workSearchAdvanced = document.getElementById('work-search-advanced');
+      if (workSearchToggle && workSearchAdvanced) {
+        workSearchToggle.addEventListener('click', () => {
+          const isOpen = workSearchAdvanced.classList.toggle('is-open');
+          workSearchAdvanced.classList.toggle('is-hidden', !isOpen);
+          workSearchToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        });
+      }
+
+      const mobileNavMore = document.getElementById('mobile-nav-more');
+      const mobileSheet = document.getElementById('mobile-utility-sheet');
+      const mobileSheetScrim = document.getElementById('mobile-sheet-scrim');
+      const mobileSheetClose = document.getElementById('mobile-sheet-close');
+      const setMobileSheetOpen = (open) => {
+        if (!mobileSheet || !mobileSheetScrim || !mobileNavMore) {
+          return;
+        }
+
+        mobileSheet.hidden = !open;
+        mobileSheetScrim.hidden = !open;
+        mobileNavMore.classList.toggle('is-active', open);
+        document.body.classList.toggle('mobile-nav-open', open);
+      };
+
+      if (mobileNavMore && mobileSheet && mobileSheetScrim && mobileSheetClose) {
+        mobileNavMore.addEventListener('click', () => {
+          setMobileSheetOpen(mobileSheet.hidden);
+        });
+        mobileSheetClose.addEventListener('click', () => setMobileSheetOpen(false));
+        mobileSheetScrim.addEventListener('click', () => setMobileSheetOpen(false));
+      }
+
       const modal = document.getElementById('unit-preview-modal');
       const titleNode = document.getElementById('unit-preview-title');
       const subtitleNode = document.getElementById('unit-preview-subtitle');
@@ -4481,7 +5098,9 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
 
       function showPhoneTip(name, phone, cx, cy) {
         tipName.textContent  = name;
+        const phoneHref = String(phone || '').replace(/[^0-9+]/g, '');
         tipPhone.textContent = phone;
+        tipPhone.setAttribute('href', phoneHref ? `tel:${phoneHref}` : '#');
         phoneTip.style.display = 'block';
         const tw = phoneTip.offsetWidth  || 180;
         const th = phoneTip.offsetHeight || 60;
@@ -4656,6 +5275,9 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
           showPhoneTip(el.dataset.name, el.dataset.phone, e.clientX, e.clientY);
           e.stopPropagation();
         });
+      });
+      tipPhone.addEventListener('click', function(e) {
+        e.stopPropagation();
       });
       document.addEventListener('click', hidePhoneTip);
       orgPrint.addEventListener('click', openOrgPrintPreview);

@@ -30,6 +30,15 @@ if (isset($_GET['cat'])) {
 $_pageTitle   = $_pageTitle ?? BOARD_TITLE;
 $_boardCssVersion = (string)@filemtime(__DIR__ . '/../assets/css/style.css');
 $_mainPageHref = function_exists('auth_main_page_path') ? '../risk_assessment/' . auth_main_page_path($_currentUser) : '../risk_assessment/task_select.php';
+$_mobileRegisterHref = '../risk_assessment/task_select.php';
+if ($_currentUser) {
+    $mobileRegisterRole = (string)($_currentUser['original_role'] ?? $_currentUser['role'] ?? '');
+    if ($mobileRegisterRole === 'leader') {
+        $_mobileRegisterHref = '../risk_assessment/leader_task_select.php';
+    } elseif ($mobileRegisterRole === 'worker') {
+        $_mobileRegisterHref = '../risk_assessment/work_list.php';
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="ko">

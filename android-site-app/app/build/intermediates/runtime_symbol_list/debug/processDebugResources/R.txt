@@ -3823,8 +3823,11 @@ int string searchview_clear_text_content_description 0x7f0e00a2
 int string searchview_navigation_content_description 0x7f0e00a3
 int string side_sheet_accessibility_pane_title 0x7f0e00a4
 int string side_sheet_behavior 0x7f0e00a5
-int string site_url 0x7f0e00a6
-int string status_bar_notification_info_overflow 0x7f0e00a7
+int string site_load_error_unknown 0x7f0e00a6
+int string site_load_error_with_reason 0x7f0e00a7
+int string site_load_http_error 0x7f0e00a8
+int string site_url 0x7f0e00a9
+int string status_bar_notification_info_overflow 0x7f0e00aa
 int style AlertDialog_AppCompat 0x7f0f0000
 int style AlertDialog_AppCompat_Light 0x7f0f0001
 int style Animation_AppCompat_Dialog 0x7f0f0002

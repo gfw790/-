@@ -6,6 +6,9 @@ id toolbar
 id webView
 layout activity_main
 string app_name
+string site_load_error_unknown
+string site_load_error_with_reason
+string site_load_http_error
 string site_url
 style Theme.RiskSiteApp
 xml network_security_config

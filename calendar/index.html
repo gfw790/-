@@ -104,6 +104,22 @@
       padding: 18px;
     }
 
+    .mobile-selected-strip {
+      display: none;
+    }
+
+    .mobile-bottom-nav {
+      display: none;
+    }
+
+    .mobile-bottom-nav-link {
+      text-decoration: none;
+    }
+
+    .mobile-bottom-nav-label {
+      display: block;
+    }
+
     .month-toolbar {
       display: flex;
       justify-content: space-between;
@@ -234,6 +250,7 @@
       gap: 7px;
       cursor: pointer;
       transition: background 0.14s ease, transform 0.14s ease;
+      position: relative;
     }
 
     .day:hover {
@@ -259,6 +276,24 @@
       border-radius: 999px;
       font-size: 0.88rem;
       font-weight: 700;
+    }
+
+    .day-count {
+      position: absolute;
+      top: 8px;
+      right: 7px;
+      min-width: 20px;
+      height: 20px;
+      border-radius: 999px;
+      padding: 0 6px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: #e6f4ff;
+      color: #0f5f8a;
+      font-size: 0.68rem;
+      font-weight: 800;
+      letter-spacing: -0.01em;
     }
 
     .day.is-sunday .day-number {
@@ -332,11 +367,19 @@
       gap: 14px;
     }
 
+    .side-wrap.is-hidden {
+      display: none;
+    }
+
     .box {
       border-radius: var(--radius-lg);
       border: 1px solid #dce7f4;
       background: var(--surface-strong);
       padding: 14px;
+    }
+
+    .selected-events-box.is-hidden {
+      display: none;
     }
 
     .box h2 {
@@ -455,6 +498,88 @@
       color: #6a7c94;
       font-size: 0.85rem;
       padding: 8px 2px 2px;
+    }
+
+    .event-modal[hidden] {
+      display: none !important;
+    }
+
+    .event-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 80;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      background: rgba(15, 23, 42, 0.52);
+      backdrop-filter: blur(6px);
+    }
+
+    .event-modal-dialog {
+      width: min(100%, 560px);
+      max-height: min(82vh, 760px);
+      overflow: auto;
+      border-radius: 22px;
+      border: 1px solid rgba(215, 227, 239, 0.95);
+      background: rgba(255, 255, 255, 0.97);
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+    }
+
+    .event-modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px 12px;
+      border-bottom: 1px solid #e3ecf5;
+    }
+
+    .event-modal-title {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 780;
+      letter-spacing: -0.02em;
+      color: #14233a;
+    }
+
+    .event-modal-head-main {
+      min-width: 0;
+      display: grid;
+      gap: 8px;
+    }
+
+    .event-modal-tools {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .event-modal-tools .btn {
+      min-height: 36px;
+      padding: 8px 12px;
+      border-radius: 12px;
+    }
+
+    .event-modal-close {
+      min-width: 38px;
+      min-height: 38px;
+      border: 1px solid #d6e1ed;
+      border-radius: 999px;
+      background: #f8fbff;
+      color: #2f4867;
+      font-size: 1.15rem;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .event-modal-body {
+      padding: 14px 18px 18px;
+    }
+
+    .event-modal-list {
+      display: grid;
+      gap: 8px;
     }
 
     .form-grid {
@@ -615,33 +740,188 @@
 
     @media (max-width: 700px) {
       body {
-        padding: 14px;
+        padding: 10px 10px 96px;
+      }
+
+      .page {
+        gap: 12px;
       }
 
       .hero {
-        padding: 20px 18px;
+        padding: 16px 16px 14px;
+        border-radius: 18px;
+      }
+
+      .hero::after {
+        width: 140px;
+        height: 140px;
+        right: -50px;
+        top: -55px;
+      }
+
+      .hero h1 {
+        font-size: 1.15rem;
+      }
+
+      .hero p {
+        margin-top: 6px;
+        font-size: 0.82rem;
       }
 
       .calendar-wrap,
       .side-wrap {
-        padding: 14px;
+        padding: 12px;
+        border-radius: 18px;
       }
 
-      .day {
-        min-height: 90px;
-        padding: 7px 5px 5px;
+      .box {
+        padding: 12px;
+        border-radius: 14px;
       }
 
-      .event-pill {
-        font-size: 0.66rem;
+      .month-toolbar {
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+
+      .month-title {
+        width: 100%;
+        font-size: 1.12rem;
+      }
+
+      .controls {
+        width: 100%;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .controls .btn {
+        width: 100%;
+        min-height: 40px;
+        padding: 8px 10px;
+        border-radius: 12px;
+      }
+
+      #prevMonthBtn {
+        order: 1;
+      }
+
+      #todayBtn {
+        order: 2;
+      }
+
+      #nextMonthBtn {
+        order: 3;
+      }
+
+      #syncTasksBtn {
+        order: 4;
       }
 
       .search {
         min-width: 100%;
+        height: 42px;
+        border-radius: 14px;
       }
 
-      .month-toolbar {
-        align-items: stretch;
+      .mobile-selected-strip {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+        padding: 10px 12px;
+        border: 1px solid #dbe7f2;
+        border-radius: 14px;
+        background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+      }
+
+      .mobile-selected-main {
+        min-width: 0;
+      }
+
+      .mobile-selected-label {
+        font-size: 0.9rem;
+        font-weight: 760;
+        letter-spacing: -0.02em;
+        color: #15314d;
+      }
+
+      .mobile-selected-sub {
+        margin-top: 2px;
+        font-size: 0.74rem;
+        color: #59708c;
+      }
+
+      .mobile-selected-count {
+        flex-shrink: 0;
+        border-radius: 999px;
+        background: #dff4ff;
+        color: #0d6889;
+        font-size: 0.74rem;
+        font-weight: 800;
+        padding: 7px 10px;
+      }
+
+      .week-head {
+        margin-top: 10px;
+      }
+
+      .week-head div {
+        padding: 8px 2px;
+        font-size: 0.68rem;
+      }
+
+      .day {
+        min-height: 76px;
+        padding: 6px 4px 4px;
+        gap: 4px;
+      }
+
+      .day-number {
+        width: 24px;
+        height: 24px;
+        font-size: 0.78rem;
+      }
+
+      .day-count {
+        top: 6px;
+        right: 4px;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
+        font-size: 0.62rem;
+      }
+
+      .weather-row {
+        gap: 2px;
+        margin: 0;
+      }
+
+      .weather-icon,
+      .weather-icon svg {
+        width: 13px;
+        height: 13px;
+      }
+
+      .weather-temp,
+      .weather-pop {
+        font-size: 0.55rem;
+      }
+
+      .event-pill {
+        font-size: 0.61rem;
+        padding: 2px 4px;
+        border-radius: 7px;
+      }
+
+      .event-more {
+        font-size: 0.6rem;
+      }
+
+      .event-list {
+        max-height: none;
       }
 
       .category-create-row {
@@ -659,6 +939,73 @@
 
       .category-chip-actions .chip-btn {
         flex: 1;
+      }
+
+      .time-row,
+      .form-actions {
+        grid-template-columns: 1fr;
+      }
+
+      .form-actions {
+        display: grid;
+      }
+
+      .helper {
+        font-size: 0.72rem;
+      }
+
+      .mobile-bottom-nav {
+        position: fixed;
+        left: 50%;
+        bottom: 12px;
+        transform: translateX(-50%);
+        width: min(calc(100% - 20px), 420px);
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 6px;
+        padding: 8px;
+        border: 1px solid rgba(202, 216, 232, 0.92);
+        border-radius: 22px;
+        background: rgba(12, 23, 38, 0.92);
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.24);
+        backdrop-filter: blur(16px);
+        z-index: 50;
+      }
+
+      .mobile-bottom-nav-link {
+        min-width: 0;
+        border-radius: 16px;
+        padding: 9px 4px 8px;
+        color: rgba(226, 237, 248, 0.82);
+        text-align: center;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+
+      .mobile-bottom-nav-link.is-active {
+        background: linear-gradient(180deg, #f8fcff 0%, #dbeeff 100%);
+        color: #0f3d63;
+        box-shadow: inset 0 0 0 1px rgba(202, 226, 244, 0.9);
+      }
+
+      .event-modal {
+        align-items: center;
+        padding: 10px;
+      }
+
+      .event-modal-dialog {
+        width: 100%;
+        max-height: 78vh;
+        border-radius: 20px;
+      }
+
+      .event-modal-head {
+        padding: 14px 14px 10px;
+      }
+
+      .event-modal-body {
+        padding: 12px 14px 16px;
       }
     }
 
@@ -720,11 +1067,18 @@
             <button type="button" class="btn" id="nextMonthBtn">다음 달</button>
             <button type="button" class="btn primary" id="todayBtn">오늘</button>
             <button type="button" class="btn" id="syncTasksBtn" hidden>작업목록 동기화</button>
-            <a class="btn" href="../risk_assessment/work_list.php">작업목록으로 가기</a>
           </div>
           <label class="search" aria-label="일정 검색">
             <input type="search" id="keywordInput" placeholder="일정 제목 검색">
           </label>
+        </div>
+
+        <div class="mobile-selected-strip">
+          <div class="mobile-selected-main">
+            <div class="mobile-selected-label" id="mobileSelectedLabel"></div>
+            <div class="mobile-selected-sub">선택한 날짜의 일정을 바로 확인할 수 있습니다.</div>
+          </div>
+          <div class="mobile-selected-count" id="mobileSelectedCount"></div>
         </div>
 
         <div class="week-head">
@@ -739,14 +1093,14 @@
         <div class="days-grid" id="daysGrid"></div>
       </article>
 
-      <aside class="panel side-wrap">
-        <section class="box">
+      <aside class="panel side-wrap is-hidden">
+        <section class="box selected-events-box is-hidden">
           <h2 id="selectedDateTitle"></h2>
           <p>선택한 날짜의 일정 목록입니다.</p>
           <div class="event-list" id="selectedEventList"></div>
         </section>
 
-        <section class="box">
+        <section class="box event-form-section" id="eventFormSection">
           <h2 id="formTitle">일정 추가</h2>
           <form id="eventForm" class="form-grid">
             <input type="hidden" id="eventIdInput">
@@ -780,12 +1134,7 @@
                 <option value="meeting">회의</option>
               </select>
               <div class="category-manager">
-                <div class="category-create-row">
-                  <input id="categoryNameInput" type="text" maxlength="24" placeholder="새 카테고리 이름">
-                  <input id="categoryColorInput" class="category-color-input" type="color" value="#2563eb" aria-label="카테고리 색상">
-                  <button type="button" class="btn" id="addCategoryBtn">카테고리 추가</button>
-                </div>
-                <div class="category-list" id="categoryList"></div>
+                <button type="button" class="btn" id="openCategoryModalBtn">카테고리 추가</button>
               </div>
             </div>
 
@@ -827,6 +1176,68 @@
         </section>
       </aside>
     </section>
+  </div>
+
+  <nav class="mobile-bottom-nav" aria-label="모바일 하단 메뉴">
+    <a class="mobile-bottom-nav-link" href="../risk_assessment/index.php">
+      <span class="mobile-bottom-nav-label">홈</span>
+    </a>
+    <a class="mobile-bottom-nav-link is-active" href="index.html">
+      <span class="mobile-bottom-nav-label">달력</span>
+    </a>
+    <a class="mobile-bottom-nav-link" href="../risk_assessment/work_list.php">
+      <span class="mobile-bottom-nav-label">목록</span>
+    </a>
+    <a class="mobile-bottom-nav-link" href="../board/index.php">
+      <span class="mobile-bottom-nav-label">게시판</span>
+    </a>
+    <a class="mobile-bottom-nav-link" href="../risk_assessment/task_select.php">
+      <span class="mobile-bottom-nav-label">메뉴</span>
+    </a>
+  </nav>
+
+  <div class="event-modal" id="eventModal" hidden>
+    <div class="event-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="eventModalTitle">
+      <div class="event-modal-head">
+        <div class="event-modal-head-main">
+          <h3 class="event-modal-title" id="eventModalTitle"></h3>
+          <div class="event-modal-tools">
+            <button type="button" class="btn primary" id="openEventFormModalBtn">일정추가</button>
+          </div>
+        </div>
+        <button type="button" class="event-modal-close" id="eventModalCloseBtn" aria-label="일정 목록 닫기">×</button>
+      </div>
+      <div class="event-modal-body">
+        <div class="event-modal-list" id="eventModalList"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="event-modal" id="eventFormModal" hidden>
+    <div class="event-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="formTitle">
+      <div class="event-modal-body" id="eventFormModalBody"></div>
+    </div>
+  </div>
+
+  <div class="event-modal" id="categoryModal" hidden>
+    <div class="event-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="categoryModalTitle">
+      <div class="event-modal-head">
+        <div class="event-modal-head-main">
+          <h3 class="event-modal-title" id="categoryModalTitle">카테고리 관리</h3>
+        </div>
+        <button type="button" class="event-modal-close" id="categoryModalCloseBtn" aria-label="카테고리 모달 닫기">×</button>
+      </div>
+      <div class="event-modal-body">
+        <div class="category-manager">
+          <div class="category-create-row">
+            <input id="categoryNameInput" type="text" maxlength="24" placeholder="새 카테고리 이름">
+            <input id="categoryColorInput" class="category-color-input" type="color" value="#2563eb" aria-label="카테고리 색상">
+            <button type="button" class="btn" id="addCategoryBtn">추가</button>
+          </div>
+          <div class="category-list" id="categoryList"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="kr_holidays.js"></script>
@@ -1001,6 +1412,20 @@
       var daysGridEl = document.getElementById("daysGrid");
       var selectedDateTitleEl = document.getElementById("selectedDateTitle");
       var selectedEventListEl = document.getElementById("selectedEventList");
+      var sideWrapEl = document.querySelector(".side-wrap");
+      var eventFormSectionEl = document.getElementById("eventFormSection");
+      var eventModalEl = document.getElementById("eventModal");
+      var eventModalTitleEl = document.getElementById("eventModalTitle");
+      var eventModalListEl = document.getElementById("eventModalList");
+      var eventModalCloseBtnEl = document.getElementById("eventModalCloseBtn");
+      var openEventFormModalBtnEl = document.getElementById("openEventFormModalBtn");
+      var eventFormModalEl = document.getElementById("eventFormModal");
+      var eventFormModalBodyEl = document.getElementById("eventFormModalBody");
+      var openCategoryModalBtnEl = document.getElementById("openCategoryModalBtn");
+      var categoryModalEl = document.getElementById("categoryModal");
+      var categoryModalCloseBtnEl = document.getElementById("categoryModalCloseBtn");
+      var mobileSelectedLabelEl = document.getElementById("mobileSelectedLabel");
+      var mobileSelectedCountEl = document.getElementById("mobileSelectedCount");
       var keywordInputEl = document.getElementById("keywordInput");
       var formTitleEl = document.getElementById("formTitle");
 
@@ -1023,6 +1448,13 @@
       var sharedUserInputEl = document.getElementById("sharedUserInput");
       var cancelEditBtnEl = document.getElementById("cancelEditBtn");
       var syncTasksBtnEl = document.getElementById("syncTasksBtn");
+
+      if (eventFormModalBodyEl && eventFormSectionEl) {
+        eventFormModalBodyEl.appendChild(eventFormSectionEl);
+      }
+      if (sideWrapEl) {
+        sideWrapEl.classList.add("is-hidden");
+      }
 
       document.getElementById("prevMonthBtn").addEventListener("click", function () {
         state.currentMonth = new Date(state.currentMonth.getFullYear(), state.currentMonth.getMonth() - 1, 1);
@@ -1079,6 +1511,7 @@
           categoryInputEl.value = duplicate.id;
           categoryNameInputEl.value = "";
           renderCategoryList();
+          closeCategoryModal();
           return;
         }
 
@@ -1096,6 +1529,7 @@
 
         categoryInputEl.value = id;
         categoryNameInputEl.value = "";
+        closeCategoryModal();
       });
 
       categoryNameInputEl.addEventListener("keydown", function (event) {
@@ -1285,14 +1719,16 @@
         persistEvents();
         resetFormForCreate();
         render();
+        closeEventFormModal();
+        openEventModal();
       });
 
       cancelEditBtnEl.addEventListener("click", function () {
         resetFormForCreate();
+        closeEventFormModal();
       });
 
-      selectedEventListEl.addEventListener("click", function (event) {
-        var target = event.target;
+      function handleEventListAction(target) {
         if (!(target instanceof HTMLElement)) {
           return;
         }
@@ -1344,7 +1780,17 @@
           }
           render();
         }
+      }
+
+      selectedEventListEl.addEventListener("click", function (event) {
+        handleEventListAction(event.target);
       });
+
+      if (eventModalListEl) {
+        eventModalListEl.addEventListener("click", function (event) {
+          handleEventListAction(event.target);
+        });
+      }
 
       function hexToRgb(hex) {
         var value = normalizeHexColor(hex, "#64748b").slice(1);
@@ -2019,6 +2465,7 @@
       function renderCalendar() {
         monthTitleEl.textContent = state.currentMonth.getFullYear() + "년 " + (state.currentMonth.getMonth() + 1) + "월";
         daysGridEl.innerHTML = "";
+        var maxVisibleEvents = window.innerWidth <= 700 ? 2 : 3;
 
         var year = state.currentMonth.getFullYear();
         var monthIndex = state.currentMonth.getMonth();
@@ -2076,6 +2523,13 @@
           numberEl.textContent = String(dayNumber);
           dayEl.appendChild(numberEl);
 
+          if (dayEvents.length > 0) {
+            var countEl = document.createElement("span");
+            countEl.className = "day-count";
+            countEl.textContent = String(dayEvents.length);
+            dayEl.appendChild(countEl);
+          }
+
           var w = state.weatherData[cellKey];
           if (w) {
             var wRow = document.createElement("div");
@@ -2107,7 +2561,7 @@
           var stackEl = document.createElement("div");
           stackEl.className = "event-stack";
 
-          dayEvents.slice(0, 3).forEach(function (item) {
+          dayEvents.slice(0, maxVisibleEvents).forEach(function (item) {
             var pill = document.createElement("div");
             pill.className = "event-pill";
             applyCategoryStyle(pill, item, "pill");
@@ -2116,10 +2570,11 @@
             stackEl.appendChild(pill);
           });
 
-          if (dayEvents.length > 3) {
+          if (dayEvents.length > maxVisibleEvents) {
             var moreEl = document.createElement("div");
             moreEl.className = "event-more";
             moreEl.textContent = "+" + (dayEvents.length - 3) + "개 더 있음";
+            moreEl.textContent = "+" + (dayEvents.length - maxVisibleEvents) + "건 더 있음";
             stackEl.appendChild(moreEl);
           }
 
@@ -2134,11 +2589,142 @@
               eventDateInputEl.value = picked;
             }
             render();
+            openEventModal();
           });
 
           daysGridEl.appendChild(dayEl);
         }
       }
+
+      function syncEventModalFromSelected() {
+        if (!eventModalEl || eventModalEl.hidden || !eventModalTitleEl || !eventModalListEl) {
+          return;
+        }
+        eventModalTitleEl.textContent = selectedDateTitleEl.textContent;
+        eventModalListEl.innerHTML = selectedEventListEl.innerHTML;
+      }
+
+      function syncModalScrollLock() {
+        var hasOpenModal = (eventModalEl && !eventModalEl.hidden)
+          || (eventFormModalEl && !eventFormModalEl.hidden)
+          || (categoryModalEl && !categoryModalEl.hidden);
+        document.body.style.overflow = hasOpenModal ? "hidden" : "";
+      }
+
+      function openEventModal() {
+        if (!eventModalEl) {
+          return;
+        }
+        eventModalEl.hidden = false;
+        syncEventModalFromSelected();
+        syncModalScrollLock();
+      }
+
+      function closeEventModal() {
+        if (!eventModalEl) {
+          return;
+        }
+        eventModalEl.hidden = true;
+        syncModalScrollLock();
+      }
+
+      function openEventFormModal() {
+        if (!eventFormModalEl) {
+          return;
+        }
+        eventFormModalEl.hidden = false;
+        syncModalScrollLock();
+        eventTitleInputEl.focus();
+      }
+
+      function closeEventFormModal() {
+        if (!eventFormModalEl) {
+          return;
+        }
+        eventFormModalEl.hidden = true;
+        syncModalScrollLock();
+      }
+
+      function openCategoryModal() {
+        if (!categoryModalEl) {
+          return;
+        }
+        categoryModalEl.hidden = false;
+        syncModalScrollLock();
+        if (categoryNameInputEl) {
+          categoryNameInputEl.focus();
+        }
+      }
+
+      function closeCategoryModal() {
+        if (!categoryModalEl) {
+          return;
+        }
+        categoryModalEl.hidden = true;
+        syncModalScrollLock();
+      }
+
+      if (eventModalCloseBtnEl) {
+        eventModalCloseBtnEl.addEventListener("click", function () {
+          closeEventModal();
+        });
+      }
+
+      if (openEventFormModalBtnEl) {
+        openEventFormModalBtnEl.addEventListener("click", function () {
+          resetFormForCreate();
+          closeEventModal();
+          openEventFormModal();
+        });
+      }
+
+      if (openCategoryModalBtnEl) {
+        openCategoryModalBtnEl.addEventListener("click", function () {
+          openCategoryModal();
+        });
+      }
+
+      if (categoryModalCloseBtnEl) {
+        categoryModalCloseBtnEl.addEventListener("click", function () {
+          closeCategoryModal();
+        });
+      }
+
+      if (eventModalEl) {
+        eventModalEl.addEventListener("click", function (event) {
+          if (event.target === eventModalEl) {
+            closeEventModal();
+          }
+        });
+      }
+
+      if (eventFormModalEl) {
+        eventFormModalEl.addEventListener("click", function (event) {
+          if (event.target === eventFormModalEl) {
+            closeEventFormModal();
+          }
+        });
+      }
+
+      if (categoryModalEl) {
+        categoryModalEl.addEventListener("click", function (event) {
+          if (event.target === categoryModalEl) {
+            closeCategoryModal();
+          }
+        });
+      }
+
+      document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape" && eventModalEl && !eventModalEl.hidden) {
+          closeEventModal();
+        }
+        if (event.key === "Escape" && eventFormModalEl && !eventFormModalEl.hidden) {
+          closeEventFormModal();
+        }
+        if (event.key === "Escape" && categoryModalEl && !categoryModalEl.hidden) {
+          closeCategoryModal();
+        }
+      });
 
       function renderSelectedEvents() {
         var dateKey = state.selectedDate;
@@ -2147,6 +2733,21 @@
 
         var list = eventsForDate(dateKey, true);
         selectedEventListEl.innerHTML = "";
+
+        if (mobileSelectedLabelEl) {
+          mobileSelectedLabelEl.textContent = formatKoreanDateTitle(dateObj);
+        }
+        if (mobileSelectedCountEl) {
+          mobileSelectedCountEl.textContent = list.length ? ("일정 " + list.length + "건") : "일정 없음";
+        }
+
+        if (mobileSelectedCountEl) {
+          mobileSelectedCountEl.textContent = list.length ? ("일정 " + list.length + "건") : "일정 없음";
+        }
+
+        if (mobileSelectedCountEl) {
+          mobileSelectedCountEl.textContent = list.length ? ("일정 " + list.length + "건") : "일정 없음";
+        }
 
         if (!list.length) {
           var emptyEl = document.createElement("div");
@@ -2247,6 +2848,8 @@
           });
         }
 
+        syncEventModalFromSelected();
+
         if (state.editingId === null) {
           eventDateInputEl.value = state.selectedDate;
         }
@@ -2268,6 +2871,8 @@
         persistEvents();
         resetFormForCreate();
         render();
+        closeEventFormModal();
+        openEventModal();
       });
 
       function startEdit(id) {
@@ -2293,6 +2898,8 @@
         populateSharedUserOptions(target.sharedUserIds || []);
         updateVisibilityControls();
         deleteEventBtnEl.style.display = "";
+        closeEventModal();
+        openEventFormModal();
         eventTitleInputEl.focus();
       }
 
