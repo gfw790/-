@@ -277,6 +277,10 @@ $downloadUrl = $record !== null ? 'msds_list.php?download_file=' . rawurlencode(
     background: rgba(255, 255, 255, 0.045);
     border: 1px solid rgba(255, 255, 255, 0.08);
   }
+  .mobile-text-section.has-index {
+    border-color: rgba(255, 177, 26, 0.28);
+    background: linear-gradient(180deg, rgba(255, 177, 26, 0.08), rgba(255, 255, 255, 0.04));
+  }
   .mobile-text-section h3 {
     margin: 0 0 10px;
     font-size: 16px;
@@ -299,6 +303,81 @@ $downloadUrl = $record !== null ? 'msds_list.php?download_file=' . rawurlencode(
     color: var(--muted);
     text-align: center;
     line-height: 1.7;
+  }
+  .mobile-text-subsection {
+    margin-top: 10px;
+    padding: 12px;
+    border-radius: 16px;
+    background: rgba(255, 177, 26, 0.08);
+    border: 1px solid rgba(255, 177, 26, 0.18);
+  }
+  .mobile-text-subsection:first-child {
+    margin-top: 0;
+  }
+  .mobile-text-subsection-title {
+    margin: 0 0 8px;
+    font-size: 14px;
+    font-weight: 800;
+    color: #ffd27a;
+  }
+  .mobile-text-table {
+    display: grid;
+    gap: 8px;
+  }
+  .mobile-text-table-row {
+    display: grid;
+    grid-template-columns: minmax(88px, 120px) minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    padding: 10px 12px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+  }
+  .mobile-text-table-label {
+    color: #9fc4eb;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.5;
+    word-break: keep-all;
+  }
+  .mobile-text-table-value {
+    color: #f4f7fb;
+    font-size: 14px;
+    line-height: 1.7;
+    word-break: keep-all;
+    white-space: pre-wrap;
+  }
+  .mobile-text-grid-table {
+    width: 100%;
+    overflow: hidden;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.035);
+  }
+  .mobile-text-grid-row {
+    display: grid;
+    gap: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .mobile-text-grid-row:first-child {
+    border-top: 0;
+  }
+  .mobile-text-grid-cell {
+    padding: 10px 12px;
+    font-size: 13px;
+    line-height: 1.55;
+    color: #f4f7fb;
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    word-break: break-word;
+  }
+  .mobile-text-grid-cell:first-child {
+    border-left: 0;
+  }
+  .mobile-text-grid-row.is-head .mobile-text-grid-cell {
+    background: rgba(255, 177, 26, 0.14);
+    color: #ffe2a0;
+    font-weight: 800;
   }
   .viewer-toolbar {
     display: flex;
@@ -500,6 +579,24 @@ $downloadUrl = $record !== null ? 'msds_list.php?download_file=' . rawurlencode(
     }
     .mobile-text-section h3 {
       font-size: 15px;
+    }
+    .mobile-text-subsection {
+      padding: 10px;
+    }
+    .mobile-text-subsection-title {
+      font-size: 13px;
+    }
+    .mobile-text-table-row {
+      grid-template-columns: 92px minmax(0, 1fr);
+      gap: 8px;
+      padding: 9px 10px;
+    }
+    .mobile-text-table-label {
+      font-size: 12px;
+    }
+    .mobile-text-table-value,
+    .mobile-text-grid-cell {
+      font-size: 13px;
     }
     .mobile-text-paragraph {
       font-size: 14px;
@@ -793,9 +890,274 @@ $downloadUrl = $record !== null ? 'msds_list.php?download_file=' . rawurlencode(
     }
 
     mobileTextBody.innerHTML = sections.map((section) => {
-      const paragraphs = (section.paragraphs || []).map((paragraph) => `<p class="mobile-text-paragraph">${escapeHtml(paragraph)}</p>`).join('');
-      return `<article class="mobile-text-section"><h3>${escapeHtml(section.title || '본문')}</h3>${paragraphs}</article>`;
+      const originalTitle = normalizeLineText(section.title || '본문');
+      const titleInfo = parseSectionTitle(originalTitle);
+      const sectionClass = titleInfo.index ? 'mobile-text-section has-index' : 'mobile-text-section';
+      const blocksHtml = renderSectionBlocks(section);
+      return `<article class="${sectionClass}"><h3>${escapeHtml(originalTitle || '본문')}</h3>${blocksHtml}</article>`;
     }).join('');
+  }
+
+  function parseSectionTitle(rawTitle) {
+    const title = normalizeLineText(rawTitle || '본문');
+    const match = title.match(/^((?:\d{1,2}[.)])|(?:[①-⑳]))\s*(.+)$/);
+    if (!match) {
+      return { index: '', text: title || '본문' };
+    }
+
+    return {
+      index: match[1],
+      text: match[2] || title,
+    };
+  }
+
+  function isPageMarker(line) {
+    return /^-\s*\d+\s*-$/.test(line) || /^\d+\s*\/\s*\d+$/.test(line);
+  }
+
+  function isSubheadingLine(line) {
+    return /^[가-하]\.\s*/.test(line);
+  }
+
+  function isLikelyKeyLabel(line) {
+    const normalized = normalizeLineText(line);
+    if (!normalized || normalized.length > 26) {
+      return false;
+    }
+
+    if (/[.:：]/.test(normalized)) {
+      return false;
+    }
+
+    return !/\d{3,}/.test(normalized);
+  }
+
+  function splitKnownFieldLine(line) {
+    const normalized = normalizeLineText(line);
+    if (!normalized) {
+      return null;
+    }
+
+    const numberedMatch = normalized.match(/^\d+\)\s*(.+)$/);
+    const targetText = numberedMatch ? normalizeLineText(numberedMatch[1]) : normalized;
+
+    const knownLabels = [
+      '제품명',
+      '제품의 권고 용도',
+      '제품의 사용상의 제한',
+      '회사명',
+      '주소',
+      '긴급전화번호',
+      '유해·위험성 분류',
+      '그림문자',
+      '신호어',
+      '유해·위험문구',
+      '예방조치문구',
+      '물질명',
+      '이명(관용명)',
+      'CAS 번호',
+      '함유량(%)',
+    ];
+
+    for (const label of knownLabels) {
+      if (!targetText.startsWith(label)) {
+        continue;
+      }
+
+      const remainder = normalizeLineText(targetText.slice(label.length)).replace(/^[:：]\s*/, '');
+      if (!remainder) {
+        return null;
+      }
+
+      return {
+        label,
+        value: remainder,
+      };
+    }
+
+    return null;
+  }
+
+  function splitSubheadingTitle(rawTitle) {
+    const normalized = normalizeLineText(rawTitle);
+    const match = normalized.match(/^([가-하]\.)\s*(.+)$/);
+    if (!match) {
+      return { marker: '', title: normalized };
+    }
+
+    return {
+      marker: match[1],
+      title: match[2] || normalized,
+    };
+  }
+
+  function buildGridTable(lines) {
+    if (!lines.length) {
+      return '';
+    }
+
+    const headerIndex = lines.findIndex((line) => /CAS/.test(line) && /함유/.test(lines[Math.min(lines.length - 1, lines.indexOf(line) + 1)] || ''));
+    if (headerIndex === -1 || lines.length < headerIndex + 8) {
+      return '';
+    }
+
+    const headers = lines.slice(headerIndex, headerIndex + 4);
+    const values = lines.slice(headerIndex + 4);
+    if (headers.length !== 4 || values.length < 4) {
+      return '';
+    }
+
+    const rows = [];
+    for (let index = 0; index < values.length; index += 4) {
+      const chunk = values.slice(index, index + 4);
+      if (chunk.length === 4) {
+        rows.push(chunk);
+      }
+    }
+
+    if (!rows.length) {
+      return '';
+    }
+
+    const headHtml = `<div class="mobile-text-grid-row is-head" style="grid-template-columns: repeat(${headers.length}, minmax(0, 1fr));">${headers.map((header) => `<div class="mobile-text-grid-cell">${escapeHtml(header)}</div>`).join('')}</div>`;
+    const bodyHtml = rows.map((row) => `<div class="mobile-text-grid-row" style="grid-template-columns: repeat(${row.length}, minmax(0, 1fr));">${row.map((cell) => `<div class="mobile-text-grid-cell">${escapeHtml(cell)}</div>`).join('')}</div>`).join('');
+    return `<div class="mobile-text-grid-table">${headHtml}${bodyHtml}</div>`;
+  }
+
+  function buildKeyValueRows(lines) {
+    const rows = [];
+    const consumedIndexes = new Set();
+    let index = 0;
+
+    while (index < lines.length) {
+      const current = lines[index];
+      const combinedField = splitKnownFieldLine(current);
+      if (combinedField) {
+        rows.push(combinedField);
+        consumedIndexes.add(index);
+        index += 1;
+        continue;
+      }
+
+      const colonMatch = current.match(/^([^:：]{1,30})\s*[:：]\s*(.+)$/);
+      if (colonMatch) {
+        rows.push({ label: colonMatch[1], value: colonMatch[2] });
+        consumedIndexes.add(index);
+        index += 1;
+        continue;
+      }
+
+      const next = lines[index + 1] || '';
+      if (isLikelyKeyLabel(current) && next && !isLikelyKeyLabel(next) && !isSubheadingLine(next) && !isSectionHeading(next)) {
+        rows.push({ label: current, value: next });
+        consumedIndexes.add(index);
+        consumedIndexes.add(index + 1);
+        index += 2;
+        continue;
+      }
+
+      index += 1;
+    }
+
+    return { rows, consumedIndexes };
+  }
+
+  function renderKeyValueTable(rows) {
+    if (!rows.length) {
+      return '';
+    }
+
+    return `<div class="mobile-text-table">${rows.map((row) => `<div class="mobile-text-table-row"><div class="mobile-text-table-label">${escapeHtml(row.label)}</div><div class="mobile-text-table-value">${escapeHtml(row.value)}</div></div>`).join('')}</div>`;
+  }
+
+  function renderParagraphLines(lines) {
+    return lines.map((line) => `<p class="mobile-text-paragraph">${escapeHtml(line)}</p>`).join('');
+  }
+
+  function renderSubsectionBlock(title, lines) {
+    const cleanLines = lines.filter((line) => !isPageMarker(line));
+    const subsectionTitle = splitSubheadingTitle(title);
+    const workingLines = [...cleanLines];
+
+    const inlineField = splitKnownFieldLine(subsectionTitle.title);
+    if (inlineField) {
+      workingLines.unshift(inlineField.value);
+      title = `${subsectionTitle.marker} ${inlineField.label}`.trim();
+    } else {
+      title = [subsectionTitle.marker, subsectionTitle.title].filter(Boolean).join(' ').trim();
+    }
+
+    if (!workingLines.length) {
+      return `<section class="mobile-text-subsection"><p class="mobile-text-subsection-title">${escapeHtml(title)}</p></section>`;
+    }
+
+    const gridTableHtml = buildGridTable(workingLines);
+    if (gridTableHtml) {
+      return `<section class="mobile-text-subsection"><p class="mobile-text-subsection-title">${escapeHtml(title)}</p>${gridTableHtml}</section>`;
+    }
+
+    const { rows: keyValueRows, consumedIndexes } = buildKeyValueRows(workingLines);
+    const tableHtml = renderKeyValueTable(keyValueRows);
+    const paragraphLines = workingLines.filter((_, idx) => !consumedIndexes.has(idx));
+    const paragraphsHtml = paragraphLines.length ? renderParagraphLines(paragraphLines) : '';
+    return `<section class="mobile-text-subsection"><p class="mobile-text-subsection-title">${escapeHtml(title)}</p>${tableHtml}${paragraphsHtml}</section>`;
+  }
+
+  function renderSectionBlocks(section) {
+    const allLines = (section.paragraphs || [])
+      .map((line) => normalizeLineText(line))
+      .filter((line) => line && !isPageMarker(line));
+
+    if (!allLines.length) {
+      return '<div class="mobile-text-empty">표시할 본문이 없습니다.</div>';
+    }
+
+    const fullSectionTable = buildGridTable(allLines);
+    if (fullSectionTable) {
+      return fullSectionTable;
+    }
+
+    const subsections = [];
+    let currentSubsection = null;
+    let rootLines = [];
+
+    allLines.forEach((line) => {
+      if (isSubheadingLine(line)) {
+        if (currentSubsection) {
+          subsections.push(currentSubsection);
+        }
+        currentSubsection = {
+          title: line,
+          lines: [],
+        };
+        return;
+      }
+
+      if (currentSubsection) {
+        currentSubsection.lines.push(line);
+      } else {
+        rootLines.push(line);
+      }
+    });
+
+    if (currentSubsection) {
+      subsections.push(currentSubsection);
+    }
+
+    let html = '';
+    if (rootLines.length) {
+      const { rows: rootRows, consumedIndexes: rootConsumedIndexes } = buildKeyValueRows(rootLines);
+      const rootTable = renderKeyValueTable(rootRows);
+      const rootParagraphLines = rootLines.filter((_, idx) => !rootConsumedIndexes.has(idx));
+      const rootParagraphs = rootParagraphLines.length ? renderParagraphLines(rootParagraphLines) : '';
+      html += `${rootTable}${rootParagraphs}`;
+    }
+
+    if (subsections.length) {
+      html += subsections.map((subsection) => renderSubsectionBlock(subsection.title, subsection.lines)).join('');
+    }
+
+    return html || renderParagraphLines(allLines);
   }
 
   async function extractTextSections(documentRef) {
@@ -961,15 +1323,17 @@ $downloadUrl = $record !== null ? 'msds_list.php?download_file=' . rawurlencode(
       if (manualSections.length) {
         renderTextSections(manualSections, '관리자가 정리한 모바일 전용 본문입니다.', false);
       } else {
-        const normalizedServerSections = normalizeServerSections(serverOcrSections);
-        if (normalizedServerSections.length) {
-          const engineLabel = serverOcrEngine ? `서버 ${serverOcrEngine}` : '서버 OCR';
-          renderTextSections(normalizedServerSections, `${engineLabel} 결과를 모바일용으로 정리했습니다.`, false);
-        } else if (serverOcrText) {
+        if (serverOcrText) {
           const fallbackServerSections = buildSectionsFromLines(serverOcrText.split(/\r?\n/));
           if (fallbackServerSections.length) {
             const engineLabel = serverOcrEngine ? `서버 ${serverOcrEngine}` : '서버 OCR';
             renderTextSections(fallbackServerSections, `${engineLabel} 텍스트를 모바일용으로 정리했습니다.`, false);
+          } else {
+            const normalizedServerSections = normalizeServerSections(serverOcrSections);
+            if (normalizedServerSections.length) {
+              const engineLabel = serverOcrEngine ? `서버 ${serverOcrEngine}` : '서버 OCR';
+              renderTextSections(normalizedServerSections, `${engineLabel} 결과를 모바일용으로 정리했습니다.`, false);
+            }
           }
         } else {
           try {

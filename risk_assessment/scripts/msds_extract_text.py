@@ -5,6 +5,7 @@ import re
 import sys
 from pathlib import Path
 
+import pymupdf
 from pypdf import PdfReader
 
 
@@ -64,6 +65,21 @@ def extract_with_pypdf(pdf_path: Path) -> tuple[str, list[dict]]:
     return joined, split_sections(joined)
 
 
+def extract_with_pymupdf(pdf_path: Path) -> tuple[str, list[dict]]:
+    document = pymupdf.open(str(pdf_path))
+    try:
+        chunks = []
+        for page in document:
+            page_text = normalize_text(page.get_text() or "")
+            if page_text:
+                chunks.append(page_text)
+    finally:
+        document.close()
+
+    joined = "\n\n".join(chunks).strip()
+    return joined, split_sections(joined)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True)
@@ -85,15 +101,20 @@ def main() -> int:
         if not input_path.is_file():
             raise FileNotFoundError("입력 PDF 파일을 찾을 수 없습니다.")
 
-        text, sections = extract_with_pypdf(input_path)
+        text, sections = extract_with_pymupdf(input_path)
+        engine = "pymupdf"
+        if not text:
+            text, sections = extract_with_pypdf(input_path)
+            engine = "pypdf"
+
         if text:
             payload["status"] = "ready"
-            payload["engine"] = "pypdf"
+            payload["engine"] = engine
             payload["text"] = text
             payload["sections"] = sections
         else:
             payload["status"] = "failed"
-            payload["engine"] = "pypdf"
+            payload["engine"] = engine
             payload["error"] = (
                 "이 PDF에서는 서버 추출 텍스트를 찾지 못했습니다. "
                 "현재 Python 3.14 환경에서는 PaddleOCR 엔진을 설치할 수 없어, "
