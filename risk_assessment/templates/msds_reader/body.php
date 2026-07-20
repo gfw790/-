@@ -151,7 +151,7 @@
 
   <?php foreach ($mobileGlossary as $index => $entry): ?>
     <div class="mobile-glossary-sheet" id="<?= h('mobile-glossary-entry-' . $index) ?>" aria-hidden="true">
-      <a class="mobile-glossary-sheet-backdrop" href="#msds-reader-top" aria-label="닫기"></a>
+      <a class="mobile-glossary-sheet-backdrop mobile-glossary-sheet-close" href="javascript:void(0)" aria-label="닫기"></a>
       <div class="mobile-glossary-sheet-dialog" role="dialog" aria-modal="true" aria-labelledby="<?= h('mobile-glossary-sheet-title-' . $index) ?>">
         <div class="mobile-glossary-head">
           <p class="mobile-glossary-eyebrow">TERM GUIDE</p>
@@ -159,7 +159,7 @@
         </div>
         <div class="mobile-glossary-content"><?= h(trim((string)($entry['content'] ?? ''))) ?></div>
         <div class="mobile-glossary-actions">
-          <a class="btn btn-ghost" href="#msds-reader-top">닫기</a>
+          <a class="btn btn-ghost mobile-glossary-sheet-close" href="javascript:void(0)">닫기</a>
         </div>
       </div>
     </div>

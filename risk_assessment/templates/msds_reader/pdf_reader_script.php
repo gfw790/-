@@ -49,6 +49,7 @@
   let editingArticle = null;
   let glossaryEntries = Array.isArray(mobileGlossary) ? mobileGlossary.slice() : [];
   let glossaryModalOpenedAt = 0;
+  let glossaryScrollRestoreY = 0;
 
   window.__msdsReaderManaged = true;
 
@@ -194,6 +195,7 @@
       return false;
     }
 
+    glossaryScrollRestoreY = window.scrollY || window.pageYOffset || 0;
     const glossaryIndex = Number(button.getAttribute('data-glossary-index'));
     const glossaryTerm = button.getAttribute('data-glossary-term') || button.textContent || '';
     openGlossaryModalByTerm(glossaryTerm, Number.isNaN(glossaryIndex) ? null : glossaryIndex);
@@ -377,6 +379,22 @@
 
     mobileGlossaryModal.classList.remove('is-open');
     mobileGlossaryModal.setAttribute('aria-hidden', 'true');
+  }
+
+  function closeGlossarySheet(event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    const baseUrl = `${window.location.pathname}${window.location.search}`;
+    if (window.location.hash) {
+      window.history.replaceState(null, '', baseUrl);
+    }
+
+    window.setTimeout(() => {
+      window.scrollTo({ top: glossaryScrollRestoreY, behavior: 'auto' });
+    }, 0);
   }
 
   window.__openMobileGlossaryFromButton = openGlossaryFromButton;
@@ -1687,6 +1705,9 @@
   if (mobileGlossaryManageButton) {
     mobileGlossaryManageButton.addEventListener('click', openGlossaryEditor);
   }
+  document.querySelectorAll('.mobile-glossary-sheet-close').forEach((node) => {
+    node.addEventListener('click', closeGlossarySheet);
+  });
   if (mobileGlossaryAdd) {
     mobileGlossaryAdd.addEventListener('click', () => {
       glossaryEntries.push({ term: '', title: '', content: '' });
