@@ -1,6 +1,7 @@
 ﻿<?php
 require_once 'includes/header.php';
 $user = requireLogin();
+ensureBoardNoticeTargetSchema();
 
 $editId = (int)($_GET['id'] ?? 0);
 $post = null;
@@ -33,6 +34,8 @@ if ($editId > 0) {
 }
 
 $canWriteAdminCat = $user['role'] === 'admin' || ($user['original_role'] ?? '') === 'safety_manager';
+$noticeTeamOptions = board_notice_team_options();
+$selectedNoticeTargetTeam = board_normalize_notice_target_team((string)($post['notice_target_team'] ?? 'ALL'));
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     checkCsrf($_POST['csrf'] ?? '');
@@ -58,6 +61,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     $categoryId = (int)($_POST['category_id'] ?? 0);
     $isNotice = !empty($_POST['is_notice']) && $canWriteAdminCat ? 1 : 0;
+    $noticeTargetTeam = board_normalize_notice_target_team($_POST['notice_target_team'] ?? 'ALL');
+    if (!$isNotice) {
+        $noticeTargetTeam = 'ALL';
+    }
+    $selectedNoticeTargetTeam = $noticeTargetTeam;
 
     if ($title === '' || $content === '' || $categoryId === 0) {
         $error = '제목, 분류, 내용을 모두 입력해 주세요.';
@@ -76,9 +84,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($editId > 0) {
                 $stmt = db()->prepare(
-                    "UPDATE posts SET category_id = ?, title = ?, content = ?, is_notice = ? WHERE id = ?"
+                    "UPDATE posts
+                     SET category_id = ?, title = ?, content = ?, is_notice = ?, notice_target_team = ?
+                     WHERE id = ?"
                 );
-                $stmt->execute([$categoryId, $title, $content, $isNotice, $editId]);
+                $stmt->execute([$categoryId, $title, $content, $isNotice, $noticeTargetTeam, $editId]);
                 $postId = $editId;
 
                 if (!empty($_POST['delete_attachments'])) {
@@ -99,8 +109,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 db()->prepare("DELETE FROM polls WHERE post_id = ?")->execute([$postId]);
             } else {
                 $stmt = db()->prepare(
-                    "INSERT INTO posts (category_id, title, content, author_id, author_name, author_dept, is_notice)
-                     VALUES (?, ?, ?, ?, ?, ?, ?)"
+                    "INSERT INTO posts (
+                        category_id, title, content, author_id, author_name, author_dept, is_notice, notice_target_team
+                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
                 );
                 $stmt->execute([
                     $categoryId,
@@ -110,6 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $user['name'],
                     $user['dept'],
                     $isNotice,
+                    $noticeTargetTeam,
                 ]);
                 $postId = (int)db()->lastInsertId();
             }
@@ -189,6 +201,17 @@ if (!$selectedCat && !empty($_GET['cat'])) {
                 <label style="margin-left:14px;font-size:12px;">
                     <input type="checkbox" name="is_notice" value="1" <?= !empty($post['is_notice']) ? 'checked' : '' ?>>
                     공지글로 등록
+                </label>
+                <label style="margin-left:14px;font-size:12px;">
+                    공지 노출팀
+                    <select name="notice_target_team" style="margin-left:6px;">
+                        <option value="ALL" <?= $selectedNoticeTargetTeam === 'ALL' ? 'selected' : '' ?>>전체 공지</option>
+                        <?php foreach ($noticeTeamOptions as $teamName): ?>
+                            <option value="<?= h($teamName) ?>" <?= $selectedNoticeTargetTeam === $teamName ? 'selected' : '' ?>>
+                                <?= h($teamName) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
                 </label>
             <?php endif; ?>
         </div>

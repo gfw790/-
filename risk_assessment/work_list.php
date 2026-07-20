@@ -1124,6 +1124,8 @@ $unitTypeOptions = work_list_collect_type_options();
 $workListKeyword = trim((string)($_GET['work_keyword'] ?? ''));
 $workDateFrom = trim((string)($_GET['work_date_from'] ?? ''));
 $workDateTo = trim((string)($_GET['work_date_to'] ?? ''));
+$workDateFrom = str_replace('/', '-', $workDateFrom);
+$workDateTo = str_replace('/', '-', $workDateTo);
 $isDefaultMonthDateRange = false;
 $currentUserName = trim((string)auth_display_name($user));
 $currentUserTeam = auth_normalize_team_name((string)($user['team'] ?? ''));
@@ -1142,6 +1144,8 @@ if ($workDateFrom === '' && $workDateTo === '') {
   $workDateTo = $shouldUseTodayDefaultDateRange ? date('Y-m-d') : date('Y-m-t');
   $isDefaultMonthDateRange = true;
 }
+$workDateFromDisplay = $workDateFrom !== '' ? str_replace('-', '/', $workDateFrom) : '';
+$workDateToDisplay = $workDateTo !== '' ? str_replace('-', '/', $workDateTo) : '';
 $selectedUnitTypeFilter = trim((string)($_GET['filter_type'] ?? ''));
 if ($selectedUnitTypeFilter !== '' && !array_key_exists($selectedUnitTypeFilter, $unitTypeOptions)) {
     $selectedUnitTypeFilter = '';
@@ -2495,6 +2499,13 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     }
     .desktop-action-cloud { display: none; }
     .mobile-quick-panel { display: block; width: 100%; }
+    .mobile-quick-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .mobile-quick-grid .mobile-quick-primary {
+      grid-column: 1 / -1;
+    }
     .mobile-bottom-nav,
     .mobile-bottom-spacer { display: block; }
     .panel-head h1 { font-size: 20px; }
@@ -2502,6 +2513,11 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     .work-search-primary-row {
       flex-direction: column;
       align-items: stretch;
+    }
+    .work-search-box {
+      flex: none;
+      width: 100%;
+      min-width: 0;
     }
     .work-search-input { flex-basis: 100%; min-width: 0; }
     .work-search-primary-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -2529,12 +2545,61 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     .work-search-toggle[aria-expanded="true"]::after { content: '접기'; }
     .work-search-advanced {
       display: none;
-      margin-top: 4px;
+      margin-top: 2px;
+      gap: 8px;
     }
     .work-search-advanced.is-open {
       display: flex;
       flex-direction: column;
       align-items: stretch;
+    }
+    .work-search-advanced .work-search-input[type="date"] {
+      appearance: none;
+      -webkit-appearance: none;
+      height: 44px;
+      min-height: 44px;
+      max-height: 44px;
+      padding: 0 12px;
+      font-size: 13px;
+      line-height: 44px;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+    .work-search-advanced .work-search-input[type="date"]::-webkit-date-and-time-value {
+      min-height: 0;
+      height: 24px;
+      line-height: 24px;
+      text-align: left;
+    }
+    .work-search-advanced .work-search-input[type="date"]::-webkit-datetime-edit {
+      display: inline-flex;
+      align-items: center;
+      min-height: 0;
+      padding: 0;
+    }
+    .work-search-advanced .work-search-input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+      padding: 0;
+    }
+    .work-search-advanced .work-search-input[type="date"]::-webkit-calendar-picker-indicator {
+      margin: 0;
+    }
+    .work-filter-select-leader {
+      display: none;
+    }
+    .work-search-meta {
+      margin-top: 2px;
+    }
+    .search-entry-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .search-entry-button {
+      min-width: 0;
+      width: 100%;
+      padding: 11px 12px;
+      font-size: 13px;
     }
     .work-filter-field { flex-basis: 100%; min-width: 0; }
     .table-wrap { display: none; }
@@ -3077,7 +3142,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
           <div class="mobile-quick-label">Quick Menu</div>
           <div class="mobile-quick-grid">
             <?php if (!$isWorker && !$isLeaderOnly && $userRole !== 'safety_manager' && $userRole !== 'administrator' && !$isJungYeontakAccount): ?>
-              <a class="btn-secondary" href="<?= h($entryPage) ?>">작업 등록</a>
+              <a class="btn-secondary mobile-quick-primary" href="<?= h($entryPage) ?>">작업 등록</a>
             <?php endif; ?>
             <a class="btn-secondary btn-header-cta" href="../board/index.php">게시판</a>
             <a class="btn-secondary" href="../tbm/index.php">TBM일지</a>
@@ -3162,24 +3227,30 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
             id="work-search-advanced"
           >
             <input
-              type="date"
+              type="text"
               name="work_date_from"
               class="work-search-input"
-              value="<?= h($workDateFrom) ?>"
+              value="<?= h($workDateFromDisplay) ?>"
+              placeholder="YYYY/MM/DD"
+              inputmode="numeric"
+              pattern="\d{4}/\d{2}/\d{2}"
               aria-label="작업일자 시작일"
               style="flex:0 1 170px; min-width:160px;"
             >
             <input
-              type="date"
+              type="text"
               name="work_date_to"
               class="work-search-input"
-              value="<?= h($workDateTo) ?>"
+              value="<?= h($workDateToDisplay) ?>"
+              placeholder="YYYY/MM/DD"
+              inputmode="numeric"
+              pattern="\d{4}/\d{2}/\d{2}"
               aria-label="작업일자 종료일"
               style="flex:0 1 170px; min-width:160px;"
             >
             <select
               name="filter_checked_item"
-              class="work-filter-select"
+              class="work-filter-select work-filter-select-leader"
               aria-label="작업지휘자 선택 항목"
               style="flex:0 1 240px; min-width:220px;"
             >
@@ -3509,7 +3580,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
       </a>
       <a class="mobile-nav-button" href="more.php">
         <span class="mobile-nav-icon">◎</span>
-        <span>내정보</span>
+        <span>더보기</span>
       </a>
     </div>
   </nav>

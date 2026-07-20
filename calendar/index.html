@@ -43,7 +43,8 @@
     }
 
     .page {
-      max-width: 1300px;
+      width: 100%;
+      max-width: none;
       margin: 0 auto;
       display: grid;
       grid-template-columns: 1fr;
@@ -789,6 +790,11 @@
         padding: 10px 10px 96px;
       }
 
+      .day .weather-temp,
+      .day .weather-pop {
+        display: none;
+      }
+
       .page {
         gap: 12px;
       }
@@ -1091,11 +1097,6 @@
       color: #4e607a;
       font-weight: 650;
       white-space: nowrap;
-    }
-
-    .day .weather-temp,
-    .day .weather-pop {
-      display: none;
     }
 
     .weather-pop {
@@ -1478,6 +1479,7 @@
       var daysGridEl = document.getElementById("daysGrid");
       var selectedDateTitleEl = document.getElementById("selectedDateTitle");
       var selectedEventListEl = document.getElementById("selectedEventList");
+      var selectedEventsBoxEl = document.querySelector(".selected-events-box");
       var sideWrapEl = document.querySelector(".side-wrap");
       var eventFormSectionEl = document.getElementById("eventFormSection");
       var eventModalEl = document.getElementById("eventModal");
@@ -1518,12 +1520,37 @@
       var sharedUserInputEl = document.getElementById("sharedUserInput");
       var cancelEditBtnEl = document.getElementById("cancelEditBtn");
       var syncTasksBtnEl = document.getElementById("syncTasksBtn");
+      var desktopCalendarMedia = window.matchMedia("(min-width: 1101px)");
 
-      if (eventFormModalBodyEl && eventFormSectionEl) {
-        eventFormModalBodyEl.appendChild(eventFormSectionEl);
+      function syncDesktopSidePanelLayout() {
+        if (!eventFormSectionEl || !sideWrapEl || !eventFormModalBodyEl) {
+          return;
+        }
+
+        if (desktopCalendarMedia.matches) {
+          sideWrapEl.classList.remove("is-hidden");
+          if (selectedEventsBoxEl) {
+            selectedEventsBoxEl.classList.remove("is-hidden");
+          }
+          if (eventFormSectionEl.parentElement !== sideWrapEl) {
+            sideWrapEl.appendChild(eventFormSectionEl);
+          }
+        } else {
+          sideWrapEl.classList.add("is-hidden");
+          if (selectedEventsBoxEl) {
+            selectedEventsBoxEl.classList.add("is-hidden");
+          }
+          if (eventFormSectionEl.parentElement !== eventFormModalBodyEl) {
+            eventFormModalBodyEl.appendChild(eventFormSectionEl);
+          }
+        }
       }
-      if (sideWrapEl) {
-        sideWrapEl.classList.add("is-hidden");
+
+      syncDesktopSidePanelLayout();
+      if (typeof desktopCalendarMedia.addEventListener === "function") {
+        desktopCalendarMedia.addEventListener("change", syncDesktopSidePanelLayout);
+      } else if (typeof desktopCalendarMedia.addListener === "function") {
+        desktopCalendarMedia.addListener(syncDesktopSidePanelLayout);
       }
 
       document.getElementById("prevMonthBtn").addEventListener("click", function () {

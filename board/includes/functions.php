@@ -106,6 +106,72 @@ function getCategories() {
     return $cats;
 }
 
+function ensureBoardNoticeTargetSchema(): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+
+    try {
+        $stmt = db()->query("SHOW COLUMNS FROM posts LIKE 'notice_target_team'");
+        $exists = (bool)$stmt->fetch();
+        if (!$exists) {
+            db()->exec("ALTER TABLE posts ADD COLUMN notice_target_team VARCHAR(100) NOT NULL DEFAULT 'ALL' AFTER is_notice");
+            db()->exec("UPDATE posts SET notice_target_team = 'ALL' WHERE is_notice = 1 AND COALESCE(notice_target_team, '') = ''");
+        }
+    } catch (Throwable $e) {
+        // ignore schema sync failure here; write/list code will continue best-effort
+    }
+
+    $done = true;
+}
+
+function board_notice_team_options(): array
+{
+    $teams = [];
+    if (function_exists('auth_read_teams')) {
+        foreach ((array)auth_read_teams() as $teamName) {
+            $teamName = trim((string)$teamName);
+            if ($teamName !== '') {
+                $teams[] = $teamName;
+            }
+        }
+    }
+
+    return array_values(array_unique($teams));
+}
+
+function board_normalize_notice_target_team(?string $team): string
+{
+    $team = trim((string)$team);
+    if ($team === '' || strcasecmp($team, 'ALL') === 0) {
+        return 'ALL';
+    }
+
+    return $team;
+}
+
+function board_notice_visible_to_user(array $post, ?array $user): bool
+{
+    if (!(int)($post['is_notice'] ?? 0)) {
+        return true;
+    }
+
+    $role = (string)($user['role'] ?? '');
+    if (in_array($role, ['admin', 'administrator'], true)) {
+        return true;
+    }
+
+    $targetTeam = board_normalize_notice_target_team((string)($post['notice_target_team'] ?? 'ALL'));
+    if ($targetTeam === 'ALL') {
+        return true;
+    }
+
+    $currentDept = trim((string)($user['dept'] ?? ''));
+    return $currentDept !== '' && $currentDept === $targetTeam;
+}
+
 function getCategoryById($id) {
     foreach (getCategories() as $c) {
         if ($c['id'] == $id) return $c;

@@ -24,6 +24,7 @@ function h($value): string
 }
 
 $menuItems = [
+    ['label' => '수시위험성평가', 'href' => 'hazard_review.php', 'desc' => '수시위험성평가 목록과 열람 화면으로 이동합니다.'],
     ['label' => '홈', 'href' => 'index.php', 'desc' => '메인 화면으로 이동합니다.'],
     ['label' => '달력', 'href' => '../calendar/index.html', 'desc' => '일정과 날씨를 확인합니다.'],
     ['label' => '작업목록', 'href' => 'work_list.php', 'desc' => '등록된 작업 목록을 확인합니다.'],
@@ -200,23 +201,23 @@ if ($user !== null) {
   <nav class="mobile-bottom-nav" aria-label="모바일 하단 메뉴">
     <div class="mobile-bottom-nav-grid">
       <a class="mobile-nav-link" href="index.php">
-        <span class="mobile-nav-icon">홈</span>
+        <span class="mobile-nav-icon">⌂</span>
         <span>홈</span>
       </a>
       <a class="mobile-nav-link" href="../calendar/index.html">
-        <span class="mobile-nav-icon">달력</span>
+        <span class="mobile-nav-icon">◫</span>
         <span>달력</span>
       </a>
       <a class="mobile-nav-link" href="work_list.php">
-        <span class="mobile-nav-icon">목록</span>
+        <span class="mobile-nav-icon">≡</span>
         <span>목록</span>
       </a>
       <a class="mobile-nav-link" href="../board/index.php">
-        <span class="mobile-nav-icon">게시판</span>
+        <span class="mobile-nav-icon">▣</span>
         <span>게시판</span>
       </a>
       <a class="mobile-nav-link is-active" href="more.php">
-        <span class="mobile-nav-icon">더보기</span>
+        <span class="mobile-nav-icon">⋯</span>
         <span>더보기</span>
       </a>
     </div>

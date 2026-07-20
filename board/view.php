@@ -1,5 +1,6 @@
 ﻿<?php
 require_once 'includes/header.php';
+ensureBoardNoticeTargetSchema();
 
 $id = (int)($_GET['id'] ?? 0);
 if ($id <= 0) {
@@ -21,6 +22,10 @@ $stmt->execute([$id]);
 $post = $stmt->fetch();
 if (!$post) {
     die('게시글을 찾을 수 없습니다.');
+}
+if (!board_notice_visible_to_user($post, $_currentUser)) {
+    http_response_code(403);
+    die('이 공지글은 현재 소속 팀에서 볼 수 없습니다.');
 }
 
 $attachments = getAttachments($id);

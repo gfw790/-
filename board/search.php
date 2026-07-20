@@ -1,5 +1,6 @@
 ﻿<?php
 require_once 'includes/header.php';
+ensureBoardNoticeTargetSchema();
 
 $q = trim($_GET['q'] ?? '');
 $field = $_GET['field'] ?? 'all';
@@ -11,6 +12,13 @@ $offset = ($page - 1) * POSTS_PER_PAGE;
 
 $where = ['1=1'];
 $params = [];
+$currentDept = trim((string)($_currentUser['dept'] ?? ''));
+$isAdmin = in_array(($_currentUser['role'] ?? ''), ['admin', 'administrator'], true);
+
+if (!$isAdmin && $currentDept !== '') {
+    $where[] = "(p.is_notice = 0 OR COALESCE(p.notice_target_team, 'ALL') = 'ALL' OR p.notice_target_team = ?)";
+    $params[] = $currentDept;
+}
 
 if ($q !== '') {
     $like = '%' . $q . '%';

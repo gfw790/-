@@ -256,9 +256,16 @@ if ($periodBounds !== null) {
     $reportListSql .= "
     WHERE wr.work_date >= :period_start
       AND wr.work_date < :period_end
+      AND wr.work_date <= :today_date
 ";
     $reportListParams[':period_start'] = $periodBounds['start']->format('Y-m-d');
     $reportListParams[':period_end'] = $periodBounds['end']->format('Y-m-d');
+    $reportListParams[':today_date'] = $today->format('Y-m-d');
+} else {
+    $reportListSql .= "
+    WHERE wr.work_date <= :today_date
+";
+    $reportListParams[':today_date'] = $today->format('Y-m-d');
 }
 $reportListSql .= "
     GROUP BY wr.report_id, wr.work_date, wr.work_title
@@ -363,7 +370,7 @@ foreach ($participantRows as $participantRow) {
     color: var(--text) !important;
     padding: 28px 20px 48px;
   }
-  .shell { max-width: 1100px; margin: 0 auto; }
+  .shell { width: 100%; max-width: none; margin: 0 auto; }
   .topbar {
     display: flex;
     justify-content: space-between;
@@ -678,10 +685,59 @@ foreach ($participantRows as $participantRow) {
     font-size: 11px;
     font-weight: 700;
   }
+  .mobile-bottom-nav {
+    display: none;
+  }
+  .mobile-bottom-nav {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    z-index: 1000;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 20px;
+    background: rgba(10, 17, 28, 0.96);
+    backdrop-filter: blur(14px);
+    box-shadow: 0 18px 40px rgba(0,0,0,0.38);
+    padding: 8px;
+  }
+  .mobile-bottom-nav-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .mobile-nav-link {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-height: 58px;
+    border-radius: 14px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: #c5d8eb;
+    text-decoration: none;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .mobile-nav-link.is-active {
+    background: linear-gradient(180deg, rgba(245,166,35,0.2), rgba(245,166,35,0.1));
+    border-color: rgba(245,166,35,0.35);
+    color: #fff4df;
+  }
+  .mobile-nav-icon {
+    font-size: 18px;
+    line-height: 1;
+  }
   @media (max-width: 720px) {
+    body { padding-bottom: 118px; }
     .panel-head, .content { padding-left: 18px; padding-right: 18px; }
     .report-row { grid-template-columns: 1fr; }
     .actions { justify-content: space-between; }
+    .mobile-bottom-nav { display: block; }
   }
 </style>
 </head>
@@ -857,6 +913,31 @@ foreach ($participantRows as $participantRow) {
       </div>
     </div>
   </div>
+
+  <nav class="mobile-bottom-nav" aria-label="모바일 하단 메뉴">
+    <div class="mobile-bottom-nav-grid">
+      <a class="mobile-nav-link" href="index.php">
+        <span class="mobile-nav-icon">⌂</span>
+        <span>홈</span>
+      </a>
+      <a class="mobile-nav-link" href="../calendar/index.html">
+        <span class="mobile-nav-icon">◫</span>
+        <span>달력</span>
+      </a>
+      <a class="mobile-nav-link" href="work_list.php">
+        <span class="mobile-nav-icon">≡</span>
+        <span>목록</span>
+      </a>
+      <a class="mobile-nav-link" href="../board/index.php">
+        <span class="mobile-nav-icon">▣</span>
+        <span>게시판</span>
+      </a>
+      <a class="mobile-nav-link is-active" href="more.php">
+        <span class="mobile-nav-icon">◎</span>
+        <span>더보기</span>
+      </a>
+    </div>
+  </nav>
 
   <script>
     (function () {

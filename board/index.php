@@ -1,5 +1,6 @@
 ﻿<?php
 require_once 'includes/header.php';
+ensureBoardNoticeTargetSchema();
 
 $catCode = $_GET['cat'] ?? 'notice';
 $isAllTab = ($catCode === 'all');
@@ -55,9 +56,12 @@ if ($isAllTab) {
     $noticeParams = array_merge($noticeParams, $allTabAllowedCodes);
 
     if ($currentDept !== '' && !$isAdmin) {
-        $noticeQuery .= " AND (COALESCE(p.author_dept, '') = '' OR p.author_dept = ?)";
+        $noticeQuery .= " AND (COALESCE(p.notice_target_team, 'ALL') = 'ALL' OR p.notice_target_team = ?)";
         $noticeParams[] = $currentDept;
     }
+} elseif (!$isAdmin && $currentDept !== '') {
+    $noticeQuery .= " AND (COALESCE(p.notice_target_team, 'ALL') = 'ALL' OR p.notice_target_team = ?)";
+    $noticeParams[] = $currentDept;
 }
 $noticeQuery .= "\n     ORDER BY p.created_at DESC\n     LIMIT 5";
 

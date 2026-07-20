@@ -792,7 +792,7 @@ if (!$report) {
     color: var(--text) !important;
     padding: 28px 20px 48px;
   }
-  .shell { max-width: 1100px; margin: 0 auto; }
+  .shell { width: 100%; max-width: none; margin: 0 auto; }
   .topbar {
     display: flex;
     gap: 10px;
@@ -1084,9 +1084,9 @@ if (!$report) {
                                 ): ?>
                                   <div class="hazard-meta-row">
                                     <strong>현재 위험도</strong>
-                                    P <?= h($hazard['likelihood_before'] ?? '-') ?>
-                                    / S <?= h($hazard['severity_before'] ?? '-') ?>
-                                    / R <?= h($hazard['risk_score_before'] ?? '-') ?>
+                                    빈도 <?= h($hazard['likelihood_before'] ?? '-') ?>
+                                    / 강도 <?= h($hazard['severity_before'] ?? '-') ?>
+                                    / 위험도 <?= h($hazard['risk_score_before'] ?? '-') ?>
                                   </div>
                                 <?php endif; ?>
                                 <?php if (!empty($hazard['current_control_text'])): ?>
@@ -1099,14 +1099,14 @@ if (!$report) {
                                 ): ?>
                                   <div class="hazard-meta-row">
                                     <strong>조치후위험도</strong>
-                                    P <?= h($hazard['likelihood_current'] ?? '-') ?>
-                                    / S <?= h($hazard['severity_current'] ?? '-') ?>
-                                    / R <?= h($hazard['risk_score_current'] ?? '-') ?>
+                                    빈도 <?= h($hazard['likelihood_current'] ?? '-') ?>
+                                    / 강도 <?= h($hazard['severity_current'] ?? '-') ?>
+                                    / 위험도 <?= h($hazard['risk_score_current'] ?? '-') ?>
                                   </div>
                                 <?php else: ?>
                                   <div class="hazard-meta-row">
                                     <strong>조치후위험도</strong>
-                                    P - / S - / R -
+                                    빈도 - / 강도 - / 위험도 -
                                   </div>
                                 <?php endif; ?>
                               </div>
@@ -1195,9 +1195,9 @@ if (!$report) {
                       ): ?>
                         <div class="hazard-meta-row">
                           <strong>개선 전 위험도</strong>
-                          P <?= h($item['likelihood_before'] ?? '-') ?>
-                          / S <?= h($item['severity_before'] ?? '-') ?>
-                          / R <?= h($item['risk_score_before'] ?? '-') ?>
+                          빈도 <?= h($item['likelihood_before'] ?? '-') ?>
+                          / 강도 <?= h($item['severity_before'] ?? '-') ?>
+                          / 위험도 <?= h($item['risk_score_before'] ?? '-') ?>
                         </div>
                       <?php endif; ?>
                       <?php if (
@@ -1207,9 +1207,9 @@ if (!$report) {
                       ): ?>
                         <div class="hazard-meta-row">
                           <strong>현재 위험도</strong>
-                          P <?= h($item['likelihood_current'] ?? '-') ?>
-                          / S <?= h($item['severity_current'] ?? '-') ?>
-                          / R <?= h($item['risk_score_current'] ?? '-') ?>
+                          빈도 <?= h($item['likelihood_current'] ?? '-') ?>
+                          / 강도 <?= h($item['severity_current'] ?? '-') ?>
+                          / 위험도 <?= h($item['risk_score_current'] ?? '-') ?>
                         </div>
                       <?php endif; ?>
                       <?php if (
@@ -1219,9 +1219,9 @@ if (!$report) {
                       ): ?>
                         <div class="hazard-meta-row">
                           <strong>개선 후 위험도</strong>
-                          P <?= h($item['likelihood_after'] ?? '-') ?>
-                          / S <?= h($item['severity_after'] ?? '-') ?>
-                          / R <?= h($item['risk_score_after'] ?? '-') ?>
+                          빈도 <?= h($item['likelihood_after'] ?? '-') ?>
+                          / 강도 <?= h($item['severity_after'] ?? '-') ?>
+                          / 위험도 <?= h($item['risk_score_after'] ?? '-') ?>
                         </div>
                       <?php endif; ?>
                       <?php if (!empty($item['improvement_due_date'])): ?>
