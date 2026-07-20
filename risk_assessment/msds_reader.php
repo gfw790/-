@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require_once __DIR__ . '/auth.php';
 
 $user = auth_current_user();
@@ -6,6 +6,8 @@ if ($user === null) {
     header('Location: task_select.php');
     exit;
 }
+
+$canEditMobileMsds = is_array($user);
 
 function h($value): string
 {
@@ -44,6 +46,23 @@ function msds_reader_find_record(array $records, string $id): ?array
     return null;
 }
 
+function msds_reader_find_record_index(array $records, string $id): ?int
+{
+    foreach ($records as $index => $record) {
+        if ((string)($record['id'] ?? '') === $id) {
+            return $index;
+        }
+    }
+
+    return null;
+}
+
+function msds_reader_write_records(array $records): bool
+{
+    $json = json_encode(array_values($records), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    return is_string($json) && file_put_contents(msds_reader_storage_path(), $json, LOCK_EX) !== false;
+}
+
 function msds_reader_extension(array $record): string
 {
     $originalName = trim((string)($record['original_name'] ?? ''));
@@ -52,10 +71,233 @@ function msds_reader_extension(array $record): string
     return strtolower(pathinfo($candidate, PATHINFO_EXTENSION));
 }
 
+function msds_reader_normalize_block_text(string $value): string
+{
+    $value = str_replace(["\r\n", "\r"], "\n", trim($value));
+    $value = preg_replace('/[ \t]+/u', ' ', $value) ?? $value;
+    $value = preg_replace("/\n{3,}/u", "\n\n", $value) ?? $value;
+    $lines = array_map('trim', explode("\n", $value));
+    $lines = array_values(array_filter($lines, static function ($line) {
+        return $line !== '' && !in_array($line, ['본문', '추출 본문'], true);
+    }));
+    return trim(implode("\n", $lines));
+}
+
+function msds_reader_fallback_sections(string $rawText): array
+{
+    $normalized = msds_reader_normalize_block_text($rawText);
+    if ($normalized === '') {
+        return [];
+    }
+
+    $lines = array_values(array_filter(
+        array_map('trim', explode("\n", $normalized)),
+        static fn ($line) => $line !== '' && !preg_match('/^-\s*\d+\s*-$/u', $line)
+    ));
+
+    $sections = [];
+    $current = null;
+
+    foreach ($lines as $line) {
+        if (preg_match('/^\d{1,2}\.\s+/u', $line)) {
+            if ($current !== null) {
+                if ($current['body'] === []) {
+                    $current['body'][] = '내용이 없습니다.';
+                }
+                $sections[] = [
+                    'title' => $current['title'],
+                    'body' => implode("\n", $current['body']),
+                ];
+            }
+
+            $current = [
+                'title' => $line,
+                'body' => [],
+            ];
+            continue;
+        }
+
+        if ($current === null) {
+            $current = [
+                'title' => '',
+                'body' => [],
+            ];
+        }
+
+        $current['body'][] = $line;
+    }
+
+    if ($current !== null) {
+        if ($current['body'] === []) {
+            $current['body'][] = '내용이 없습니다.';
+        }
+        $sections[] = [
+            'title' => $current['title'],
+            'body' => implode("\n", $current['body']),
+        ];
+    }
+
+    return $sections;
+}
+
+function msds_reader_server_pictogram_keys(string $sourceText): array
+{
+    $normalized = preg_replace('/\s+/u', ' ', trim($sourceText)) ?? trim($sourceText);
+    $keys = [];
+
+    if (preg_match('/(고압가스|압축가스|액화가스|냉동액화가스|용해가스|H280|H281)/iu', $normalized)) {
+        $keys[] = 'gas-cylinder';
+    }
+
+    return array_values(array_unique($keys));
+}
+
+function msds_reader_server_is_pictogram_label(string $line): bool
+{
+    return in_array(trim($line), ['가스실린더'], true);
+}
+
+function msds_reader_server_render_pictogram_html(string $sourceText): string
+{
+    $keys = msds_reader_server_pictogram_keys($sourceText);
+    if ($keys === []) {
+        return '<div class="mobile-text-fallback-detail">그림문자 정보가 없습니다.</div>';
+    }
+
+    $items = [];
+    foreach ($keys as $key) {
+        if ($key !== 'gas-cylinder') {
+            continue;
+        }
+
+        $items[] = '<div class="mobile-pictogram-item">'
+            . '<svg class="mobile-pictogram-svg" viewBox="0 0 88 88" aria-hidden="true" focusable="false">'
+            . '<rect x="16" y="16" width="56" height="56" transform="rotate(45 44 44)" fill="#ffffff" stroke="#e6331f" stroke-width="5.5"/>'
+            . '<g transform="rotate(-14 44 44)">'
+            . '<rect x="23" y="38" width="33" height="10" rx="3.6" fill="#211a18"/>'
+            . '<rect x="54.8" y="40.4" width="11.6" height="4.5" rx="1.8" fill="#211a18"/>'
+            . '</g>'
+            . '</svg>'
+            . '<div class="mobile-pictogram-label">가스실린더</div>'
+            . '</div>';
+    }
+
+    if ($items === []) {
+        return '<div class="mobile-text-fallback-detail">그림문자 정보가 없습니다.</div>';
+    }
+
+    return '<div class="mobile-pictogram-card is-inline">'
+        . '<div class="mobile-pictogram-title">그림문자</div>'
+        . '<div class="mobile-pictogram-list">' . implode('', $items) . '</div>'
+        . '</div>';
+}
+
+function msds_reader_render_fallback_html(array $sections, bool $canEditMobileMsds = false): string
+{
+    if ($sections === []) {
+        return '<div class="mobile-text-empty">표시할 본문이 없습니다.</div>';
+    }
+
+    $html = '';
+    foreach ($sections as $section) {
+        $rawTitle = trim((string)($section['title'] ?? ''));
+        $title = h($rawTitle);
+        $bodyLines = array_values(array_filter(
+            array_map('trim', explode("\n", (string)($section['body'] ?? ''))),
+            static fn ($line) => $line !== ''
+        ));
+        $bodyChunks = [];
+        foreach ($bodyLines as $line) {
+            $escaped = h($line);
+            if ($line === '그림문자') {
+                $bodyChunks[] = msds_reader_server_render_pictogram_html(
+                    implode("\n", array_merge([$rawTitle], $bodyLines))
+                );
+                continue;
+            }
+
+            if (msds_reader_server_is_pictogram_label($line)) {
+                continue;
+            }
+
+            if (preg_match('/^[가-하]\.\s*/u', $line)) {
+                $bodyChunks[] = '<div class="mobile-text-fallback-subhead">' . $escaped . '</div>';
+                continue;
+            }
+
+            if (preg_match('/^(.{1,80}?[:：])\s*(.+)$/u', $line, $matches)) {
+                $label = h(trim((string)$matches[1]));
+                $value = h(trim((string)$matches[2]));
+                $prefixClass = preg_match('/^\d+\)\s*/u', $line) ? ' mobile-text-fallback-kv-detail' : '';
+                $bodyChunks[] = '<div class="mobile-text-fallback-kv' . $prefixClass . '">'
+                    . '<span class="mobile-text-fallback-kv-label">' . $label . '</span>'
+                    . '<span class="mobile-text-fallback-kv-value">' . $value . '</span>'
+                    . '</div>';
+                continue;
+            }
+
+            if (preg_match('/^\d+\)\s*/u', $line)) {
+                $bodyChunks[] = '<div class="mobile-text-fallback-detail">' . $escaped . '</div>';
+                continue;
+            }
+
+            $bodyChunks[] = '<p class="mobile-text-paragraph mobile-text-fallback-body">' . $escaped . '</p>';
+        }
+        $articleClass = $canEditMobileMsds ? 'mobile-text-section is-editable' : 'mobile-text-section';
+        $html .= '<article class="' . $articleClass . '">';
+        if ($canEditMobileMsds) {
+            $html .= '<button class="mobile-card-edit" type="button" aria-label="이 카드 수정">수정</button>';
+        }
+        if ($rawTitle !== '') {
+            $html .= '<h3>' . $title . '</h3>';
+        }
+        $html .= implode('', $bodyChunks);
+        $html .= '</article>';
+    }
+
+    return $html;
+}
+
 $records = msds_reader_read_records();
 $recordId = trim((string)($_GET['id'] ?? ''));
 $record = $recordId !== '' ? msds_reader_find_record($records, $recordId) : null;
 $isPdf = $record !== null && msds_reader_extension($record) === 'pdf';
+
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (string)($_POST['action'] ?? '') === 'save_mobile_content') {
+    header('Content-Type: application/json; charset=UTF-8');
+
+    if (!$canEditMobileMsds) {
+        http_response_code(403);
+        echo json_encode(['ok' => false, 'message' => '편집 권한이 없습니다.'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
+    $targetId = trim((string)($_POST['record_id'] ?? ''));
+    $content = msds_reader_normalize_block_text((string)($_POST['content'] ?? ''));
+    $recordIndex = msds_reader_find_record_index($records, $targetId);
+
+    if ($targetId === '' || $recordIndex === null) {
+        http_response_code(404);
+        echo json_encode(['ok' => false, 'message' => '대상 문서를 찾지 못했습니다.'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
+    $records[$recordIndex]['mobile_content'] = $content;
+    $records[$recordIndex]['mobile_content_updated_at'] = date('c');
+
+    if (!msds_reader_write_records($records)) {
+        http_response_code(500);
+        echo json_encode(['ok' => false, 'message' => '편집 내용을 저장하지 못했습니다.'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
+    echo json_encode([
+        'ok' => true,
+        'message' => '저장되었습니다.',
+        'content' => $content,
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
 
 if ($record === null || !$isPdf) {
     http_response_code(404);
@@ -75,6 +317,12 @@ $ocrSections = is_array($record['ocr_sections'] ?? null) ? $record['ocr_sections
 $ocrError = (string)($record['ocr_error'] ?? '');
 $pdfUrl = $record !== null ? 'msds_list.php?view_file=' . rawurlencode((string)($record['id'] ?? '')) : '';
 $downloadUrl = $record !== null ? 'msds_list.php?download_file=' . rawurlencode((string)($record['id'] ?? '')) : 'msds_list.php';
+$serverRenderSource = $mobileContent !== '' ? $mobileContent : $ocrText;
+$serverRenderSections = msds_reader_fallback_sections($serverRenderSource);
+$serverRenderHtml = msds_reader_render_fallback_html($serverRenderSections, $canEditMobileMsds);
+$serverRenderStatus = $mobileContent !== ''
+    ? '관리자가 정리한 모바일 전용 본문입니다.'
+    : ($ocrText !== '' ? '서버 OCR 텍스트를 불러왔습니다.' : '표시할 본문을 준비하지 못했습니다.');
 ?>
 <!DOCTYPE html>
 <html lang="ko">
@@ -82,1286 +330,13 @@ $downloadUrl = $record !== null ? 'msds_list.php?download_file=' . rawurlencode(
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>MSDS 보기</title>
-<style>
-  * { box-sizing: border-box; }
-  :root {
-    --bg: #08111d;
-    --panel: #0f1d31;
-    --panel-soft: #13243c;
-    --line: rgba(194, 211, 229, 0.18);
-    --text: #f5f8fc;
-    --muted: #9fb4c8;
-    --accent: #ffb11a;
-    --accent-dark: #1f2937;
-    --shadow: 0 24px 50px rgba(0, 0, 0, 0.28);
-  }
-  html {
-    background: var(--bg);
-    scroll-behavior: smooth;
-  }
-  body {
-    margin: 0;
-    min-height: 100vh;
-    background:
-      radial-gradient(circle at top, rgba(255, 177, 26, 0.16), transparent 28%),
-      linear-gradient(180deg, #091220 0%, #0a1423 100%);
-    color: var(--text);
-    font-family: "Malgun Gothic", sans-serif;
-  }
-  a { color: inherit; }
-  .reader-shell {
-    width: min(100%, 1240px);
-    margin: 0 auto;
-    padding: 22px 18px 40px;
-  }
-  .reader-topbar {
-    position: sticky;
-    top: 0;
-    z-index: 50;
-    margin-bottom: 16px;
-    padding-top: max(12px, env(safe-area-inset-top));
-    backdrop-filter: blur(18px);
-  }
-  .reader-topbar-inner {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 12px;
-    border: 1px solid var(--line);
-    border-radius: 22px;
-    background: rgba(11, 22, 38, 0.82);
-    box-shadow: var(--shadow);
-  }
-  .reader-title {
-    min-width: 0;
-  }
-  .reader-title .eyebrow {
-    margin: 0 0 6px;
-    color: var(--muted);
-    font-size: 12px;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-  }
-  .reader-title h1 {
-    margin: 0;
-    font-size: 22px;
-    line-height: 1.3;
-    word-break: keep-all;
-  }
-  .reader-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 44px;
-    padding: 0 14px;
-    border: 1px solid transparent;
-    border-radius: 14px;
-    text-decoration: none;
-    font-size: 14px;
-    font-weight: 700;
-    cursor: pointer;
-  }
-  .btn-accent {
-    background: var(--accent);
-    color: var(--accent-dark);
-  }
-  .btn-ghost {
-    background: rgba(255, 255, 255, 0.06);
-    border-color: var(--line);
-    color: var(--text);
-  }
-  .btn-soft {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.12);
-    color: var(--text);
-  }
-  .info-card,
-  .viewer-card,
-  .status-card {
-    border: 1px solid var(--line);
-    border-radius: 28px;
-    background: linear-gradient(180deg, rgba(19, 36, 60, 0.96), rgba(12, 23, 38, 0.98));
-    box-shadow: var(--shadow);
-  }
-  .info-card {
-    padding: 20px;
-    margin-bottom: 16px;
-  }
-  .info-grid {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 12px;
-  }
-  .info-item {
-    padding: 14px;
-    border-radius: 18px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-  }
-  .info-item dt {
-    margin: 0 0 8px;
-    color: var(--muted);
-    font-size: 12px;
-    font-weight: 700;
-  }
-  .info-item dd {
-    margin: 0;
-    font-size: 15px;
-    line-height: 1.6;
-    word-break: break-word;
-  }
-  .status-card {
-    padding: 24px 20px;
-    text-align: center;
-  }
-  .status-card h2 {
-    margin: 0 0 10px;
-    font-size: 24px;
-  }
-  .status-card p {
-    margin: 0;
-    color: var(--muted);
-    line-height: 1.7;
-  }
-  .viewer-card {
-    padding: 16px;
-  }
-  .mobile-text-reader {
-    display: none;
-    margin-bottom: 14px;
-    border: 1px solid var(--line);
-    border-radius: 24px;
-    background: linear-gradient(180deg, rgba(19, 36, 60, 0.98), rgba(11, 21, 35, 0.98));
-    box-shadow: var(--shadow);
-    overflow: hidden;
-  }
-  .mobile-text-head {
-    padding: 16px 18px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    background: linear-gradient(135deg, rgba(255, 177, 26, 0.15), rgba(255, 255, 255, 0.02));
-  }
-  .mobile-text-head h2 {
-    margin: 0 0 6px;
-    font-size: 18px;
-  }
-  .mobile-text-head p {
-    margin: 0;
-    color: var(--muted);
-    font-size: 13px;
-    line-height: 1.6;
-  }
-  .mobile-text-status {
-    padding: 12px 18px 0;
-    color: var(--muted);
-    font-size: 12px;
-    line-height: 1.6;
-  }
-  .mobile-text-status.is-error {
-    color: #ffcabd;
-  }
-  .mobile-text-body {
-    display: grid;
-    gap: 10px;
-    padding: 14px;
-  }
-  .mobile-text-section {
-    padding: 14px;
-    border-radius: 18px;
-    background: rgba(255, 255, 255, 0.045);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-  }
-  .mobile-text-section.has-index {
-    border-color: rgba(255, 177, 26, 0.28);
-    background: linear-gradient(180deg, rgba(255, 177, 26, 0.08), rgba(255, 255, 255, 0.04));
-  }
-  .mobile-text-section h3 {
-    margin: 0 0 10px;
-    font-size: 16px;
-    line-height: 1.4;
-    color: #ffd27a;
-  }
-  .mobile-text-paragraph {
-    margin: 0;
-    color: #f4f7fb;
-    font-size: 15px;
-    line-height: 1.8;
-    word-break: keep-all;
-    white-space: pre-wrap;
-  }
-  .mobile-text-paragraph + .mobile-text-paragraph {
-    margin-top: 10px;
-  }
-  .mobile-text-empty {
-    padding: 18px;
-    color: var(--muted);
-    text-align: center;
-    line-height: 1.7;
-  }
-  .mobile-text-subsection {
-    margin-top: 10px;
-    padding: 12px;
-    border-radius: 16px;
-    background: rgba(255, 177, 26, 0.08);
-    border: 1px solid rgba(255, 177, 26, 0.18);
-  }
-  .mobile-text-subsection:first-child {
-    margin-top: 0;
-  }
-  .mobile-text-subsection-title {
-    margin: 0 0 8px;
-    font-size: 14px;
-    font-weight: 800;
-    color: #ffd27a;
-  }
-  .mobile-text-table {
-    display: grid;
-    gap: 8px;
-  }
-  .mobile-text-table-row {
-    display: grid;
-    grid-template-columns: minmax(88px, 120px) minmax(0, 1fr);
-    gap: 10px;
-    align-items: start;
-    padding: 10px 12px;
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-  }
-  .mobile-text-table-label {
-    color: #9fc4eb;
-    font-size: 13px;
-    font-weight: 800;
-    line-height: 1.5;
-    word-break: keep-all;
-  }
-  .mobile-text-table-value {
-    color: #f4f7fb;
-    font-size: 14px;
-    line-height: 1.7;
-    word-break: keep-all;
-    white-space: pre-wrap;
-  }
-  .mobile-text-grid-table {
-    width: 100%;
-    overflow: hidden;
-    border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.035);
-  }
-  .mobile-text-grid-row {
-    display: grid;
-    gap: 0;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-  }
-  .mobile-text-grid-row:first-child {
-    border-top: 0;
-  }
-  .mobile-text-grid-cell {
-    padding: 10px 12px;
-    font-size: 13px;
-    line-height: 1.55;
-    color: #f4f7fb;
-    border-left: 1px solid rgba(255, 255, 255, 0.08);
-    word-break: break-word;
-  }
-  .mobile-text-grid-cell:first-child {
-    border-left: 0;
-  }
-  .mobile-text-grid-row.is-head .mobile-text-grid-cell {
-    background: rgba(255, 177, 26, 0.14);
-    color: #ffe2a0;
-    font-weight: 800;
-  }
-  .viewer-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    margin-bottom: 14px;
-  }
-  .viewer-toolbar-group {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-  }
-  .viewer-toolbar select,
-  .viewer-toolbar button {
-    font: inherit;
-  }
-  .viewer-page-select {
-    min-width: 116px;
-    min-height: 42px;
-    padding: 0 12px;
-    border-radius: 12px;
-    border: 1px solid var(--line);
-    background: rgba(255, 255, 255, 0.05);
-    color: var(--text);
-  }
-  .viewer-page-indicator {
-    color: var(--muted);
-    font-size: 13px;
-    font-weight: 700;
-  }
-  .viewer-canvas-wrap {
-    position: relative;
-    overflow: auto;
-    border-radius: 22px;
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.02)),
-      #09101a;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    min-height: 58vh;
-    padding: 18px;
-    touch-action: pan-x pan-y pinch-zoom;
-  }
-  .viewer-canvas-wrap.is-loading::after {
-    content: "페이지를 읽기 좋은 크기로 준비하고 있습니다.";
-    position: absolute;
-    inset: 18px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 18px;
-    border-radius: 18px;
-    background: rgba(7, 15, 27, 0.84);
-    color: var(--muted);
-    text-align: center;
-    line-height: 1.6;
-  }
-  #pdf-canvas {
-    display: block;
-    margin: 0 auto;
-    border-radius: 18px;
-    background: #ffffff;
-    box-shadow: 0 18px 36px rgba(0, 0, 0, 0.28);
-  }
-  .viewer-help {
-    margin-top: 14px;
-    color: var(--muted);
-    font-size: 13px;
-    line-height: 1.7;
-    text-align: center;
-  }
-  .mobile-bottom-nav {
-    display: none;
-    position: fixed;
-    left: 12px;
-    right: 12px;
-    bottom: max(10px, env(safe-area-inset-bottom));
-    z-index: 60;
-    padding: 8px;
-    border: 1px solid rgba(24, 59, 86, 0.10);
-    border-radius: 20px;
-    background: rgba(255, 255, 255, 0.96);
-    backdrop-filter: blur(14px);
-    box-shadow: 0 18px 40px rgba(17, 52, 77, 0.18);
-  }
-  .mobile-bottom-nav-grid {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 6px;
-  }
-  .mobile-nav-link {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    min-height: 58px;
-    border-radius: 14px;
-    color: #45627b;
-    text-decoration: none;
-    font-size: 11px;
-    font-weight: 700;
-  }
-  .mobile-nav-link.is-active {
-    background: linear-gradient(180deg, rgba(35, 104, 162, 0.14), rgba(35, 104, 162, 0.08));
-    color: #17486f;
-  }
-  .mobile-nav-icon {
-    font-size: 18px;
-    line-height: 1;
-  }
-  @media (max-width: 960px) {
-    .info-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-  }
-  @media (max-width: 640px) {
-    body {
-      padding-bottom: 112px;
-    }
-    .reader-topbar,
-    .info-card {
-      display: none;
-    }
-    .reader-shell {
-      padding: 12px 12px 28px;
-    }
-    .mobile-text-reader {
-      display: block;
-    }
-    .reader-topbar-inner,
-    .info-card,
-    .viewer-card,
-    .status-card {
-      border-radius: 22px;
-    }
-    .reader-topbar-inner {
-      padding: 10px 12px;
-      border-radius: 18px;
-    }
-    .reader-topbar {
-      margin-bottom: 10px;
-    }
-    .reader-title .eyebrow {
-      margin-bottom: 2px;
-      font-size: 10px;
-      letter-spacing: 0.12em;
-    }
-    .reader-title h1 {
-      font-size: 16px;
-      line-height: 1.25;
-    }
-    .reader-actions,
-    .reader-actions .btn {
-      width: 100%;
-    }
-    .reader-actions .btn {
-      min-height: 38px;
-      font-size: 13px;
-    }
-    .info-card {
-      padding: 14px;
-    }
-    .info-grid {
-      grid-template-columns: 1fr;
-    }
-    .info-item {
-      padding: 12px;
-    }
-    .viewer-card {
-      padding: 10px;
-    }
-    .mobile-text-reader {
-      border-radius: 20px;
-      margin-bottom: 10px;
-    }
-    .mobile-text-head {
-      padding: 14px 14px 12px;
-    }
-    .mobile-text-head h2 {
-      font-size: 17px;
-    }
-    .mobile-text-head p,
-    .mobile-text-status {
-      font-size: 12px;
-    }
-    .mobile-text-status {
-      padding: 10px 14px 0;
-    }
-    .mobile-text-body {
-      padding: 12px;
-      gap: 8px;
-    }
-    .mobile-text-section {
-      padding: 12px;
-      border-radius: 16px;
-    }
-    .mobile-text-section h3 {
-      font-size: 15px;
-    }
-    .mobile-text-subsection {
-      padding: 10px;
-    }
-    .mobile-text-subsection-title {
-      font-size: 13px;
-    }
-    .mobile-text-table-row {
-      grid-template-columns: 92px minmax(0, 1fr);
-      gap: 8px;
-      padding: 9px 10px;
-    }
-    .mobile-text-table-label {
-      font-size: 12px;
-    }
-    .mobile-text-table-value,
-    .mobile-text-grid-cell {
-      font-size: 13px;
-    }
-    .mobile-text-paragraph {
-      font-size: 14px;
-      line-height: 1.75;
-    }
-    .viewer-toolbar {
-      margin-bottom: 10px;
-      align-items: stretch;
-    }
-    .viewer-toolbar-group {
-      width: 100%;
-      justify-content: space-between;
-    }
-    .viewer-toolbar-group .btn,
-    .viewer-toolbar-group .viewer-page-select {
-      flex: 1 1 calc(50% - 4px);
-      min-width: 0;
-    }
-    .viewer-page-indicator {
-      width: 100%;
-      text-align: center;
-    }
-    .viewer-canvas-wrap {
-      min-height: 52vh;
-      padding: 10px;
-    }
-    .viewer-help {
-      font-size: 12px;
-    }
-    .mobile-bottom-nav {
-      display: block;
-    }
-  }
-</style>
+<?php require __DIR__ . '/templates/msds_reader/styles.php'; ?>
 </head>
 <body>
-  <div class="reader-shell">
-    <div class="reader-topbar">
-      <div class="reader-topbar-inner">
-        <div class="reader-title">
-          <p class="eyebrow">MSDS MOBILE READER</p>
-          <h1><?= h($materialName !== '' ? $materialName : 'MSDS 문서 보기') ?></h1>
-        </div>
-        <div class="reader-actions">
-          <a class="btn btn-soft" href="msds_list.php">목록</a>
-          <?php if ($record !== null): ?>
-            <a class="btn btn-ghost" href="<?= h($downloadUrl) ?>">다운로드</a>
-            <a class="btn btn-accent" href="<?= h($pdfUrl) ?>" target="_blank" rel="noopener">원본보기</a>
-          <?php endif; ?>
-        </div>
-      </div>
-    </div>
-
-    <?php if ($record === null || !$isPdf): ?>
-      <section class="status-card">
-        <h2>문서를 찾을 수 없습니다</h2>
-        <p>해당 MSDS PDF가 없거나 열람할 수 없는 상태입니다. 목록으로 돌아가 다시 선택해주세요.</p>
-      </section>
-    <?php else: ?>
-      <section class="info-card">
-        <dl class="info-grid">
-          <div class="info-item">
-            <dt>물질명</dt>
-            <dd><?= h($materialName !== '' ? $materialName : '-') ?></dd>
-          </div>
-          <div class="info-item">
-            <dt>제조사</dt>
-            <dd><?= h($manufacturer !== '' ? $manufacturer : '-') ?></dd>
-          </div>
-          <div class="info-item">
-            <dt>작성일자 / 개정일자</dt>
-            <dd><?= h(($createdDate !== '' ? $createdDate : '-') . ' / ' . ($revisedDate !== '' ? $revisedDate : '-')) ?></dd>
-          </div>
-          <div class="info-item">
-            <dt>개정횟수 / 비고</dt>
-            <dd><?= h(($revisionCount !== '' ? $revisionCount . '회' : '-') . ' / ' . ($note !== '' ? $note : '-')) ?></dd>
-          </div>
-        </dl>
-      </section>
-
-      <section class="mobile-text-reader" id="mobile-text-reader">
-        <div class="mobile-text-head">
-          <h2>모바일 읽기</h2>
-          <p>정리된 본문이 있으면 우선 표시하고, 없으면 PDF에서 텍스트를 자동 추출해 읽기 좋게 정렬합니다.</p>
-        </div>
-        <div class="mobile-text-status" id="mobile-text-status">모바일 본문을 준비하고 있습니다.</div>
-        <div class="mobile-text-body" id="mobile-text-body">
-          <div class="mobile-text-empty">본문을 불러오는 중입니다.</div>
-        </div>
-      </section>
-
-      <section class="viewer-card">
-        <div class="viewer-toolbar">
-          <div class="viewer-toolbar-group">
-            <button class="btn btn-ghost" type="button" id="prev-page">이전 페이지</button>
-            <button class="btn btn-ghost" type="button" id="next-page">다음 페이지</button>
-          </div>
-          <div class="viewer-toolbar-group">
-            <button class="btn btn-ghost" type="button" id="zoom-out">축소</button>
-            <button class="btn btn-ghost" type="button" id="zoom-in">확대</button>
-            <select class="viewer-page-select" id="page-select" aria-label="페이지 선택"></select>
-          </div>
-          <div class="viewer-page-indicator" id="page-indicator">불러오는 중</div>
-        </div>
-
-        <div class="viewer-canvas-wrap is-loading" id="pdf-stage">
-          <canvas id="pdf-canvas"></canvas>
-        </div>
-        <div class="viewer-help">
-          모바일에서는 한 페이지씩 크게 보여주도록 구성했습니다. 확대 버튼으로 글자를 더 키워 볼 수 있고, 원본이 필요하면 상단의 원본보기 버튼을 사용할 수 있습니다.
-        </div>
-      </section>
-    <?php endif; ?>
-  </div>
-
-  <nav class="mobile-bottom-nav" aria-label="모바일 하단 메뉴">
-    <div class="mobile-bottom-nav-grid">
-      <a class="mobile-nav-link" href="index.php">
-        <span class="mobile-nav-icon">⌂</span>
-        <span>홈</span>
-      </a>
-      <a class="mobile-nav-link" href="../calendar/index.html">
-        <span class="mobile-nav-icon">◫</span>
-        <span>달력</span>
-      </a>
-      <a class="mobile-nav-link" href="work_list.php">
-        <span class="mobile-nav-icon">▤</span>
-        <span>작업목록</span>
-      </a>
-      <a class="mobile-nav-link is-active" href="msds_list.php">
-        <span class="mobile-nav-icon">⌘</span>
-        <span>MSDS</span>
-      </a>
-      <a class="mobile-nav-link" href="more.php">
-        <span class="mobile-nav-icon">⋯</span>
-        <span>더보기</span>
-      </a>
-    </div>
-  </nav>
-
+<?php require __DIR__ . '/templates/msds_reader/body.php'; ?>
 <?php if ($record !== null && $isPdf): ?>
-<script type="module">
-  import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs';
-
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs';
-
-  const pdfUrl = <?= json_encode($pdfUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
-  const manualMobileContent = <?= json_encode($mobileContent, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
-  const serverOcrStatus = <?= json_encode($ocrStatus, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
-  const serverOcrEngine = <?= json_encode($ocrEngine, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
-  const serverOcrText = <?= json_encode($ocrText, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
-  const serverOcrSections = <?= json_encode($ocrSections, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
-  const serverOcrError = <?= json_encode($ocrError, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
-  const stage = document.getElementById('pdf-stage');
-  const canvas = document.getElementById('pdf-canvas');
-  const context = canvas.getContext('2d');
-  const prevButton = document.getElementById('prev-page');
-  const nextButton = document.getElementById('next-page');
-  const zoomOutButton = document.getElementById('zoom-out');
-  const zoomInButton = document.getElementById('zoom-in');
-  const pageSelect = document.getElementById('page-select');
-  const pageIndicator = document.getElementById('page-indicator');
-  const mobileTextReader = document.getElementById('mobile-text-reader');
-  const mobileTextStatus = document.getElementById('mobile-text-status');
-  const mobileTextBody = document.getElementById('mobile-text-body');
-  const isMobileViewport = () => window.matchMedia('(max-width: 640px)').matches;
-
-  let pdfDoc = null;
-  let pageNum = 1;
-  let zoomFactor = 1;
-  let rendering = false;
-  let pendingPage = null;
-
-  function escapeHtml(value) {
-    return String(value)
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
-      .replaceAll("'", '&#39;');
-  }
-
-  function normalizeLineText(value) {
-    return String(value || '')
-      .replace(/\s+/g, ' ')
-      .replace(/\u0000/g, '')
-      .trim();
-  }
-
-  function isSectionHeading(line) {
-    return /^(?:\d{1,2}[.)]?\s*|[①-⑳]\s*)/.test(line)
-      || /(응급조치|유해성|위험성|취급|저장|노출방지|보호구|물리화학적|안정성|독성|환경|폐기|운송|법적|기타 참고|성분|구성)/.test(line);
-  }
-
-  function splitManualSections(rawText) {
-    const normalized = String(rawText || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
-    if (!normalized) {
-      return [];
-    }
-
-    const blocks = normalized.split(/\n{2,}/).map((block) => block.trim()).filter(Boolean);
-    return blocks.map((block, index) => {
-      const lines = block.split('\n').map((line) => line.trim()).filter(Boolean);
-      if (!lines.length) {
-        return null;
-      }
-
-      let title = `정리 내용 ${index + 1}`;
-      let paragraphs = lines;
-      if (lines.length >= 2 && lines[0].length <= 40) {
-        title = lines[0];
-        paragraphs = lines.slice(1);
-      }
-
-      if (!paragraphs.length) {
-        paragraphs = [''];
-      }
-
-      return { title, paragraphs };
-    }).filter(Boolean);
-  }
-
-  function buildSectionsFromLines(lines) {
-    const sections = [];
-    let current = null;
-
-    lines.forEach((line) => {
-      const cleanLine = normalizeLineText(line);
-      if (!cleanLine) {
-        return;
-      }
-
-      if (!current) {
-        current = { title: '추출 본문', paragraphs: [] };
-      }
-
-      if (isSectionHeading(cleanLine) && current.paragraphs.length) {
-        sections.push(current);
-        current = { title: cleanLine, paragraphs: [] };
-        return;
-      }
-
-      if (isSectionHeading(cleanLine) && current.title === '추출 본문' && !current.paragraphs.length) {
-        current.title = cleanLine;
-        return;
-      }
-
-      current.paragraphs.push(cleanLine);
-    });
-
-    if (current && (current.paragraphs.length || current.title !== '추출 본문')) {
-      sections.push(current);
-    }
-
-    return sections.slice(0, 24);
-  }
-
-  function normalizeServerSections(rawSections) {
-    if (!Array.isArray(rawSections)) {
-      return [];
-    }
-
-    return rawSections.map((section) => {
-      const title = normalizeLineText(section && section.title ? section.title : '본문');
-      const paragraphs = Array.isArray(section && section.paragraphs)
-        ? section.paragraphs.map((paragraph) => normalizeLineText(paragraph)).filter(Boolean)
-        : [];
-
-      if (!paragraphs.length) {
-        return null;
-      }
-
-      return {
-        title: title || '본문',
-        paragraphs,
-      };
-    }).filter(Boolean);
-  }
-
-  function renderTextSections(sections, statusText, isError) {
-    if (!mobileTextReader || !mobileTextBody || !mobileTextStatus) {
-      return;
-    }
-
-    mobileTextStatus.textContent = statusText;
-    mobileTextStatus.classList.toggle('is-error', !!isError);
-
-    if (!sections.length) {
-      mobileTextBody.innerHTML = '<div class="mobile-text-empty">표시할 텍스트를 찾지 못했습니다. 원본보기로 PDF를 확인해주세요.</div>';
-      return;
-    }
-
-    mobileTextBody.innerHTML = sections.map((section) => {
-      const originalTitle = normalizeLineText(section.title || '본문');
-      const titleInfo = parseSectionTitle(originalTitle);
-      const sectionClass = titleInfo.index ? 'mobile-text-section has-index' : 'mobile-text-section';
-      const blocksHtml = renderSectionBlocks(section);
-      return `<article class="${sectionClass}"><h3>${escapeHtml(originalTitle || '본문')}</h3>${blocksHtml}</article>`;
-    }).join('');
-  }
-
-  function parseSectionTitle(rawTitle) {
-    const title = normalizeLineText(rawTitle || '본문');
-    const match = title.match(/^((?:\d{1,2}[.)])|(?:[①-⑳]))\s*(.+)$/);
-    if (!match) {
-      return { index: '', text: title || '본문' };
-    }
-
-    return {
-      index: match[1],
-      text: match[2] || title,
-    };
-  }
-
-  function isPageMarker(line) {
-    return /^-\s*\d+\s*-$/.test(line) || /^\d+\s*\/\s*\d+$/.test(line);
-  }
-
-  function isSubheadingLine(line) {
-    return /^[가-하]\.\s*/.test(line);
-  }
-
-  function isLikelyKeyLabel(line) {
-    const normalized = normalizeLineText(line);
-    if (!normalized || normalized.length > 26) {
-      return false;
-    }
-
-    if (/[.:：]/.test(normalized)) {
-      return false;
-    }
-
-    return !/\d{3,}/.test(normalized);
-  }
-
-  function splitKnownFieldLine(line) {
-    const normalized = normalizeLineText(line);
-    if (!normalized) {
-      return null;
-    }
-
-    const numberedMatch = normalized.match(/^\d+\)\s*(.+)$/);
-    const targetText = numberedMatch ? normalizeLineText(numberedMatch[1]) : normalized;
-
-    const knownLabels = [
-      '제품명',
-      '제품의 권고 용도',
-      '제품의 사용상의 제한',
-      '회사명',
-      '주소',
-      '긴급전화번호',
-      '유해·위험성 분류',
-      '그림문자',
-      '신호어',
-      '유해·위험문구',
-      '예방조치문구',
-      '물질명',
-      '이명(관용명)',
-      'CAS 번호',
-      '함유량(%)',
-    ];
-
-    for (const label of knownLabels) {
-      if (!targetText.startsWith(label)) {
-        continue;
-      }
-
-      const remainder = normalizeLineText(targetText.slice(label.length)).replace(/^[:：]\s*/, '');
-      if (!remainder) {
-        return null;
-      }
-
-      return {
-        label,
-        value: remainder,
-      };
-    }
-
-    return null;
-  }
-
-  function splitSubheadingTitle(rawTitle) {
-    const normalized = normalizeLineText(rawTitle);
-    const match = normalized.match(/^([가-하]\.)\s*(.+)$/);
-    if (!match) {
-      return { marker: '', title: normalized };
-    }
-
-    return {
-      marker: match[1],
-      title: match[2] || normalized,
-    };
-  }
-
-  function buildGridTable(lines) {
-    if (!lines.length) {
-      return '';
-    }
-
-    const headerIndex = lines.findIndex((line) => /CAS/.test(line) && /함유/.test(lines[Math.min(lines.length - 1, lines.indexOf(line) + 1)] || ''));
-    if (headerIndex === -1 || lines.length < headerIndex + 8) {
-      return '';
-    }
-
-    const headers = lines.slice(headerIndex, headerIndex + 4);
-    const values = lines.slice(headerIndex + 4);
-    if (headers.length !== 4 || values.length < 4) {
-      return '';
-    }
-
-    const rows = [];
-    for (let index = 0; index < values.length; index += 4) {
-      const chunk = values.slice(index, index + 4);
-      if (chunk.length === 4) {
-        rows.push(chunk);
-      }
-    }
-
-    if (!rows.length) {
-      return '';
-    }
-
-    const headHtml = `<div class="mobile-text-grid-row is-head" style="grid-template-columns: repeat(${headers.length}, minmax(0, 1fr));">${headers.map((header) => `<div class="mobile-text-grid-cell">${escapeHtml(header)}</div>`).join('')}</div>`;
-    const bodyHtml = rows.map((row) => `<div class="mobile-text-grid-row" style="grid-template-columns: repeat(${row.length}, minmax(0, 1fr));">${row.map((cell) => `<div class="mobile-text-grid-cell">${escapeHtml(cell)}</div>`).join('')}</div>`).join('');
-    return `<div class="mobile-text-grid-table">${headHtml}${bodyHtml}</div>`;
-  }
-
-  function buildKeyValueRows(lines) {
-    const rows = [];
-    const consumedIndexes = new Set();
-    let index = 0;
-
-    while (index < lines.length) {
-      const current = lines[index];
-      const combinedField = splitKnownFieldLine(current);
-      if (combinedField) {
-        rows.push(combinedField);
-        consumedIndexes.add(index);
-        index += 1;
-        continue;
-      }
-
-      const colonMatch = current.match(/^([^:：]{1,30})\s*[:：]\s*(.+)$/);
-      if (colonMatch) {
-        rows.push({ label: colonMatch[1], value: colonMatch[2] });
-        consumedIndexes.add(index);
-        index += 1;
-        continue;
-      }
-
-      const next = lines[index + 1] || '';
-      if (isLikelyKeyLabel(current) && next && !isLikelyKeyLabel(next) && !isSubheadingLine(next) && !isSectionHeading(next)) {
-        rows.push({ label: current, value: next });
-        consumedIndexes.add(index);
-        consumedIndexes.add(index + 1);
-        index += 2;
-        continue;
-      }
-
-      index += 1;
-    }
-
-    return { rows, consumedIndexes };
-  }
-
-  function renderKeyValueTable(rows) {
-    if (!rows.length) {
-      return '';
-    }
-
-    return `<div class="mobile-text-table">${rows.map((row) => `<div class="mobile-text-table-row"><div class="mobile-text-table-label">${escapeHtml(row.label)}</div><div class="mobile-text-table-value">${escapeHtml(row.value)}</div></div>`).join('')}</div>`;
-  }
-
-  function renderParagraphLines(lines) {
-    return lines.map((line) => `<p class="mobile-text-paragraph">${escapeHtml(line)}</p>`).join('');
-  }
-
-  function renderSubsectionBlock(title, lines) {
-    const cleanLines = lines.filter((line) => !isPageMarker(line));
-    const subsectionTitle = splitSubheadingTitle(title);
-    const workingLines = [...cleanLines];
-
-    const inlineField = splitKnownFieldLine(subsectionTitle.title);
-    if (inlineField) {
-      workingLines.unshift(inlineField.value);
-      title = `${subsectionTitle.marker} ${inlineField.label}`.trim();
-    } else {
-      title = [subsectionTitle.marker, subsectionTitle.title].filter(Boolean).join(' ').trim();
-    }
-
-    if (!workingLines.length) {
-      return `<section class="mobile-text-subsection"><p class="mobile-text-subsection-title">${escapeHtml(title)}</p></section>`;
-    }
-
-    const gridTableHtml = buildGridTable(workingLines);
-    if (gridTableHtml) {
-      return `<section class="mobile-text-subsection"><p class="mobile-text-subsection-title">${escapeHtml(title)}</p>${gridTableHtml}</section>`;
-    }
-
-    const { rows: keyValueRows, consumedIndexes } = buildKeyValueRows(workingLines);
-    const tableHtml = renderKeyValueTable(keyValueRows);
-    const paragraphLines = workingLines.filter((_, idx) => !consumedIndexes.has(idx));
-    const paragraphsHtml = paragraphLines.length ? renderParagraphLines(paragraphLines) : '';
-    return `<section class="mobile-text-subsection"><p class="mobile-text-subsection-title">${escapeHtml(title)}</p>${tableHtml}${paragraphsHtml}</section>`;
-  }
-
-  function renderSectionBlocks(section) {
-    const allLines = (section.paragraphs || [])
-      .map((line) => normalizeLineText(line))
-      .filter((line) => line && !isPageMarker(line));
-
-    if (!allLines.length) {
-      return '<div class="mobile-text-empty">표시할 본문이 없습니다.</div>';
-    }
-
-    const fullSectionTable = buildGridTable(allLines);
-    if (fullSectionTable) {
-      return fullSectionTable;
-    }
-
-    const subsections = [];
-    let currentSubsection = null;
-    let rootLines = [];
-
-    allLines.forEach((line) => {
-      if (isSubheadingLine(line)) {
-        if (currentSubsection) {
-          subsections.push(currentSubsection);
-        }
-        currentSubsection = {
-          title: line,
-          lines: [],
-        };
-        return;
-      }
-
-      if (currentSubsection) {
-        currentSubsection.lines.push(line);
-      } else {
-        rootLines.push(line);
-      }
-    });
-
-    if (currentSubsection) {
-      subsections.push(currentSubsection);
-    }
-
-    let html = '';
-    if (rootLines.length) {
-      const { rows: rootRows, consumedIndexes: rootConsumedIndexes } = buildKeyValueRows(rootLines);
-      const rootTable = renderKeyValueTable(rootRows);
-      const rootParagraphLines = rootLines.filter((_, idx) => !rootConsumedIndexes.has(idx));
-      const rootParagraphs = rootParagraphLines.length ? renderParagraphLines(rootParagraphLines) : '';
-      html += `${rootTable}${rootParagraphs}`;
-    }
-
-    if (subsections.length) {
-      html += subsections.map((subsection) => renderSubsectionBlock(subsection.title, subsection.lines)).join('');
-    }
-
-    return html || renderParagraphLines(allLines);
-  }
-
-  async function extractTextSections(documentRef) {
-    const allLines = [];
-
-    for (let pageIndex = 1; pageIndex <= documentRef.numPages; pageIndex += 1) {
-      const page = await documentRef.getPage(pageIndex);
-      const textContent = await page.getTextContent();
-      const rows = new Map();
-
-      textContent.items.forEach((item) => {
-        const text = normalizeLineText(item.str || '');
-        if (!text) {
-          return;
-        }
-
-        const transform = Array.isArray(item.transform) ? item.transform : [0, 0, 0, 0, 0, 0];
-        const x = Number(transform[4] || 0);
-        const y = Math.round(Number(transform[5] || 0));
-        const key = String(y);
-
-        if (!rows.has(key)) {
-          rows.set(key, []);
-        }
-
-        rows.get(key).push({ x, text });
-      });
-
-      const pageLines = Array.from(rows.entries())
-        .sort((a, b) => Number(b[0]) - Number(a[0]))
-        .map((entry) => entry[1]
-          .sort((a, b) => a.x - b.x)
-          .map((part) => part.text)
-          .join(' ')
-        )
-        .map((line) => normalizeLineText(line))
-        .filter(Boolean);
-
-      allLines.push(...pageLines);
-    }
-
-    return buildSectionsFromLines(allLines);
-  }
-
-  function setLoadingState(isLoading) {
-    stage.classList.toggle('is-loading', isLoading);
-  }
-
-  function updateControls() {
-    if (!pdfDoc) {
-      pageIndicator.textContent = '불러오는 중';
-      return;
-    }
-
-    prevButton.disabled = pageNum <= 1 || rendering;
-    nextButton.disabled = pageNum >= pdfDoc.numPages || rendering;
-    zoomOutButton.disabled = zoomFactor <= 0.8 || rendering;
-    zoomInButton.disabled = zoomFactor >= 2.2 || rendering;
-    pageSelect.disabled = rendering;
-    pageSelect.value = String(pageNum);
-    pageIndicator.textContent = `${pageNum} / ${pdfDoc.numPages} 페이지 · ${Math.round(zoomFactor * 100)}%`;
-  }
-
-  async function renderPage(targetPage) {
-    if (!pdfDoc) {
-      return;
-    }
-
-    rendering = true;
-    setLoadingState(true);
-    updateControls();
-
-    try {
-      const page = await pdfDoc.getPage(targetPage);
-      const baseViewport = page.getViewport({ scale: 1 });
-      const availableWidth = Math.max(280, stage.clientWidth - 36);
-      const fitScale = availableWidth / baseViewport.width;
-      const renderScale = fitScale * zoomFactor;
-      const viewport = page.getViewport({ scale: renderScale });
-      const ratio = window.devicePixelRatio || 1;
-
-      canvas.width = Math.floor(viewport.width * ratio);
-      canvas.height = Math.floor(viewport.height * ratio);
-      canvas.style.width = `${Math.round(viewport.width)}px`;
-      canvas.style.height = `${Math.round(viewport.height)}px`;
-
-      const renderContext = {
-        canvasContext: context,
-        viewport,
-        transform: ratio !== 1 ? [ratio, 0, 0, ratio, 0, 0] : null,
-      };
-
-      await page.render(renderContext).promise;
-      pageNum = targetPage;
-      stage.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
-    } catch (error) {
-      pageIndicator.textContent = '문서를 표시하지 못했습니다';
-      console.error(error);
-    } finally {
-      rendering = false;
-      setLoadingState(false);
-      updateControls();
-      if (pendingPage !== null && pendingPage !== pageNum) {
-        const queuedPage = pendingPage;
-        pendingPage = null;
-        renderPage(queuedPage);
-      } else {
-        pendingPage = null;
-      }
-    }
-  }
-
-  function queueRender(targetPage) {
-    if (!pdfDoc) {
-      return;
-    }
-
-    const safePage = Math.min(Math.max(targetPage, 1), pdfDoc.numPages);
-    if (rendering) {
-      pendingPage = safePage;
-      return;
-    }
-
-    renderPage(safePage);
-  }
-
-  function rebuildPageOptions(totalPages) {
-    const options = [];
-    for (let index = 1; index <= totalPages; index += 1) {
-      options.push(`<option value="${index}">${index} 페이지</option>`);
-    }
-    pageSelect.innerHTML = options.join('');
-  }
-
-  prevButton.addEventListener('click', () => queueRender(pageNum - 1));
-  nextButton.addEventListener('click', () => queueRender(pageNum + 1));
-  zoomOutButton.addEventListener('click', () => {
-    zoomFactor = Math.max(0.8, +(zoomFactor - 0.15).toFixed(2));
-    queueRender(pageNum);
-  });
-  zoomInButton.addEventListener('click', () => {
-    zoomFactor = Math.min(2.2, +(zoomFactor + 0.15).toFixed(2));
-    queueRender(pageNum);
-  });
-  pageSelect.addEventListener('change', () => queueRender(Number(pageSelect.value)));
-
-  let resizeTimer = null;
-  window.addEventListener('resize', () => {
-    window.clearTimeout(resizeTimer);
-    resizeTimer = window.setTimeout(() => queueRender(pageNum), 180);
-  });
-
-  updateControls();
-
-  try {
-    const loadingTask = pdfjsLib.getDocument({
-      url: pdfUrl,
-      cMapPacked: true,
-    });
-    pdfDoc = await loadingTask.promise;
-    if (mobileTextReader && isMobileViewport()) {
-      const manualSections = splitManualSections(manualMobileContent);
-      if (manualSections.length) {
-        renderTextSections(manualSections, '관리자가 정리한 모바일 전용 본문입니다.', false);
-      } else {
-        if (serverOcrText) {
-          const fallbackServerSections = buildSectionsFromLines(serverOcrText.split(/\r?\n/));
-          if (fallbackServerSections.length) {
-            const engineLabel = serverOcrEngine ? `서버 ${serverOcrEngine}` : '서버 OCR';
-            renderTextSections(fallbackServerSections, `${engineLabel} 텍스트를 모바일용으로 정리했습니다.`, false);
-          } else {
-            const normalizedServerSections = normalizeServerSections(serverOcrSections);
-            if (normalizedServerSections.length) {
-              const engineLabel = serverOcrEngine ? `서버 ${serverOcrEngine}` : '서버 OCR';
-              renderTextSections(normalizedServerSections, `${engineLabel} 결과를 모바일용으로 정리했습니다.`, false);
-            }
-          }
-        } else {
-          try {
-            const extractedSections = await extractTextSections(pdfDoc);
-            if (extractedSections.length) {
-              renderTextSections(extractedSections, '브라우저에서 PDF 텍스트를 자동 추출해 모바일용으로 정리했습니다.', false);
-            } else {
-              renderTextSections([], serverOcrError || '자동 추출된 텍스트가 없어 원본 PDF 보기가 필요합니다.', true);
-              stage.style.display = 'block';
-            }
-          } catch (textError) {
-            renderTextSections([], serverOcrError || '자동 텍스트 추출에 실패했습니다. 원본 PDF 보기로 확인해주세요.', true);
-            stage.style.display = 'block';
-            console.error(textError);
-          }
-        }
-      }
-    }
-    rebuildPageOptions(pdfDoc.numPages);
-    updateControls();
-    renderPage(1);
-  } catch (error) {
-    setLoadingState(false);
-    pageIndicator.textContent = '문서를 불러오지 못했습니다';
-    stage.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:52vh;color:#9fb4c8;text-align:center;line-height:1.7;padding:18px;">모바일 읽기 화면을 준비하지 못했습니다.<br>상단의 원본보기 버튼으로 PDF를 바로 열 수 있습니다.</div>';
-    console.error(error);
-  }
-</script>
+<?php require __DIR__ . '/templates/msds_reader/mobile_edit_script.php'; ?>
+<?php require __DIR__ . '/templates/msds_reader/pdf_reader_script.php'; ?>
 <?php endif; ?>
 </body>
 </html>
