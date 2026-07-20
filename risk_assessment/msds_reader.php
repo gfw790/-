@@ -7,7 +7,8 @@ if ($user === null) {
     exit;
 }
 
-$canEditMobileMsds = is_array($user);
+$currentUserName = is_array($user) ? trim((string)($user['name'] ?? '')) : '';
+$canEditMobileMsds = is_array($user) && $currentUserName !== '정연탁';
 
 function h($value): string
 {
@@ -83,6 +84,121 @@ function msds_reader_normalize_block_text(string $value): string
     return trim(implode("\n", $lines));
 }
 
+function msds_reader_normalize_glossary(array $items): array
+{
+    $normalized = [];
+
+    foreach ($items as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+
+        $term = trim((string)($item['term'] ?? ''));
+        $title = trim((string)($item['title'] ?? ''));
+        $content = trim((string)($item['content'] ?? ''));
+
+        if ($term === '' || $content === '') {
+            continue;
+        }
+
+        $normalized[] = [
+            'term' => $term,
+            'title' => $title !== '' ? $title : $term,
+            'content' => $content,
+        ];
+    }
+
+    return array_values($normalized);
+}
+
+function msds_reader_glossary_match_key(string $value): string
+{
+    $normalized = str_replace(["\r\n", "\r"], "\n", trim($value));
+    $normalized = preg_replace('/^[\-\•\●\○\▪\‣\◦]+\s*/u', '', $normalized) ?? $normalized;
+    $normalized = str_replace('：', ':', $normalized);
+    $normalized = preg_replace('/\s*:\s*/u', ':', $normalized) ?? $normalized;
+    $normalized = preg_replace('/\s+/u', '', $normalized) ?? $normalized;
+    return $normalized;
+}
+
+function msds_reader_glossary_loose_key(string $value): string
+{
+    $normalized = msds_reader_glossary_match_key($value);
+    $normalized = preg_replace('/[^[:alnum:][:alpha:]\p{Hangul}]+/u', '', $normalized) ?? $normalized;
+    return mb_strtolower($normalized, 'UTF-8');
+}
+
+function msds_reader_find_glossary_entry(array $glossary, string $text): ?array
+{
+    $targetKey = msds_reader_glossary_match_key($text);
+    if ($targetKey === '') {
+        return null;
+    }
+
+    $targetLooseKey = msds_reader_glossary_loose_key($text);
+    $bestEntry = null;
+    $bestScore = -1;
+
+    foreach (array_values($glossary) as $index => $entry) {
+        if (!is_array($entry)) {
+            continue;
+        }
+
+        $term = trim((string)($entry['term'] ?? ''));
+        $content = trim((string)($entry['content'] ?? ''));
+        if ($term === '' || $content === '') {
+            continue;
+        }
+
+        $entryKey = msds_reader_glossary_match_key($term);
+        if ($entryKey === $targetKey) {
+            $entry['_index'] = $index;
+            return $entry;
+        }
+
+        $entryLooseKey = msds_reader_glossary_loose_key($term);
+        $score = -1;
+
+        if ($entryLooseKey !== '' && $entryLooseKey === $targetLooseKey) {
+            $score = 900;
+        } elseif (
+            $entryKey !== ''
+            && (
+                str_contains($entryKey, $targetKey)
+                || str_contains($targetKey, $entryKey)
+            )
+        ) {
+            $score = 700;
+        } elseif (
+            $entryLooseKey !== ''
+            && $targetLooseKey !== ''
+            && (
+                str_contains($entryLooseKey, $targetLooseKey)
+                || str_contains($targetLooseKey, $entryLooseKey)
+            )
+        ) {
+            $score = 600;
+        }
+
+        if ($score > $bestScore) {
+            $entry['_index'] = $index;
+            $bestEntry = $entry;
+            $bestScore = $score;
+        }
+    }
+
+    return $bestEntry;
+}
+
+function msds_reader_render_glossary_button(array $entry, string $label): string
+{
+    $index = (int)($entry['_index'] ?? 0);
+    $term = trim((string)($entry['term'] ?? ''));
+    return '<a class="mobile-glossary-trigger" href="#mobile-glossary-entry-' . $index . '" data-glossary-index="' . $index . '" data-glossary-term="' . h($term) . '">'
+        . h($label)
+        . '</a>';
+}
+
 function msds_reader_fallback_sections(string $rawText): array
 {
     $normalized = msds_reader_normalize_block_text($rawText);
@@ -140,6 +256,16 @@ function msds_reader_fallback_sections(string $rawText): array
     return $sections;
 }
 
+function msds_reader_has_structured_mobile_content(string $content): bool
+{
+    $normalized = msds_reader_normalize_block_text($content);
+    if ($normalized === '') {
+        return false;
+    }
+
+    return preg_match('/(^|\n)\d{1,2}\.\s+/u', $normalized) === 1;
+}
+
 function msds_reader_server_pictogram_keys(string $sourceText): array
 {
     $normalized = preg_replace('/\s+/u', ' ', trim($sourceText)) ?? trim($sourceText);
@@ -192,14 +318,14 @@ function msds_reader_server_render_pictogram_html(string $sourceText): string
         . '</div>';
 }
 
-function msds_reader_render_fallback_html(array $sections, bool $canEditMobileMsds = false): string
+function msds_reader_render_fallback_html(array $sections, bool $canEditMobileMsds = false, array $glossary = []): string
 {
     if ($sections === []) {
         return '<div class="mobile-text-empty">표시할 본문이 없습니다.</div>';
     }
 
     $html = '';
-    foreach ($sections as $section) {
+    foreach (array_values($sections) as $index => $section) {
         $rawTitle = trim((string)($section['title'] ?? ''));
         $title = h($rawTitle);
         $bodyLines = array_values(array_filter(
@@ -209,6 +335,7 @@ function msds_reader_render_fallback_html(array $sections, bool $canEditMobileMs
         $bodyChunks = [];
         foreach ($bodyLines as $line) {
             $escaped = h($line);
+            $glossaryEntry = msds_reader_find_glossary_entry($glossary, $line);
             if ($line === '그림문자') {
                 $bodyChunks[] = msds_reader_server_render_pictogram_html(
                     implode("\n", array_merge([$rawTitle], $bodyLines))
@@ -226,28 +353,48 @@ function msds_reader_render_fallback_html(array $sections, bool $canEditMobileMs
             }
 
             if (preg_match('/^(.{1,80}?[:：])\s*(.+)$/u', $line, $matches)) {
-                $label = h(trim((string)$matches[1]));
-                $value = h(trim((string)$matches[2]));
-                $prefixClass = preg_match('/^\d+\)\s*/u', $line) ? ' mobile-text-fallback-kv-detail' : '';
-                $bodyChunks[] = '<div class="mobile-text-fallback-kv' . $prefixClass . '">'
-                    . '<span class="mobile-text-fallback-kv-label">' . $label . '</span>'
-                    . '<span class="mobile-text-fallback-kv-value">' . $value . '</span>'
-                    . '</div>';
+                if ($glossaryEntry !== null) {
+                    $prefixClass = preg_match('/^\d+\)\s*/u', $line) ? ' mobile-text-fallback-kv-detail' : '';
+                    $bodyChunks[] = '<div class="mobile-text-fallback-kv has-glossary-trigger' . $prefixClass . '">'
+                        . msds_reader_render_glossary_button($glossaryEntry, $line)
+                        . '</div>';
+                } else {
+                    $label = h(trim((string)$matches[1]));
+                    $value = h(trim((string)$matches[2]));
+                    $prefixClass = preg_match('/^\d+\)\s*/u', $line) ? ' mobile-text-fallback-kv-detail' : '';
+                    $bodyChunks[] = '<div class="mobile-text-fallback-kv' . $prefixClass . '">'
+                        . '<span class="mobile-text-fallback-kv-label">' . $label . '</span>'
+                        . '<span class="mobile-text-fallback-kv-value">' . $value . '</span>'
+                        . '</div>';
+                }
                 continue;
             }
 
             if (preg_match('/^\d+\)\s*/u', $line)) {
-                $bodyChunks[] = '<div class="mobile-text-fallback-detail">' . $escaped . '</div>';
+                if ($glossaryEntry !== null) {
+                    $bodyChunks[] = '<div class="mobile-text-fallback-detail">'
+                        . msds_reader_render_glossary_button($glossaryEntry, $line)
+                        . '</div>';
+                } else {
+                    $bodyChunks[] = '<div class="mobile-text-fallback-detail">' . $escaped . '</div>';
+                }
                 continue;
             }
 
-            $bodyChunks[] = '<p class="mobile-text-paragraph mobile-text-fallback-body">' . $escaped . '</p>';
+            if ($glossaryEntry !== null) {
+                $bodyChunks[] = '<p class="mobile-text-paragraph mobile-text-fallback-body">'
+                    . msds_reader_render_glossary_button($glossaryEntry, $line)
+                    . '</p>';
+            } else {
+                $bodyChunks[] = '<p class="mobile-text-paragraph mobile-text-fallback-body">' . $escaped . '</p>';
+            }
         }
-        $articleClass = $canEditMobileMsds ? 'mobile-text-section is-editable' : 'mobile-text-section';
-        $html .= '<article class="' . $articleClass . '">';
+        $sectionId = 'mobile-msds-section-' . ($index + 1);
+        $articleAttrs = ' class="mobile-text-section" id="' . h($sectionId) . '"';
         if ($canEditMobileMsds) {
-            $html .= '<button class="mobile-card-edit" type="button" aria-label="이 카드 수정">수정</button>';
+            $articleAttrs .= ' tabindex="0" role="button" aria-label="본문 편집 열기"';
         }
+        $html .= '<article' . $articleAttrs . '>';
         if ($rawTitle !== '') {
             $html .= '<h3>' . $title . '</h3>';
         }
@@ -299,6 +446,49 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (string)($_POST['action'
     exit;
 }
 
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (string)($_POST['action'] ?? '') === 'save_mobile_glossary') {
+    header('Content-Type: application/json; charset=UTF-8');
+
+    if (!$canEditMobileMsds) {
+        http_response_code(403);
+        echo json_encode(['ok' => false, 'message' => '편집 권한이 없습니다.'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
+    $targetId = trim((string)($_POST['record_id'] ?? ''));
+    $recordIndex = msds_reader_find_record_index($records, $targetId);
+    $items = json_decode((string)($_POST['glossary'] ?? '[]'), true);
+
+    if ($targetId === '' || $recordIndex === null) {
+        http_response_code(404);
+        echo json_encode(['ok' => false, 'message' => '대상 문서를 찾지 못했습니다.'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
+    if (!is_array($items)) {
+        http_response_code(422);
+        echo json_encode(['ok' => false, 'message' => '용어 데이터를 읽지 못했습니다.'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
+    $glossary = msds_reader_normalize_glossary($items);
+    $records[$recordIndex]['mobile_glossary'] = $glossary;
+    $records[$recordIndex]['mobile_glossary_updated_at'] = date('c');
+
+    if (!msds_reader_write_records($records)) {
+        http_response_code(500);
+        echo json_encode(['ok' => false, 'message' => '용어 설명을 저장하지 못했습니다.'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
+    echo json_encode([
+        'ok' => true,
+        'message' => '저장되었습니다.',
+        'glossary' => $glossary,
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
 if ($record === null || !$isPdf) {
     http_response_code(404);
 }
@@ -310,17 +500,19 @@ $revisedDate = (string)($record['revised_date'] ?? '');
 $revisionCount = (string)($record['revision_count'] ?? '');
 $note = (string)($record['note'] ?? '');
 $mobileContent = (string)($record['mobile_content'] ?? '');
+$hasStructuredMobileContent = msds_reader_has_structured_mobile_content($mobileContent);
 $ocrStatus = (string)($record['ocr_status'] ?? '');
 $ocrEngine = (string)($record['ocr_engine'] ?? '');
 $ocrText = (string)($record['ocr_text'] ?? '');
 $ocrSections = is_array($record['ocr_sections'] ?? null) ? $record['ocr_sections'] : [];
 $ocrError = (string)($record['ocr_error'] ?? '');
+$mobileGlossary = msds_reader_normalize_glossary(is_array($record['mobile_glossary'] ?? null) ? $record['mobile_glossary'] : []);
 $pdfUrl = $record !== null ? 'msds_list.php?view_file=' . rawurlencode((string)($record['id'] ?? '')) : '';
 $downloadUrl = $record !== null ? 'msds_list.php?download_file=' . rawurlencode((string)($record['id'] ?? '')) : 'msds_list.php';
-$serverRenderSource = $mobileContent !== '' ? $mobileContent : $ocrText;
+$serverRenderSource = $hasStructuredMobileContent ? $mobileContent : $ocrText;
 $serverRenderSections = msds_reader_fallback_sections($serverRenderSource);
-$serverRenderHtml = msds_reader_render_fallback_html($serverRenderSections, $canEditMobileMsds);
-$serverRenderStatus = $mobileContent !== ''
+$serverRenderHtml = msds_reader_render_fallback_html($serverRenderSections, $canEditMobileMsds, $mobileGlossary);
+$serverRenderStatus = $hasStructuredMobileContent
     ? '관리자가 정리한 모바일 전용 본문입니다.'
     : ($ocrText !== '' ? '서버 OCR 텍스트를 불러왔습니다.' : '표시할 본문을 준비하지 못했습니다.');
 ?>
@@ -335,7 +527,6 @@ $serverRenderStatus = $mobileContent !== ''
 <body>
 <?php require __DIR__ . '/templates/msds_reader/body.php'; ?>
 <?php if ($record !== null && $isPdf): ?>
-<?php require __DIR__ . '/templates/msds_reader/mobile_edit_script.php'; ?>
 <?php require __DIR__ . '/templates/msds_reader/pdf_reader_script.php'; ?>
 <?php endif; ?>
 </body>

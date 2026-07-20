@@ -1,4 +1,5 @@
 ﻿  <div class="reader-shell">
+    <div id="msds-reader-top"></div>
     <div class="reader-topbar">
       <div class="reader-topbar-inner">
         <div class="reader-title">
@@ -46,9 +47,19 @@
         <div class="mobile-text-head">
           <h2>MSDS 리더</h2>
         </div>
+        <?php if ($canEditMobileMsds): ?>
+          <div class="mobile-glossary-manage">
+            <button class="btn btn-ghost" type="button" id="mobile-glossary-manage-button">용어 설명 관리</button>
+          </div>
+        <?php endif; ?>
         <div class="mobile-section-jump" id="mobile-section-jump">
-          <select class="mobile-section-select" id="mobile-section-select" aria-label="카드별 이동">
+          <select class="mobile-section-select" id="mobile-section-select" aria-label="카드별 이동" onchange="if(this.value){ window.location.hash = this.value; }">
             <option value="">항목별 이동</option>
+            <?php foreach (array_values(array_slice($serverRenderSections, 1)) as $index => $section): ?>
+              <?php $sectionTitle = trim((string)($section['title'] ?? '')); ?>
+              <?php if ($sectionTitle === '') { continue; } ?>
+              <option value="<?= h('mobile-msds-section-' . ($index + 2)) ?>"><?= h($sectionTitle) ?></option>
+            <?php endforeach; ?>
           </select>
         </div>
         <div class="mobile-text-status" id="mobile-text-status"><?= h($serverRenderStatus) ?></div>
@@ -109,7 +120,7 @@
     </div>
   </nav>
 
-  <button class="mobile-scroll-top" id="mobile-scroll-top" type="button" aria-label="맨 위로 이동">맨 위</button>
+  <a class="mobile-scroll-top" id="mobile-scroll-top" href="#msds-reader-top" aria-label="맨 위로 이동">맨 위</a>
 
   <div class="mobile-editor-modal" id="mobile-editor-modal" aria-hidden="true">
     <div class="mobile-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="mobile-editor-title">
@@ -124,3 +135,49 @@
       </div>
     </div>
   </div>
+
+  <div class="mobile-glossary-modal" id="mobile-glossary-modal" aria-hidden="true">
+    <div class="mobile-glossary-dialog" role="dialog" aria-modal="true" aria-labelledby="mobile-glossary-title">
+      <div class="mobile-glossary-head">
+        <p class="mobile-glossary-eyebrow">TERM GUIDE</p>
+        <h3 id="mobile-glossary-title">용어 설명</h3>
+      </div>
+      <div class="mobile-glossary-content" id="mobile-glossary-content"></div>
+      <div class="mobile-glossary-actions">
+        <button class="btn btn-ghost" type="button" id="mobile-glossary-close">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <?php foreach ($mobileGlossary as $index => $entry): ?>
+    <div class="mobile-glossary-sheet" id="<?= h('mobile-glossary-entry-' . $index) ?>" aria-hidden="true">
+      <a class="mobile-glossary-sheet-backdrop" href="#msds-reader-top" aria-label="닫기"></a>
+      <div class="mobile-glossary-sheet-dialog" role="dialog" aria-modal="true" aria-labelledby="<?= h('mobile-glossary-sheet-title-' . $index) ?>">
+        <div class="mobile-glossary-head">
+          <p class="mobile-glossary-eyebrow">TERM GUIDE</p>
+          <h3 id="<?= h('mobile-glossary-sheet-title-' . $index) ?>"><?= h(trim((string)($entry['title'] ?? $entry['term'] ?? '용어 설명'))) ?></h3>
+        </div>
+        <div class="mobile-glossary-content"><?= h(trim((string)($entry['content'] ?? ''))) ?></div>
+        <div class="mobile-glossary-actions">
+          <a class="btn btn-ghost" href="#msds-reader-top">닫기</a>
+        </div>
+      </div>
+    </div>
+  <?php endforeach; ?>
+
+  <?php if ($canEditMobileMsds): ?>
+    <div class="mobile-glossary-editor-modal" id="mobile-glossary-editor-modal" aria-hidden="true">
+      <div class="mobile-glossary-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="mobile-glossary-editor-title">
+        <div class="mobile-glossary-editor-head">
+          <h3 id="mobile-glossary-editor-title">용어 설명 관리</h3>
+          <p>특정 용어나 문장을 입력하면 모바일 본문에서 눌러 볼 수 있는 설명 링크로 연결됩니다.</p>
+        </div>
+        <div class="mobile-glossary-editor-list" id="mobile-glossary-editor-list"></div>
+        <button class="btn btn-soft mobile-glossary-add" type="button" id="mobile-glossary-add">용어 추가</button>
+        <div class="mobile-glossary-editor-actions">
+          <button class="btn btn-ghost" type="button" id="mobile-glossary-editor-cancel">닫기</button>
+          <button class="btn btn-accent" type="button" id="mobile-glossary-editor-save">저장</button>
+        </div>
+      </div>
+    </div>
+  <?php endif; ?>

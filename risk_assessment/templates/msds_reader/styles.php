@@ -191,6 +191,14 @@
     font-size: 12px;
     line-height: 1.6;
   }
+  .mobile-glossary-manage {
+    padding: 12px 14px 0;
+  }
+  .mobile-glossary-manage .btn {
+    width: 100%;
+    min-height: 40px;
+    font-size: 13px;
+  }
   .mobile-section-jump {
     display: none;
     position: sticky;
@@ -277,6 +285,31 @@
   }
   .mobile-text-paragraph + .mobile-text-paragraph {
     margin-top: 10px;
+  }
+  .mobile-glossary-trigger {
+    display: inline;
+    padding: 0;
+    border: 0;
+    border-bottom: 1px solid rgba(255, 177, 26, 0.75);
+    background: transparent;
+    color: #9fd4ff;
+    font: inherit;
+    font-weight: 700;
+    line-height: inherit;
+    cursor: pointer;
+  }
+  .mobile-glossary-trigger:active {
+    color: #ffd27a;
+  }
+  .mobile-text-fallback-kv.has-glossary-trigger {
+    display: block;
+    margin-left: 14px;
+    padding-left: 12px;
+  }
+  .mobile-text-fallback-kv.has-glossary-trigger .mobile-glossary-trigger {
+    display: inline-block;
+    text-align: left;
+    line-height: 1.75;
   }
   .mobile-text-fallback-body {
     margin-left: 14px;
@@ -440,6 +473,164 @@
     display: flex;
     gap: 10px;
     justify-content: flex-end;
+  }
+  .mobile-glossary-modal,
+  .mobile-glossary-editor-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 125;
+    display: none;
+    align-items: end;
+    justify-content: center;
+    padding: 16px 12px calc(24px + env(safe-area-inset-bottom));
+    background: rgba(3, 9, 18, 0.68);
+    backdrop-filter: blur(10px);
+  }
+  .mobile-glossary-modal.is-open,
+  .mobile-glossary-editor-modal.is-open {
+    display: flex;
+  }
+  .mobile-glossary-dialog,
+  .mobile-glossary-editor-dialog {
+    width: 100%;
+    max-width: 720px;
+    max-height: 84vh;
+    overflow: auto;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 26px;
+    background: linear-gradient(180deg, rgba(16, 31, 51, 0.99), rgba(8, 17, 29, 0.99));
+    box-shadow: var(--shadow);
+  }
+  .mobile-glossary-head,
+  .mobile-glossary-editor-head {
+    padding: 18px 18px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .mobile-glossary-eyebrow {
+    margin: 0 0 6px;
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .mobile-glossary-head h3,
+  .mobile-glossary-editor-head h3 {
+    margin: 0;
+    color: #ffd27a;
+    font-size: 18px;
+    line-height: 1.4;
+  }
+  .mobile-glossary-editor-head p {
+    margin: 8px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .mobile-glossary-content {
+    padding: 18px;
+    color: #f4f7fb;
+    font-size: 15px;
+    line-height: 1.8;
+    white-space: pre-wrap;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+  .mobile-glossary-actions,
+  .mobile-glossary-editor-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    padding: 14px 18px 18px;
+  }
+  .mobile-glossary-sheet {
+    position: fixed;
+    inset: 0;
+    z-index: 126;
+    display: none;
+    align-items: end;
+    justify-content: center;
+    padding: 16px 12px calc(24px + env(safe-area-inset-bottom));
+  }
+  .mobile-glossary-sheet:target {
+    display: flex;
+  }
+  .mobile-glossary-sheet-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(3, 9, 18, 0.68);
+    backdrop-filter: blur(10px);
+  }
+  .mobile-glossary-sheet-dialog {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 720px;
+    max-height: 84vh;
+    overflow: auto;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 26px;
+    background: linear-gradient(180deg, rgba(16, 31, 51, 0.99), rgba(8, 17, 29, 0.99));
+    box-shadow: var(--shadow);
+  }
+  .mobile-glossary-editor-list {
+    display: grid;
+    gap: 12px;
+    padding: 16px 16px 0;
+  }
+  .mobile-glossary-row {
+    display: grid;
+    gap: 10px;
+    padding: 14px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .mobile-glossary-field {
+    display: grid;
+    gap: 6px;
+  }
+  .mobile-glossary-field label {
+    color: #9fc4eb;
+    font-size: 12px;
+    font-weight: 800;
+  }
+  .mobile-glossary-input,
+  .mobile-glossary-textarea {
+    width: 100%;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
+    background: rgba(12, 23, 38, 0.96);
+    color: var(--text);
+    font: inherit;
+    outline: none;
+  }
+  .mobile-glossary-input {
+    min-height: 42px;
+    padding: 0 12px;
+    font-size: 14px;
+  }
+  .mobile-glossary-textarea {
+    min-height: 120px;
+    padding: 12px;
+    font-size: 14px;
+    line-height: 1.7;
+    resize: vertical;
+  }
+  .mobile-glossary-remove {
+    justify-self: end;
+    min-height: 34px;
+    padding: 0 12px;
+    border: 1px solid rgba(255, 120, 120, 0.22);
+    border-radius: 999px;
+    background: rgba(255, 107, 107, 0.08);
+    color: #ffc7c7;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+  .mobile-glossary-add {
+    margin: 14px 16px 0;
+    width: calc(100% - 32px);
   }
   .mobile-scroll-top {
     position: fixed;
@@ -771,6 +962,9 @@
     .mobile-text-status {
       padding: 10px 14px 0;
     }
+    .mobile-glossary-manage {
+      padding: 10px 12px 0;
+    }
     .mobile-text-body {
       padding: 12px;
       gap: 8px;
@@ -824,6 +1018,14 @@
     .mobile-editor-actions .btn {
       flex: 1 1 0;
     }
+    .mobile-glossary-actions .btn,
+    .mobile-glossary-editor-actions .btn {
+      flex: 1 1 0;
+    }
+    .mobile-glossary-dialog,
+    .mobile-glossary-editor-dialog {
+      border-radius: 22px;
+    }
     .viewer-toolbar {
       margin-bottom: 10px;
       align-items: stretch;
@@ -849,6 +1051,7 @@
       font-size: 12px;
     }
     .mobile-scroll-top {
+      display: inline-flex;
       right: 14px;
       bottom: calc(84px + env(safe-area-inset-bottom));
     }

@@ -26,6 +26,17 @@
   const mobileEditorTextarea = document.getElementById('mobile-editor-textarea');
   const mobileEditorCancel = document.getElementById('mobile-editor-cancel');
   const mobileEditorApply = document.getElementById('mobile-editor-apply');
+  const mobileGlossaryModal = document.getElementById('mobile-glossary-modal');
+  const mobileGlossaryTitle = document.getElementById('mobile-glossary-title');
+  const mobileGlossaryContent = document.getElementById('mobile-glossary-content');
+  const mobileGlossaryClose = document.getElementById('mobile-glossary-close');
+  const mobileGlossaryManageButton = document.getElementById('mobile-glossary-manage-button');
+  const mobileGlossaryEditorModal = document.getElementById('mobile-glossary-editor-modal');
+  const mobileGlossaryEditorList = document.getElementById('mobile-glossary-editor-list');
+  const mobileGlossaryEditorCancel = document.getElementById('mobile-glossary-editor-cancel');
+  const mobileGlossaryEditorSave = document.getElementById('mobile-glossary-editor-save');
+  const mobileGlossaryAdd = document.getElementById('mobile-glossary-add');
+  const mobileGlossary = <?= json_encode($mobileGlossary, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const canEditMobileMsds = <?= $canEditMobileMsds ? 'true' : 'false' ?>;
   const recordId = <?= json_encode((string)($record['id'] ?? ''), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const isMobileViewport = () => window.matchMedia('(max-width: 640px)').matches;
@@ -36,6 +47,10 @@
   let rendering = false;
   let pendingPage = null;
   let editingArticle = null;
+  let glossaryEntries = Array.isArray(mobileGlossary) ? mobileGlossary.slice() : [];
+  let glossaryModalOpenedAt = 0;
+
+  window.__msdsReaderManaged = true;
 
   function refreshMobileSectionJump() {
     if (!mobileSectionSelect || !mobileTextBody) {
@@ -62,7 +77,8 @@
     });
 
     if (mobileSectionJump) {
-      mobileSectionJump.style.display = isMobileViewport() && articles.length > 0 ? 'block' : 'none';
+      const hasJumpTargets = mobileSectionSelect.options.length > 1;
+      mobileSectionJump.style.display = isMobileViewport() && hasJumpTargets ? 'block' : 'none';
     }
   }
 
@@ -71,7 +87,7 @@
       return;
     }
 
-    const shouldShow = isMobileViewport() && window.scrollY > 320;
+    const shouldShow = isMobileViewport() && window.scrollY > 140;
     mobileScrollTopButton.classList.toggle('is-visible', shouldShow);
   }
 
@@ -89,6 +105,434 @@
       .replace(/\s+/g, ' ')
       .replace(/\u0000/g, '')
       .trim();
+  }
+
+  function normalizeGlossaryKey(value) {
+    return String(value || '')
+      .replace(/\u0000/g, '')
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
+      .replace(/^[\-\•\●\○\▪\‣\◦]+\s*/u, '')
+      .replace(/：/g, ':')
+      .replace(/\s*:\s*/g, ':')
+      .replace(/\s+/g, '')
+      .trim();
+  }
+
+  function normalizeGlossaryLooseKey(value) {
+    return normalizeGlossaryKey(value)
+      .replace(/[^0-9A-Za-z가-힣]+/g, '')
+      .toLowerCase();
+  }
+
+  function findGlossaryEntry(value) {
+    const targetKey = normalizeGlossaryKey(value);
+    if (!targetKey || !Array.isArray(glossaryEntries)) {
+      return null;
+    }
+
+    const targetLooseKey = normalizeGlossaryLooseKey(value);
+    let bestEntry = null;
+    let bestScore = -1;
+
+    for (let index = 0; index < glossaryEntries.length; index += 1) {
+      const entry = glossaryEntries[index];
+      if (!entry || !entry.term || !entry.content) {
+        continue;
+      }
+
+      const entryKey = normalizeGlossaryKey(entry.term);
+      if (entryKey === targetKey) {
+        return { ...entry, _index: index };
+      }
+
+      const entryLooseKey = normalizeGlossaryLooseKey(entry.term);
+      let score = -1;
+
+      if (entryLooseKey && entryLooseKey === targetLooseKey) {
+        score = 900;
+      } else if (
+        entryKey
+        && (
+          entryKey.includes(targetKey)
+          || targetKey.includes(entryKey)
+        )
+      ) {
+        score = 700;
+      } else if (
+        entryLooseKey
+        && targetLooseKey
+        && (
+          entryLooseKey.includes(targetLooseKey)
+          || targetLooseKey.includes(entryLooseKey)
+        )
+      ) {
+        score = 600;
+      }
+
+      if (
+        score > bestScore
+      ) {
+        bestEntry = { ...entry, _index: index };
+        bestScore = score;
+      }
+    }
+
+    return bestEntry;
+  }
+
+  function renderGlossaryButtonHtml(entry, label) {
+    if (!entry) {
+      return escapeHtml(label);
+    }
+
+    return `<a class="mobile-glossary-trigger" href="#mobile-glossary-entry-${entry._index}" data-glossary-index="${entry._index}" data-glossary-term="${escapeAttribute(entry.term || '')}" onclick="return window.__openMobileGlossaryFromButton ? window.__openMobileGlossaryFromButton(this) : true;">${escapeHtml(label)}</a>`;
+  }
+
+  function openGlossaryFromButton(button) {
+    if (!(button instanceof Element)) {
+      return false;
+    }
+
+    const glossaryIndex = Number(button.getAttribute('data-glossary-index'));
+    const glossaryTerm = button.getAttribute('data-glossary-term') || button.textContent || '';
+    openGlossaryModalByTerm(glossaryTerm, Number.isNaN(glossaryIndex) ? null : glossaryIndex);
+    return false;
+  }
+
+  function resolveGlossaryTriggerFromEvent(event) {
+    if (!event) {
+      return null;
+    }
+
+    if (typeof event.composedPath === 'function') {
+      const path = event.composedPath();
+      for (let index = 0; index < path.length; index += 1) {
+        const node = path[index];
+        if (node instanceof Element && node.classList.contains('mobile-glossary-trigger')) {
+          return node;
+        }
+      }
+    }
+
+    const rawTarget = event.target;
+    if (rawTarget instanceof Element) {
+      return rawTarget.closest('.mobile-glossary-trigger');
+    }
+
+    if (rawTarget && rawTarget.parentElement) {
+      return rawTarget.parentElement.closest('.mobile-glossary-trigger');
+    }
+
+    return null;
+  }
+
+  function attachGlossaryTriggerHandlers(scope = mobileTextBody) {
+    if (!scope) {
+      return;
+    }
+
+    scope.querySelectorAll('.mobile-glossary-trigger').forEach((button) => {
+      if (!(button instanceof Element) || button.dataset.boundGlossaryClick === 'true') {
+        return;
+      }
+
+      button.dataset.boundGlossaryClick = 'true';
+      button.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openGlossaryFromButton(button);
+      });
+    });
+  }
+
+  function hydrateGlossaryTriggers(scope = mobileTextBody) {
+    if (!scope || !Array.isArray(glossaryEntries) || !glossaryEntries.length) {
+      return;
+    }
+
+    scope.querySelectorAll('.mobile-text-table-row').forEach((row) => {
+      if (!(row instanceof Element) || row.querySelector('.mobile-glossary-trigger')) {
+        return;
+      }
+
+      const labelNode = row.querySelector('.mobile-text-table-label');
+      const valueNode = row.querySelector('.mobile-text-table-value');
+      const label = normalizeLineText(labelNode ? labelNode.textContent : '');
+      const value = normalizeLineText(valueNode ? valueNode.textContent : '');
+      const combined = [label, value].filter(Boolean).join(' : ');
+      const glossaryEntry = findGlossaryEntry(combined);
+      if (!glossaryEntry || !valueNode) {
+        return;
+      }
+
+      row.innerHTML = `<div class="mobile-text-table-value" style="grid-column: 1 / -1;">${renderGlossaryButtonHtml(glossaryEntry, combined)}</div>`;
+      row.classList.add('has-glossary-trigger');
+    });
+
+    scope.querySelectorAll('.mobile-text-fallback-kv').forEach((node) => {
+      if (!(node instanceof Element)) {
+        return;
+      }
+
+      if (node.querySelector('.mobile-glossary-trigger')) {
+        return;
+      }
+
+      const labelNode = node.querySelector('.mobile-text-fallback-kv-label');
+      const valueNode = node.querySelector('.mobile-text-fallback-kv-value');
+      const label = normalizeLineText(labelNode ? labelNode.textContent : '');
+      const value = normalizeLineText(valueNode ? valueNode.textContent : '');
+      const combined = [label, value].filter(Boolean).join(' ');
+      const text = normalizeLineText(combined || node.textContent || '');
+      if (!text) {
+        return;
+      }
+
+      const glossaryEntry = findGlossaryEntry(text);
+      if (!glossaryEntry) {
+        return;
+      }
+
+      node.innerHTML = renderGlossaryButtonHtml(glossaryEntry, text);
+      node.classList.add('has-glossary-trigger');
+    });
+
+    const targets = scope.querySelectorAll([
+      '.mobile-text-paragraph',
+      '.mobile-text-fallback-body',
+      '.mobile-text-fallback-detail',
+      '.mobile-text-table-value',
+    ].join(','));
+
+    targets.forEach((node) => {
+      if (!(node instanceof Element)) {
+        return;
+      }
+
+      if (node.closest('.mobile-text-table-row')) {
+        return;
+      }
+
+      if (node.querySelector('.mobile-glossary-trigger')) {
+        return;
+      }
+
+      const text = normalizeLineText(node.textContent || '');
+      if (!text) {
+        return;
+      }
+
+      const glossaryEntry = findGlossaryEntry(text);
+      if (!glossaryEntry) {
+        return;
+      }
+
+      node.innerHTML = renderGlossaryButtonHtml(glossaryEntry, text);
+    });
+
+    attachGlossaryTriggerHandlers(scope);
+  }
+
+  function openGlossaryModalByIndex(index) {
+    const entry = glossaryEntries[index];
+    if (!entry || !mobileGlossaryModal || !mobileGlossaryTitle || !mobileGlossaryContent) {
+      return;
+    }
+
+    glossaryModalOpenedAt = Date.now();
+    window.requestAnimationFrame(() => {
+      mobileGlossaryTitle.textContent = entry.title || entry.term || '용어 설명';
+      mobileGlossaryContent.textContent = entry.content || '';
+      mobileGlossaryModal.classList.add('is-open');
+      mobileGlossaryModal.setAttribute('aria-hidden', 'false');
+    });
+  }
+
+  function openGlossaryModalByTerm(term, fallbackIndex = null) {
+    const normalizedTerm = normalizeGlossaryKey(term);
+    if (normalizedTerm && Array.isArray(glossaryEntries)) {
+      for (let index = 0; index < glossaryEntries.length; index += 1) {
+        const entry = glossaryEntries[index];
+        if (!entry || !entry.term || !entry.content) {
+          continue;
+        }
+
+        if (normalizeGlossaryKey(entry.term) === normalizedTerm) {
+          openGlossaryModalByIndex(index);
+          return;
+        }
+      }
+    }
+
+    if (fallbackIndex !== null && !Number.isNaN(fallbackIndex)) {
+      openGlossaryModalByIndex(fallbackIndex);
+    }
+  }
+
+  function closeGlossaryModal() {
+    if (!mobileGlossaryModal) {
+      return;
+    }
+
+    mobileGlossaryModal.classList.remove('is-open');
+    mobileGlossaryModal.setAttribute('aria-hidden', 'true');
+  }
+
+  window.__openMobileGlossaryFromButton = openGlossaryFromButton;
+
+  function escapeAttribute(value) {
+    return escapeHtml(value).replace(/"/g, '&quot;');
+  }
+
+  function renderGlossaryEditorRows() {
+    if (!mobileGlossaryEditorList) {
+      return;
+    }
+
+    const rows = glossaryEntries.length ? glossaryEntries : [{ term: '', title: '', content: '' }];
+    mobileGlossaryEditorList.innerHTML = rows.map((entry, index) => ''
+      + `<div class="mobile-glossary-row" data-index="${index}">`
+      + '<div class="mobile-glossary-field">'
+      + '<label>표시할 용어 또는 문장</label>'
+      + `<input class="mobile-glossary-input" data-field="term" type="text" value="${escapeAttribute(entry.term || '')}" placeholder="예: 고압가스 : 액화가스">`
+      + '</div>'
+      + '<div class="mobile-glossary-field">'
+      + '<label>모달 제목</label>'
+      + `<input class="mobile-glossary-input" data-field="title" type="text" value="${escapeAttribute(entry.title || '')}" placeholder="비우면 용어와 같은 제목으로 표시됩니다.">`
+      + '</div>'
+      + '<div class="mobile-glossary-field">'
+      + '<label>설명 내용</label>'
+      + `<textarea class="mobile-glossary-textarea" data-field="content" placeholder="작업자가 눌렀을 때 볼 설명을 입력해 주세요.">${escapeHtml(entry.content || '')}</textarea>`
+      + '</div>'
+      + `<button class="mobile-glossary-remove" type="button" data-remove-index="${index}">삭제</button>`
+      + '</div>').join('');
+  }
+
+  function openGlossaryEditor() {
+    if (!canEditMobileMsds || !mobileGlossaryEditorModal) {
+      return;
+    }
+
+    renderGlossaryEditorRows();
+    mobileGlossaryEditorModal.classList.add('is-open');
+    mobileGlossaryEditorModal.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeGlossaryEditor() {
+    if (!mobileGlossaryEditorModal) {
+      return;
+    }
+
+    mobileGlossaryEditorModal.classList.remove('is-open');
+    mobileGlossaryEditorModal.setAttribute('aria-hidden', 'true');
+  }
+
+  function collectGlossaryEditorRows() {
+    if (!mobileGlossaryEditorList) {
+      return [];
+    }
+
+    return Array.from(mobileGlossaryEditorList.querySelectorAll('.mobile-glossary-row')).map((row) => {
+      const term = normalizeLineText(row.querySelector('[data-field="term"]')?.value || '');
+      const title = normalizeLineText(row.querySelector('[data-field="title"]')?.value || '');
+      const content = String(row.querySelector('[data-field="content"]')?.value || '')
+        .replace(/\r\n/g, '\n')
+        .replace(/\r/g, '\n')
+        .trim();
+
+      if (!term || !content) {
+        return null;
+      }
+
+      return {
+        term,
+        title: title || term,
+        content,
+      };
+    }).filter(Boolean);
+  }
+
+  async function persistGlossary(entries) {
+    const body = new URLSearchParams();
+    body.set('action', 'save_mobile_glossary');
+    body.set('record_id', recordId);
+    body.set('glossary', JSON.stringify(entries));
+
+    const response = await fetch(window.location.href, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: body.toString(),
+      credentials: 'same-origin',
+    });
+
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch (error) {
+      payload = null;
+    }
+
+    if (!response.ok || !payload || payload.ok !== true) {
+      throw new Error(payload && payload.message ? payload.message : '용어 설명을 저장하지 못했습니다.');
+    }
+
+    return payload;
+  }
+
+  async function saveGlossaryEditor() {
+    const nextEntries = collectGlossaryEditorRows();
+    const originalButtonText = mobileGlossaryEditorSave ? mobileGlossaryEditorSave.textContent : '';
+
+    try {
+      if (mobileGlossaryEditorSave) {
+        mobileGlossaryEditorSave.disabled = true;
+        mobileGlossaryEditorSave.textContent = '저장 중...';
+      }
+
+      const payload = await persistGlossary(nextEntries);
+      glossaryEntries = Array.isArray(payload.glossary) ? payload.glossary : nextEntries;
+
+      if (mobileTextStatus) {
+        mobileTextStatus.textContent = '용어 설명을 저장했습니다.';
+        mobileTextStatus.classList.remove('is-error');
+      }
+
+      if (manualMobileContent && renderSavedManualContent('용어 설명을 저장했습니다.')) {
+        closeGlossaryEditor();
+        return;
+      }
+
+      const normalizedSections = normalizeServerSections(serverOcrSections);
+      if (normalizedSections.length) {
+        renderTextSections(normalizedSections, '용어 설명을 저장했습니다.', false);
+      } else if (serverOcrText) {
+        const fallbackSections = buildSectionsFromLines(serverOcrText.split(/\r?\n/));
+        if (fallbackSections.length) {
+          renderTextSections(fallbackSections, '용어 설명을 저장했습니다.', false);
+        } else {
+          hydrateGlossaryTriggers();
+        }
+      } else {
+        hydrateGlossaryTriggers();
+      }
+
+      closeGlossaryEditor();
+    } catch (error) {
+      if (mobileTextStatus) {
+        mobileTextStatus.textContent = error instanceof Error ? error.message : '용어 설명을 저장하지 못했습니다.';
+        mobileTextStatus.classList.add('is-error');
+      }
+      window.alert(error instanceof Error ? error.message : '용어 설명을 저장하지 못했습니다.');
+    } finally {
+      if (mobileGlossaryEditorSave) {
+        mobileGlossaryEditorSave.disabled = false;
+        mobileGlossaryEditorSave.textContent = originalButtonText || '저장';
+      }
+    }
   }
 
   function isSectionHeading(line) {
@@ -137,6 +581,19 @@
     }
 
     return sections.filter((section) => section.title || section.paragraphs.length);
+  }
+
+  function hasStructuredManualContent(rawText) {
+    const normalized = String(rawText || '')
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
+      .trim();
+
+    if (!normalized) {
+      return false;
+    }
+
+    return /(^|\n)\d{1,2}\.\s+/u.test(normalized);
   }
 
   function buildSectionsFromLines(lines) {
@@ -376,8 +833,12 @@
       const titleInfo = parseSectionTitle(originalTitle);
       const sectionClass = titleInfo.index ? 'mobile-text-section has-index' : 'mobile-text-section';
       const blocksHtml = renderSectionBlocks(section);
-      return `<article class="${sectionClass} is-editable"><h3>${escapeHtml(originalTitle || '본문')}</h3>${blocksHtml}</article>`;
+      const editableAttrs = canEditMobileMsds
+        ? ' tabindex="0" role="button" aria-label="본문 편집 열기"'
+        : '';
+      return `<article class="${sectionClass}"${editableAttrs}><h3>${escapeHtml(originalTitle || '본문')}</h3>${blocksHtml}</article>`;
     }).join('');
+    hydrateGlossaryTriggers();
     decorateEditableCards();
     refreshMobileSectionJump();
   }
@@ -385,6 +846,7 @@
   function formatManualBodyLine(line) {
     const normalized = normalizeLineText(line);
     const escaped = escapeHtml(normalized);
+    const glossaryEntry = findGlossaryEntry(normalized);
 
     if (normalized === '그림문자' || normalized === '1) 그림문자') {
       const labelText = normalized === '그림문자' ? '1) 그림문자' : normalized;
@@ -397,6 +859,11 @@
 
     const kvMatch = normalized.match(/^(.{1,80}?[:：])\s*(.+)$/);
     if (kvMatch) {
+      if (glossaryEntry) {
+        const detailClass = /^\d+\)\s*/.test(normalized) ? ' mobile-text-fallback-kv-detail' : '';
+        return `<div class="mobile-text-fallback-kv has-glossary-trigger${detailClass}">${renderGlossaryButtonHtml(glossaryEntry, normalized)}</div>`;
+      }
+
       const label = escapeHtml(normalizeLineText(kvMatch[1]));
       const value = escapeHtml(normalizeLineText(kvMatch[2]));
       const detailClass = /^\d+\)\s*/.test(normalized) ? ' mobile-text-fallback-kv-detail' : '';
@@ -404,13 +871,17 @@
     }
 
     if (/^\d+\)\s*/.test(normalized)) {
-      return `<div class="mobile-text-fallback-detail">${escaped}</div>`;
+      return `<div class="mobile-text-fallback-detail">${glossaryEntry ? renderGlossaryButtonHtml(glossaryEntry, normalized) : escaped}</div>`;
     }
 
-    return `<p class="mobile-text-paragraph mobile-text-fallback-body">${escaped}</p>`;
+    return `<p class="mobile-text-paragraph mobile-text-fallback-body">${glossaryEntry ? renderGlossaryButtonHtml(glossaryEntry, normalized) : escaped}</p>`;
   }
 
   function renderSavedManualContent(statusText = '관리자가 정리한 모바일 전용 본문입니다.') {
+    if (!hasStructuredManualContent(manualMobileContent)) {
+      return false;
+    }
+
     const manualSections = splitManualSections(manualMobileContent);
     if (!manualSections.length) {
       return false;
@@ -451,9 +922,13 @@
       }
 
       const bodyHtml = normalizedLines.map((line) => formatManualBodyLine(line)).join('');
-      return `<article class="mobile-text-section is-editable">${titleHtml}${bodyHtml || '<div class="mobile-text-empty">표시할 본문이 없습니다.</div>'}</article>`;
+      const editableAttrs = canEditMobileMsds
+        ? ' tabindex="0" role="button" aria-label="본문 편집 열기"'
+        : '';
+      return `<article class="mobile-text-section"${editableAttrs}>${titleHtml}${bodyHtml || '<div class="mobile-text-empty">표시할 본문이 없습니다.</div>'}</article>`;
     }).join('');
 
+    hydrateGlossaryTriggers();
     decorateEditableCards();
     refreshMobileSectionJump();
     return true;
@@ -471,20 +946,6 @@
       }
       article.setAttribute('role', 'button');
       article.setAttribute('aria-label', '본문 편집 열기');
-
-      if (!article.querySelector('.mobile-card-edit')) {
-        const editButton = document.createElement('button');
-        editButton.type = 'button';
-        editButton.className = 'mobile-card-edit';
-        editButton.textContent = '수정';
-        editButton.setAttribute('aria-label', '이 카드 수정');
-        editButton.addEventListener('click', (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          openEditor(article);
-        });
-        article.appendChild(editButton);
-      }
     });
   }
 
@@ -519,6 +980,10 @@
     mobileEditorModal.setAttribute('aria-hidden', 'false');
     window.setTimeout(() => mobileEditorTextarea.focus(), 20);
   }
+
+  window.openMobileMsdsEditor = (article) => {
+    openEditor(article instanceof Element ? article.closest('.mobile-text-section') || article : null);
+  };
 
   function closeEditor() {
     if (!mobileEditorModal) {
@@ -928,11 +1393,22 @@
       return '';
     }
 
-    return `<div class="mobile-text-table">${rows.map((row) => `<div class="mobile-text-table-row"><div class="mobile-text-table-label">${escapeHtml(row.label)}</div><div class="mobile-text-table-value">${escapeHtml(row.value)}</div></div>`).join('')}</div>`;
+    return `<div class="mobile-text-table">${rows.map((row) => {
+      const combinedLine = `${normalizeLineText(row.label)} : ${normalizeLineText(row.value)}`;
+      const glossaryEntry = findGlossaryEntry(combinedLine);
+      if (glossaryEntry) {
+        return `<div class="mobile-text-table-row has-glossary-trigger"><div class="mobile-text-table-value" style="grid-column: 1 / -1;">${renderGlossaryButtonHtml(glossaryEntry, combinedLine)}</div></div>`;
+      }
+
+      return `<div class="mobile-text-table-row"><div class="mobile-text-table-label">${escapeHtml(row.label)}</div><div class="mobile-text-table-value">${escapeHtml(row.value)}</div></div>`;
+    }).join('')}</div>`;
   }
 
   function renderParagraphLines(lines) {
-    return lines.map((line) => `<p class="mobile-text-paragraph">${escapeHtml(line)}</p>`).join('');
+    return lines.map((line) => {
+      const glossaryEntry = findGlossaryEntry(line);
+      return `<p class="mobile-text-paragraph">${glossaryEntry ? renderGlossaryButtonHtml(glossaryEntry, line) : escapeHtml(line)}</p>`;
+    }).join('');
   }
 
   function renderSubsectionBlock(title, lines) {
@@ -1192,6 +1668,61 @@
     });
   }
 
+  if (mobileGlossaryClose) {
+    mobileGlossaryClose.addEventListener('click', closeGlossaryModal);
+  }
+  if (mobileGlossaryModal) {
+    mobileGlossaryModal.addEventListener('click', (event) => {
+      if (Date.now() - glossaryModalOpenedAt < 250) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      if (event.target === mobileGlossaryModal) {
+        closeGlossaryModal();
+      }
+    });
+  }
+  if (mobileGlossaryManageButton) {
+    mobileGlossaryManageButton.addEventListener('click', openGlossaryEditor);
+  }
+  if (mobileGlossaryAdd) {
+    mobileGlossaryAdd.addEventListener('click', () => {
+      glossaryEntries.push({ term: '', title: '', content: '' });
+      renderGlossaryEditorRows();
+    });
+  }
+  if (mobileGlossaryEditorList) {
+    mobileGlossaryEditorList.addEventListener('click', (event) => {
+      const target = event.target instanceof Element ? event.target.closest('[data-remove-index]') : null;
+      if (!target) {
+        return;
+      }
+
+      const index = Number(target.getAttribute('data-remove-index'));
+      if (Number.isNaN(index)) {
+        return;
+      }
+
+      glossaryEntries.splice(index, 1);
+      renderGlossaryEditorRows();
+    });
+  }
+  if (mobileGlossaryEditorCancel) {
+    mobileGlossaryEditorCancel.addEventListener('click', closeGlossaryEditor);
+  }
+  if (mobileGlossaryEditorSave) {
+    mobileGlossaryEditorSave.addEventListener('click', saveGlossaryEditor);
+  }
+  if (mobileGlossaryEditorModal) {
+    mobileGlossaryEditorModal.addEventListener('click', (event) => {
+      if (event.target === mobileGlossaryEditorModal) {
+        closeGlossaryEditor();
+      }
+    });
+  }
+
   let resizeTimer = null;
   window.addEventListener('resize', () => {
     window.clearTimeout(resizeTimer);
@@ -1201,15 +1732,28 @@
       updateMobileScrollTopVisibility();
     }, 180);
   });
+  window.addEventListener('load', () => {
+    refreshMobileSectionJump();
+    updateMobileScrollTopVisibility();
+  });
   window.addEventListener('scroll', updateMobileScrollTopVisibility, { passive: true });
 
   updateControls();
   decorateEditableCards();
+  attachGlossaryTriggerHandlers();
   refreshMobileSectionJump();
   updateMobileScrollTopVisibility();
 
   if (mobileTextBody) {
     mobileTextBody.addEventListener('click', (event) => {
+      const glossaryButton = resolveGlossaryTriggerFromEvent(event);
+      if (glossaryButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        openGlossaryFromButton(glossaryButton);
+        return;
+      }
+
       if (!canEditMobileMsds) {
         return;
       }
@@ -1249,6 +1793,14 @@
       }
     });
   }
+  window.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && mobileGlossaryModal && mobileGlossaryModal.classList.contains('is-open')) {
+      closeGlossaryModal();
+    }
+    if (event.key === 'Escape' && mobileGlossaryEditorModal && mobileGlossaryEditorModal.classList.contains('is-open')) {
+      closeGlossaryEditor();
+    }
+  });
   window.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && mobileEditorModal && mobileEditorModal.classList.contains('is-open')) {
       closeEditor();
@@ -1295,7 +1847,15 @@
     try {
       pdfDoc = await loadPdfDocument();
       if (mobileTextReader && isMobileViewport()) {
-        if (renderSavedManualContent()) {
+        const serverRenderedGlossaryCount = mobileTextBody
+          ? mobileTextBody.querySelectorAll('.mobile-glossary-trigger').length
+          : 0;
+
+        if (serverRenderedGlossaryCount > 0) {
+          hydrateGlossaryTriggers();
+          decorateEditableCards();
+          refreshMobileSectionJump();
+        } else if (renderSavedManualContent()) {
         } else if (serverOcrText) {
           const fallbackServerSections = buildSectionsFromLines(serverOcrText.split(/\r?\n/));
           if (fallbackServerSections.length) {

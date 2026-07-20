@@ -44,10 +44,13 @@ class MainActivity : AppCompatActivity() {
         settings.databaseEnabled = true
         settings.loadsImagesAutomatically = true
         settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-        settings.cacheMode = WebSettings.LOAD_DEFAULT
+        settings.cacheMode = WebSettings.LOAD_NO_CACHE
         settings.allowFileAccess = true
         settings.allowContentAccess = true
         settings.setSupportZoom(false)
+        webView.clearCache(true)
+        webView.clearHistory()
+        webView.clearFormData()
 
         webView.webChromeClient = WebChromeClient()
         webView.webViewClient = object : WebViewClient() {
@@ -97,7 +100,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        swipeRefresh.setOnRefreshListener { webView.reload() }
+        swipeRefresh.setOnRefreshListener {
+            webView.clearCache(true)
+            webView.reload()
+        }
 
         if (savedInstanceState != null) {
             webView.restoreState(savedInstanceState)
