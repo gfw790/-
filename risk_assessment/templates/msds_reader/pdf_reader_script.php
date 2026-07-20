@@ -388,16 +388,24 @@
     }
 
     const baseUrl = `${window.location.pathname}${window.location.search}`;
-    if (window.location.hash) {
+    if (window.location.hash && window.history && typeof window.history.replaceState === 'function') {
       window.history.replaceState(null, '', baseUrl);
+    } else if (window.location.hash) {
+      window.location.hash = '';
     }
 
-    window.setTimeout(() => {
-      window.scrollTo({ top: glossaryScrollRestoreY, behavior: 'auto' });
-    }, 0);
+    window.requestAnimationFrame(() => {
+      window.scrollTo(0, glossaryScrollRestoreY);
+      window.setTimeout(() => {
+        window.scrollTo(0, glossaryScrollRestoreY);
+      }, 30);
+    });
+
+    return false;
   }
 
   window.__openMobileGlossaryFromButton = openGlossaryFromButton;
+  window.__closeMobileGlossarySheet = closeGlossarySheet;
 
   function escapeAttribute(value) {
     return escapeHtml(value).replace(/"/g, '&quot;');
