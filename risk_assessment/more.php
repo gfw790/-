@@ -9,6 +9,7 @@ $canLead = auth_can_lead($user);
 $isWorker = auth_is_worker($user);
 $displayName = trim((string)auth_display_name($user));
 $loginId = trim((string)($user['login_id'] ?? ''));
+$userTeamName = auth_normalize_team_name((string)($user['team'] ?? ''));
 $primaryHref = $isWorker
     ? 'work_list.php'
     : ($canLead && !$canManage ? 'leader_task_select.php' : 'task_select.php');
@@ -17,6 +18,12 @@ $canAccessMyGearTest = $displayName === '김남균';
 $canAccessSafetyGearManagement = $canManage && $loginId !== '6680';
 $canAccessEmploymentRules = in_array($loginId, ['5878', '2316', '7204', '6680'], true);
 $showMaterialManagement = $displayName === '김남균' && $canAccessSafetyGearManagement;
+$canViewGasTeamSchedule = auth_team_key($userTeamName) === auth_team_key('가스팀')
+    || (string)($user['role'] ?? '') === 'safety_manager'
+    || in_array($displayName, ['진종철', '정주랑', '정연탁'], true);
+$gasTeamScheduleHref = auth_team_key($userTeamName) === auth_team_key('가스팀')
+    ? 'schedule.php'
+    : 'schedule.php?view_team=' . rawurlencode('가스팀');
 
 function h($value): string
 {
@@ -26,9 +33,9 @@ function h($value): string
 $menuItems = [
     ['label' => '수시위험성평가', 'href' => 'hazard_review.php', 'desc' => '수시위험성평가 목록과 열람 화면으로 이동합니다.'],
     ['label' => '홈', 'href' => 'index.php', 'desc' => '메인 화면으로 이동합니다.'],
-    ['label' => '달력', 'href' => '../calendar/index.html', 'desc' => '일정과 날씨를 확인합니다.'],
+    ['label' => '달력', 'href' => '../calendar/index.html', 'desc' => '일정과 캘린더를 확인합니다.'],
     ['label' => '작업목록', 'href' => 'work_list.php', 'desc' => '등록된 작업 목록을 확인합니다.'],
-    ['label' => 'MSDS', 'href' => 'msds_list.php', 'desc' => '물질안전보건자료를 등록하고 다운로드합니다.'],
+    ['label' => 'MSDS', 'href' => 'msds_list.php', 'desc' => '물질안전보건 자료를 등록하고 내려받습니다.'],
     ['label' => '게시판', 'href' => '../board/index.php', 'desc' => '공지와 게시글을 확인합니다.'],
     ['label' => '작업 선택', 'href' => $primaryHref, 'desc' => '현재 권한에 맞는 작업 화면으로 이동합니다.'],
     ['label' => '아차사고', 'href' => '../near_miss/', 'desc' => '아차사고 등록 및 조회 페이지입니다.'],
@@ -48,6 +55,9 @@ if ($canAccessSafetyGearManagement) {
 }
 if ($showMaterialManagement) {
     $menuItems[] = ['label' => '물질관리', 'href' => '/material_management/index.php', 'desc' => '물질 관리 화면을 엽니다.'];
+}
+if ($canViewGasTeamSchedule) {
+    $menuItems[] = ['label' => '가스팀근무표', 'href' => $gasTeamScheduleHref, 'desc' => '가스팀 근무표와 교대 일정을 확인합니다.'];
 }
 if ($isAdmin) {
     $menuItems[] = ['label' => '게시판관리', 'href' => '../board/admin.php', 'desc' => '게시판 관리 페이지로 이동합니다.'];
@@ -185,7 +195,7 @@ if ($user !== null) {
   <div class="shell">
     <section class="hero">
       <h1>더보기</h1>
-      <p>자주 여는 추가 메뉴와 바로가기를 한곳에 모아두었습니다.</p>
+      <p>자주 찾는 추가 메뉴와 바로가기를 한곳에 모았습니다.</p>
     </section>
 
     <section class="menu-grid">

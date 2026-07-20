@@ -456,6 +456,16 @@ function work_list_report_matches_date_range(array $report, string $dateFrom, st
     return true;
 }
 
+function work_list_report_is_visible_today_or_past(array $report, string $todayDate): bool
+{
+    $workDate = trim((string)($report['work_date'] ?? ''));
+    if ($workDate === '') {
+        return false;
+    }
+
+    return $workDate <= $todayDate;
+}
+
 function render_completion_badge(bool $isCompleted): string
 {
     $className = $isCompleted ? 'status-badge is-complete' : 'status-badge is-pending';
@@ -1108,7 +1118,8 @@ foreach ($reports as &$report) {
 unset($report);
 
 $reports = filter_reports_for_user($reports, $user);
-$todayWorkDate = date('Y-m-d');
+$todayWorkDate = (new DateTimeImmutable('now', new DateTimeZone('Asia/Seoul')))->format('Y-m-d');
+$unitTypeOptions = work_list_collect_type_options();
 $todayRegisteredReportCount = count(array_filter(
     $reports,
     static fn(array $report): bool => trim((string)($report['work_date'] ?? '')) === $todayWorkDate
@@ -1120,10 +1131,26 @@ $todayLeaderPendingReportCount = count(array_filter(
         && (bool)($report['requires_leader_input'] ?? false)
         && !(bool)($report['work_input_completed'] ?? false)
 ));
-$unitTypeOptions = work_list_collect_type_options();
 $workListKeyword = trim((string)($_GET['work_keyword'] ?? ''));
-$workDateFrom = trim((string)($_GET['work_date_from'] ?? ''));
-$workDateTo = trim((string)($_GET['work_date_to'] ?? ''));
+$workDateFromRaw = '';
+foreach (['work_date_from_pc', 'work_date_from_mobile', 'work_date_from'] as $dateParamName) {
+    $dateParamValue = trim((string)($_GET[$dateParamName] ?? ''));
+    if ($dateParamValue !== '') {
+        $workDateFromRaw = $dateParamValue;
+        break;
+    }
+}
+$workDateToRaw = '';
+foreach (['work_date_to_pc', 'work_date_to_mobile', 'work_date_to'] as $dateParamName) {
+    $dateParamValue = trim((string)($_GET[$dateParamName] ?? ''));
+    if ($dateParamValue !== '') {
+        $workDateToRaw = $dateParamValue;
+        break;
+    }
+}
+$hasExplicitDateQuery = $workDateFromRaw !== '' || $workDateToRaw !== '';
+$workDateFrom = $workDateFromRaw;
+$workDateTo = $workDateToRaw;
 $workDateFrom = str_replace('/', '-', $workDateFrom);
 $workDateTo = str_replace('/', '-', $workDateTo);
 $isDefaultMonthDateRange = false;
@@ -1143,6 +1170,12 @@ if ($workDateFrom === '' && $workDateTo === '') {
   $workDateFrom = $shouldUseTodayDefaultDateRange ? date('Y-m-d') : date('Y-m-01');
   $workDateTo = $shouldUseTodayDefaultDateRange ? date('Y-m-d') : date('Y-m-t');
   $isDefaultMonthDateRange = true;
+}
+if (!$hasExplicitDateQuery) {
+    $reports = array_values(array_filter(
+        $reports,
+        static fn(array $report): bool => work_list_report_is_visible_today_or_past($report, $todayWorkDate)
+    ));
 }
 $workDateFromDisplay = $workDateFrom !== '' ? str_replace('-', '/', $workDateFrom) : '';
 $workDateToDisplay = $workDateTo !== '' ? str_replace('-', '/', $workDateTo) : '';
@@ -1693,6 +1726,11 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
   .work-search-advanced.is-hidden {
     display: none;
   }
+  @media (min-width: 721px) {
+    .work-search-advanced.is-hidden {
+      display: flex;
+    }
+  }
   .work-search-input {
     width: 100%;
     padding: 11px 14px;
@@ -1716,6 +1754,12 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
     filter: brightness(0) invert(1);
     cursor: pointer;
     opacity: 1;
+  }
+  .work-search-date-desktop {
+    display: block;
+  }
+  .work-search-date-mobile {
+    display: none;
   }
   .work-search-meta {
     margin-top: 10px;
@@ -2520,6 +2564,12 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
       min-width: 0;
     }
     .work-search-input { flex-basis: 100%; min-width: 0; }
+    .work-search-date-desktop {
+      display: none;
+    }
+    .work-search-date-mobile {
+      display: block;
+    }
     .work-search-primary-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .work-search-primary-actions .btn-secondary { width: 100%; }
     .work-search-toggle {
@@ -2552,6 +2602,30 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
       display: flex;
       flex-direction: column;
       align-items: stretch;
+    }
+    .work-search-advanced.is-open .work-search-input,
+    .work-search-advanced.is-open .work-filter-select {
+      flex: none !important;
+      width: 100%;
+      min-width: 0 !important;
+    }
+    .work-search-advanced .work-search-date-mobile {
+      display: block;
+      appearance: none;
+      -webkit-appearance: none;
+      height: 44px;
+      min-height: 44px;
+      max-height: 44px;
+      padding: 0 14px;
+      line-height: 44px;
+      background: rgba(255,255,255,0.04);
+      color: var(--text-hi);
+      -webkit-text-fill-color: var(--text-hi);
+    }
+    .work-search-advanced .work-search-date-mobile::-webkit-calendar-picker-indicator {
+      margin: 0;
+      filter: brightness(0) invert(1);
+      opacity: 1;
     }
     .work-search-advanced .work-search-input[type="date"] {
       appearance: none;
@@ -3227,24 +3301,34 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
             id="work-search-advanced"
           >
             <input
-              type="text"
-              name="work_date_from"
-              class="work-search-input"
-              value="<?= h($workDateFromDisplay) ?>"
-              placeholder="YYYY/MM/DD"
-              inputmode="numeric"
-              pattern="\d{4}/\d{2}/\d{2}"
+              type="date"
+              name="work_date_from_pc"
+              class="work-search-input work-search-date-desktop"
+              value="<?= h($workDateFrom) ?>"
               aria-label="작업일자 시작일"
               style="flex:0 1 170px; min-width:160px;"
             >
             <input
-              type="text"
-              name="work_date_to"
-              class="work-search-input"
-              value="<?= h($workDateToDisplay) ?>"
-              placeholder="YYYY/MM/DD"
-              inputmode="numeric"
-              pattern="\d{4}/\d{2}/\d{2}"
+              type="date"
+              name="work_date_from_mobile"
+              class="work-search-input work-search-date-mobile"
+              value="<?= h($workDateFrom) ?>"
+              aria-label="작업일자 시작일"
+              style="flex:0 1 170px; min-width:160px;"
+            >
+            <input
+              type="date"
+              name="work_date_to_pc"
+              class="work-search-input work-search-date-desktop"
+              value="<?= h($workDateTo) ?>"
+              aria-label="작업일자 종료일"
+              style="flex:0 1 170px; min-width:160px;"
+            >
+            <input
+              type="date"
+              name="work_date_to_mobile"
+              class="work-search-input work-search-date-mobile"
+              value="<?= h($workDateTo) ?>"
               aria-label="작업일자 종료일"
               style="flex:0 1 170px; min-width:160px;"
             >

@@ -28,13 +28,16 @@ $boardPageUrl = '../board/index.php';
 
 $user = auth_current_user();
 $userTeamName = auth_normalize_team_name((string)($user['team'] ?? ''));
+$displayName = trim((string)auth_display_name($user));
+$canViewGasTeamSchedule = (string)($user['role'] ?? '') === 'safety_manager'
+    || in_array($displayName, ['진종철', '정주랑', '정연탁'], true);
 
 // ?붿껌??? ?뚮씪誘명꽣 ?뺤씤 (怨듭궗?-?꾧린 愿由ш컧?낆옄 ?뱀? ?댁쁺???덉쟾愿由ъ옄媛 ?ㅻⅨ ????쇱젙??蹂???
 $requestedTeamName = '';
 $isViewingOtherTeam = false;
 $canViewOtherTeam = auth_is_admin($user) || (string)($user['role'] ?? '') === 'safety_manager' || (
     auth_can_manage($user) && auth_team_key($userTeamName) === auth_team_key('怨듭궗?-?꾧린')
-);
+) || $canViewGasTeamSchedule;
 
 if (!empty($_GET['view_team'])) {
     $requestedTeamName = auth_normalize_team_name((string)($_GET['view_team']));
@@ -1111,6 +1114,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 $teamWorkers = auth_team_members($teamName);
+$teamWorkerPhoneMap = [];
+foreach ($teamWorkers as $worker) {
+    $workerName = trim((string)($worker['name'] ?? ''));
+    if ($workerName === '') {
+        continue;
+    }
+    $teamWorkerPhoneMap[$workerName] = trim((string)($worker['phone'] ?? ''));
+}
 
 $monthLabel = build_month_label($monthDates);
 $nextMonth = date('Y-m-d', strtotime('+1 month', strtotime($monthStart)));
@@ -1118,7 +1129,10 @@ $prevMonth = date('Y-m-d', strtotime('-1 month', strtotime($monthStart)));
 $scheduleViewTeamParam = $isViewingOtherTeam ? $requestedTeamName : '';
 $prevMonthUrl = build_schedule_url(['date' => $prevMonth, 'view_team' => $scheduleViewTeamParam]);
 $nextMonthUrl = build_schedule_url(['date' => $nextMonth, 'view_team' => $scheduleViewTeamParam]);
+$todayScheduleUrl = build_schedule_url(['date' => date('Y-m-d'), 'view_team' => $scheduleViewTeamParam]) . '#schedule-today';
 $currentMonthActionUrl = build_schedule_url(['date' => $selectedDate, 'view_team' => $scheduleViewTeamParam]);
+$scheduleListUrl = build_schedule_url(['view_team' => $scheduleViewTeamParam]);
+$hasExplicitSelectedDate = !empty($_GET['date']);
 
 ?>
 <!DOCTYPE html>
@@ -1158,9 +1172,44 @@ $currentMonthActionUrl = build_schedule_url(['date' => $selectedDate, 'view_team
   .success { background: rgba(46,160,67,0.12); border: 1px solid rgba(46,160,67,0.35); color: #aff5b4; border-radius: 10px; padding: 12px 16px; margin: 16px 24px; font-size: 13px; }
 
   /* ?? ?щ젰 ?ㅻ퉬寃뚯씠???? */
-  .schedule-nav { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 18px; }
-  .schedule-nav .btn-secondary { min-width: 80px; padding: 7px 12px; font-size: 12px; }
+  .schedule-nav { display: grid; gap: 10px; margin-bottom: 18px; }
+  .schedule-nav-row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+  .schedule-nav-row .btn-secondary { min-width: 80px; padding: 7px 12px; font-size: 12px; }
   .schedule-nav strong { color: var(--text-hi); font-size: 20px; font-weight: 900; }
+  .schedule-date-search {
+    display: none;
+    gap: 8px;
+    align-items: center;
+  }
+  .schedule-date-search-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border2);
+    background: rgba(255,255,255,0.04);
+    color: var(--text-hi);
+    font: inherit;
+    color-scheme: dark;
+  }
+  .schedule-date-search-input::-webkit-calendar-picker-indicator {
+    filter: brightness(0) invert(1);
+    opacity: 1;
+    cursor: pointer;
+  }
+  .schedule-date-search-input::-webkit-date-and-time-value {
+    color: var(--text-hi);
+    -webkit-text-fill-color: var(--text-hi);
+  }
+  .schedule-date-search-input::-webkit-datetime-edit,
+  .schedule-date-search-input::-webkit-datetime-edit-fields-wrapper,
+  .schedule-date-search-input::-webkit-datetime-edit-text,
+  .schedule-date-search-input::-webkit-datetime-edit-year-field,
+  .schedule-date-search-input::-webkit-datetime-edit-month-field,
+  .schedule-date-search-input::-webkit-datetime-edit-day-field {
+    color: var(--text-hi);
+    -webkit-text-fill-color: var(--text-hi);
+  }
 
   /* ?? ?щ젰 洹몃━???? */
   .schedule-grid { display: grid; gap: 10px; width: 100%; margin-bottom: 24px; }
@@ -1169,6 +1218,10 @@ $currentMonthActionUrl = build_schedule_url(['date' => $selectedDate, 'view_team
   .calendar-header-cell { border: 1px solid var(--border); border-radius: 10px; padding: 8px; text-align: center; font-weight: 700; font-size: 13px; background: var(--bg3); color: var(--text-dim); }
   .calendar-day { min-width: 0; border: 1px solid var(--border); border-radius: 12px; padding: 10px; background: var(--bg3); display: flex; flex-direction: column; gap: 6px; }
   .calendar-day-empty { background: var(--bg2); border-color: var(--border); opacity: 0.4; }
+  .calendar-day-selected {
+    border-color: rgba(245,166,35,0.55);
+    box-shadow: 0 0 0 1px rgba(245,166,35,0.18), 0 14px 28px rgba(0,0,0,0.18);
+  }
   .calendar-day-title { display: flex; justify-content: space-between; align-items: center; gap: 4px; margin-bottom: 2px; }
   .calendar-day-number { font-size: 15px; font-weight: 700; color: var(--text-hi); }
   .calendar-day-today .calendar-day-number { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 13px; }
@@ -1185,6 +1238,131 @@ $currentMonthActionUrl = build_schedule_url(['date' => $selectedDate, 'view_team
   .calendar-entry-day   { border-color: rgba(58,127,193,0.45); }
   .calendar-entry-night { border-color: rgba(130,90,200,0.45); }
   .calendar-entry-off   { border-color: rgba(232,146,10,0.35); }
+  .schedule-day-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(6, 11, 19, 0.68);
+  }
+  .schedule-day-modal.is-open {
+    display: flex;
+  }
+  .schedule-day-panel {
+    width: min(460px, 100%);
+    max-height: min(78vh, 720px);
+    overflow: hidden;
+    border: 1px solid var(--border2);
+    border-radius: 18px;
+    background: #132238;
+    box-shadow: 0 24px 50px rgba(0,0,0,0.42);
+    display: grid;
+    grid-template-rows: auto 1fr;
+  }
+  .schedule-day-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 18px 18px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .schedule-day-head h2 {
+    color: var(--text-hi);
+    font-size: 18px;
+    font-weight: 900;
+    margin-bottom: 4px;
+  }
+  .schedule-day-head p {
+    color: var(--text-dim);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .schedule-day-close {
+    flex: 0 0 auto;
+  }
+  .schedule-day-body {
+    position: relative;
+    overflow-y: auto;
+    padding: 16px 18px 18px;
+    display: grid;
+    gap: 12px;
+  }
+  .schedule-day-section {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: rgba(255,255,255,0.03);
+    padding: 14px;
+    display: grid;
+    gap: 10px;
+  }
+  .schedule-day-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .schedule-day-section-title {
+    color: var(--text-hi);
+    font-size: 14px;
+    font-weight: 800;
+  }
+  .schedule-day-names {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .schedule-day-name {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.05);
+    color: var(--text-hi);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .schedule-day-name.is-empty {
+    cursor: default;
+    color: var(--text-dim);
+  }
+  .schedule-day-name.has-phone {
+    border-color: rgba(245,166,35,0.24);
+  }
+  .schedule-day-phone-tip {
+    position: absolute;
+    display: none;
+    min-width: 172px;
+    max-width: min(220px, calc(100vw - 48px));
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(245,166,35,0.28);
+    background: rgba(12, 20, 32, 0.96);
+    box-shadow: 0 18px 34px rgba(0,0,0,0.35);
+  }
+  .schedule-day-phone-tip.is-open {
+    display: block;
+  }
+  .schedule-day-phone-tip .tip-name {
+    color: rgba(255,255,255,.78);
+    font-size: 11px;
+    margin-bottom: 4px;
+  }
+  .schedule-day-phone-tip .tip-phone {
+    color: #ffd56d;
+    font-size: 15px;
+    font-weight: 800;
+    text-decoration: none;
+  }
 
   /* ?? ?묒뾽???좏깮 ?앹뾽 ?? */
   .calendar-worker-popup { position: absolute; z-index: 1000; min-width: 260px; max-height: 320px; overflow-y: hidden; border: 1px solid var(--border2); border-radius: 12px; background: #12203a; box-shadow: 0 20px 40px rgba(0,0,0,0.45); display: none; }
@@ -1204,6 +1382,81 @@ $currentMonthActionUrl = build_schedule_url(['date' => $selectedDate, 'view_team
   .upload-panel legend { font-weight: 700; margin-bottom: 12px; color: var(--text-hi); font-size: 13px; }
   .upload-panel input[type="file"] { color: var(--text); font: inherit; }
     .upload-panel label { display: grid; gap: 8px; }
+  .mobile-bottom-nav {
+    display: none;
+  }
+  .mobile-bottom-nav {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    z-index: 1000;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 20px;
+    background: rgba(10, 17, 28, 0.96);
+    backdrop-filter: blur(14px);
+    box-shadow: 0 18px 40px rgba(0,0,0,0.38);
+    padding: 8px;
+  }
+  .mobile-bottom-nav-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .mobile-nav-link {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-height: 58px;
+    border-radius: 14px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: #c5d8eb;
+    text-decoration: none;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .mobile-nav-link.is-active {
+    background: linear-gradient(180deg, rgba(245,166,35,0.2), rgba(245,166,35,0.1));
+    border-color: rgba(245,166,35,0.35);
+    color: #fff4df;
+  }
+  .mobile-nav-icon {
+    font-size: 18px;
+    line-height: 1;
+  }
+  .scroll-top-fab {
+    display: none;
+  }
+  .scroll-top-fab {
+    position: fixed;
+    right: 16px;
+    bottom: calc(max(10px, env(safe-area-inset-bottom)) + 92px);
+    z-index: 1001;
+    width: 48px;
+    height: 48px;
+    border: 1px solid rgba(245,166,35,0.34);
+    border-radius: 999px;
+    background: rgba(245,166,35,0.92);
+    color: #111827;
+    box-shadow: 0 16px 30px rgba(0,0,0,0.32);
+    font: inherit;
+    font-size: 18px;
+    font-weight: 900;
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(8px);
+    transition: opacity .18s ease, transform .18s ease;
+  }
+  .scroll-top-fab.is-visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+  }
 
   @media (max-width: 1200px) {
     .calendar-header,
@@ -1214,7 +1467,7 @@ $currentMonthActionUrl = build_schedule_url(['date' => $selectedDate, 'view_team
     .calendar-week { grid-template-columns: repeat(7, minmax(90px, 1fr)); }
   }
     @media (max-width: 768px) {
-        body { padding: 16px 12px 28px; }
+        body { padding: 16px 12px 110px; }
         .topbar { align-items: stretch; }
         .identity { width: 100%; }
         .identity:last-child { gap: 8px; }
@@ -1224,9 +1477,32 @@ $currentMonthActionUrl = build_schedule_url(['date' => $selectedDate, 'view_team
         .panel-head p { line-height: 1.5; }
         .error,
         .success { margin: 12px 16px; }
-        .schedule-nav { justify-content: space-between; gap: 8px; }
-        .schedule-nav strong { width: 100%; order: -1; font-size: 18px; }
-        .schedule-nav .btn-secondary { flex: 1 1 calc(50% - 4px); }
+        .schedule-nav { gap: 8px; }
+        .schedule-nav-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+        .schedule-nav-row .btn-secondary { width: 100%; min-width: 0; padding-left: 0; padding-right: 0; }
+        .schedule-nav strong { font-size: 18px; text-align: center; }
+        .schedule-date-search { display: flex; }
+        .schedule-date-search-input {
+            appearance: none;
+            -webkit-appearance: none;
+            background: rgba(255,255,255,0.04) !important;
+            background-color: rgba(255,255,255,0.04) !important;
+            color: var(--text-hi) !important;
+            -webkit-text-fill-color: var(--text-hi) !important;
+            opacity: 1;
+        }
+        .schedule-date-search-input::-webkit-date-and-time-value,
+        .schedule-date-search-input::-webkit-datetime-edit,
+        .schedule-date-search-input::-webkit-datetime-edit-fields-wrapper,
+        .schedule-date-search-input::-webkit-datetime-edit-text,
+        .schedule-date-search-input::-webkit-datetime-edit-year-field,
+        .schedule-date-search-input::-webkit-datetime-edit-month-field,
+        .schedule-date-search-input::-webkit-datetime-edit-day-field {
+            color: var(--text-hi) !important;
+            -webkit-text-fill-color: var(--text-hi) !important;
+            opacity: 1;
+        }
+        .schedule-date-search .btn-secondary { flex: 0 0 auto; min-width: 84px; }
         .schedule-grid { gap: 12px; }
         .calendar-header { display: none; }
         .calendar-week { grid-template-columns: 1fr; gap: 10px; }
@@ -1251,6 +1527,17 @@ $currentMonthActionUrl = build_schedule_url(['date' => $selectedDate, 'view_team
             max-height: min(60vh, 420px);
         }
         .calendar-worker-list { max-height: calc(min(60vh, 420px) - 64px); }
+        .mobile-bottom-nav { display: block; }
+        .scroll-top-fab { display: inline-flex; align-items: center; justify-content: center; }
+        .schedule-day-modal {
+            align-items: flex-end;
+            padding: 12px;
+        }
+        .schedule-day-panel {
+            width: 100%;
+            max-height: min(72vh, 640px);
+            border-radius: 18px 18px 14px 14px;
+        }
     }
 </style>
 </head>
@@ -1293,9 +1580,25 @@ $currentMonthActionUrl = build_schedule_url(['date' => $selectedDate, 'view_team
 
       <div style="padding: 20px 24px 24px;">
       <div class="schedule-nav">
-        <a class="btn-secondary" href="<?= h($prevMonthUrl) ?>">이전 달</a>
+        <div class="schedule-nav-row">
+          <a class="btn-secondary" href="<?= h($prevMonthUrl) ?>">이전 달</a>
+          <a class="btn-secondary" href="<?= h($todayScheduleUrl) ?>">오늘</a>
+          <a class="btn-secondary" href="<?= h($nextMonthUrl) ?>">다음 달</a>
+        </div>
         <strong><?= h($monthLabel) ?></strong>
-        <a class="btn-secondary" href="<?= h($nextMonthUrl) ?>">다음 달</a>
+        <form class="schedule-date-search" method="get" action="<?= h($scheduleListUrl) ?>">
+          <input
+            type="date"
+            name="date"
+            class="schedule-date-search-input"
+            value="<?= h($selectedDate) ?>"
+            aria-label="조회할 날짜"
+          >
+          <?php if ($scheduleViewTeamParam !== ''): ?>
+            <input type="hidden" name="view_team" value="<?= h($scheduleViewTeamParam) ?>">
+          <?php endif; ?>
+          <button type="submit" class="btn-secondary">날짜 조회</button>
+        </form>
       </div>
 
       <div class="schedule-grid">
@@ -1308,7 +1611,12 @@ $currentMonthActionUrl = build_schedule_url(['date' => $selectedDate, 'view_team
         <?php foreach ($monthWeeks as $week): ?>
           <div class="calendar-week">
             <?php foreach ($week as $date): ?>
-              <div class="calendar-day <?= $date === null ? 'calendar-day-empty' : ($date === date('Y-m-d') ? 'calendar-day-today' : '') ?>">
+              <div
+                class="calendar-day <?= $date === null ? 'calendar-day-empty' : ($date === date('Y-m-d') ? 'calendar-day-today' : '') ?><?= $date !== null && $date === $selectedDate ? ' calendar-day-selected' : '' ?>"
+                <?= $date === date('Y-m-d') ? 'id="schedule-today"' : '' ?>
+                <?= $date !== null && $date === $selectedDate ? 'data-selected-date="1" id="schedule-selected-date"' : '' ?>
+                <?= $date !== null ? 'data-schedule-date="' . h($date) . '"' : '' ?>
+              >
                 <?php if ($date !== null): ?>
                   <div class="calendar-day-title">
                     <span class="calendar-day-number"><?= date('j', strtotime($date)) ?></span>
@@ -1378,8 +1686,53 @@ $currentMonthActionUrl = build_schedule_url(['date' => $selectedDate, 'view_team
     </div>
   </div>
 
+  <div class="schedule-day-modal" id="schedule-day-modal" aria-hidden="true">
+    <div class="schedule-day-panel" role="dialog" aria-modal="true" aria-labelledby="schedule-day-modal-title">
+      <div class="schedule-day-head">
+        <div>
+          <h2 id="schedule-day-modal-title">일정 상세</h2>
+          <p id="schedule-day-modal-subtitle">날짜별 근무 내용을 확인합니다.</p>
+        </div>
+        <button type="button" class="btn-secondary schedule-day-close" id="schedule-day-modal-close">닫기</button>
+      </div>
+      <div class="schedule-day-body" id="schedule-day-modal-body">
+        <div class="schedule-day-phone-tip" id="schedule-day-phone-tip" aria-hidden="true">
+          <div class="tip-name" id="schedule-day-tip-name"></div>
+          <a class="tip-phone" id="schedule-day-tip-phone" href="#"></a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <nav class="mobile-bottom-nav" aria-label="모바일 하단 메뉴">
+    <div class="mobile-bottom-nav-grid">
+      <a class="mobile-nav-link" href="index.php">
+        <span class="mobile-nav-icon">⌂</span>
+        <span>홈</span>
+      </a>
+      <a class="mobile-nav-link" href="../calendar/index.html">
+        <span class="mobile-nav-icon">◫</span>
+        <span>달력</span>
+      </a>
+      <a class="mobile-nav-link" href="work_list.php">
+        <span class="mobile-nav-icon">≡</span>
+        <span>목록</span>
+      </a>
+      <a class="mobile-nav-link" href="../board/index.php">
+        <span class="mobile-nav-icon">▣</span>
+        <span>게시판</span>
+      </a>
+      <a class="mobile-nav-link is-active" href="more.php">
+        <span class="mobile-nav-icon">⋯</span>
+        <span>더보기</span>
+      </a>
+    </div>
+  </nav>
+  <button type="button" class="scroll-top-fab" id="scroll-top-fab" aria-label="맨 위로 이동">↑</button>
+
   <script>
     var isReadOnly = <?= $isReadOnly ? 'true' : 'false' ?>;
+    var teamWorkerPhoneMap = <?= json_encode($teamWorkerPhoneMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 
     function saveInlineEntry(date, shift, value) {
       var form = document.getElementById('inline-save-form');
@@ -1400,6 +1753,122 @@ $currentMonthActionUrl = build_schedule_url(['date' => $selectedDate, 'view_team
     var activeWorkerNames = [];
     var calendarWorkerSave = document.getElementById('calendar-worker-save');
     var calendarWorkerClear = document.getElementById('calendar-worker-clear');
+    var scheduleDayModal = document.getElementById('schedule-day-modal');
+    var scheduleDayModalBody = document.getElementById('schedule-day-modal-body');
+    var scheduleDayModalTitle = document.getElementById('schedule-day-modal-title');
+    var scheduleDayModalSubtitle = document.getElementById('schedule-day-modal-subtitle');
+    var scheduleDayModalClose = document.getElementById('schedule-day-modal-close');
+    var scheduleDayPhoneTip = document.getElementById('schedule-day-phone-tip');
+    var scheduleDayTipName = document.getElementById('schedule-day-tip-name');
+    var scheduleDayTipPhone = document.getElementById('schedule-day-tip-phone');
+
+    function isMobileScheduleView() {
+      return window.matchMedia('(max-width: 768px)').matches;
+    }
+
+    function hideScheduleDayPhoneTip() {
+      if (!scheduleDayPhoneTip) {
+        return;
+      }
+      scheduleDayPhoneTip.classList.remove('is-open');
+      scheduleDayPhoneTip.setAttribute('aria-hidden', 'true');
+    }
+
+    function showScheduleDayPhoneTip(name, phone, anchor) {
+      if (!scheduleDayPhoneTip || !scheduleDayTipName || !scheduleDayTipPhone || !scheduleDayModalBody || !anchor) {
+        return;
+      }
+      var normalizedPhone = String(phone || '').replace(/[^0-9+]/g, '');
+      scheduleDayTipName.textContent = name || '전화번호';
+      scheduleDayTipPhone.textContent = phone || '번호 없음';
+      scheduleDayTipPhone.setAttribute('href', normalizedPhone ? 'tel:' + normalizedPhone : '#');
+      scheduleDayPhoneTip.classList.add('is-open');
+      scheduleDayPhoneTip.setAttribute('aria-hidden', 'false');
+      scheduleDayPhoneTip.style.left = '12px';
+      scheduleDayPhoneTip.style.top = '12px';
+
+      var bodyRect = scheduleDayModalBody.getBoundingClientRect();
+      var anchorRect = anchor.getBoundingClientRect();
+      var tipWidth = scheduleDayPhoneTip.offsetWidth || 180;
+      var tipHeight = scheduleDayPhoneTip.offsetHeight || 66;
+      var left = Math.min(
+        Math.max(anchorRect.left - bodyRect.left, 0),
+        Math.max(bodyRect.width - tipWidth - 4, 0)
+      );
+      var top = anchorRect.bottom - bodyRect.top + 8;
+      if (top + tipHeight > bodyRect.height - 4) {
+        top = Math.max(anchorRect.top - bodyRect.top - tipHeight - 8, 0);
+      }
+      scheduleDayPhoneTip.style.left = left + 'px';
+      scheduleDayPhoneTip.style.top = top + 'px';
+    }
+
+    function closeScheduleDayModal() {
+      if (!scheduleDayModal) {
+        return;
+      }
+      scheduleDayModal.classList.remove('is-open');
+      scheduleDayModal.setAttribute('aria-hidden', 'true');
+      hideScheduleDayPhoneTip();
+    }
+
+    function renderScheduleNames(rawValue) {
+      var trimmed = String(rawValue || '').trim();
+      if (trimmed === '' || trimmed === '등록 없음') {
+        return '<span class="schedule-day-name is-empty">등록 없음</span>';
+      }
+
+      return trimmed.split(',').map(function(name) {
+        var cleanName = name.trim();
+        if (!cleanName) {
+          return '';
+        }
+        var phone = teamWorkerPhoneMap[cleanName] || '';
+        return '<button type="button" class="schedule-day-name' + (phone ? ' has-phone' : '') + '" data-worker-name="' + cleanName.replace(/"/g, '&quot;') + '" data-worker-phone="' + String(phone).replace(/"/g, '&quot;') + '">' + cleanName + '</button>';
+      }).filter(Boolean).join('');
+    }
+
+    function openScheduleDayModal(dayCard) {
+      if (!scheduleDayModal || !scheduleDayModalBody || !scheduleDayModalTitle || !scheduleDayModalSubtitle || !dayCard) {
+        return;
+      }
+
+      var date = dayCard.getAttribute('data-schedule-date') || '';
+      var weekdayNode = dayCard.querySelector('.calendar-day-weekday');
+      var dayNumberNode = dayCard.querySelector('.calendar-day-number');
+      var weekdayText = weekdayNode ? weekdayNode.textContent.trim() : '';
+      var dayNumberText = dayNumberNode ? dayNumberNode.textContent.trim() : '';
+      scheduleDayModalTitle.textContent = date ? (date + ' 일정') : '일정 상세';
+      scheduleDayModalSubtitle.textContent = weekdayText !== '' ? ('선택 날짜: ' + weekdayText + ' ' + dayNumberText + '일') : '날짜별 근무 내용을 확인합니다.';
+
+      var sections = [];
+      dayCard.querySelectorAll('.calendar-entry[data-date][data-shift]').forEach(function(entry) {
+        var labelNode = entry.querySelector('.calendar-entry-label');
+        var textNode = entry.querySelector('.calendar-entry-text');
+        var shift = entry.getAttribute('data-shift') || '';
+        var label = labelNode ? labelNode.textContent.trim() : '';
+        var text = textNode ? textNode.textContent.trim() : '';
+        var editButton = !isReadOnly
+          ? '<button type="button" class="btn-secondary schedule-day-edit" data-date="' + (entry.getAttribute('data-date') || '') + '" data-shift="' + shift + '">편집</button>'
+          : '';
+        sections.push(
+          '<section class="schedule-day-section">'
+          + '<div class="schedule-day-section-head">'
+          + '<div class="schedule-day-section-title">' + label + '</div>'
+          + editButton
+          + '</div>'
+          + '<div class="schedule-day-names">' + renderScheduleNames(text) + '</div>'
+          + '</section>'
+        );
+      });
+
+      scheduleDayModalBody.innerHTML = sections.join('') + scheduleDayPhoneTip.outerHTML;
+      scheduleDayPhoneTip = document.getElementById('schedule-day-phone-tip');
+      scheduleDayTipName = document.getElementById('schedule-day-tip-name');
+      scheduleDayTipPhone = document.getElementById('schedule-day-tip-phone');
+      scheduleDayModal.classList.add('is-open');
+      scheduleDayModal.setAttribute('aria-hidden', 'false');
+    }
 
     function hideCalendarWorkerPopup() {
       if (calendarWorkerPopup) {
@@ -1517,6 +1986,7 @@ $currentMonthActionUrl = build_schedule_url(['date' => $selectedDate, 'view_team
     document.addEventListener('keydown', function(event) {
       if (event.key === 'Escape') {
         hideCalendarWorkerPopup();
+        closeScheduleDayModal();
       }
     });
 
@@ -1534,6 +2004,101 @@ $currentMonthActionUrl = build_schedule_url(['date' => $selectedDate, 'view_team
           showCalendarWorkerPopup(this, textNode, date, shift);
         });
       });
+    }
+
+    document.querySelectorAll('.calendar-day[data-schedule-date]').forEach(function(dayCard) {
+      dayCard.addEventListener('click', function(event) {
+        if (!isMobileScheduleView()) {
+          return;
+        }
+        if (event.target.closest('.calendar-entry')) {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        openScheduleDayModal(dayCard);
+      });
+    });
+
+    if (scheduleDayModal && scheduleDayModalClose) {
+      scheduleDayModalClose.addEventListener('click', closeScheduleDayModal);
+      scheduleDayModal.addEventListener('click', function(event) {
+        if (event.target === scheduleDayModal) {
+          closeScheduleDayModal();
+          return;
+        }
+
+        var nameButton = event.target.closest('.schedule-day-name[data-worker-name]');
+        if (nameButton) {
+          var workerPhone = nameButton.getAttribute('data-worker-phone') || '';
+          if (workerPhone !== '') {
+            showScheduleDayPhoneTip(
+              nameButton.getAttribute('data-worker-name') || '',
+              workerPhone,
+              nameButton
+            );
+          }
+          return;
+        }
+
+        var editButton = event.target.closest('.schedule-day-edit[data-date][data-shift]');
+        if (editButton) {
+          closeScheduleDayModal();
+          var targetEntry = document.querySelector(
+            '.calendar-entry[data-date="' + editButton.getAttribute('data-date') + '"][data-shift="' + editButton.getAttribute('data-shift') + '"]'
+          );
+          if (targetEntry && !isReadOnly) {
+            var targetTextNode = targetEntry.querySelector('.calendar-entry-text');
+            showCalendarWorkerPopup(
+              targetEntry,
+              targetTextNode,
+              editButton.getAttribute('data-date') || '',
+              editButton.getAttribute('data-shift') || ''
+            );
+          }
+          return;
+        }
+
+        if (!event.target.closest('.schedule-day-phone-tip')) {
+          hideScheduleDayPhoneTip();
+        }
+      });
+    }
+
+    if (window.location.hash === '#schedule-today') {
+      var todayCard = document.getElementById('schedule-today');
+      if (todayCard) {
+        window.requestAnimationFrame(function() {
+          todayCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+      }
+    }
+
+    var selectedDateCard = document.getElementById('schedule-selected-date');
+    if (selectedDateCard && <?= $hasExplicitSelectedDate ? 'true' : 'false' ?>) {
+      window.requestAnimationFrame(function() {
+        selectedDateCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
+
+    var scrollTopFab = document.getElementById('scroll-top-fab');
+    if (scrollTopFab) {
+      var syncScrollTopFab = function() {
+        if (!window.matchMedia('(max-width: 768px)').matches) {
+          scrollTopFab.classList.remove('is-visible');
+          return;
+        }
+
+        scrollTopFab.classList.toggle('is-visible', window.scrollY > 240);
+      };
+
+      scrollTopFab.addEventListener('click', function() {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+
+      window.addEventListener('scroll', syncScrollTopFab, { passive: true });
+      window.addEventListener('resize', syncScrollTopFab);
+      syncScrollTopFab();
     }
   </script>
 </body>

@@ -68,6 +68,20 @@ function msds_normalize_date(string $value): string
     return date('Y-m-d', $timestamp);
 }
 
+function msds_normalize_multiline_text(string $value): string
+{
+    $value = str_replace(["\r\n", "\r"], "\n", trim($value));
+    if ($value === '') {
+        return '';
+    }
+
+    $lines = array_map(static function ($line) {
+        return rtrim((string)$line);
+    }, explode("\n", $value));
+
+    return trim(implode("\n", $lines));
+}
+
 function msds_csv_escape(string $value): string
 {
     return '"' . str_replace('"', '""', $value) . '"';
@@ -114,6 +128,79 @@ function msds_remove_file_if_exists(string $storedName): void
     if (is_file($path)) {
         @unlink($path);
     }
+}
+
+function msds_ocr_script_path(): string
+{
+    return __DIR__ . '/scripts/msds_extract_text.py';
+}
+
+function msds_default_ocr_payload(string $status = 'pending', string $error = ''): array
+{
+    return [
+        'ocr_status' => $status,
+        'ocr_engine' => '',
+        'ocr_text' => '',
+        'ocr_sections' => [],
+        'ocr_error' => $error,
+        'ocr_updated_at' => date('c'),
+    ];
+}
+
+function msds_extract_text_payload(string $pdfPath): array
+{
+    if (!is_file($pdfPath)) {
+        return msds_default_ocr_payload('failed', 'PDF 파일을 찾을 수 없습니다.');
+    }
+
+    $scriptPath = msds_ocr_script_path();
+    if (!is_file($scriptPath)) {
+        return msds_default_ocr_payload('failed', 'OCR 추출 스크립트를 찾을 수 없습니다.');
+    }
+
+    $python = trim((string)getenv('MSDS_OCR_PYTHON'));
+    if ($python === '') {
+        $python = 'python';
+    }
+
+    $outputPath = tempnam(sys_get_temp_dir(), 'msds_ocr_');
+    if ($outputPath === false) {
+        return msds_default_ocr_payload('failed', 'OCR 임시 파일을 만들지 못했습니다.');
+    }
+
+    $command = escapeshellarg($python)
+        . ' ' . escapeshellarg($scriptPath)
+        . ' --input ' . escapeshellarg($pdfPath)
+        . ' --output ' . escapeshellarg($outputPath)
+        . ' 2>&1';
+
+    $outputLines = [];
+    $exitCode = 0;
+    exec($command, $outputLines, $exitCode);
+
+    $payload = msds_default_ocr_payload('failed', 'OCR 추출 결과를 읽지 못했습니다.');
+    if (is_file($outputPath)) {
+        $decoded = json_decode((string)file_get_contents($outputPath), true);
+        if (is_array($decoded)) {
+            $status = (string)($decoded['status'] ?? 'failed');
+            $payload = [
+                'ocr_status' => $status,
+                'ocr_engine' => (string)($decoded['engine'] ?? ''),
+                'ocr_text' => (string)($decoded['text'] ?? ''),
+                'ocr_sections' => is_array($decoded['sections'] ?? null) ? $decoded['sections'] : [],
+                'ocr_error' => (string)($decoded['error'] ?? ''),
+                'ocr_updated_at' => date('c'),
+            ];
+        }
+        @unlink($outputPath);
+    }
+
+    if ($exitCode !== 0 && $payload['ocr_error'] === '') {
+        $payload['ocr_error'] = trim(implode("\n", $outputLines)) ?: 'OCR 추출 실행에 실패했습니다.';
+        $payload['ocr_status'] = 'failed';
+    }
+
+    return $payload;
 }
 
 $errors = [];
@@ -164,7 +251,7 @@ if (isset($_GET['download_file'])) {
         }
     }
 
-    $errors[] = '다운로드할 파일을 찾을 수 없습니다.';
+    $errors[] = '????μ떜媛?걫??????癲????ル㎦??????????耀붾굝????????????????源낆┰?????????곸죩.';
 }
 
 if (isset($_GET['view_file'])) {
@@ -184,7 +271,7 @@ if (isset($_GET['view_file'])) {
         }
     }
 
-    $errors[] = 'PDF 문서를 찾을 수 없습니다.';
+    $errors[] = 'PDF ???癲??????????용만??耀붾굝????????????????源낆┰?????????곸죩.';
 }
 
 $editingRecord = null;
@@ -192,7 +279,7 @@ $editingId = trim((string)($_GET['edit'] ?? ''));
 if ($editingId !== '' && $isSafetyManager) {
     $editingRecord = msds_find_record($records, $editingId);
     if ($editingRecord === null) {
-        $errors[] = '수정할 MSDS 항목을 찾을 수 없습니다.';
+        $errors[] = '?????곌떽釉붾???MSDS ??????耀붾굝????????????????源낆┰?????????곸죩.';
     }
 }
 
@@ -203,6 +290,7 @@ $formDefaults = [
     'revised_date' => '',
     'revision_count' => '',
     'note' => '',
+    'mobile_content' => '',
 ];
 
 if ($editingRecord !== null) {
@@ -213,6 +301,7 @@ if ($editingRecord !== null) {
         'revised_date' => (string)($editingRecord['revised_date'] ?? ''),
         'revision_count' => (string)($editingRecord['revision_count'] ?? ''),
         'note' => (string)($editingRecord['note'] ?? ''),
+        'mobile_content' => (string)($editingRecord['mobile_content'] ?? ''),
     ];
 }
 
@@ -221,18 +310,18 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 
     if ($action === 'delete_msds') {
         if (!$isSafetyManager) {
-            $errors[] = 'MSDS 삭제는 안전관리자 계정에서만 가능합니다.';
+            $errors[] = 'MSDS ?????????μ떜媛?걫?繹먃??????怨멸텛??????얠뺏??????傭?끆??????????傭?끆??????レ춸??????ル뒌???????嚥〓끃異??????????곸죩.';
         } else {
             $targetId = trim((string)($_POST['record_id'] ?? ''));
             $existingIndex = msds_find_record_index($records, $targetId);
             if ($existingIndex === null) {
-                $errors[] = '삭제할 MSDS 항목을 찾을 수 없습니다.';
+                $errors[] = '?????MSDS ??????耀붾굝????????????????源낆┰?????????곸죩.';
             } else {
                 $existingRecord = $records[$existingIndex];
                 msds_remove_file_if_exists((string)($existingRecord['stored_name'] ?? ''));
                 array_splice($records, $existingIndex, 1);
                 if (!msds_write_records($records)) {
-                    $errors[] = 'MSDS 삭제 저장에 실패했습니다.';
+                    $errors[] = 'MSDS ????????????뗫떔?????????ㅼ뒩??????????????곸죩.';
                 } else {
                     header('Location: msds_list.php?deleted=1');
                     exit;
@@ -241,7 +330,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         }
     } elseif ($action === 'upload_msds' || $action === 'update_msds') {
         if (!$isSafetyManager) {
-            $errors[] = 'MSDS 업로드 및 수정은 안전관리자 계정에서만 가능합니다.';
+            $errors[] = 'MSDS ??????????????곌떽釉붾??? ????μ떜媛?걫?繹먃??????怨멸텛??????얠뺏??????傭?끆??????????傭?끆??????レ춸??????ル뒌???????嚥〓끃異??????????곸죩.';
         }
 
         $targetId = trim((string)($_POST['record_id'] ?? ''));
@@ -251,6 +340,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         $revisedDate = msds_normalize_date((string)($_POST['revised_date'] ?? ''));
         $revisionCount = trim((string)($_POST['revision_count'] ?? ''));
         $note = trim((string)($_POST['note'] ?? ''));
+        $mobileContent = msds_normalize_multiline_text((string)($_POST['mobile_content'] ?? ''));
         $uploadedFile = isset($_FILES['msds_file']) && is_array($_FILES['msds_file']) ? $_FILES['msds_file'] : null;
         $isUpdate = $action === 'update_msds';
 
@@ -261,24 +351,25 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             'revised_date' => $revisedDate,
             'revision_count' => $revisionCount,
             'note' => $note,
+            'mobile_content' => $mobileContent,
         ];
 
         if ($materialName === '') {
-            $errors[] = '물질명을 입력해주세요.';
+            $errors[] = '??????ル뭸????ル쭔???⑥?뎅?꿔꺂??蹂?덩???????깅♥?????????쇨덫櫻????欲꼲????饔낅떽??????';
         }
         if ($manufacturer === '') {
-            $errors[] = '제조사를 입력해주세요.';
+            $errors[] = '???轅붽틓?????뮻???? ???????쇨덫櫻????欲꼲????饔낅떽??????';
         }
         if ($createdDate === '') {
-            $errors[] = '작성일자를 입력해주세요.';
+            $errors[] = '????????關?쒎첎?嫄??ル竊숃눧?????????쇨덫櫻????欲꼲????饔낅떽??????';
         }
         if ($revisedDate === '') {
-            $errors[] = '개정일자를 입력해주세요.';
+            $errors[] = '?????ル뒌??????關?쒎첎?嫄??ル竊숃눧?????????쇨덫櫻????欲꼲????饔낅떽??????';
         }
         if ($revisionCount === '') {
-            $errors[] = '개정횟수를 입력해주세요.';
+            $errors[] = '?????ル뒌???????????껉묻?????????쇨덫櫻????欲꼲????饔낅떽??????';
         } elseif (!preg_match('/^\d+$/', $revisionCount)) {
-            $errors[] = '개정횟수는 숫자로 입력해주세요.';
+            $errors[] = '?????ル뒌???????????껉묻??????????ㅿ폍筌????????쇨덫櫻????欲꼲????饔낅떽??????';
         }
 
         $existingIndex = null;
@@ -287,11 +378,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $existingIndex = msds_find_record_index($records, $targetId);
             $existingRecord = $existingIndex !== null ? $records[$existingIndex] : null;
             if ($existingRecord === null) {
-                $errors[] = '수정할 MSDS 항목을 찾을 수 없습니다.';
+                $errors[] = '?????곌떽釉붾???MSDS ??????耀붾굝????????????????源낆┰?????????곸죩.';
             }
         } else {
             if ($uploadedFile === null || (int)($uploadedFile['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-                $errors[] = '업로드할 MSDS 파일을 선택해주세요.';
+                $errors[] = '?????????????MSDS ??????????壤굿??Β?????欲꼲????饔낅떽??????';
             }
         }
 
@@ -304,15 +395,15 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $allowedExtensions = ['pdf', 'xlsx', 'xls', 'csv', 'doc', 'docx', 'png', 'jpg', 'jpeg'];
 
             if ($tmpName === '' || !is_uploaded_file($tmpName)) {
-                $errors[] = '업로드된 파일을 확인할 수 없습니다.';
+                $errors[] = '????????轅붽틓???壤굿?戮깅룾?????????饔낅떽??????????????????源낆┰?????????곸죩.';
             } elseif (!in_array($extension, $allowedExtensions, true)) {
-                $errors[] = '지원되는 파일 형식은 pdf, xlsx, xls, csv, doc, docx, png, jpg, jpeg 입니다.';
+                $errors[] = '?耀붾굝??????????????????饔낅떽????????怨룸씔?? pdf, xlsx, xls, csv, doc, docx, png, jpg, jpeg ??????筌?캉??';
             } else {
                 msds_ensure_directory(msds_upload_dir());
                 $newStoredName = 'msds_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $extension;
                 $newPath = msds_upload_dir() . '/' . $newStoredName;
                 if (!move_uploaded_file($tmpName, $newPath)) {
-                    $errors[] = '파일 업로드에 실패했습니다.';
+                    $errors[] = '???????????????????????ㅼ뒩??????????????곸죩.';
                     $newStoredName = null;
                     $newOriginalName = null;
                 }
@@ -328,6 +419,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 $updatedRecord['revised_date'] = $revisedDate;
                 $updatedRecord['revision_count'] = $revisionCount;
                 $updatedRecord['note'] = $note;
+                $updatedRecord['mobile_content'] = $mobileContent;
                 $updatedRecord['updated_at'] = date('c');
                 $updatedRecord['updated_by'] = (string)auth_display_name($user);
 
@@ -335,6 +427,14 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                     msds_remove_file_if_exists((string)($existingRecord['stored_name'] ?? ''));
                     $updatedRecord['stored_name'] = $newStoredName;
                     $updatedRecord['original_name'] = $newOriginalName;
+                    if (strtolower(pathinfo($newOriginalName, PATHINFO_EXTENSION)) === 'pdf') {
+                        $updatedRecord = array_merge(
+                            $updatedRecord,
+                            msds_extract_text_payload(msds_upload_dir() . '/' . $newStoredName)
+                        );
+                    } else {
+                        $updatedRecord = array_merge($updatedRecord, msds_default_ocr_payload('skipped', 'PDF가 아닌 파일은 OCR 추출을 건너뜁니다.'));
+                    }
                 }
 
                 $records[$existingIndex] = $updatedRecord;
@@ -342,13 +442,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                     if ($newStoredName !== null) {
                         msds_remove_file_if_exists($newStoredName);
                     }
-                    $errors[] = 'MSDS 수정 저장에 실패했습니다.';
+                    $errors[] = 'MSDS ?????곌떽釉붾??????????뗫떔?????????ㅼ뒩??????????????곸죩.';
                 } else {
                     header('Location: msds_list.php?updated=1');
                     exit;
                 }
             } elseif (!$isUpdate) {
-                $records[] = [
+                $newRecord = [
                     'id' => uniqid('msds_', true),
                     'material_name' => $materialName,
                     'manufacturer' => $manufacturer,
@@ -356,18 +456,30 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                     'revised_date' => $revisedDate,
                     'revision_count' => $revisionCount,
                     'note' => $note,
+                    'mobile_content' => $mobileContent,
                     'stored_name' => (string)$newStoredName,
                     'original_name' => (string)$newOriginalName,
                     'uploaded_at' => date('c'),
                     'uploaded_by' => (string)auth_display_name($user),
                 ];
 
+                if ($newStoredName !== null && strtolower(pathinfo((string)$newOriginalName, PATHINFO_EXTENSION)) === 'pdf') {
+                    $newRecord = array_merge(
+                        $newRecord,
+                        msds_extract_text_payload(msds_upload_dir() . '/' . $newStoredName)
+                    );
+                } else {
+                    $newRecord = array_merge($newRecord, msds_default_ocr_payload('skipped', 'PDF가 아닌 파일은 OCR 추출을 건너뜁니다.'));
+                }
+
+                $records[] = $newRecord;
+
                 if (!msds_write_records($records)) {
                     if ($newStoredName !== null) {
                         msds_remove_file_if_exists($newStoredName);
                     }
                     array_pop($records);
-                    $errors[] = 'MSDS 등록 저장에 실패했습니다.';
+                    $errors[] = 'MSDS ?????롮쾸?椰???⑤챶猷??????????뗫떔?????????ㅼ뒩??????????????곸죩.';
                 } else {
                     header('Location: msds_list.php?uploaded=1');
                     exit;
@@ -382,16 +494,35 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 }
 
 if (isset($_GET['uploaded']) && $_GET['uploaded'] === '1') {
-    $successMessage = 'MSDS 파일이 등록되었습니다.';
+    $successMessage = 'MSDS ???????????롮쾸?椰???⑤챶猷???????????';
 }
 if (isset($_GET['updated']) && $_GET['updated'] === '1') {
-    $successMessage = 'MSDS 항목이 수정되었습니다.';
+    $successMessage = 'MSDS ??????????곌떽釉붾???????????';
 }
 if (isset($_GET['deleted']) && $_GET['deleted'] === '1') {
-    $successMessage = 'MSDS 항목이 삭제되었습니다.';
+    $successMessage = 'MSDS ??????????????????';
 }
 
 $displayRows = array_reverse(msds_read_records());
+$selectedMaterialId = trim((string)($_GET['material_id'] ?? ''));
+$matchedMaterialId = '';
+$materialOptions = [];
+foreach ($displayRows as $record) {
+    $recordId = trim((string)($record['id'] ?? ''));
+    $materialName = trim((string)($record['material_name'] ?? ''));
+    if ($recordId === '' || $materialName === '') {
+        continue;
+    }
+
+    $materialOptions[] = [
+        'id' => $recordId,
+        'label' => $materialName,
+    ];
+
+    if ($selectedMaterialId !== '' && $recordId === $selectedMaterialId) {
+        $matchedMaterialId = $recordId;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="ko">
@@ -588,6 +719,43 @@ $displayRows = array_reverse(msds_read_records());
     font-size: 12px;
     line-height: 1.5;
   }
+  .mobile-search-panel {
+    display: none;
+    margin-top: 14px;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: #f8fbfe;
+  }
+  .mobile-search-form {
+    display: grid;
+    gap: 8px;
+  }
+  .mobile-search-form label {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .mobile-search-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+  .mobile-search-input {
+    width: 100%;
+    min-height: 44px;
+    padding: 11px 13px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: #ffffff;
+    font: inherit;
+    color: var(--text);
+  }
+  .mobile-search-hint {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+  }
   .table-wrap {
     overflow-x: auto;
     border: 1px solid var(--line);
@@ -618,6 +786,10 @@ $displayRows = array_reverse(msds_read_records());
   tbody tr:last-child td {
     border-bottom: 0;
   }
+  tbody tr.is-search-target {
+    outline: 2px solid rgba(255, 177, 26, 0.7);
+    outline-offset: -2px;
+  }
   .empty-state {
     padding: 26px 20px;
     text-align: center;
@@ -638,6 +810,7 @@ $displayRows = array_reverse(msds_read_records());
   }
   .file-download,
   .file-view,
+  .file-view-original,
   .file-edit {
     display: inline-flex;
     align-items: center;
@@ -655,6 +828,7 @@ $displayRows = array_reverse(msds_read_records());
     color: var(--primary);
   }
   .file-view,
+  .file-view-original,
   .file-edit {
     background: #ffffff;
     color: #1d405e;
@@ -701,6 +875,35 @@ $displayRows = array_reverse(msds_read_records());
     font-size: 18px;
     line-height: 1;
   }
+  .scroll-top-fab {
+    display: none;
+  }
+  .scroll-top-fab {
+    position: fixed;
+    right: 16px;
+    bottom: calc(max(10px, env(safe-area-inset-bottom)) + 92px);
+    z-index: 1001;
+    width: 48px;
+    height: 48px;
+    border: 1px solid rgba(255, 177, 26, 0.34);
+    border-radius: 999px;
+    background: rgba(255, 177, 26, 0.92);
+    color: #111827;
+    box-shadow: 0 16px 30px rgba(0,0,0,0.32);
+    font: inherit;
+    font-size: 18px;
+    font-weight: 900;
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(8px);
+    transition: opacity .18s ease, transform .18s ease;
+  }
+  .scroll-top-fab.is-visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+  }
   @media (max-width: 900px) {
     .upload-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -745,6 +948,14 @@ $displayRows = array_reverse(msds_read_records());
     .mobile-bottom-nav {
       display: block;
     }
+    .scroll-top-fab {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .mobile-search-panel {
+      display: block;
+    }
     .table-mobile-caption {
       display: block;
     }
@@ -772,6 +983,7 @@ $displayRows = array_reverse(msds_read_records());
       border: 1px solid var(--line);
       border-radius: 18px;
       box-shadow: 0 10px 24px rgba(18, 45, 70, 0.08);
+      scroll-margin-top: 18px;
     }
     tbody td {
       display: grid;
@@ -801,6 +1013,7 @@ $displayRows = array_reverse(msds_read_records());
     }
     .file-download,
     .file-view,
+    .file-view-original,
     .file-edit {
       width: 100%;
       min-height: 40px;
@@ -820,9 +1033,9 @@ $displayRows = array_reverse(msds_read_records());
   <div class="shell">
     <section class="hero">
       <div class="eyebrow">MSDS</div>
-      <h1>물질안전보건(MSDS) LIST</h1>
+      <h1>물질안전보건자료(MSDS) LIST</h1>
       <div class="hero-actions">
-        <a class="btn btn-primary" href="work_list.php">작업목록으로</a>
+        <a class="btn btn-primary" href="work_list.php">작업목록으로 돌아가기</a>
       </div>
     </section>
 
@@ -843,11 +1056,11 @@ $displayRows = array_reverse(msds_read_records());
         <div class="panel-head">
           <div>
             <h2><?= $editingRecord !== null ? 'MSDS 수정' : 'MSDS 업로드' ?></h2>
-            <p><?= $editingRecord !== null ? '기존 등록 정보를 수정하고 필요하면 파일도 교체하거나 삭제할 수 있습니다.' : '물질 정보와 파일을 함께 등록해두면 현장에서 바로 확인할 수 있습니다.' ?></p>
+            <p><?= $editingRecord !== null ? '기존 등록 정보를 수정하고 필요하면 새 파일로 교체할 수 있습니다.' : '새로운 MSDS 문서를 등록하고 목록에서 바로 열람하거나 다운로드할 수 있습니다.' ?></p>
           </div>
           <div class="inline-actions">
             <a class="btn btn-secondary" href="msds_list.php?download=template">업로드 양식 다운로드</a>
-            <a class="btn btn-secondary" href="msds_list.php?download=list">목록 다운로드</a>
+            <a class="btn btn-secondary" href="msds_list.php?download=list">현재 목록 CSV 다운로드</a>
           </div>
         </div>
 
@@ -881,12 +1094,17 @@ $displayRows = array_reverse(msds_read_records());
               <label for="msds_file">MSDS 파일<?= $editingRecord !== null ? ' 교체' : '' ?></label>
               <input id="msds_file" name="msds_file" type="file" accept=".pdf,.xlsx,.xls,.csv,.doc,.docx,.png,.jpg,.jpeg" <?= $editingRecord === null ? 'required' : '' ?>>
               <?php if ($editingRecord !== null): ?>
-                <div class="field-help">파일을 바꾸지 않으려면 비워두고 저장하세요.</div>
+                <div class="field-help">수정 시 새 파일을 올리면 기존 파일을 교체하고, 올리지 않으면 기존 파일을 유지합니다.</div>
               <?php endif; ?>
             </div>
             <div class="field is-span-4">
               <label for="note">비고</label>
-              <textarea id="note" name="note" placeholder="필요한 메모가 있으면 입력해주세요."><?= h($formDefaults['note']) ?></textarea>
+              <textarea id="note" name="note" placeholder="현장 메모, 보관 위치, 주의사항 등을 적어두면 목록에서 함께 확인할 수 있습니다."><?= h($formDefaults['note']) ?></textarea>
+            </div>
+            <div class="field is-span-4">
+              <label for="mobile_content">모바일 리더용 정리 본문</label>
+              <textarea id="mobile_content" name="mobile_content" placeholder="모바일에서 크게 읽기 좋게 정리한 본문을 붙여넣으세요. 비워두면 PDF에서 자동 추출한 텍스트를 사용합니다."><?= h($formDefaults['mobile_content']) ?></textarea>
+              <div class="field-help">줄바꿈은 그대로 유지됩니다. 항목 제목은 한 줄씩 구분해 두면 모바일 카드로 읽기 쉽게 보입니다.</div>
             </div>
           </div>
           <div class="upload-actions">
@@ -908,10 +1126,13 @@ $displayRows = array_reverse(msds_read_records());
       <div class="panel-head">
         <div>
           <h2>물질안전보건(MSDS) LIST</h2>
-          <p>번호 | 물질명 | 제조사 | 작성일자 | 개정일자 | 개정횟수 | 비고</p>
+          <p>번호, 물질명, 제조사, 작성일자, 개정일자, 개정횟수, 비고 정보를 한 번에 확인할 수 있습니다.</p>
         </div>
       </div>
-      <div class="table-mobile-caption">모바일에서는 한 건씩 카드 형태로 표시됩니다.</div>
+
+      <div class="mobile-search-panel"></div>
+      <div class="table-mobile-caption">모바일에서는 자료별 카드 형식으로 표시되며, 보기 버튼으로 읽기 전용 화면을 열 수 있습니다.</div>
+
       <div class="table-wrap">
         <?php if (empty($displayRows)): ?>
           <div class="empty-state">아직 등록된 MSDS가 없습니다. 안전관리자 계정에서 첫 자료를 등록해주세요.</div>
@@ -931,7 +1152,7 @@ $displayRows = array_reverse(msds_read_records());
             <tbody>
               <?php foreach ($displayRows as $index => $record): ?>
                 <?php $isPdf = msds_record_extension($record) === 'pdf'; ?>
-                <tr>
+                <tr<?= $matchedMaterialId !== '' && (string)($record['id'] ?? '') === $matchedMaterialId ? ' id="msds-search-target" class="is-search-target"' : '' ?>>
                   <td data-label="번호"><?= h($index + 1) ?></td>
                   <td data-label="물질명"><?= h($record['material_name'] ?? '') ?></td>
                   <td data-label="제조사"><?= h($record['manufacturer'] ?? '') ?></td>
@@ -944,9 +1165,10 @@ $displayRows = array_reverse(msds_read_records());
                     <?php endif; ?>
                     <div class="file-actions">
                       <?php if ($isPdf): ?>
-                        <a class="file-view" href="msds_list.php?view_file=<?= h($record['id'] ?? '') ?>" target="_blank" rel="noopener">문서 보기</a>
+                        <a class="file-view" href="msds_reader.php?id=<?= h($record['id'] ?? '') ?>">보기</a>
+                        <a class="file-view-original" href="msds_list.php?view_file=<?= h($record['id'] ?? '') ?>" target="_blank" rel="noopener">원본보기</a>
                       <?php endif; ?>
-                      <a class="file-download" href="msds_list.php?download_file=<?= h($record['id'] ?? '') ?>">파일 다운로드</a>
+                      <a class="file-download" href="msds_list.php?download_file=<?= h($record['id'] ?? '') ?>">다운로드</a>
                       <?php if ($isSafetyManager): ?>
                         <a class="file-edit" href="msds_list.php?edit=<?= h($record['id'] ?? '') ?>">수정</a>
                       <?php endif; ?>
@@ -972,18 +1194,75 @@ $displayRows = array_reverse(msds_read_records());
         <span>달력</span>
       </a>
       <a class="mobile-nav-link" href="work_list.php">
-        <span class="mobile-nav-icon">≡</span>
-        <span>목록</span>
+        <span class="mobile-nav-icon">▤</span>
+        <span>작업목록</span>
       </a>
-      <a class="mobile-nav-link" href="../board/index.php">
-        <span class="mobile-nav-icon">▣</span>
-        <span>게시판</span>
+      <a class="mobile-nav-link is-active" href="msds_list.php">
+        <span class="mobile-nav-icon">⌘</span>
+        <span>MSDS</span>
       </a>
-      <a class="mobile-nav-link is-active" href="more.php">
+      <a class="mobile-nav-link" href="more.php">
         <span class="mobile-nav-icon">⋯</span>
         <span>더보기</span>
       </a>
     </div>
   </nav>
+
+  <button type="button" class="scroll-top-fab" id="scroll-top-fab" aria-label="맨 위로 이동">↑</button>
+
+  <script>
+    (function () {
+      var panel = document.querySelector('.mobile-search-panel');
+      if (panel) {
+        var options = <?= json_encode($materialOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+        var selectedId = <?= json_encode($selectedMaterialId, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+        var optionHtml = ['<option value="">물질을 선택하면 해당 항목으로 자동 이동합니다</option>'];
+
+        options.forEach(function (option) {
+          var selected = selectedId === option.id ? ' selected' : '';
+          optionHtml.push('<option value="' + option.id + '"' + selected + '>' + option.label + '</option>');
+        });
+
+        panel.innerHTML = ''
+          + '<form class="mobile-search-form" method="get">'
+          + '  <label for="material_id">물질 빠른 찾기</label>'
+          + '  <div class="mobile-search-row">'
+          + '    <select id="material_id" name="material_id" class="mobile-search-input" onchange="this.form.submit()">'
+          + optionHtml.join('')
+          + '    </select>'
+          + '    <a class="btn btn-link" href="msds_list.php">초기화</a>'
+          + '  </div>'
+          + '  <div class="mobile-search-hint">드롭다운에서 물질명을 고르면 해당 MSDS 카드 위치로 자동 이동합니다.</div>'
+          + '</form>';
+      }
+
+      var target = document.getElementById('msds-search-target');
+      if (target) {
+        window.requestAnimationFrame(function () {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+      }
+
+      var scrollTopFab = document.getElementById('scroll-top-fab');
+      if (scrollTopFab) {
+        var syncScrollTopFab = function () {
+          if (!window.matchMedia('(max-width: 640px)').matches) {
+            scrollTopFab.classList.remove('is-visible');
+            return;
+          }
+
+          scrollTopFab.classList.toggle('is-visible', window.scrollY > 240);
+        };
+
+        scrollTopFab.addEventListener('click', function () {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+
+        window.addEventListener('scroll', syncScrollTopFab, { passive: true });
+        window.addEventListener('resize', syncScrollTopFab);
+        syncScrollTopFab();
+      }
+    }());
+  </script>
 </body>
 </html>
