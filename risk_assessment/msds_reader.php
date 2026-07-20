@@ -68,6 +68,11 @@ $revisedDate = (string)($record['revised_date'] ?? '');
 $revisionCount = (string)($record['revision_count'] ?? '');
 $note = (string)($record['note'] ?? '');
 $mobileContent = (string)($record['mobile_content'] ?? '');
+$ocrStatus = (string)($record['ocr_status'] ?? '');
+$ocrEngine = (string)($record['ocr_engine'] ?? '');
+$ocrText = (string)($record['ocr_text'] ?? '');
+$ocrSections = is_array($record['ocr_sections'] ?? null) ? $record['ocr_sections'] : [];
+$ocrError = (string)($record['ocr_error'] ?? '');
 $pdfUrl = $record !== null ? 'msds_list.php?view_file=' . rawurlencode((string)($record['id'] ?? '')) : '';
 $downloadUrl = $record !== null ? 'msds_list.php?download_file=' . rawurlencode((string)($record['id'] ?? '')) : 'msds_list.php';
 ?>
@@ -643,6 +648,11 @@ $downloadUrl = $record !== null ? 'msds_list.php?download_file=' . rawurlencode(
 
   const pdfUrl = <?= json_encode($pdfUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const manualMobileContent = <?= json_encode($mobileContent, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+  const serverOcrStatus = <?= json_encode($ocrStatus, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+  const serverOcrEngine = <?= json_encode($ocrEngine, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+  const serverOcrText = <?= json_encode($ocrText, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+  const serverOcrSections = <?= json_encode($ocrSections, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+  const serverOcrError = <?= json_encode($ocrError, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const stage = document.getElementById('pdf-stage');
   const canvas = document.getElementById('pdf-canvas');
   const context = canvas.getContext('2d');
@@ -745,6 +755,28 @@ $downloadUrl = $record !== null ? 'msds_list.php?download_file=' . rawurlencode(
     }
 
     return sections.slice(0, 24);
+  }
+
+  function normalizeServerSections(rawSections) {
+    if (!Array.isArray(rawSections)) {
+      return [];
+    }
+
+    return rawSections.map((section) => {
+      const title = normalizeLineText(section && section.title ? section.title : '본문');
+      const paragraphs = Array.isArray(section && section.paragraphs)
+        ? section.paragraphs.map((paragraph) => normalizeLineText(paragraph)).filter(Boolean)
+        : [];
+
+      if (!paragraphs.length) {
+        return null;
+      }
+
+      return {
+        title: title || '본문',
+        paragraphs,
+      };
+    }).filter(Boolean);
   }
 
   function renderTextSections(sections, statusText, isError) {
@@ -929,18 +961,30 @@ $downloadUrl = $record !== null ? 'msds_list.php?download_file=' . rawurlencode(
       if (manualSections.length) {
         renderTextSections(manualSections, '관리자가 정리한 모바일 전용 본문입니다.', false);
       } else {
-        try {
-          const extractedSections = await extractTextSections(pdfDoc);
-          if (extractedSections.length) {
-            renderTextSections(extractedSections, 'PDF 텍스트를 자동 추출해 모바일용으로 정리했습니다.', false);
-          } else {
-            renderTextSections([], '자동 추출된 텍스트가 없어 원본 PDF 보기가 필요합니다.', true);
-            stage.style.display = 'block';
+        const normalizedServerSections = normalizeServerSections(serverOcrSections);
+        if (normalizedServerSections.length) {
+          const engineLabel = serverOcrEngine ? `서버 ${serverOcrEngine}` : '서버 OCR';
+          renderTextSections(normalizedServerSections, `${engineLabel} 결과를 모바일용으로 정리했습니다.`, false);
+        } else if (serverOcrText) {
+          const fallbackServerSections = buildSectionsFromLines(serverOcrText.split(/\r?\n/));
+          if (fallbackServerSections.length) {
+            const engineLabel = serverOcrEngine ? `서버 ${serverOcrEngine}` : '서버 OCR';
+            renderTextSections(fallbackServerSections, `${engineLabel} 텍스트를 모바일용으로 정리했습니다.`, false);
           }
-        } catch (textError) {
-          renderTextSections([], '자동 텍스트 추출에 실패했습니다. 원본 PDF 보기로 확인해주세요.', true);
-          stage.style.display = 'block';
-          console.error(textError);
+        } else {
+          try {
+            const extractedSections = await extractTextSections(pdfDoc);
+            if (extractedSections.length) {
+              renderTextSections(extractedSections, '브라우저에서 PDF 텍스트를 자동 추출해 모바일용으로 정리했습니다.', false);
+            } else {
+              renderTextSections([], serverOcrError || '자동 추출된 텍스트가 없어 원본 PDF 보기가 필요합니다.', true);
+              stage.style.display = 'block';
+            }
+          } catch (textError) {
+            renderTextSections([], serverOcrError || '자동 텍스트 추출에 실패했습니다. 원본 PDF 보기로 확인해주세요.', true);
+            stage.style.display = 'block';
+            console.error(textError);
+          }
         }
       }
     }
