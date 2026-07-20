@@ -292,14 +292,15 @@
     border: 0;
     border-bottom: 1px solid rgba(255, 177, 26, 0.75);
     background: transparent;
-    color: #9fd4ff;
+    color: inherit;
     font: inherit;
-    font-weight: 700;
+    font-weight: inherit;
     line-height: inherit;
     cursor: pointer;
+    text-decoration: none;
   }
   .mobile-glossary-trigger:active {
-    color: #ffd27a;
+    color: inherit;
   }
   .mobile-text-fallback-kv.has-glossary-trigger {
     display: block;
