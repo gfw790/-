@@ -535,3 +535,18 @@ Stack trace:
 [21-Jul-2026 00:00:07 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
 [21-Jul-2026 00:00:15 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=2) — Gemini Vision 폴백
 [21-Jul-2026 00:00:25 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[21-Jul-2026 06:33:51 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=0, prevention=4) — Gemini Vision 폴백
+[21-Jul-2026 06:34:00 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=2) — Gemini Vision 폴백
+[21-Jul-2026 06:34:11 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[21-Jul-2026 06:37:27 Asia/Seoul] PHP Fatal error:  Uncaught Error: Call to undefined function tbm_ai_collect_length_metrics() in Standard input code:7
+Stack trace:
+#0 {main}
+  thrown in Standard input code on line 7
+[21-Jul-2026 06:37:43 Asia/Seoul] PHP Fatal error:  Uncaught Error: Call to undefined function tbm_ai_collect_length_metrics() in A:\risk_server\project\tmp_tbm_metrics.php:9
+Stack trace:
+#0 {main}
+  thrown in A:\risk_server\project\tmp_tbm_metrics.php on line 9
+[21-Jul-2026 06:38:11 Asia/Seoul] PHP Fatal error:  Uncaught Error: Call to undefined function tbm_ai_collect_length_metrics() in A:\risk_server\project\tmp_tbm_metrics.php:9
+Stack trace:
+#0 {main}
+  thrown in A:\risk_server\project\tmp_tbm_metrics.php on line 9

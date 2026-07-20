@@ -1106,6 +1106,115 @@ function tbm_ai_autofit_single_quiz(string $quiz, int $targetMin = 183, int $tar
     return tbm_ai_normalize_single_quiz(tbm_ai_quiz_join_lines($lines));
 }
 
+function tbm_ai_force_trim_quiz_to_max(string $quiz, int $targetMax): string
+{
+    $lines = tbm_ai_quiz_normalize_lines(tbm_ai_normalize_single_quiz($quiz));
+    if ($lines === []) {
+        return '';
+    }
+
+    $quiz = tbm_ai_quiz_join_lines($lines);
+    $guard = 0;
+
+    while (mb_strlen($quiz, 'UTF-8') > $targetMax && $guard < 24) {
+        $guard++;
+        $lineIndex = null;
+        $lineLength = 0;
+
+        foreach ($lines as $index => $line) {
+            $currentLength = mb_strlen((string)$line, 'UTF-8');
+            if ($currentLength > $lineLength) {
+                $lineIndex = $index;
+                $lineLength = $currentLength;
+            }
+        }
+
+        if ($lineIndex === null || $lineLength <= 18) {
+            break;
+        }
+
+        $excess = mb_strlen($quiz, 'UTF-8') - $targetMax;
+        $minKeep = $lineIndex === 0 ? 52 : 18;
+        $nextLimit = max($minKeep, $lineLength - max(1, $excess));
+        $trimmed = tbm_ai_trim_text_to_limit((string)$lines[$lineIndex], $nextLimit, 10, true);
+
+        if ($trimmed === '' || $trimmed === (string)$lines[$lineIndex]) {
+            $hardLimit = max($minKeep, $lineLength - max(1, $excess));
+            $trimmed = rtrim(trim(mb_substr((string)$lines[$lineIndex], 0, $hardLimit, 'UTF-8')), " ,;:\t\n\r\0\x0B");
+        }
+
+        if ($trimmed === '' || $trimmed === (string)$lines[$lineIndex]) {
+            break;
+        }
+
+        $lines[$lineIndex] = $trimmed;
+        $quiz = tbm_ai_quiz_join_lines($lines);
+    }
+
+    return tbm_ai_normalize_single_quiz(tbm_ai_quiz_join_lines($lines));
+}
+
+function tbm_ai_get_quiz_total_length(array $parsed): int
+{
+    $quizKeys = ['quiz_1', 'quiz_2', 'quiz_3'];
+    $total = 0;
+
+    foreach ($quizKeys as $key) {
+        $total += mb_strlen(trim((string)($parsed[$key] ?? '')), 'UTF-8');
+    }
+
+    return $total;
+}
+
+function tbm_ai_force_fit_quiz_fields(array $parsed): array
+{
+    $quizKeys = ['quiz_1', 'quiz_2', 'quiz_3'];
+
+    for ($guard = 0; $guard < 12; $guard++) {
+        $quizTotal = tbm_ai_get_quiz_total_length($parsed);
+        if ($quizTotal >= 545 && $quizTotal <= 820) {
+            break;
+        }
+
+        if ($quizTotal > 820) {
+            $lengthMap = [];
+            foreach ($quizKeys as $key) {
+                $lengthMap[$key] = mb_strlen((string)($parsed[$key] ?? ''), 'UTF-8');
+            }
+            arsort($lengthMap);
+
+            $changed = false;
+            foreach (array_keys($lengthMap) as $key) {
+                $current = trim((string)($parsed[$key] ?? ''));
+                if ($current === '') {
+                    continue;
+                }
+
+                $excess = $quizTotal - 820;
+                $targetMax = max(175, mb_strlen($current, 'UTF-8') - max(1, $excess));
+                $candidate = tbm_ai_force_trim_quiz_to_max($current, $targetMax);
+                if ($candidate !== '' && mb_strlen($candidate, 'UTF-8') < mb_strlen($current, 'UTF-8')) {
+                    $parsed[$key] = $candidate;
+                    $changed = true;
+                    break;
+                }
+            }
+
+            if (!$changed) {
+                break;
+            }
+
+            continue;
+        }
+
+        foreach ($quizKeys as $key) {
+            $parsed[$key] = tbm_ai_autofit_single_quiz(trim((string)($parsed[$key] ?? '')), 186, 198);
+        }
+    }
+
+    return $parsed;
+}
+
 function tbm_ai_autofit_quiz_fields(array $parsed): array
 {
     $quizKeys = ['quiz_1', 'quiz_2', 'quiz_3'];
@@ -1135,7 +1244,7 @@ function tbm_ai_autofit_quiz_fields(array $parsed): array
         }
     }
 
-    return $parsed;
+    return tbm_ai_force_fit_quiz_fields($parsed);
 }
 
 function tbm_ai_autofit_body_text(string $bodyText): string
