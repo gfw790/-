@@ -1,3 +1,8 @@
 {
-  "java.jdt.ls.java.home": "C:\\Program Files\\Android\\Android Studio\\jbr"
+  "java.jdt.ls.java.home": "C:\\Program Files\\Android\\Android Studio\\jbr",
+  "cSpell.words": [
+    "MSDS",
+    "Msds",
+    "msds"
+  ]
 }
