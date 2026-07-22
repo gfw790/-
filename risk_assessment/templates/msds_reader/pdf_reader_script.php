@@ -37,6 +37,7 @@
   const mobileGlossaryEditorSave = document.getElementById('mobile-glossary-editor-save');
   const mobileGlossaryAdd = document.getElementById('mobile-glossary-add');
   const mobileGlossary = <?= json_encode($mobileGlossary, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+  const msdsPictogramImages = <?= json_encode($msdsPictogramImages, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const canEditMobileMsds = <?= $canEditMobileMsds ? 'true' : 'false' ?>;
   const recordId = <?= json_encode((string)($record['id'] ?? ''), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const isMobileViewport = () => window.matchMedia('(max-width: 640px)').matches;
@@ -79,7 +80,7 @@
 
     if (mobileSectionJump) {
       const hasJumpTargets = mobileSectionSelect.options.length > 1;
-      mobileSectionJump.style.display = isMobileViewport() && hasJumpTargets ? 'block' : 'none';
+      mobileSectionJump.style.display = hasJumpTargets && (isMobileViewport() || canEditMobileMsds) ? 'block' : 'none';
     }
   }
 
@@ -90,6 +91,13 @@
 
     const shouldShow = isMobileViewport() && window.scrollY > 140;
     mobileScrollTopButton.classList.toggle('is-visible', shouldShow);
+  }
+
+  function buildSectionEditUrl(sectionNumber) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('edit_section', String(Math.max(1, Number(sectionNumber) || 1)));
+    url.hash = 'msds-section-editor';
+    return url.toString();
   }
 
   function escapeHtml(value) {
@@ -246,6 +254,69 @@
         openGlossaryFromButton(button);
       });
     });
+  }
+
+  function resolveEditButtonFromEvent(event) {
+    if (!event) {
+      return null;
+    }
+
+    if (typeof event.composedPath === 'function') {
+      const path = event.composedPath();
+      for (let index = 0; index < path.length; index += 1) {
+        const node = path[index];
+        if (node instanceof Element && node.classList.contains('mobile-card-edit')) {
+          return node;
+        }
+      }
+    }
+
+    const rawTarget = event.target;
+    if (rawTarget instanceof Element) {
+      return rawTarget.closest('.mobile-card-edit');
+    }
+
+    if (rawTarget && rawTarget.parentElement) {
+      return rawTarget.parentElement.closest('.mobile-card-edit');
+    }
+
+    return null;
+  }
+
+  function resolveEditableArticleFromEvent(event) {
+    if (!event) {
+      return null;
+    }
+
+    if (typeof event.composedPath === 'function') {
+      const path = event.composedPath();
+      for (let index = 0; index < path.length; index += 1) {
+        const node = path[index];
+        if (node instanceof Element && node.classList.contains('mobile-text-section')) {
+          return node;
+        }
+      }
+    }
+
+    const rawTarget = event.target;
+    if (rawTarget instanceof Element) {
+      return rawTarget.closest('.mobile-text-section');
+    }
+
+    if (rawTarget && rawTarget.parentElement) {
+      return rawTarget.parentElement.closest('.mobile-text-section');
+    }
+
+    return null;
+  }
+
+  function openEditorFromButton(button) {
+    if (!(button instanceof Element)) {
+      return false;
+    }
+
+    openEditor(button.closest('.mobile-text-section'));
+    return false;
   }
 
   function hydrateGlossaryTriggers(scope = mobileTextBody) {
@@ -444,6 +515,10 @@
     mobileGlossaryEditorModal.classList.add('is-open');
     mobileGlossaryEditorModal.setAttribute('aria-hidden', 'false');
   }
+  window.__openMobileGlossaryEditor = () => {
+    openGlossaryEditor();
+    return false;
+  };
 
   function closeGlossaryEditor() {
     if (!mobileGlossaryEditorModal) {
@@ -854,15 +929,15 @@
       return;
     }
 
-    mobileTextBody.innerHTML = sections.map((section) => {
+    mobileTextBody.innerHTML = sections.map((section, sectionIndex) => {
       const originalTitle = normalizeLineText(section.title || '본문');
       const titleInfo = parseSectionTitle(originalTitle);
-      const sectionClass = titleInfo.index ? 'mobile-text-section has-index' : 'mobile-text-section';
+      const sectionClass = `${titleInfo.index ? 'mobile-text-section has-index' : 'mobile-text-section'}${canEditMobileMsds ? ' is-editable' : ''}`;
       const blocksHtml = renderSectionBlocks(section);
-      const editableAttrs = canEditMobileMsds
-        ? ' tabindex="0" role="button" aria-label="본문 편집 열기"'
+      const editButtonHtml = canEditMobileMsds
+        ? `<a class="mobile-card-edit" href="${escapeAttribute(buildSectionEditUrl(sectionIndex + 1))}" aria-label="이 카드 수정">수정</a>`
         : '';
-      return `<article class="${sectionClass}"${editableAttrs}><h3>${escapeHtml(originalTitle || '본문')}</h3>${blocksHtml}</article>`;
+      return `<article class="${sectionClass}">${editButtonHtml}<h3>${escapeHtml(originalTitle || '본문')}</h3>${blocksHtml}</article>`;
     }).join('');
     hydrateGlossaryTriggers();
     decorateEditableCards();
@@ -873,10 +948,24 @@
     const normalized = normalizeLineText(line);
     const escaped = escapeHtml(normalized);
     const glossaryEntry = findGlossaryEntry(normalized);
+    const indicatorMatch = normalized.match(/^[○●]\s*(그림문자|신호어|유해·위험 문구|유해·위험문구|예방조치문구)$/);
+    const indicatorText = indicatorMatch
+      ? (indicatorMatch[1] === '유해·위험 문구' ? '유해·위험문구' : indicatorMatch[1])
+      : '';
 
-    if (normalized === '그림문자' || normalized === '1) 그림문자') {
+    if (normalized === '그림문자' || normalized === '1) 그림문자' || indicatorText === '그림문자') {
       const labelText = normalized === '그림문자' ? '1) 그림문자' : normalized;
-      return `<div class="mobile-text-fallback-detail">${escapeHtml(labelText)}</div>${renderMobilePictogramCard(manualMobileContent, true, '')}`;
+      const finalLabel = indicatorText === '그림문자' ? '1) 그림문자' : labelText;
+      return `<div class="mobile-text-fallback-detail">${escapeHtml(finalLabel)}</div>${renderMobilePictogramCard(manualMobileContent, true, '')}`;
+    }
+
+    if (indicatorText) {
+      const headingMap = {
+        '신호어': '2) 신호어',
+        '유해·위험문구': '3) 유해·위험문구',
+        '예방조치문구': '4) 예방조치문구',
+      };
+      return `<div class="mobile-text-fallback-detail">${escapeHtml(headingMap[indicatorText] || indicatorText)}</div>`;
     }
 
     if (/^[가-하]\.\s*/.test(normalized)) {
@@ -918,7 +1007,7 @@
       mobileTextStatus.classList.remove('is-error');
     }
 
-    mobileTextBody.innerHTML = manualSections.map((section) => {
+    mobileTextBody.innerHTML = manualSections.map((section, sectionIndex) => {
       const originalTitle = normalizeLineText(section.title || '');
       const titleHtml = originalTitle ? `<h3>${escapeHtml(originalTitle)}</h3>` : '';
       const normalizedLines = [];
@@ -948,10 +1037,11 @@
       }
 
       const bodyHtml = normalizedLines.map((line) => formatManualBodyLine(line)).join('');
-      const editableAttrs = canEditMobileMsds
-        ? ' tabindex="0" role="button" aria-label="본문 편집 열기"'
+      const sectionClass = canEditMobileMsds ? 'mobile-text-section is-editable' : 'mobile-text-section';
+      const editButtonHtml = canEditMobileMsds
+        ? `<a class="mobile-card-edit" href="${escapeAttribute(buildSectionEditUrl(sectionIndex + 1))}" aria-label="이 카드 수정">수정</a>`
         : '';
-      return `<article class="mobile-text-section"${editableAttrs}>${titleHtml}${bodyHtml || '<div class="mobile-text-empty">표시할 본문이 없습니다.</div>'}</article>`;
+      return `<article class="${sectionClass}">${editButtonHtml}${titleHtml}${bodyHtml || '<div class="mobile-text-empty">표시할 본문이 없습니다.</div>'}</article>`;
     }).join('');
 
     hydrateGlossaryTriggers();
@@ -965,13 +1055,17 @@
       return;
     }
 
-    mobileTextBody.querySelectorAll('.mobile-text-section').forEach((article) => {
+    mobileTextBody.querySelectorAll('.mobile-text-section').forEach((article, articleIndex) => {
       article.classList.add('is-editable');
-      if (!article.hasAttribute('tabindex')) {
-        article.setAttribute('tabindex', '0');
+
+      if (!article.querySelector('.mobile-card-edit')) {
+        const editButton = document.createElement('a');
+        editButton.className = 'mobile-card-edit';
+        editButton.textContent = '수정';
+        editButton.href = buildSectionEditUrl(articleIndex + 1);
+        editButton.setAttribute('aria-label', '이 카드 수정');
+        article.appendChild(editButton);
       }
-      article.setAttribute('role', 'button');
-      article.setAttribute('aria-label', '본문 편집 열기');
     });
   }
 
@@ -1010,6 +1104,7 @@
   window.openMobileMsdsEditor = (article) => {
     openEditor(article instanceof Element ? article.closest('.mobile-text-section') || article : null);
   };
+  window.__openMobileMsdsEditorButton = (button) => openEditorFromButton(button);
 
   function closeEditor() {
     if (!mobileEditorModal) {
@@ -1201,46 +1296,20 @@
   function getMsdsPictogramDefinitions() {
     return {
       flame: {
-        label: '불꽃',
-        svg: `
-          <svg class="mobile-pictogram-svg" viewBox="0 0 88 88" aria-hidden="true" focusable="false">
-            <rect x="16" y="16" width="56" height="56" transform="rotate(45 44 44)" fill="#ffffff" stroke="#e6331f" stroke-width="5.5"/>
-            <path d="M45.6 27.4c3.9 5 5.2 9 4.1 12.2 2.5-1.1 4.5-3.4 5.2-6.2 5.3 4.9 8.4 10.3 8.4 16.1 0 8.5-7.2 14.4-16.5 14.4-9.7 0-16.3-6.5-16.3-15.3 0-6.1 3.2-11.5 9-16 0 3.1 1.1 5.8 3.1 8-0.2-4.8 0.6-9.3 3-13.2z" fill="#211a18"/>
-          </svg>
-        `.trim(),
+        label: '인화성',
+        image: msdsPictogramImages.flame || '',
       },
       'gas-cylinder': {
-        label: '가스실린더',
-        svg: `
-          <svg class="mobile-pictogram-svg" viewBox="0 0 88 88" aria-hidden="true" focusable="false">
-            <rect x="16" y="16" width="56" height="56" transform="rotate(45 44 44)" fill="#ffffff" stroke="#e6331f" stroke-width="5.5"/>
-            <g transform="rotate(-14 44 44)">
-              <rect x="23" y="38" width="33" height="10" rx="3.6" fill="#211a18"/>
-              <rect x="54.8" y="40.4" width="11.6" height="4.5" rx="1.8" fill="#211a18"/>
-            </g>
-          </svg>
-        `.trim(),
+        label: '고압가스',
+        image: msdsPictogramImages['gas-cylinder'] || '',
       },
       exclamation: {
-        label: '느낌표',
-        svg: `
-          <svg class="mobile-pictogram-svg" viewBox="0 0 88 88" aria-hidden="true" focusable="false">
-            <rect x="16" y="16" width="56" height="56" transform="rotate(45 44 44)" fill="#ffffff" stroke="#e6331f" stroke-width="5.5"/>
-            <rect x="40.2" y="27" width="7.6" height="23" rx="3.8" fill="#211a18"/>
-            <circle cx="44" cy="57.2" r="4.6" fill="#211a18"/>
-          </svg>
-        `.trim(),
+        label: '경고',
+        image: msdsPictogramImages.exclamation || '',
       },
       'health-hazard': {
         label: '건강유해성',
-        svg: `
-          <svg class="mobile-pictogram-svg" viewBox="0 0 88 88" aria-hidden="true" focusable="false">
-            <rect x="16" y="16" width="56" height="56" transform="rotate(45 44 44)" fill="#ffffff" stroke="#e6331f" stroke-width="5.5"/>
-            <circle cx="44" cy="31" r="6.2" fill="#211a18"/>
-            <path d="M33 57.5c1.4-8.6 5.1-13.8 11-13.8 6 0 9.6 5.2 11 13.8h-6.9c-0.8-3.8-2.1-5.9-4.1-5.9-2 0-3.3 2.1-4.1 5.9H33z" fill="#211a18"/>
-            <path d="M44 44.7l2.2 3.8 4.4 0.9-3 3.2 0.4 4.4-4-2-4 2 0.4-4.4-3-3.2 4.4-0.9z" fill="#ffffff"/>
-          </svg>
-        `.trim(),
+        image: msdsPictogramImages['health-hazard'] || '',
       },
     };
   }
@@ -1258,7 +1327,11 @@
         return '';
       }
 
-      return `<div class="mobile-pictogram-item">${definition.svg}<div class="mobile-pictogram-label">${escapeHtml(definition.label)}</div></div>`;
+      const visualHtml = definition.image
+        ? `<img class="mobile-pictogram-image" src="${escapeAttribute(definition.image)}" alt="${escapeAttribute(definition.label)}" loading="lazy">`
+        : (definition.svg || '');
+
+      return `<div class="mobile-pictogram-item">${visualHtml}<div class="mobile-pictogram-label">${escapeHtml(definition.label)}</div></div>`;
     }).join('');
 
     const cardClass = isInline ? 'mobile-pictogram-card is-inline' : 'mobile-pictogram-card';
@@ -1267,7 +1340,7 @@
   }
 
   function isPictogramLabelLine(line) {
-    return ['가스실린더'].includes(normalizeLineText(line));
+    return ['가스실린더', '고압가스', '불꽃', '인화성', '느낌표', '경고', '건강유해성'].includes(normalizeLineText(line));
   }
 
   function isLikelyKeyLabel(line) {
@@ -1787,25 +1860,6 @@
         return;
       }
 
-      const article = event.target instanceof Element ? event.target.closest('.mobile-text-section') : null;
-      if (article) {
-        openEditor(article);
-      }
-    });
-
-    mobileTextBody.addEventListener('keydown', (event) => {
-      if (!canEditMobileMsds) {
-        return;
-      }
-
-      if (!(event.target instanceof Element) || !event.target.classList.contains('mobile-text-section')) {
-        return;
-      }
-
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        openEditor(event.target);
-      }
     });
   }
 

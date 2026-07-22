@@ -30,6 +30,11 @@
     margin: 0 auto;
     padding: 22px 18px 40px;
   }
+  .reader-content-grid {
+    display: grid;
+    gap: 16px;
+    align-items: start;
+  }
   .reader-topbar {
     position: sticky;
     top: 0;
@@ -244,7 +249,7 @@
     border: 1px solid rgba(255, 255, 255, 0.08);
   }
   .mobile-text-section.is-editable {
-    cursor: pointer;
+    padding-top: 42px;
   }
   .mobile-card-edit {
     position: absolute;
@@ -260,6 +265,7 @@
     font-size: 12px;
     font-weight: 700;
     cursor: pointer;
+    text-decoration: none;
   }
   .mobile-card-edit:active {
     transform: scale(0.98);
@@ -393,15 +399,36 @@
     gap: 12px;
   }
   .mobile-pictogram-item {
+    position: relative;
     display: grid;
     justify-items: center;
     gap: 8px;
     min-width: 92px;
   }
+  .mobile-pictogram-item::before {
+    content: "";
+    position: absolute;
+    top: 10px;
+    width: 50px;
+    height: 50px;
+    background: #ffffff;
+    transform: rotate(45deg);
+    z-index: 0;
+  }
   .mobile-pictogram-svg {
+    position: relative;
+    z-index: 1;
     width: 72px;
     height: 72px;
     display: block;
+  }
+  .mobile-pictogram-image {
+    position: relative;
+    z-index: 1;
+    width: 72px;
+    height: 72px;
+    display: block;
+    object-fit: contain;
   }
   .mobile-pictogram-label {
     color: #f4f7fb;
@@ -415,6 +442,62 @@
     color: var(--muted);
     text-align: center;
     line-height: 1.7;
+  }
+  .pc-section-editor {
+    margin: 12px 14px 0;
+    padding: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.04);
+  }
+  .pc-section-editor-head h3 {
+    margin: 0 0 6px;
+    font-size: 16px;
+    color: #ffd27a;
+  }
+  .pc-section-editor-head p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .pc-section-editor-notice {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(56, 189, 122, 0.14);
+    color: #b7f7cf;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .pc-section-editor-form {
+    display: grid;
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .pc-section-editor-textarea {
+    width: 100%;
+    min-height: 240px;
+    padding: 14px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    background: rgba(8, 17, 29, 0.72);
+    color: var(--text);
+    font: inherit;
+    font-size: 14px;
+    line-height: 1.75;
+    resize: vertical;
+    outline: none;
+  }
+  .pc-section-editor-textarea:focus {
+    border-color: rgba(255, 177, 26, 0.48);
+    box-shadow: 0 0 0 3px rgba(255, 177, 26, 0.12);
+  }
+  .pc-section-editor-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
   }
   .mobile-editor-modal {
     position: fixed;
@@ -866,6 +949,38 @@
     }
   }
   @media (min-width: 641px) {
+    .reader-shell.can-edit-mobile-msds {
+      width: min(100%, 1600px);
+    }
+    .reader-shell.can-edit-mobile-msds .reader-content-grid {
+      grid-template-columns: minmax(360px, 480px) minmax(0, 1fr);
+    }
+    .reader-shell.can-edit-mobile-msds .mobile-text-reader {
+      display: block;
+      position: sticky;
+      top: 96px;
+      max-height: calc(100vh - 120px);
+    }
+    .reader-shell.can-edit-mobile-msds .mobile-text-head,
+    .reader-shell.can-edit-mobile-msds .mobile-glossary-manage,
+    .reader-shell.can-edit-mobile-msds .mobile-section-jump,
+    .reader-shell.can-edit-mobile-msds .mobile-text-status {
+      flex: 0 0 auto;
+    }
+    .reader-shell.can-edit-mobile-msds .mobile-text-reader {
+      display: flex;
+      flex-direction: column;
+    }
+    .reader-shell.can-edit-mobile-msds .mobile-text-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: auto;
+      padding-right: 12px;
+    }
+    .reader-shell.can-edit-mobile-msds .mobile-glossary-manage .btn {
+      width: auto;
+      min-width: 160px;
+    }
     .viewer-toolbar,
     .viewer-canvas-wrap,
     .viewer-help {

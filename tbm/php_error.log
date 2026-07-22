@@ -550,3 +550,7 @@ Stack trace:
 Stack trace:
 #0 {main}
   thrown in A:\risk_server\project\tmp_tbm_metrics.php on line 9
+[22-Jul-2026 00:00:09 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[22-Jul-2026 00:00:20 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[22-Jul-2026 00:00:31 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=4, prevention=4) — Gemini Vision 폴백
+[22-Jul-2026 00:00:40 Asia/Seoul] [TBM SIREN] OCR 점수 부족 (summary=2, prevention=2) — Gemini Vision 폴백
