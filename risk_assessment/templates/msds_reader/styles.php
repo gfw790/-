@@ -204,6 +204,115 @@
     min-height: 40px;
     font-size: 13px;
   }
+  .mobile-glossary-manage-pc {
+    display: none;
+  }
+  .pc-glossary-editor {
+    margin: 12px 14px 0;
+    padding: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.04);
+  }
+  .pc-glossary-editor-page {
+    position: sticky;
+    top: calc(88px + env(safe-area-inset-top));
+    height: calc(100vh - 108px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .pc-glossary-editor-head h3 {
+    margin: 0 0 6px;
+    font-size: 16px;
+    color: #ffd27a;
+  }
+  .pc-glossary-editor-head p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .pc-glossary-editor-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 12px;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .pc-glossary-editor-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 4px;
+    background: linear-gradient(180deg, rgba(15, 29, 49, 0.98), rgba(15, 29, 49, 0.9));
+  }
+  .pc-glossary-editor-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding-right: 6px;
+    display: grid;
+    gap: 14px;
+    align-content: start;
+  }
+  .pc-glossary-row {
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    background: rgba(8, 17, 29, 0.54);
+  }
+  .pc-glossary-row-new {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: linear-gradient(180deg, rgba(19, 36, 60, 0.98), rgba(11, 21, 35, 0.96));
+    border-color: rgba(255, 177, 26, 0.24);
+  }
+  .pc-glossary-field {
+    display: grid;
+    gap: 6px;
+  }
+  .pc-glossary-field span {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .pc-glossary-field input,
+  .pc-glossary-field textarea {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
+    background: rgba(12, 23, 38, 0.96);
+    color: var(--text);
+    font: inherit;
+    font-size: 14px;
+    line-height: 1.6;
+    outline: none;
+  }
+  .pc-glossary-field textarea {
+    resize: vertical;
+    min-height: 110px;
+  }
+  .pc-glossary-field input:focus,
+  .pc-glossary-field textarea:focus {
+    border-color: rgba(255, 177, 26, 0.48);
+    box-shadow: 0 0 0 3px rgba(255, 177, 26, 0.12);
+  }
+  .pc-glossary-editor-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
   .mobile-section-jump {
     display: none;
     position: sticky;
@@ -292,26 +401,31 @@
   .mobile-text-paragraph + .mobile-text-paragraph {
     margin-top: 10px;
   }
-  .mobile-glossary-trigger {
+  .mobile-glossary-trigger,
+  .mobile-glossary-trigger:link,
+  .mobile-glossary-trigger:visited,
+  .mobile-glossary-trigger:hover,
+  .mobile-glossary-trigger:active {
     display: inline;
     padding: 0;
     border: 0;
     border-bottom: 1px solid rgba(255, 177, 26, 0.75);
     background: transparent;
-    color: inherit;
+    color: #f4f7fb;
     font: inherit;
     font-weight: inherit;
+    font-size: inherit;
     line-height: inherit;
     cursor: pointer;
     text-decoration: none;
-  }
-  .mobile-glossary-trigger:active {
-    color: inherit;
   }
   .mobile-text-fallback-kv.has-glossary-trigger {
     display: block;
     margin-left: 14px;
     padding-left: 12px;
+    color: #dce7f4;
+    font-size: 14px;
+    line-height: 1.75;
   }
   .mobile-text-fallback-kv.has-glossary-trigger .mobile-glossary-trigger {
     display: inline-block;
@@ -981,6 +1095,12 @@
       width: auto;
       min-width: 160px;
     }
+    .mobile-glossary-manage-mobile {
+      display: none;
+    }
+    .mobile-glossary-manage-pc {
+      display: inline-flex;
+    }
     .viewer-toolbar,
     .viewer-canvas-wrap,
     .viewer-help {
@@ -1080,6 +1200,13 @@
     }
     .mobile-glossary-manage {
       padding: 10px 12px 0;
+    }
+    .mobile-glossary-manage-mobile {
+      display: inline-flex;
+    }
+    .mobile-glossary-manage-pc,
+    .pc-glossary-editor {
+      display: none;
     }
     .mobile-text-body {
       padding: 12px;

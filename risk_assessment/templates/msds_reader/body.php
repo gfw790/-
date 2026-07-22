@@ -19,6 +19,9 @@
 /** @var string $editSectionTitle */
 /** @var bool $editSectionSaved */
 /** @var int $editSectionNumber */
+/** @var bool $glossaryEditorOpen */
+/** @var bool $glossaryEditorSaved */
+/** @var array<int, array<string, mixed>> $glossaryEditorRows */
 ?>
 <?php foreach ($mobileGlossary as $index => $entry): ?>
   <div class="mobile-glossary-sheet" id="<?= h('mobile-glossary-entry-' . $index) ?>" aria-hidden="true">
@@ -88,7 +91,7 @@
       </div>
       <?php if ($canEditMobileMsds): ?>
         <div class="mobile-glossary-manage">
-          <button class="btn btn-ghost" type="button" id="mobile-glossary-manage-button" onclick="return window.__openMobileGlossaryEditor ? window.__openMobileGlossaryEditor() : false;">용어 설명 관리</button>
+          <a class="btn btn-ghost mobile-glossary-manage-pc" href="<?= h(msds_reader_glossary_editor_url((string)($record['id'] ?? ''))) ?>" target="_blank" rel="noopener">용어 설명 관리</a>
         </div>
       <?php endif; ?>
       <div class="mobile-section-jump" id="mobile-section-jump">

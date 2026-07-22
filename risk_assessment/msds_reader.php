@@ -394,6 +394,20 @@ function msds_reader_edit_section_url(string $recordId, int $sectionNumber, bool
     return 'msds_reader.php?' . http_build_query($params) . '#msds-section-editor';
 }
 
+function msds_reader_glossary_editor_url(string $recordId, bool $saved = false): string
+{
+    $params = [
+        'id' => $recordId,
+        'glossary_editor' => '1',
+    ];
+
+    if ($saved) {
+        $params['glossary_saved'] = '1';
+    }
+
+    return 'msds_reader.php?' . http_build_query($params) . '#msds-glossary-editor';
+}
+
 function msds_reader_server_pictogram_keys(string $sourceText): array
 {
     $normalized = preg_replace('/\s+/u', ' ', trim($sourceText)) ?? trim($sourceText);
@@ -666,6 +680,47 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (string)($_POST['action'
     exit;
 }
 
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (string)($_POST['action'] ?? '') === 'save_mobile_glossary_form') {
+    if (!$canEditMobileMsds) {
+        http_response_code(403);
+        exit('편집 권한이 없습니다.');
+    }
+
+    $targetId = trim((string)($_POST['record_id'] ?? ''));
+    $recordIndex = msds_reader_find_record_index($records, $targetId);
+
+    if ($targetId === '' || $recordIndex === null) {
+        http_response_code(404);
+        exit('대상 문서를 찾지 못했습니다.');
+    }
+
+    $terms = is_array($_POST['glossary_term'] ?? null) ? $_POST['glossary_term'] : [];
+    $titles = is_array($_POST['glossary_title'] ?? null) ? $_POST['glossary_title'] : [];
+    $contents = is_array($_POST['glossary_content'] ?? null) ? $_POST['glossary_content'] : [];
+    $items = [];
+    $rowCount = max(count($terms), count($titles), count($contents));
+
+    for ($index = 0; $index < $rowCount; $index += 1) {
+        $items[] = [
+            'term' => trim((string)($terms[$index] ?? '')),
+            'title' => trim((string)($titles[$index] ?? '')),
+            'content' => trim((string)($contents[$index] ?? '')),
+        ];
+    }
+
+    $glossary = msds_reader_normalize_glossary($items);
+    $records[$recordIndex]['mobile_glossary'] = $glossary;
+    $records[$recordIndex]['mobile_glossary_updated_at'] = date('c');
+
+    if (!msds_reader_write_records($records)) {
+        http_response_code(500);
+        exit('용어 설명을 저장하지 못했습니다.');
+    }
+
+    header('Location: ' . msds_reader_glossary_editor_url($targetId, true));
+    exit;
+}
+
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (string)($_POST['action'] ?? '') === 'save_mobile_section') {
     if (!$canEditMobileMsds) {
         http_response_code(403);
@@ -744,6 +799,12 @@ $editSection = ($canEditMobileMsds && $editSectionNumber >= 1 && isset($serverRe
 $editSectionBody = $editSection !== null ? msds_reader_normalize_block_text((string)($editSection['body'] ?? '')) : '';
 $editSectionTitle = $editSection !== null ? trim((string)($editSection['title'] ?? '')) : '';
 $editSectionSaved = (string)($_GET['saved'] ?? '') === '1';
+$glossaryEditorOpen = $canEditMobileMsds && (string)($_GET['glossary_editor'] ?? '') === '1';
+$glossaryEditorSaved = (string)($_GET['glossary_saved'] ?? '') === '1';
+$glossaryEditorRows = array_merge(
+    [['term' => '', 'title' => '', 'content' => '']],
+    $mobileGlossary
+);
 ?>
 <!DOCTYPE html>
 <html lang="ko">
@@ -754,9 +815,13 @@ $editSectionSaved = (string)($_GET['saved'] ?? '') === '1';
 <?php require __DIR__ . '/templates/msds_reader/styles.php'; ?>
 </head>
 <body>
+<?php if ($glossaryEditorOpen): ?>
+<?php require __DIR__ . '/templates/msds_reader/glossary_editor_page.php'; ?>
+<?php else: ?>
 <?php require __DIR__ . '/templates/msds_reader/body.php'; ?>
 <?php if ($record !== null && $isPdf): ?>
 <?php require __DIR__ . '/templates/msds_reader/pdf_reader_script.php'; ?>
+<?php endif; ?>
 <?php endif; ?>
 </body>
 </html>
