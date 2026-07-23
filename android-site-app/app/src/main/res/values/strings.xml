@@ -1,7 +1,9 @@
 <resources>
-    <string name="app_name">Risk Site</string>
-    <string name="site_url">http://hd6680.iptime.org/risk_assessment/task_select.php</string>
-    <string name="site_load_error_with_reason">페이지를 불러오지 못했습니다: %1$s</string>
-    <string name="site_load_http_error">서버 응답 오류가 발생했습니다. HTTP %1$d</string>
-    <string name="site_load_error_unknown">알 수 없는 오류</string>
+    <string name="app_name">트레이 절단 계산기</string>
+    <string name="angle_picker_instruction">오른쪽 선분을 손가락으로 끌어서 접는 각도를 맞춰보세요.</string>
+    <string name="angle_value_default">0°</string>
+    <string name="angle_value_format">%1$d°</string>
+    <string name="angle_canvas_format">현재 각도 %1$d°</string>
+    <string name="angle_range_hint">0° ~ 90°</string>
+    <string name="angle_picker_description">각도를 손가락으로 조절하는 영역</string>
 </resources>
