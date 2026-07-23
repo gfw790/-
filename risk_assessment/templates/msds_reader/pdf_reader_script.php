@@ -37,6 +37,7 @@
   const mobileGlossaryEditorSave = document.getElementById('mobile-glossary-editor-save');
   const mobileGlossaryAdd = document.getElementById('mobile-glossary-add');
   const mobileGlossary = <?= json_encode($mobileGlossary, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+  const mobilePictogramExcludeKeys = <?= json_encode($mobilePictogramExcludeKeys ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const msdsPictogramImages = <?= json_encode($msdsPictogramImages, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const canEditMobileMsds = <?= $canEditMobileMsds ? 'true' : 'false' ?>;
   const recordId = <?= json_encode((string)($record['id'] ?? ''), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
@@ -1290,7 +1291,8 @@
       keys.push('health-hazard');
     }
 
-    return [...new Set(keys)];
+    const excluded = new Set(Array.isArray(mobilePictogramExcludeKeys) ? mobilePictogramExcludeKeys : []);
+    return [...new Set(keys)].filter((key) => !excluded.has(key));
   }
 
   function getMsdsPictogramDefinitions() {

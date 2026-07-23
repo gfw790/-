@@ -44,7 +44,7 @@
   <div class="reader-topbar">
     <div class="reader-topbar-inner">
       <div class="reader-title">
-        <p class="eyebrow">MSDS MOBILE READER</p>
+        <p class="eyebrow">MSDS READER</p>
         <h1><?= h($materialName !== '' ? $materialName : 'MSDS 문서 보기') ?></h1>
       </div>
       <div class="reader-actions">

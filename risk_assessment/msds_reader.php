@@ -128,6 +128,40 @@ function msds_reader_normalize_block_text(string $value): string
     return trim(implode("\n", $lines));
 }
 
+function msds_reader_normalize_pictogram_key(string $value): string
+{
+    $normalized = trim(mb_strtolower($value, 'UTF-8'));
+
+    return match ($normalized) {
+        'flame', '인화성', '불꽃' => 'flame',
+        'gas-cylinder', '고압가스', '가스실린더' => 'gas-cylinder',
+        'exclamation', '경고', '느낌표' => 'exclamation',
+        'health-hazard', '건강유해성' => 'health-hazard',
+        default => '',
+    };
+}
+
+function msds_reader_normalize_pictogram_exclusions(mixed $value): array
+{
+    if (!is_array($value)) {
+        return [];
+    }
+
+    $normalized = [];
+    foreach ($value as $item) {
+        if (!is_scalar($item)) {
+            continue;
+        }
+
+        $key = msds_reader_normalize_pictogram_key((string)$item);
+        if ($key !== '') {
+            $normalized[] = $key;
+        }
+    }
+
+    return array_values(array_unique($normalized));
+}
+
 function msds_reader_is_top_level_section_heading(string $line): bool
 {
     if (preg_match('/^(\d{1,2})\.\s+(.+)$/u', trim($line), $matches) !== 1) {
@@ -408,7 +442,7 @@ function msds_reader_glossary_editor_url(string $recordId, bool $saved = false):
     return 'msds_reader.php?' . http_build_query($params) . '#msds-glossary-editor';
 }
 
-function msds_reader_server_pictogram_keys(string $sourceText): array
+function msds_reader_server_pictogram_keys(string $sourceText, array $excludeKeys = []): array
 {
     $normalized = preg_replace('/\s+/u', ' ', trim($sourceText)) ?? trim($sourceText);
     $keys = [];
@@ -429,7 +463,14 @@ function msds_reader_server_pictogram_keys(string $sourceText): array
         $keys[] = 'health-hazard';
     }
 
-    return array_values(array_unique($keys));
+    $excludeLookup = array_fill_keys(msds_reader_normalize_pictogram_exclusions($excludeKeys), true);
+    $keys = array_values(array_unique($keys));
+
+    if ($excludeLookup !== []) {
+        $keys = array_values(array_filter($keys, static fn (string $key): bool => !isset($excludeLookup[$key])));
+    }
+
+    return $keys;
 }
 
 function msds_reader_server_is_pictogram_label(string $line): bool
@@ -437,9 +478,9 @@ function msds_reader_server_is_pictogram_label(string $line): bool
     return in_array(trim($line), ['고압가스', '인화성', '경고', '건강유해성', '가스실린더', '불꽃', '느낌표'], true);
 }
 
-function msds_reader_server_render_pictogram_html(string $sourceText, string $titleText = '그림문자'): string
+function msds_reader_server_render_pictogram_html(string $sourceText, string $titleText = '그림문자', array $excludeKeys = []): string
 {
-    $keys = msds_reader_server_pictogram_keys($sourceText);
+    $keys = msds_reader_server_pictogram_keys($sourceText, $excludeKeys);
     if ($keys === []) {
         return '<div class="mobile-text-fallback-detail">그림문자 정보가 없습니다.</div>';
     }
@@ -491,7 +532,7 @@ function msds_reader_server_render_pictogram_html(string $sourceText, string $ti
         . '</div>';
 }
 
-function msds_reader_render_fallback_html(array $sections, bool $canEditMobileMsds = false, array $glossary = [], string $recordId = ''): string
+function msds_reader_render_fallback_html(array $sections, bool $canEditMobileMsds = false, array $glossary = [], string $recordId = '', array $pictogramExcludeKeys = []): string
 {
     if ($sections === []) {
         return '<div class="mobile-text-empty">표시할 본문이 없습니다.</div>';
@@ -517,7 +558,8 @@ function msds_reader_render_fallback_html(array $sections, bool $canEditMobileMs
                 $bodyChunks[] = '<div class="mobile-text-fallback-detail">' . h($labelText) . '</div>'
                     . msds_reader_server_render_pictogram_html(
                         implode("\n", array_merge([$rawTitle], $bodyLines)),
-                        ''
+                        '',
+                        $pictogramExcludeKeys
                     );
                 continue;
             }
@@ -783,11 +825,12 @@ $ocrText = (string)($record['ocr_text'] ?? '');
 $ocrSections = is_array($record['ocr_sections'] ?? null) ? $record['ocr_sections'] : [];
 $ocrError = (string)($record['ocr_error'] ?? '');
 $mobileGlossary = msds_reader_normalize_glossary(is_array($record['mobile_glossary'] ?? null) ? $record['mobile_glossary'] : []);
+$mobilePictogramExcludeKeys = msds_reader_normalize_pictogram_exclusions($record['mobile_pictogram_exclude'] ?? null);
 $pdfUrl = $record !== null ? 'msds_list.php?view_file=' . rawurlencode((string)($record['id'] ?? '')) : '';
 $downloadUrl = $record !== null ? 'msds_list.php?download_file=' . rawurlencode((string)($record['id'] ?? '')) : 'msds_list.php';
 $serverRenderSource = $hasStructuredMobileContent ? $mobileContent : $ocrText;
 $serverRenderSections = msds_reader_fallback_sections($serverRenderSource);
-$serverRenderHtml = msds_reader_render_fallback_html($serverRenderSections, $canEditMobileMsds, $mobileGlossary, $recordId);
+$serverRenderHtml = msds_reader_render_fallback_html($serverRenderSections, $canEditMobileMsds, $mobileGlossary, $recordId, $mobilePictogramExcludeKeys);
 $msdsPictogramImages = msds_reader_ghs_image_map();
 $serverRenderStatus = $hasStructuredMobileContent
     ? '관리자가 정리한 모바일 전용 본문입니다.'

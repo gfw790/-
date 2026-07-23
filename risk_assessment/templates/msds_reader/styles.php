@@ -1063,35 +1063,35 @@
     }
   }
   @media (min-width: 641px) {
-    .reader-shell.can-edit-mobile-msds {
+    .reader-shell {
       width: min(100%, 1600px);
     }
-    .reader-shell.can-edit-mobile-msds .reader-content-grid {
+    .reader-content-grid {
       grid-template-columns: minmax(360px, 480px) minmax(0, 1fr);
     }
-    .reader-shell.can-edit-mobile-msds .mobile-text-reader {
+    .mobile-text-reader {
       display: block;
       position: sticky;
       top: 96px;
       max-height: calc(100vh - 120px);
     }
-    .reader-shell.can-edit-mobile-msds .mobile-text-head,
-    .reader-shell.can-edit-mobile-msds .mobile-glossary-manage,
-    .reader-shell.can-edit-mobile-msds .mobile-section-jump,
-    .reader-shell.can-edit-mobile-msds .mobile-text-status {
+    .mobile-text-head,
+    .mobile-glossary-manage,
+    .mobile-section-jump,
+    .mobile-text-status {
       flex: 0 0 auto;
     }
-    .reader-shell.can-edit-mobile-msds .mobile-text-reader {
+    .mobile-text-reader {
       display: flex;
       flex-direction: column;
     }
-    .reader-shell.can-edit-mobile-msds .mobile-text-body {
+    .mobile-text-body {
       flex: 1 1 auto;
       min-height: 0;
       overflow: auto;
       padding-right: 12px;
     }
-    .reader-shell.can-edit-mobile-msds .mobile-glossary-manage .btn {
+    .mobile-glossary-manage .btn {
       width: auto;
       min-width: 160px;
     }
