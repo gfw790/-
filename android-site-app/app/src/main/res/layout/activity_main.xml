@@ -3,46 +3,40 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#FFF7F1"
-    android:gravity="center_horizontal"
+    android:gravity="center"
     android:orientation="vertical"
     android:padding="24dp">
 
     <TextView
-        android:id="@+id/titleText"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
         android:text="@string/app_name"
         android:textColor="#1C1917"
-        android:textSize="26sp"
+        android:textSize="28sp"
         android:textStyle="bold" />
 
     <TextView
-        android:id="@+id/subtitleText"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="10dp"
         android:gravity="center"
-        android:text="@string/angle_picker_instruction"
+        android:text="@string/home_subtitle"
         android:textColor="#57534E"
         android:textSize="16sp" />
 
-    <TextView
-        android:id="@+id/angleValueText"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="22dp"
-        android:text="@string/angle_value_default"
-        android:textColor="#9A3412"
-        android:textSize="34sp"
-        android:textStyle="bold" />
-
-    <com.example.risksiteapp.AnglePickerView
-        android:id="@+id/anglePickerView"
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/oneFoldButton"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_marginTop="12dp"
-        android:layout_weight="1"
-        android:minHeight="320dp" />
+        android:layout_height="wrap_content"
+        android:layout_marginTop="36dp"
+        android:text="@string/home_one_fold" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/twoFoldButton"
+        style="@style/Widget.Material3.Button.OutlinedButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:text="@string/home_two_fold" />
 
 </LinearLayout>

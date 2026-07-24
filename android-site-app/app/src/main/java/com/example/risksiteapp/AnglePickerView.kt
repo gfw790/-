@@ -8,6 +8,7 @@ import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.min
@@ -19,8 +20,11 @@ class AnglePickerView @JvmOverloads constructor(
     attrs: AttributeSet? = null
 ) : View(context, attrs) {
     var onAngleChanged: ((Int) -> Unit)? = null
+    var onInteractionBlocked: (() -> Unit)? = null
+    var isAngleInteractionEnabled: Boolean = true
 
     private var angleDegrees = 0f
+    private var hasShownBlockedMessageForTouch = false
     private val density = resources.displayMetrics.density
 
     private val baseLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -60,11 +64,11 @@ class AnglePickerView @JvmOverloads constructor(
         super.onDraw(canvas)
 
         val centerX = width / 2f
-        val centerY = height * 0.72f
+        val centerY = height * 0.66f
         val lineLength = min(width, height) * 0.3f
         val arcRadius = lineLength * 0.52f
 
-        canvas.drawLine(centerX - lineLength, centerY, centerX, centerY, baseLinePaint)
+        canvas.drawLine(centerX - lineLength, centerY, centerX + lineLength, centerY, baseLinePaint)
 
         val radians = Math.toRadians(angleDegrees.toDouble())
         val armEndX = centerX + (cos(radians) * lineLength).toFloat()
@@ -78,14 +82,14 @@ class AnglePickerView @JvmOverloads constructor(
             centerX + arcRadius,
             centerY + arcRadius
         )
-        canvas.drawArc(arcBounds, -90f, 90f, false, guideArcPaint)
+        canvas.drawArc(arcBounds, -90f, 180f, false, guideArcPaint)
         canvas.drawCircle(centerX, centerY, 7f * density, centerDotPaint)
         canvas.drawCircle(armEndX, armEndY, 10f * density, activeLinePaint)
 
         canvas.drawText(
             resources.getString(R.string.angle_canvas_format, angleDegrees.roundToInt()),
             centerX,
-            centerY - lineLength - (22f * density),
+            centerY - lineLength - (12f * density),
             labelPaint
         )
 
@@ -98,23 +102,78 @@ class AnglePickerView @JvmOverloads constructor(
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (!isAngleInteractionEnabled) {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    hasShownBlockedMessageForTouch = true
+                    onInteractionBlocked?.invoke()
+                    return true
+                }
+                MotionEvent.ACTION_MOVE,
+                MotionEvent.ACTION_UP,
+                MotionEvent.ACTION_CANCEL -> {
+                    if (event.actionMasked == MotionEvent.ACTION_UP ||
+                        event.actionMasked == MotionEvent.ACTION_CANCEL
+                    ) {
+                        hasShownBlockedMessageForTouch = false
+                    }
+                    return true
+                }
+            }
+        }
+
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN,
             MotionEvent.ACTION_MOVE -> {
+                parent?.requestDisallowInterceptTouchEvent(true)
                 updateAngle(event.x, event.y)
+                return true
+            }
+            MotionEvent.ACTION_UP -> {
+                parent?.requestDisallowInterceptTouchEvent(false)
+                performClick()
+                return true
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                parent?.requestDisallowInterceptTouchEvent(false)
+                hasShownBlockedMessageForTouch = false
                 return true
             }
         }
         return super.onTouchEvent(event)
     }
 
+    override fun performClick(): Boolean {
+        return super.performClick()
+    }
+
+    fun setAngle(angle: Int) {
+        val clampedAngle = angle.coerceIn(-90, 90).toFloat()
+        if (clampedAngle != angleDegrees) {
+            angleDegrees = clampedAngle
+            onAngleChanged?.invoke(angleDegrees.roundToInt())
+            invalidate()
+        }
+    }
+
+    fun getAngle(): Int = angleDegrees.roundToInt()
+
     private fun updateAngle(touchX: Float, touchY: Float) {
         val centerX = width / 2f
-        val centerY = height * 0.72f
+        val centerY = height * 0.66f
         val rawAngle = Math.toDegrees(
             atan2((centerY - touchY).toDouble(), (touchX - centerX).toDouble())
         ).toFloat()
-        val clampedAngle = rawAngle.coerceIn(0f, 90f)
+        val normalizedAngle = if (abs(rawAngle) > 90f) {
+            if (rawAngle > 0f) {
+                90f
+            } else {
+                -90f
+            }
+        } else {
+            rawAngle
+        }
+        val clampedAngle = normalizedAngle.coerceIn(-90f, 90f)
 
         if (clampedAngle != angleDegrees) {
             angleDegrees = clampedAngle

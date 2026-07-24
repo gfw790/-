@@ -37,6 +37,19 @@ android {
     }
 }
 
+val copyNamedDebugApk by tasks.registering(Copy::class) {
+    dependsOn("assembleDebug")
+    from(layout.buildDirectory.file("outputs/apk/debug/app-debug.apk"))
+    into(layout.buildDirectory.dir("outputs/apk/named"))
+    rename { "트레이절단계산기.apk" }
+}
+
+afterEvaluate {
+    tasks.named("assembleDebug") {
+        finalizedBy(copyNamedDebugApk)
+    }
+}
+
 dependencies {
     implementation("androidx.activity:activity-ktx:1.9.1")
     implementation("androidx.core:core-ktx:1.13.1")

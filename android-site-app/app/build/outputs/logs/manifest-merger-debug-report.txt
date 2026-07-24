@@ -1,9 +1,9 @@
 -- Merging decision tree log ---
 manifest
-ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:2:1-26:12
-INJECTED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:2:1-26:12
-INJECTED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:2:1-26:12
-INJECTED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:2:1-26:12
+ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:2:1-33:12
+INJECTED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:2:1-33:12
+INJECTED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:2:1-33:12
+INJECTED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:2:1-33:12
 MERGED from [com.google.android.material:material:1.12.0] C:\Users\gfw79\.gradle\caches\9.3.1\transforms\c675a7ac10f198545c1f65a7827cdfb7\workspace\transformed\material-1.12.0\AndroidManifest.xml:17:1-24:12
 MERGED from [androidx.appcompat:appcompat-resources:1.7.0] C:\Users\gfw79\.gradle\caches\9.3.1\transforms\47d1d0214d21fc2247782544967b8216\workspace\transformed\appcompat-resources-1.7.0\AndroidManifest.xml:2:1-7:12
 MERGED from [androidx.constraintlayout:constraintlayout:2.0.1] C:\Users\gfw79\.gradle\caches\9.3.1\transforms\4a1cba03904206deea4f53f2a45cc853\workspace\transformed\constraintlayout-2.0.1\AndroidManifest.xml:2:1-11:12
@@ -63,8 +63,8 @@ ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.
 	android:name
 		ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:4:22-64
 application
-ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:6:5-24:19
-INJECTED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:6:5-24:19
+ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:6:5-31:19
+INJECTED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:6:5-31:19
 MERGED from [com.google.android.material:material:1.12.0] C:\Users\gfw79\.gradle\caches\9.3.1\transforms\c675a7ac10f198545c1f65a7827cdfb7\workspace\transformed\material-1.12.0\AndroidManifest.xml:22:5-20
 MERGED from [com.google.android.material:material:1.12.0] C:\Users\gfw79\.gradle\caches\9.3.1\transforms\c675a7ac10f198545c1f65a7827cdfb7\workspace\transformed\material-1.12.0\AndroidManifest.xml:22:5-20
 MERGED from [androidx.constraintlayout:constraintlayout:2.0.1] C:\Users\gfw79\.gradle\caches\9.3.1\transforms\4a1cba03904206deea4f53f2a45cc853\workspace\transformed\constraintlayout-2.0.1\AndroidManifest.xml:9:5-20
@@ -86,37 +86,51 @@ MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\gf
 	android:appComponentFactory
 		ADDED from [androidx.core:core:1.13.1] C:\Users\gfw79\.gradle\caches\9.3.1\transforms\967d5cb6e0669990dbde4b8a6ef16de8\workspace\transformed\core-1.13.1\AndroidManifest.xml:28:18-86
 	android:supportsRtl
-		ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:11:9-35
+		ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:12:9-35
 	android:label
-		ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:9:9-41
+		ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:10:9-41
+	android:roundIcon
+		ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:9:9-54
 	android:icon
-		ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:8:9-58
+		ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:8:9-43
 	android:allowBackup
 		ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:7:9-35
 	android:theme
-		ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:12:9-49
+		ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:13:9-49
 	android:networkSecurityConfig
-		ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:10:9-69
+		ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:11:9-69
 	android:usesCleartextTraffic
-		ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:13:9-44
+		ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:14:9-44
 activity#com.example.risksiteapp.MainActivity
-ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:14:9-23:20
+ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:15:9-24:20
 	android:exported
-		ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:16:13-36
+		ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:17:13-36
 	android:configChanges
-		ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:17:13-74
+		ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:18:13-74
 	android:name
-		ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:15:13-41
+		ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:16:13-41
 intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
-ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:18:13-22:29
+ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:19:13-23:29
 action#android.intent.action.MAIN
-ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:19:17-69
+ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:20:17-69
 	android:name
-		ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:19:25-66
+		ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:20:25-66
 category#android.intent.category.LAUNCHER
-ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:21:17-77
+ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:22:17-77
 	android:name
-		ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:21:27-74
+		ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:22:27-74
+activity#com.example.risksiteapp.OneFoldActivity
+ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:25:9-27:40
+	android:exported
+		ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:27:13-37
+	android:name
+		ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:26:13-44
+activity#com.example.risksiteapp.TwoFoldActivity
+ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:28:9-30:40
+	android:exported
+		ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:30:13-37
+	android:name
+		ADDED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml:29:13-44
 uses-sdk
 INJECTED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from A:\risk_server\project\android-site-app\app\src\main\AndroidManifest.xml

@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#fff7f1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="트레이절단계산기">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./assets/two_fold_guide_reference.png">
+  <title>트레이절단계산기</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, "Noto Sans KR", sans-serif;
+      background: #fff7f1;
+      color: #1c1917;
+    }
+    .app {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 24px 16px 40px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 800;
+    }
+    .subtitle {
+      margin: 10px 0 20px;
+      color: #57534e;
+      line-height: 1.6;
+    }
+    .install-note {
+      margin: 0 0 20px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: #ffedd5;
+      color: #9a3412;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .tab {
+      border: 0;
+      border-radius: 14px;
+      padding: 14px 16px;
+      background: #f4e7dd;
+      color: #7c2d12;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .tab.active {
+      background: #c2410c;
+      color: white;
+    }
+    .panel {
+      display: none;
+    }
+    .panel.active {
+      display: block;
+    }
+    .card {
+      background: white;
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: 0 6px 24px rgba(28, 25, 23, 0.08);
+      margin-bottom: 18px;
+    }
+    .card-title {
+      margin: 0 0 12px;
+      color: #7c2d12;
+      font-size: 18px;
+      font-weight: 800;
+    }
+    .field {
+      margin-bottom: 14px;
+    }
+    .field label {
+      display: block;
+      margin-bottom: 6px;
+      color: #44403c;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .field input,
+    .field select {
+      width: 100%;
+      padding: 13px 14px;
+      border: 1px solid #d6d3d1;
+      border-radius: 12px;
+      font-size: 16px;
+      background: white;
+    }
+    .hint {
+      margin-top: 6px;
+      color: #78716c;
+      font-size: 13px;
+    }
+    .angle-row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .angle-badge {
+      min-width: 96px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: #fff1e7;
+      color: #9a3412;
+      font-size: 24px;
+      font-weight: 800;
+      text-align: center;
+      cursor: pointer;
+    }
+    .angle-canvas-wrap {
+      margin-top: 16px;
+      padding: 14px;
+      border-radius: 16px;
+      background: #fff8f3;
+      border: 1px solid #f1dfd2;
+      touch-action: none;
+    }
+    .angle-canvas {
+      width: 100%;
+      height: 220px;
+      display: block;
+      touch-action: none;
+    }
+    .angle-canvas-hint {
+      margin-top: 10px;
+      color: #78716c;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .guide-image {
+      width: 100%;
+      border-radius: 14px;
+      cursor: zoom-in;
+      display: block;
+    }
+    .zoom-tip {
+      margin-top: 10px;
+      color: #57534e;
+      font-size: 13px;
+    }
+    .result-box {
+      background: #fde7d8;
+      border-radius: 20px;
+      padding: 20px;
+    }
+    .result-section {
+      margin-top: 18px;
+    }
+    .result-label {
+      margin: 0 0 6px;
+      color: #7c2d12;
+      font-size: 14px;
+      font-weight: 800;
+    }
+    .result-value {
+      margin: 0;
+      color: #9a3412;
+      font-size: 24px;
+      font-weight: 800;
+      line-height: 1.5;
+    }
+    .result-headline {
+      margin: 0;
+      color: #9a3412;
+      font-size: 32px;
+      font-weight: 900;
+    }
+    .error {
+      margin-top: 6px;
+      color: #dc2626;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .overlay {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.9);
+      padding: 16px;
+      z-index: 999;
+    }
+    .overlay.open {
+      display: flex;
+    }
+    .overlay-inner {
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+    }
+    .overlay img {
+      display: block;
+      max-width: none;
+      width: 1200px;
+      min-width: 100%;
+      margin: 0 auto;
+      border-radius: 16px;
+    }
+    .overlay-close {
+      position: fixed;
+      top: 14px;
+      right: 14px;
+      border: 0;
+      background: rgba(255,255,255,0.18);
+      color: white;
+      border-radius: 999px;
+      width: 42px;
+      height: 42px;
+      font-size: 24px;
+      cursor: pointer;
+      z-index: 1000;
+    }
+    @media (min-width: 700px) {
+      .two-col {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>트레이절단계산기</h1>
+    <p class="subtitle">아이폰과 안드로이드에서 홈 화면에 추가한 뒤 인터넷 없이 사용할 수 있는 현장용 계산기입니다.</p>
+    <p class="install-note">아이폰 사파리에서 이 페이지를 한 번 연 뒤 공유 버튼을 눌러 <strong>홈 화면에 추가</strong>하면 이후 오프라인으로 사용할 수 있습니다.</p>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="one-fold">1번 접기</button>
+      <button class="tab" data-tab="two-fold">2번 접기</button>
+    </div>
+
+    <section class="panel active" id="one-fold">
+      <div class="card">
+        <h2 class="card-title">1번 접기</h2>
+        <div class="field">
+          <label for="one-width">트레이 폭</label>
+          <select id="one-width">
+            <option value="">선택하세요</option>
+            <option>100</option>
+            <option>150</option>
+            <option>200</option>
+            <option>300</option>
+            <option>400</option>
+            <option>450</option>
+            <option>500</option>
+            <option>600</option>
+            <option>750</option>
+          </select>
+          <div class="hint">단위는 mm입니다.</div>
+        </div>
+        <div class="field">
+          <label>현재 각도</label>
+          <div class="angle-row">
+            <div class="angle-badge" id="one-angle-badge">0도</div>
+          </div>
+          <div class="hint">각도 숫자를 누르거나 아래 선분을 드래그해 입력합니다.</div>
+          <div class="angle-canvas-wrap">
+            <canvas class="angle-canvas" id="one-angle-canvas" width="640" height="220"></canvas>
+            <div class="angle-canvas-hint">오른쪽 선분을 손가락으로 드래그하면 각도가 바뀝니다.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="result-box">
+        <p class="result-label">계산 결과</p>
+        <p class="result-headline" id="one-result">중심선으로 부터 좌, 우 0mm씩 절단하세요</p>
+      </div>
+    </section>
+
+    <section class="panel" id="two-fold">
+      <div class="card">
+        <h2 class="card-title">작업 안내도</h2>
+        <img class="guide-image" id="guide-image" src="./assets/two_fold_guide_reference.png" alt="작업 안내도">
+        <div class="zoom-tip">이미지를 누르면 크게 볼 수 있습니다.</div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">2번 접기</h2>
+        <p class="subtitle" style="margin-top:0;">공통 접는 각도와 트레이 간격을 입력해 2번 접기 절단값을 계산합니다.</p>
+        <div class="two-col">
+          <div class="field">
+            <label for="two-width">트레이 사이즈</label>
+            <select id="two-width">
+              <option value="">선택하세요</option>
+              <option>100</option>
+              <option>150</option>
+              <option>200</option>
+              <option>300</option>
+              <option>400</option>
+              <option>450</option>
+              <option>500</option>
+              <option>600</option>
+              <option>750</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="two-gap">트레이 간격</label>
+            <input type="number" id="two-gap" inputmode="decimal" placeholder="예: 800">
+            <div class="error" id="two-gap-error"></div>
+          </div>
+        </div>
+        <div class="field">
+          <label for="two-angle">공통 접는 각도</label>
+          <input type="number" id="two-angle" inputmode="decimal" placeholder="예: 45">
+          <div class="angle-canvas-wrap">
+            <canvas class="angle-canvas" id="two-angle-canvas" width="640" height="220"></canvas>
+            <div class="angle-canvas-hint">드래그로 공통 접는 각도를 잡을 수 있습니다.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="result-box">
+        <p class="result-label">최종 각도</p>
+        <p class="result-headline">180도</p>
+
+        <div class="result-section">
+          <p class="result-label">절단점 1</p>
+          <p class="result-value" id="two-cut-1">절단점 1은 중심점에서 좌우로 0mm 잘라내야 합니다.</p>
+        </div>
+
+        <div class="result-section">
+          <p class="result-label">절단점 2</p>
+          <p class="result-value" id="two-cut-2">절단점 2는 중심점에서 좌우로 0mm 잘라내야 합니다.</p>
+        </div>
+
+        <div class="result-section">
+          <p class="result-label">중심점 간 거리</p>
+          <p class="result-value" id="two-distance">평행 180도 모드에서 계산됩니다.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="overlay" id="guide-overlay" aria-hidden="true">
+    <button class="overlay-close" id="overlay-close" aria-label="닫기">×</button>
+    <div class="overlay-inner">
+      <img src="./assets/two_fold_guide_reference.png" alt="확대된 작업 안내도">
+    </div>
+  </div>
+
+  <script>
+    const oneWidth = document.getElementById('one-width');
+    const oneAngleBadge = document.getElementById('one-angle-badge');
+    const oneResult = document.getElementById('one-result');
+    const oneAngleCanvas = document.getElementById('one-angle-canvas');
+
+    const twoWidth = document.getElementById('two-width');
+    const twoGap = document.getElementById('two-gap');
+    const twoAngle = document.getElementById('two-angle');
+    const twoGapError = document.getElementById('two-gap-error');
+    const twoCut1 = document.getElementById('two-cut-1');
+    const twoCut2 = document.getElementById('two-cut-2');
+    const twoDistance = document.getElementById('two-distance');
+    const twoAngleCanvas = document.getElementById('two-angle-canvas');
+    let oneAngleValue = 0;
+    const canvasRedrawers = [];
+
+    function toNumber(value) {
+      if (value === '' || value === null || typeof value === 'undefined') {
+        return null;
+      }
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    function degToRad(degree) {
+      return degree * Math.PI / 180;
+    }
+
+    function radToDeg(radian) {
+      return radian * 180 / Math.PI;
+    }
+
+    function oneCut(width, angle) {
+      return Math.round(width * Math.tan(degToRad(Math.abs(angle) / 2)));
+    }
+
+    function resizeCanvas(canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const ratio = window.devicePixelRatio || 1;
+      const width = Math.max(1, Math.round(rect.width * ratio));
+      const height = Math.max(1, Math.round(rect.height * ratio));
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+    }
+
+    function drawAngleCanvas(canvas, angle, options = {}) {
+      resizeCanvas(canvas);
+      const ctx = canvas.getContext('2d');
+      const width = canvas.width;
+      const height = canvas.height;
+      const ratio = window.devicePixelRatio || 1;
+      ctx.clearRect(0, 0, width, height);
+
+      const centerX = width * 0.5;
+      const centerY = height * 0.58;
+      const baseLength = Math.min(width * 0.34, height * 0.34);
+      const radians = degToRad(angle);
+      const endX = centerX + Math.cos(radians) * baseLength;
+      const endY = centerY - Math.sin(radians) * baseLength;
+
+      ctx.lineCap = 'round';
+
+      ctx.strokeStyle = '#D6D3D1';
+      ctx.lineWidth = 2.5 * ratio;
+      ctx.beginPath();
+      ctx.moveTo(centerX - baseLength, centerY);
+      ctx.lineTo(centerX + baseLength, centerY);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#C2410C';
+      ctx.lineWidth = 5 * ratio;
+      ctx.beginPath();
+      ctx.moveTo(centerX, centerY);
+      ctx.lineTo(endX, endY);
+      ctx.stroke();
+
+      ctx.fillStyle = '#C2410C';
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, 7 * ratio, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#9A3412';
+      ctx.font = `${Math.round(20 * ratio)}px Arial`;
+      const angleLabel = `${Math.round(angle)}도`;
+      const textWidth = ctx.measureText(angleLabel).width;
+      ctx.fillText(angleLabel, centerX - textWidth / 2, centerY - (baseLength * 0.58));
+
+      ctx.strokeStyle = '#A8A29E';
+      ctx.lineWidth = 2 * ratio;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, 34 * ratio, -radians, 0, angle < 0);
+      ctx.stroke();
+
+      if (options.lockPositive) {
+        ctx.fillStyle = '#78716C';
+        ctx.font = `${Math.round(12 * ratio)}px Arial`;
+        const guide = '0도~90도';
+        const guideWidth = ctx.measureText(guide).width;
+        ctx.fillText(guide, centerX - guideWidth / 2, centerY + 34 * ratio);
+      } else {
+        ctx.fillStyle = '#78716C';
+        ctx.font = `${Math.round(12 * ratio)}px Arial`;
+        const guide = '-90도~90도';
+        const guideWidth = ctx.measureText(guide).width;
+        ctx.fillText(guide, centerX - guideWidth / 2, centerY + 34 * ratio);
+      }
+    }
+
+    function installAngleDrag(canvas, getAngle, setAngle, options = {}) {
+      const lockPositive = !!options.lockPositive;
+      let dragging = false;
+
+      const updateFromPoint = (event) => {
+        const rect = canvas.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        const centerX = rect.width * 0.5;
+        const centerY = rect.height * 0.58;
+        const dx = x - centerX;
+        const dy = centerY - y;
+
+        if (dx < 0) {
+          return;
+        }
+
+        let angle = radToDeg(Math.atan2(dy, dx));
+        if (lockPositive) {
+          angle = Math.max(0, Math.min(90, angle));
+        } else {
+          angle = Math.max(-90, Math.min(90, angle));
+        }
+        setAngle(angle);
+      };
+
+      const pointerDown = (event) => {
+        dragging = true;
+        canvas.setPointerCapture(event.pointerId);
+        updateFromPoint(event);
+      };
+
+      const pointerMove = (event) => {
+        if (!dragging) {
+          return;
+        }
+        updateFromPoint(event);
+      };
+
+      const pointerUp = (event) => {
+        dragging = false;
+        if (canvas.hasPointerCapture(event.pointerId)) {
+          canvas.releasePointerCapture(event.pointerId);
+        }
+      };
+
+      canvas.addEventListener('pointerdown', pointerDown);
+      canvas.addEventListener('pointermove', pointerMove);
+      canvas.addEventListener('pointerup', pointerUp);
+      canvas.addEventListener('pointercancel', pointerUp);
+
+      const redraw = () => drawAngleCanvas(canvas, getAngle(), options);
+      window.addEventListener('resize', redraw);
+      canvasRedrawers.push(redraw);
+      requestAnimationFrame(redraw);
+      return redraw;
+    }
+
+    function showToast(message) {
+      window.alert(message);
+    }
+
+    function updateOneFold() {
+      const width = toNumber(oneWidth.value);
+      const angle = oneAngleValue;
+      oneAngleBadge.textContent = `${Math.round(angle)}도`;
+
+      if (width === null) {
+        oneResult.textContent = '중심선으로 부터 좌, 우 0mm씩 절단하세요';
+        return;
+      }
+
+      const result = oneCut(width, angle);
+      oneResult.textContent = `중심선으로 부터 좌, 우 ${result}mm씩 절단하세요`;
+      drawAngleCanvas(oneAngleCanvas, angle);
+    }
+
+    function updateTwoFold() {
+      const width = toNumber(twoWidth.value);
+      const gap = toNumber(twoGap.value);
+      const angle = Math.min(90, Math.max(0, toNumber(twoAngle.value) ?? 0));
+      drawAngleCanvas(twoAngleCanvas, angle, { lockPositive: true });
+
+      if (width === null) {
+        twoCut1.textContent = '절단점 1은 중심점에서 좌우로 0mm 잘라내야 합니다.';
+        twoCut2.textContent = '절단점 2는 중심점에서 좌우로 0mm 잘라내야 합니다.';
+        twoDistance.textContent = '평행 180도 모드에서 계산됩니다.';
+        twoGapError.textContent = '';
+        return;
+      }
+
+      const cut = oneCut(width, angle);
+      twoCut1.textContent = `절단점 1은 중심점에서 좌우로 ${cut}mm 잘라내야 합니다.`;
+      twoCut2.textContent = `절단점 2는 중심점에서 좌우로 ${cut}mm 잘라내야 합니다.`;
+
+      if (gap !== null && gap <= width * 2) {
+        twoGapError.textContent = '트레이 간격은 위아래 트레이 길이의 합보다 커야 합니다.';
+        twoDistance.textContent = '평행 180도 모드에서 계산됩니다.';
+        return;
+      }
+
+      twoGapError.textContent = '';
+
+      const rise = (gap ?? 0) - (width * 2);
+      if (gap !== null && angle > 0 && rise > 0) {
+        const distance = Math.round(rise / Math.sin(degToRad(angle)));
+        twoDistance.textContent = `아랫변 기준 중심점 간의 거리는 ${distance}mm입니다.`;
+      } else {
+        twoDistance.textContent = '평행 180도 모드에서 계산됩니다.';
+      }
+    }
+
+    oneWidth.addEventListener('change', updateOneFold);
+
+    oneAngleBadge.addEventListener('click', () => {
+      if (!oneWidth.value) {
+        showToast('트레이를 선택해주세요');
+        return;
+      }
+      const value = window.prompt('각도를 입력하세요 (-90 ~ 90)', String(Math.round(oneAngleValue)));
+      if (value === null) {
+        return;
+      }
+      const parsed = Math.max(-90, Math.min(90, Math.round(Number(value) || 0)));
+      oneAngleValue = parsed;
+      updateOneFold();
+    });
+
+    installAngleDrag(
+      oneAngleCanvas,
+      () => oneAngleValue,
+      (angle) => {
+        if (!oneWidth.value) {
+          showToast('트레이를 선택해주세요');
+          return;
+        }
+        oneAngleValue = Math.round(angle);
+        updateOneFold();
+      }
+    );
+
+    installAngleDrag(
+      twoAngleCanvas,
+      () => Math.min(90, Math.max(0, toNumber(twoAngle.value) ?? 0)),
+      (angle) => {
+        twoAngle.value = String(Math.round(angle));
+        updateTwoFold();
+      },
+      { lockPositive: true }
+    );
+
+    [twoWidth, twoGap, twoAngle].forEach((el) => {
+      el.addEventListener('input', updateTwoFold);
+      el.addEventListener('change', updateTwoFold);
+    });
+
+    document.querySelectorAll('.tab').forEach((button) => {
+      button.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach((tab) => tab.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach((panel) => panel.classList.remove('active'));
+        button.classList.add('active');
+        document.getElementById(button.dataset.tab).classList.add('active');
+        requestAnimationFrame(() => {
+          canvasRedrawers.forEach((redraw) => redraw());
+        });
+      });
+    });
+
+    const overlay = document.getElementById('guide-overlay');
+    document.getElementById('guide-image').addEventListener('click', () => {
+      overlay.classList.add('open');
+      overlay.setAttribute('aria-hidden', 'false');
+    });
+    document.getElementById('overlay-close').addEventListener('click', closeOverlay);
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) {
+        closeOverlay();
+      }
+    });
+
+    function closeOverlay() {
+      overlay.classList.remove('open');
+      overlay.setAttribute('aria-hidden', 'true');
+    }
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js');
+      });
+    }
+
+    updateOneFold();
+    updateTwoFold();
+    window.addEventListener('load', () => {
+      requestAnimationFrame(() => {
+        canvasRedrawers.forEach((redraw) => redraw());
+      });
+    });
+  </script>
+</body>
+</html>

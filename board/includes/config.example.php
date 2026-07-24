@@ -14,7 +14,7 @@ define('DB_CHARSET', 'utf8mb4');
 define('BOARD_TITLE', '사내 게시판');
 define('POSTS_PER_PAGE', 20);
 define('MAX_UPLOAD_SIZE', 20 * 1024 * 1024); // 20MB
-define('ALLOWED_EXTENSIONS', 'jpg,jpeg,png,gif,bmp,webp,pdf,doc,docx,xls,xlsx,ppt,pptx,hwp,hwpx,txt,zip,7z,csv');
+define('ALLOWED_EXTENSIONS', 'jpg,jpeg,png,gif,bmp,webp,pdf,doc,docx,xls,xlsx,ppt,pptx,hwp,hwpx,txt,zip,7z,csv,apk');
 define('BLOCKED_EXTENSIONS', 'php,phtml,php3,php4,php5,phar,exe,bat,cmd,sh,js,html,htm');
 define('BOARD_UPLOAD_DIR_CHAT', 'A:\\risk_server\\uploads\\2026\\board-upload\\01_chat');
 define('BOARD_UPLOAD_DIR_QNA', 'A:\\risk_server\\uploads\\2026\\board-upload\\02_Q&A');

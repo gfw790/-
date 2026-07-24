@@ -1,10 +1,42 @@
 [
     {
-        "merged": "com.example.risksiteapp-debug-4:/layout_activity_main.xml.flat",
-        "source": "com.example.risksiteapp-main-6:/layout/activity_main.xml"
+        "merged": "C:\\Users\\gfw79\\.gradle\\daemon\\9.3.1\\com.example.risksiteapp-debug-4:\\xml_network_security_config.xml.flat",
+        "source": "C:\\Users\\gfw79\\.gradle\\daemon\\9.3.1\\com.example.risksiteapp-main-6:\\xml\\network_security_config.xml"
     },
     {
-        "merged": "com.example.risksiteapp-debug-4:/xml_network_security_config.xml.flat",
-        "source": "com.example.risksiteapp-main-6:/xml/network_security_config.xml"
+        "merged": "C:\\Users\\gfw79\\.gradle\\daemon\\9.3.1\\com.example.risksiteapp-debug-4:\\drawable-nodpi_two_fold_guide_reference.png.flat",
+        "source": "C:\\Users\\gfw79\\.gradle\\daemon\\9.3.1\\com.example.risksiteapp-main-6:\\drawable-nodpi\\two_fold_guide_reference.png"
+    },
+    {
+        "merged": "C:\\Users\\gfw79\\.gradle\\daemon\\9.3.1\\com.example.risksiteapp-debug-4:\\mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "C:\\Users\\gfw79\\.gradle\\daemon\\9.3.1\\com.example.risksiteapp-main-6:\\mipmap-anydpi-v26\\ic_launcher.xml"
+    },
+    {
+        "merged": "C:\\Users\\gfw79\\.gradle\\daemon\\9.3.1\\com.example.risksiteapp-debug-4:\\layout_activity_two_fold.xml.flat",
+        "source": "C:\\Users\\gfw79\\.gradle\\daemon\\9.3.1\\com.example.risksiteapp-main-6:\\layout\\activity_two_fold.xml"
+    },
+    {
+        "merged": "C:\\Users\\gfw79\\.gradle\\daemon\\9.3.1\\com.example.risksiteapp-debug-4:\\drawable_ic_launcher_background.xml.flat",
+        "source": "C:\\Users\\gfw79\\.gradle\\daemon\\9.3.1\\com.example.risksiteapp-main-6:\\drawable\\ic_launcher_background.xml"
+    },
+    {
+        "merged": "C:\\Users\\gfw79\\.gradle\\daemon\\9.3.1\\com.example.risksiteapp-debug-4:\\layout_activity_main.xml.flat",
+        "source": "C:\\Users\\gfw79\\.gradle\\daemon\\9.3.1\\com.example.risksiteapp-main-6:\\layout\\activity_main.xml"
+    },
+    {
+        "merged": "C:\\Users\\gfw79\\.gradle\\daemon\\9.3.1\\com.example.risksiteapp-debug-4:\\layout_activity_one_fold.xml.flat",
+        "source": "C:\\Users\\gfw79\\.gradle\\daemon\\9.3.1\\com.example.risksiteapp-main-6:\\layout\\activity_one_fold.xml"
+    },
+    {
+        "merged": "C:\\Users\\gfw79\\.gradle\\daemon\\9.3.1\\com.example.risksiteapp-debug-4:\\mipmap-anydpi-v26_ic_launcher_round.xml.flat",
+        "source": "C:\\Users\\gfw79\\.gradle\\daemon\\9.3.1\\com.example.risksiteapp-main-6:\\mipmap-anydpi-v26\\ic_launcher_round.xml"
+    },
+    {
+        "merged": "C:\\Users\\gfw79\\.gradle\\daemon\\9.3.1\\com.example.risksiteapp-debug-4:\\drawable_ic_launcher_foreground.xml.flat",
+        "source": "C:\\Users\\gfw79\\.gradle\\daemon\\9.3.1\\com.example.risksiteapp-main-6:\\drawable\\ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "com.example.risksiteapp-debug-4:/layout_activity_two_fold.xml.flat",
+        "source": "com.example.risksiteapp-main-6:/layout/activity_two_fold.xml"
     }
 ]

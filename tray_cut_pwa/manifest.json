@@ -1,0 +1,17 @@
+{
+  "name": "트레이절단계산기",
+  "short_name": "트레이절단",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#fff7f1",
+  "theme_color": "#fff7f1",
+  "lang": "ko",
+  "icons": [
+    {
+      "src": "./assets/two_fold_guide_reference.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

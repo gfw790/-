@@ -164,15 +164,16 @@ $pageTitle = $post['title'];
                 <div class="post-attachment-images">
                     <?php foreach ($imageAttachments as $att): ?>
                         <?php
-                        $downloadUrl = 'download.php?id=' . (int)$att['id'];
+                        $downloadUrl = attachmentDownloadUrl($att);
                         $imageSrc = attachmentInlineUrl($att);
+                        $downloadName = (string)($att['original_name'] ?? 'download');
                         ?>
                         <figure class="post-attachment-image">
-                            <a href="<?= h($downloadUrl) ?>" target="_blank" rel="noopener noreferrer">
+                            <a href="<?= h($downloadUrl) ?>" download="<?= h($downloadName) ?>" target="_blank" rel="noopener noreferrer">
                                 <img src="<?= h($imageSrc) ?>" alt="<?= h($att['original_name']) ?>" loading="lazy">
                             </a>
                             <figcaption>
-                                <a href="<?= h($downloadUrl) ?>" target="_blank" rel="noopener noreferrer"><?= h($att['original_name']) ?></a>
+                                <a href="<?= h($downloadUrl) ?>" download="<?= h($downloadName) ?>" target="_blank" rel="noopener noreferrer"><?= h($att['original_name']) ?></a>
                                 <span class="attach-size">(<?= formatBytes($att['file_size']) ?>)</span>
                             </figcaption>
                         </figure>
@@ -184,7 +185,7 @@ $pageTitle = $post['title'];
                 <ul>
                     <?php foreach ($fileAttachments as $att): ?>
                         <li>
-                            <a href="download.php?id=<?= (int)$att['id'] ?>"><?= h($att['original_name']) ?></a>
+                            <a href="<?= h(attachmentDownloadUrl($att)) ?>" download="<?= h((string)($att['original_name'] ?? 'download')) ?>"><?= h($att['original_name']) ?></a>
                             <span class="attach-size">(<?= formatBytes($att['file_size']) ?>)</span>
                         </li>
                     <?php endforeach; ?>

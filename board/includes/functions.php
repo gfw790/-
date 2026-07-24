@@ -434,8 +434,23 @@ function deleteAttachmentPhysicalFile(array $att): void {
 }
 
 function attachmentInlineUrl(array $att): string {
-    return 'download.php?' . http_build_query(
-        ['id' => (int)($att['id'] ?? 0), 'inline' => 1],
+    return attachmentDownloadUrl($att, true);
+}
+
+function attachmentDownloadUrl(array $att, bool $inline = false): string {
+    $originalName = trim((string)($att['original_name'] ?? 'download'));
+    if ($originalName === '') {
+        $originalName = 'download';
+    }
+
+    $pathName = rawurlencode($originalName);
+    $query = ['id' => (int)($att['id'] ?? 0)];
+    if ($inline) {
+        $query['inline'] = 1;
+    }
+
+    return 'download.php/' . $pathName . '?' . http_build_query(
+        $query,
         '',
         '&',
         PHP_QUERY_RFC3986
@@ -772,7 +787,7 @@ function renderAttachmentToken(string $tokenValue, array $attachments): ?string 
     }
 
     $src = attachmentInlineUrl($target);
-    $downloadUrl = 'download.php?id=' . (int)$target['id'];
+    $downloadUrl = attachmentDownloadUrl($target);
     $alt = h((string)$target['original_name']);
     $classes = 'inline-attachment-image align-' . h($align) . ' size-' . h($size);
     $scaleX = $flip ? -1 : 1;

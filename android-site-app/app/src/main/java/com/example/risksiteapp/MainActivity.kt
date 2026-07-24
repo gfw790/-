@@ -1,19 +1,21 @@
 package com.example.risksiteapp
 
+import android.content.Intent
 import android.os.Bundle
-import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.button.MaterialButton
 
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val angleValueText = findViewById<TextView>(R.id.angleValueText)
-        val anglePickerView = findViewById<AnglePickerView>(R.id.anglePickerView)
+        findViewById<MaterialButton>(R.id.oneFoldButton).setOnClickListener {
+            startActivity(Intent(this, OneFoldActivity::class.java))
+        }
 
-        anglePickerView.onAngleChanged = { angle ->
-            angleValueText.text = getString(R.string.angle_value_format, angle)
+        findViewById<MaterialButton>(R.id.twoFoldButton).setOnClickListener {
+            startActivity(Intent(this, TwoFoldActivity::class.java))
         }
     }
 }
