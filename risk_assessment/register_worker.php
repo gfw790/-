@@ -306,7 +306,7 @@ function h($value): string
     padding: 28px 16px 40px;
   }
   .shell {
-    width: min(100%, 1680px);
+    width: 100%;
     margin: 0 auto;
   }
   .panel {
@@ -437,6 +437,14 @@ function h($value): string
     grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
     gap: 24px;
     align-items: start;
+  }
+  .grid.management-grid {
+    grid-template-columns: minmax(260px, 1fr) minmax(680px, 2.2fr) minmax(280px, 0.8fr);
+  }
+  .panel-stack {
+    display: grid;
+    gap: 24px;
+    align-content: start;
   }
   .account-panel {
     border: 1px solid #d7e3ef;
@@ -642,7 +650,7 @@ function h($value): string
   }
   .team-list {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 10px;
     margin-top: 14px;
   }
@@ -765,6 +773,12 @@ function h($value): string
     .grid {
       grid-template-columns: 1fr;
     }
+    .grid.management-grid {
+      grid-template-columns: 1fr;
+    }
+    .team-list {
+      grid-template-columns: 1fr;
+    }
   }
   @media (max-width: 640px) {
     .account-item {
@@ -798,62 +812,174 @@ function h($value): string
         <?php if ($success !== ''): ?>
           <div class="success"><?= h($success) ?></div>
         <?php endif; ?>
-        <div class="grid">
-          <div class="account-panel">
-            <h2><?= $canManageAccounts ? '계정 추가' : '회원가입' ?></h2>
-            <p><?= $canAssignRoles ? '관리자는 계정을 추가하면서 역할까지 함께 지정할 수 있습니다.' : '현재 화면에서는 일반작업자 계정을 새로 등록하고 소속 팀을 함께 지정할 수 있습니다.' ?></p>
-            <form method="post">
-              <input type="hidden" name="action" value="register">
-              <div class="field">
-                <label for="name">이름</label>
-                <input type="text" id="name" name="name" value="<?= h($form['name']) ?>" placeholder="예: 홍길동" required>
-              </div>
-              <div class="field">
-                <label for="login_id">아이디</label>
-                <input type="text" id="login_id" name="login_id" value="<?= h($form['login_id']) ?>" placeholder="예: worker02" required>
-                <div class="helper">아이디는 영문, 숫자, -, _ 만 사용할 수 있습니다.</div>
-              </div>
-              <?php if ($canAssignRoles): ?>
+        <div class="grid<?= $canManageAccounts ? ' management-grid' : '' ?>">
+          <div class="panel-stack">
+            <div class="account-panel">
+              <h2><?= $canManageAccounts ? '계정 추가' : '회원가입' ?></h2>
+              <p><?= $canAssignRoles ? '관리자는 계정을 추가하면서 역할까지 함께 지정할 수 있습니다.' : '현재 화면에서는 일반작업자 계정을 새로 등록하고 소속 팀을 함께 지정할 수 있습니다.' ?></p>
+              <form method="post">
+                <input type="hidden" name="action" value="register">
                 <div class="field">
-                  <label for="role">역할</label>
-                  <select id="role" name="role" required onchange="onRoleChange(this.value)">
-                    <?php foreach ($roleOptions as $roleOption): ?>
-                      <option value="<?= h($roleOption) ?>" <?= $form['role'] === $roleOption ? 'selected' : '' ?>><?= h(auth_role_label($roleOption)) ?></option>
+                  <label for="name">이름</label>
+                  <input type="text" id="name" name="name" value="<?= h($form['name']) ?>" placeholder="예: 홍길동" required>
+                </div>
+                <div class="field">
+                  <label for="login_id">아이디</label>
+                  <input type="text" id="login_id" name="login_id" value="<?= h($form['login_id']) ?>" placeholder="예: worker02" required>
+                  <div class="helper">아이디는 영문, 숫자, -, _ 만 사용할 수 있습니다.</div>
+                </div>
+                <?php if ($canAssignRoles): ?>
+                  <div class="field">
+                    <label for="role">역할</label>
+                    <select id="role" name="role" required onchange="onRoleChange(this.value)">
+                      <?php foreach ($roleOptions as $roleOption): ?>
+                        <option value="<?= h($roleOption) ?>" <?= $form['role'] === $roleOption ? 'selected' : '' ?>><?= h(auth_role_label($roleOption)) ?></option>
+                      <?php endforeach; ?>
+                    </select>
+                  </div>
+                <?php endif; ?>
+                <input type="hidden" name="team" value="">
+                <div class="field" id="field-team">
+                  <label for="team">소속 팀</label>
+                  <select id="team" name="team">
+                    <option value="">팀 미지정</option>
+                    <?php foreach ($teams as $teamName): ?>
+                      <option value="<?= h($teamName) ?>" <?= $form['team'] === $teamName ? 'selected' : '' ?>><?= h($teamName) ?></option>
                     <?php endforeach; ?>
                   </select>
                 </div>
-              <?php endif; ?>
-              <input type="hidden" name="team" value="">
-              <div class="field" id="field-team">
-                <label for="team">소속 팀</label>
-                <select id="team" name="team">
-                  <option value="">팀 미지정</option>
-                  <?php foreach ($teams as $teamName): ?>
-                    <option value="<?= h($teamName) ?>" <?= $form['team'] === $teamName ? 'selected' : '' ?>><?= h($teamName) ?></option>
-                  <?php endforeach; ?>
-                </select>
-              </div>
-              <div class="field">
-                <label for="phone">전화번호 <span style="font-weight:400;color:#6b7c93;">(선택)</span></label>
-                <input type="text" id="phone" name="phone" value="<?= h($form['phone']) ?>" placeholder="예: 010-1234-5678" maxlength="20">
-              </div>
-              <div class="field">
-                <label for="password">비밀번호</label>
-                <input type="password" id="password" name="password" placeholder="비밀번호 입력" required>
-              </div>
-              <div class="field">
-                <label for="password_confirm">비밀번호 확인</label>
-                <input type="password" id="password_confirm" name="password_confirm" placeholder="비밀번호 다시 입력" required>
-              </div>
-              <button class="btn-primary" type="submit"><?= $canManageAccounts ? '계정 추가' : '회원가입' ?></button>
-            </form>
+                <div class="field">
+                  <label for="phone">전화번호 <span style="font-weight:400;color:#6b7c93;">(선택)</span></label>
+                  <input type="text" id="phone" name="phone" value="<?= h($form['phone']) ?>" placeholder="예: 010-1234-5678" maxlength="20">
+                </div>
+                <div class="field">
+                  <label for="password">비밀번호</label>
+                  <input type="password" id="password" name="password" placeholder="비밀번호 입력" required>
+                </div>
+                <div class="field">
+                  <label for="password_confirm">비밀번호 확인</label>
+                  <input type="password" id="password_confirm" name="password_confirm" placeholder="비밀번호 다시 입력" required>
+                </div>
+                <button class="btn-primary" type="submit"><?= $canManageAccounts ? '계정 추가' : '회원가입' ?></button>
+              </form>
 
-            <?php if (!$canManageAccounts): ?>
-              <a class="btn-secondary" href="<?= $user !== null ? 'work_list.php' : 'task_select.php' ?>"><?= $user !== null ? '작업목록으로 돌아가기' : '로그인으로 돌아가기' ?></a>
+              <?php if (!$canManageAccounts): ?>
+                <a class="btn-secondary" href="<?= $user !== null ? 'work_list.php' : 'task_select.php' ?>"><?= $user !== null ? '작업목록으로 돌아가기' : '로그인으로 돌아가기' ?></a>
+              <?php endif; ?>
+            </div>
+
+            <?php if ($canManageAccounts && (string)($user['role'] ?? '') !== 'administrator'): ?>
+            <div class="account-panel">
+              <h2>회원가입 열기</h2>
+              <p>로그인 화면의 회원가입 버튼을 필요할 때만 잠깐 열 수 있습니다.</p>
+              <div class="status-row">
+                <div>
+                  <div class="account-name">현재 상태</div>
+                  <div class="account-meta">
+                    <span class="status-badge <?= $registrationOpen ? 'is-open' : 'is-closed' ?>">
+                      <?= $registrationOpen ? '열림' : '닫힘' ?>
+                    </span>
+                    <?= $registrationOpen ? '로그인 화면에서 회원가입 버튼이 보입니다.' : '로그인 화면에서 회원가입 버튼이 숨겨져 있습니다.' ?>
+                  </div>
+                </div>
+                <form method="post">
+                  <input type="hidden" name="action" value="toggle_registration">
+                  <input type="hidden" name="registration_state" value="<?= $registrationOpen ? 'closed' : 'open' ?>">
+                  <button class="btn-secondary btn-inline" type="submit"><?= $registrationOpen ? '회원가입 닫기' : '회원가입 열기' ?></button>
+                </form>
+              </div>
+            </div>
             <?php endif; ?>
           </div>
 
           <?php if ($canManageAccounts): ?>
+            <div class="panel-stack">
+              <?php if ($canManageTeams): ?>
+                <div class="account-panel">
+                  <h2>팀 관리</h2>
+                  <p>새 팀을 추가하고 현재 사용할 팀 목록을 관리할 수 있습니다. 팀명이 바뀌면 계정 소속팀, 관리감독팀 연결, 저장된 작업 팀명도 함께 갱신됩니다.</p>
+                  <form method="post">
+                    <input type="hidden" name="action" value="create_team">
+                    <div class="field">
+                      <label for="team_name">새 팀 이름</label>
+                      <input type="text" id="team_name" name="team_name" value="<?= h($teamForm['team_name']) ?>" placeholder="예: 품질팀" required>
+                    </div>
+                    <div class="field">
+                      <label for="team_supervisor">관리감독팀 (선택)</label>
+                      <select id="team_supervisor" name="team_supervisor">
+                        <option value="">선택 안함</option>
+                        <?php foreach ($teams as $supervisorTeamName): ?>
+                          <option value="<?= h($supervisorTeamName) ?>" <?= $teamForm['team_supervisor'] === $supervisorTeamName ? 'selected' : '' ?>><?= h($supervisorTeamName) ?></option>
+                        <?php endforeach; ?>
+                      </select>
+                      <div class="helper">팀에 내부 관리감독자가 없는 경우, 이 팀을 관리할 감독팀을 선택하세요.</div>
+                    </div>
+                    <button class="btn-primary" type="submit">팀 만들기</button>
+                  </form>
+                  <?php if (!empty($teams)): ?>
+                    <div class="team-list">
+                      <?php foreach ($teams as $teamName): ?>
+                        <?php $memberCount = (int)($teamCounts[$teamName] ?? 0); ?>
+                        <?php $supervisorTeam = auth_get_team_supervisor($teamName); ?>
+                        <?php $isTeamActive = array_key_exists($teamName, $teamStatuses) ? (bool)$teamStatuses[$teamName] : true; ?>
+                        <div class="team-pill">
+                          <div class="team-pill-header">
+                            <span><?= h($teamName) ?></span>
+                            <small><?= $memberCount ?>명 / <?= $isTeamActive ? '활성' : '비활성' ?></small>
+                          </div>
+                          <?php $isProtectedTeam = auth_is_protected_team_name($teamName); ?>
+                          <?php if ($supervisorTeam !== ''): ?>
+                            <div class="team-pill-supervisor">관리감독팀: <?= h($supervisorTeam) ?></div>
+                          <?php endif; ?>
+                          <form method="post">
+                            <input type="hidden" name="action" value="toggle_team_active">
+                            <input type="hidden" name="team_name" value="<?= h($teamName) ?>">
+                            <input type="hidden" name="team_active" value="<?= $isTeamActive ? '0' : '1' ?>">
+                            <button class="btn-secondary btn-inline" type="submit"><?= $isTeamActive ? '비활성으로 변경' : '활성으로 변경' ?></button>
+                          </form>
+                          <form method="post">
+                            <input type="hidden" name="action" value="rename_team">
+                            <input type="hidden" name="rename_team_name" value="<?= h($teamName) ?>">
+                            <input
+                              type="text"
+                              name="rename_team_target"
+                              value="<?= $teamForm['rename_team_name'] === $teamName ? h($teamForm['rename_team_target']) : h($teamName) ?>"
+                              placeholder="새 팀 이름"
+                              maxlength="30"
+                              <?= $isProtectedTeam ? 'disabled' : '' ?>
+                              required
+                            >
+                            <button class="btn-secondary btn-inline" type="submit" <?= $isProtectedTeam ? 'disabled' : '' ?>>팀명 수정</button>
+                          </form>
+                          <?php if ($isProtectedTeam): ?>
+                            <div class="helper">이 팀은 화면 규칙과 권한 정책에 연결되어 있어 이름을 바꿀 수 없습니다.</div>
+                          <?php endif; ?>
+                          <form method="post" class="team-supervisor-form">
+                            <input type="hidden" name="action" value="set_team_supervisor">
+                            <input type="hidden" name="team_name" value="<?= h($teamName) ?>">
+                            <select name="team_supervisor">
+                              <option value="" <?= $supervisorTeam === '' ? 'selected' : '' ?>>미지정</option>
+                              <?php foreach ($teams as $supervisorTeamName): ?>
+                                <?php if (auth_team_key($supervisorTeamName) === auth_team_key($teamName)) { continue; } ?>
+                                <option value="<?= h($supervisorTeamName) ?>" <?= $supervisorTeam === $supervisorTeamName ? 'selected' : '' ?>><?= h($supervisorTeamName) ?></option>
+                              <?php endforeach; ?>
+                            </select>
+                            <button class="btn-secondary btn-inline" type="submit">저장</button>
+                          </form>
+                          <form method="post" onsubmit="return confirm('이 팀을 삭제하시겠습니까?');">
+                            <input type="hidden" name="action" value="delete_team">
+                            <input type="hidden" name="delete_team_name" value="<?= h($teamName) ?>">
+                            <button class="btn-team-delete" type="submit" <?= $memberCount > 0 ? 'disabled' : '' ?>>삭제</button>
+                          </form>
+                        </div>
+                      <?php endforeach; ?>
+                    </div>
+                  <?php endif; ?>
+                </div>
+              <?php endif; ?>
+
+            </div>
+
             <div class="account-panel">
               <h2>저장된 계정</h2>
               <p><?= $canAssignRoles ? '저장된 계정을 팀별로 묶어서 표시합니다. 관리자는 각 계정의 역할을 바로 변경할 수 있고, 현재 로그인한 계정은 삭제되거나 역할이 바뀌지 않도록 보호됩니다.' : '저장된 계정을 팀별로 묶어서 표시합니다. 팀 헤더를 눌러 명단을 감추거나 펼칠 수 있고, 현재 로그인한 계정은 삭제되지 않도록 보호됩니다.' ?></p>
@@ -943,113 +1069,6 @@ function h($value): string
                 <div class="empty-box">삭제 가능한 저장 계정이 아직 없습니다.</div>
               <?php endif; ?>
             </div>
-
-            <?php if ($canManageTeams): ?>
-              <div class="account-panel">
-                <h2>팀 관리</h2>
-                <p>새 팀을 추가하고 현재 사용할 팀 목록을 관리할 수 있습니다. 팀명이 바뀌면 계정 소속팀, 관리감독팀 연결, 저장된 작업 팀명도 함께 갱신됩니다.</p>
-                <form method="post">
-                  <input type="hidden" name="action" value="create_team">
-                  <div class="field">
-                    <label for="team_name">새 팀 이름</label>
-                    <input type="text" id="team_name" name="team_name" value="<?= h($teamForm['team_name']) ?>" placeholder="예: 품질팀" required>
-                  </div>
-                  <div class="field">
-                    <label for="team_supervisor">관리감독팀 (선택)</label>
-                    <select id="team_supervisor" name="team_supervisor">
-                      <option value="">선택 안함</option>
-                      <?php foreach ($teams as $supervisorTeamName): ?>
-                        <option value="<?= h($supervisorTeamName) ?>" <?= $teamForm['team_supervisor'] === $supervisorTeamName ? 'selected' : '' ?>><?= h($supervisorTeamName) ?></option>
-                      <?php endforeach; ?>
-                    </select>
-                    <div class="helper">팀에 내부 관리감독자가 없는 경우, 이 팀을 관리할 감독팀을 선택하세요.</div>
-                  </div>
-                  <button class="btn-primary" type="submit">팀 만들기</button>
-                </form>
-                <?php if (!empty($teams)): ?>
-                  <div class="team-list">
-                    <?php foreach ($teams as $teamName): ?>
-                      <?php $memberCount = (int)($teamCounts[$teamName] ?? 0); ?>
-                      <?php $supervisorTeam = auth_get_team_supervisor($teamName); ?>
-                      <?php $isTeamActive = array_key_exists($teamName, $teamStatuses) ? (bool)$teamStatuses[$teamName] : true; ?>
-                      <div class="team-pill">
-                        <div class="team-pill-header">
-                          <span><?= h($teamName) ?></span>
-                          <small><?= $memberCount ?>명 / <?= $isTeamActive ? '활성' : '비활성' ?></small>
-                        </div>
-                        <?php $isProtectedTeam = auth_is_protected_team_name($teamName); ?>
-                        <?php if ($supervisorTeam !== ''): ?>
-                          <div class="team-pill-supervisor">관리감독팀: <?= h($supervisorTeam) ?></div>
-                        <?php endif; ?>
-                        <form method="post">
-                          <input type="hidden" name="action" value="toggle_team_active">
-                          <input type="hidden" name="team_name" value="<?= h($teamName) ?>">
-                          <input type="hidden" name="team_active" value="<?= $isTeamActive ? '0' : '1' ?>">
-                          <button class="btn-secondary btn-inline" type="submit"><?= $isTeamActive ? '비활성으로 변경' : '활성으로 변경' ?></button>
-                        </form>
-                        <form method="post">
-                          <input type="hidden" name="action" value="rename_team">
-                          <input type="hidden" name="rename_team_name" value="<?= h($teamName) ?>">
-                          <input
-                            type="text"
-                            name="rename_team_target"
-                            value="<?= $teamForm['rename_team_name'] === $teamName ? h($teamForm['rename_team_target']) : h($teamName) ?>"
-                            placeholder="새 팀 이름"
-                            maxlength="30"
-                            <?= $isProtectedTeam ? 'disabled' : '' ?>
-                            required
-                          >
-                          <button class="btn-secondary btn-inline" type="submit" <?= $isProtectedTeam ? 'disabled' : '' ?>>팀명 수정</button>
-                        </form>
-                        <?php if ($isProtectedTeam): ?>
-                          <div class="helper">이 팀은 화면 규칙과 권한 정책에 연결되어 있어 이름을 바꿀 수 없습니다.</div>
-                        <?php endif; ?>
-                        <form method="post" class="team-supervisor-form">
-                          <input type="hidden" name="action" value="set_team_supervisor">
-                          <input type="hidden" name="team_name" value="<?= h($teamName) ?>">
-                          <select name="team_supervisor">
-                            <option value="" <?= $supervisorTeam === '' ? 'selected' : '' ?>>미지정</option>
-                            <?php foreach ($teams as $supervisorTeamName): ?>
-                              <?php if (auth_team_key($supervisorTeamName) === auth_team_key($teamName)) { continue; } ?>
-                              <option value="<?= h($supervisorTeamName) ?>" <?= $supervisorTeam === $supervisorTeamName ? 'selected' : '' ?>><?= h($supervisorTeamName) ?></option>
-                            <?php endforeach; ?>
-                          </select>
-                          <button class="btn-secondary btn-inline" type="submit">저장</button>
-                        </form>
-                        <form method="post" onsubmit="return confirm('이 팀을 삭제하시겠습니까?');">
-                          <input type="hidden" name="action" value="delete_team">
-                          <input type="hidden" name="delete_team_name" value="<?= h($teamName) ?>">
-                          <button class="btn-team-delete" type="submit" <?= $memberCount > 0 ? 'disabled' : '' ?>>삭제</button>
-                        </form>
-                      </div>
-                    <?php endforeach; ?>
-                  </div>
-                <?php endif; ?>
-              </div>
-            <?php endif; ?>
-
-            <?php if ((string)($user['role'] ?? '') !== 'administrator'): ?>
-            <div class="account-panel">
-              <h2>회원가입 열기</h2>
-              <p>로그인 화면의 회원가입 버튼을 필요할 때만 잠깐 열 수 있습니다.</p>
-              <div class="status-row">
-                <div>
-                  <div class="account-name">현재 상태</div>
-                  <div class="account-meta">
-                    <span class="status-badge <?= $registrationOpen ? 'is-open' : 'is-closed' ?>">
-                      <?= $registrationOpen ? '열림' : '닫힘' ?>
-                    </span>
-                    <?= $registrationOpen ? '로그인 화면에서 회원가입 버튼이 보입니다.' : '로그인 화면에서 회원가입 버튼이 숨겨져 있습니다.' ?>
-                  </div>
-                </div>
-                <form method="post">
-                  <input type="hidden" name="action" value="toggle_registration">
-                  <input type="hidden" name="registration_state" value="<?= $registrationOpen ? 'closed' : 'open' ?>">
-                  <button class="btn-secondary btn-inline" type="submit"><?= $registrationOpen ? '회원가입 닫기' : '회원가입 열기' ?></button>
-                </form>
-              </div>
-            </div>
-            <?php endif; ?>
           <?php endif; ?>
         </div>
       </div>
