@@ -283,7 +283,7 @@ if ($form['team'] === '' && !empty($teams)) {
     $form['team'] = (string)$teams[0];
 }
 
-function h($value): string
+function h(mixed $value): string
 {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
