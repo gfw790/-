@@ -174,6 +174,12 @@
       font-weight: 800;
       line-height: 1.5;
     }
+    .result-note {
+      margin: 12px 0 0;
+      color: #7c2d12;
+      font-size: 14px;
+      line-height: 1.6;
+    }
     .result-headline {
       margin: 0;
       color: #9a3412;
@@ -332,17 +338,20 @@
 
         <div class="result-section">
           <p class="result-label">절단점 1</p>
-          <p class="result-value" id="two-cut-1">절단점 1은 중심점에서 좌우로 0mm 잘라내야 합니다.</p>
+          <p class="result-value" id="two-cut-1">절단점 1은 윗면 중심점에서 좌우로 0mm 잘라내야 합니다.</p>
         </div>
 
         <div class="result-section">
           <p class="result-label">절단점 2</p>
-          <p class="result-value" id="two-cut-2">절단점 2는 중심점에서 좌우로 0mm 잘라내야 합니다.</p>
+          <p class="result-value" id="two-cut-2">절단점 2는 아랫면 중심점에서 좌우로 0mm 잘라내야 합니다.</p>
         </div>
 
         <div class="result-section">
           <p class="result-label">중심점 간 거리</p>
           <p class="result-value" id="two-distance">평행 180도 모드에서 계산됩니다.</p>
+          <p class="result-label">절곡 후 줄어진 길이</p>
+          <p class="result-value" id="two-horizontal-reduction">중심점 거리 계산 후 표시됩니다.</p>
+          <p class="result-note" id="two-connector-warning">중심점 거리 계산 후 연결대 설치 가능 여부가 표시됩니다.</p>
         </div>
       </div>
     </section>
@@ -368,6 +377,8 @@
     const twoCut1 = document.getElementById('two-cut-1');
     const twoCut2 = document.getElementById('two-cut-2');
     const twoDistance = document.getElementById('two-distance');
+    const twoHorizontalReduction = document.getElementById('two-horizontal-reduction');
+    const twoConnectorWarning = document.getElementById('two-connector-warning');
     const twoAngleCanvas = document.getElementById('two-angle-canvas');
     let oneAngleValue = 0;
     const canvasRedrawers = [];
@@ -550,31 +561,63 @@
       drawAngleCanvas(twoAngleCanvas, angle, { lockPositive: true });
 
       if (width === null) {
-        twoCut1.textContent = '절단점 1은 중심점에서 좌우로 0mm 잘라내야 합니다.';
-        twoCut2.textContent = '절단점 2는 중심점에서 좌우로 0mm 잘라내야 합니다.';
+        twoCut1.textContent = '절단점 1은 윗면 중심점에서 좌우로 0mm 잘라내야 합니다.';
+        twoCut2.textContent = '절단점 2는 아랫면 중심점에서 좌우로 0mm 잘라내야 합니다.';
         twoDistance.textContent = '평행 180도 모드에서 계산됩니다.';
+        twoHorizontalReduction.textContent = '중심점 거리 계산 후 표시됩니다.';
+        twoConnectorWarning.textContent = '중심점 거리 계산 후 연결대 설치 가능 여부가 표시됩니다.';
         twoGapError.textContent = '';
         return;
       }
 
       const cut = oneCut(width, angle);
-      twoCut1.textContent = `절단점 1은 중심점에서 좌우로 ${cut}mm 잘라내야 합니다.`;
-      twoCut2.textContent = `절단점 2는 중심점에서 좌우로 ${cut}mm 잘라내야 합니다.`;
+      const connectorWingLength = 121;
+      const installationClearance = 10;
+      twoCut1.textContent = `절단점 1은 윗면 중심점에서 좌우로 ${cut}mm 잘라내야 합니다.`;
+      twoCut2.textContent = `절단점 2는 아랫면 중심점에서 좌우로 ${cut}mm 잘라내야 합니다.`;
 
-      if (gap !== null && gap <= width * 2) {
-        twoGapError.textContent = '트레이 간격은 위아래 트레이 길이의 합보다 커야 합니다.';
+      if (gap !== null && gap <= width - cut) {
+        twoGapError.textContent = '트레이 간격이 너무 작아 중심점 거리를 계산할 수 없습니다.';
         twoDistance.textContent = '평행 180도 모드에서 계산됩니다.';
+        twoHorizontalReduction.textContent = '중심점 거리 계산 후 표시됩니다.';
+        twoConnectorWarning.textContent = '연결대 설치 여부를 계산할 수 없습니다.';
         return;
       }
 
       twoGapError.textContent = '';
 
-      const rise = (gap ?? 0) - (width * 2);
+      const rise = (gap ?? 0) - width + cut;
       if (gap !== null && angle > 0 && rise > 0) {
-        const distance = Math.round(rise / Math.sin(degToRad(angle)));
+        const centerDistance = rise / Math.sin(degToRad(angle));
+        const distance = Math.round(centerDistance);
+        const horizontalReduction = centerDistance * (1 - Math.cos(degToRad(Math.abs(angle))));
+        const horizontalReductionDisplay = Math.round(horizontalReduction);
         twoDistance.textContent = `아랫변 기준 중심점 간의 거리는 ${distance}mm입니다.`;
+        twoHorizontalReduction.textContent = `절곡으로 인한 수평 감소량은 약 ${horizontalReductionDisplay}mm입니다.`;
+        const availableLength = centerDistance - cut;
+
+        if (!Number.isFinite(centerDistance) || !Number.isFinite(cut) || centerDistance <= 0 || cut < 0) {
+          twoConnectorWarning.textContent = '연결대 설치 여부를 계산할 수 없습니다.';
+        } else if (availableLength <= 0) {
+          twoConnectorWarning.textContent = '절단부가 중첩되어 연결대를 설치할 수 없습니다.';
+        } else if (availableLength < connectorWingLength) {
+          const shortage = connectorWingLength - availableLength;
+          const shortageDisplay = Math.ceil(shortage);
+          twoConnectorWarning.textContent =
+            `연결대 설치 길이가 최소 ${shortageDisplay}mm 부족합니다.`;
+        } else if (availableLength < connectorWingLength + installationClearance) {
+          const remaining = Math.floor(availableLength - connectorWingLength);
+          twoConnectorWarning.textContent =
+            `연결대 설치는 가능하지만 작업 여유가 ${remaining}mm에 불과합니다.`;
+        } else {
+          const spare = Math.floor(availableLength - (connectorWingLength + installationClearance));
+          twoConnectorWarning.textContent =
+            `연결대 설치가 가능합니다. 작업 여유는 약 ${spare}mm입니다.`;
+        }
       } else {
         twoDistance.textContent = '평행 180도 모드에서 계산됩니다.';
+        twoHorizontalReduction.textContent = '중심점 거리 계산 후 표시됩니다.';
+        twoConnectorWarning.textContent = '연결대 설치 여부를 계산할 수 없습니다.';
       }
     }
 

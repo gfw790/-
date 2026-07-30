@@ -306,7 +306,7 @@ function h($value): string
     padding: 28px 16px 40px;
   }
   .shell {
-    max-width: 900px;
+    width: min(100%, 1680px);
     margin: 0 auto;
   }
   .panel {
@@ -434,8 +434,9 @@ function h($value): string
   }
   .grid {
     display: grid;
-    grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
-    gap: 18px;
+    grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
   }
   .account-panel {
     border: 1px solid #d7e3ef;
@@ -757,6 +758,10 @@ function h($value): string
     color: #486581;
   }
   @media (max-width: 860px) {
+    body {
+      padding-left: 12px;
+      padding-right: 12px;
+    }
     .grid {
       grid-template-columns: 1fr;
     }

@@ -7,6 +7,7 @@ import android.text.TextWatcher
 import android.widget.ArrayAdapter
 import android.widget.EditText
 import android.widget.HorizontalScrollView
+import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.ScrollView
 import android.widget.TextView
@@ -14,6 +15,9 @@ import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import com.google.android.material.textfield.TextInputLayout
 import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.cos
+import kotlin.math.floor
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.tan
@@ -30,10 +34,16 @@ class TwoFoldActivity : AppCompatActivity() {
         val trayGapInputLayout = findViewById<TextInputLayout>(R.id.trayGapInputLayout)
         val parallelAngleInput = findViewById<EditText>(R.id.parallelAngleInput)
         val trayGapInput = findViewById<EditText>(R.id.trayGapInput)
+        findViewById<ImageButton>(R.id.backButton).setOnClickListener { finish() }
         val finalAngleText = findViewById<TextView>(R.id.finalAngleValueText)
         val cutPoint1Text = findViewById<TextView>(R.id.cutPoint1ValueText)
         val cutPoint2Text = findViewById<TextView>(R.id.cutPoint2ValueText)
         val centerDistanceText = findViewById<TextView>(R.id.centerDistanceValueText)
+        val horizontalReductionText = findViewById<TextView>(R.id.horizontalReductionValueText)
+        val connectorWarningText = findViewById<TextView>(R.id.connectorWarningText)
+
+        val connectorWingLength = 121.0
+        val installationClearance = 10.0
 
         traySizeInput.setAdapter(
             ArrayAdapter(
@@ -89,41 +99,84 @@ class TwoFoldActivity : AppCompatActivity() {
                 cutPoint1Text.text = getString(R.string.two_fold_cut_default_1)
                 cutPoint2Text.text = getString(R.string.two_fold_cut_default_2)
                 centerDistanceText.text = getString(R.string.two_fold_center_distance_default)
+                horizontalReductionText.text = getString(R.string.two_fold_horizontal_reduction_default)
+                connectorWarningText.text = getString(R.string.two_fold_connector_warning_default)
                 return
             }
 
             val angle = readNumber(parallelAngleInput)?.coerceIn(0.0, 90.0) ?: 0.0
             val trayGap = readNumber(trayGapInput)
-            val minimumGap = traySize * 2.0
+            val cut = cutPoint(traySize, angle)
+            val minimumGap = traySize - cut.toDouble()
 
             finalAngleText.text = getString(R.string.two_fold_final_angle_format, 180)
             cutPoint1Text.text = getString(
                 R.string.two_fold_cut_sentence_1,
-                cutPoint(traySize, angle)
+                cut
             )
             cutPoint2Text.text = getString(
                 R.string.two_fold_cut_sentence_2,
-                cutPoint(traySize, angle)
+                cut
             )
 
             if (trayGap != null && trayGap <= minimumGap) {
                 trayGapInputLayout.error = getString(R.string.two_fold_gap_error)
                 centerDistanceText.text = getString(R.string.two_fold_center_distance_default)
+                horizontalReductionText.text = getString(R.string.two_fold_horizontal_reduction_default)
+                connectorWarningText.text = getString(R.string.two_fold_connector_warning_invalid)
                 return
             }
 
             trayGapInputLayout.error = null
 
-            val rise = (trayGap ?: 0.0) - (traySize * 2.0)
-            val centerDistance = if (trayGap != null && angle > 0.0 && rise > 0.0) {
-                (rise / sin(Math.toRadians(angle))).roundToInt()
+            val rise = (trayGap ?: 0.0) - traySize + cut
+            val centerDistanceRaw = if (trayGap != null && angle > 0.0 && rise > 0.0) {
+                rise / sin(Math.toRadians(angle))
             } else {
-                0
+                Double.NaN
             }
+            val centerDistance = if (centerDistanceRaw.isFinite()) centerDistanceRaw.roundToInt() else 0
             centerDistanceText.text = getString(
                 R.string.two_fold_center_distance_format,
                 centerDistance
             )
+            val horizontalReduction = if (centerDistanceRaw.isFinite()) {
+                centerDistanceRaw * (1 - cos(Math.toRadians(abs(angle))))
+            } else {
+                Double.NaN
+            }
+            val horizontalReductionDisplay = if (horizontalReduction.isFinite()) {
+                horizontalReduction.roundToInt()
+            } else {
+                0
+            }
+            horizontalReductionText.text = getString(
+                R.string.two_fold_horizontal_reduction_format,
+                horizontalReductionDisplay
+            )
+            connectorWarningText.text = when {
+                !centerDistanceRaw.isFinite() || cut < 0 || centerDistanceRaw <= 0.0 -> {
+                    getString(R.string.two_fold_connector_warning_invalid)
+                }
+                centerDistanceRaw - cut <= 0.0 -> {
+                    getString(R.string.two_fold_connector_warning_overlap)
+                }
+                centerDistanceRaw - cut < connectorWingLength -> {
+                    val shortage = connectorWingLength - (centerDistanceRaw - cut)
+                    getString(
+                        R.string.two_fold_connector_warning_shortage,
+                        ceil(shortage).toInt()
+                    )
+                }
+                centerDistanceRaw - cut < connectorWingLength + installationClearance -> {
+                    val remaining = floor((centerDistanceRaw - cut) - connectorWingLength).toInt()
+                    getString(R.string.two_fold_connector_warning_clearance, remaining)
+                }
+                else -> {
+                    val spare = floor((centerDistanceRaw - cut) - (connectorWingLength + installationClearance)).toInt()
+                    getString(R.string.two_fold_connector_warning_ok, spare)
+                }
+            }
         }
 
         val watcher = object : TextWatcher {

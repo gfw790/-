@@ -1,15 +1,20 @@
 R_DEF: Internal format may change without notice
 local
 array tray_width_options
+drawable gemini_generated_image_s42wtls42wtls42w
 drawable ic_launcher_background
 drawable ic_launcher_foreground
+drawable ic_launcher_foreground_art
 drawable two_fold_guide_reference
 id anglePickerView
 id angleValueText
+id backButton
 id centerDistanceValueText
+id connectorWarningText
 id cutPoint1ValueText
 id cutPoint2ValueText
 id finalAngleValueText
+id horizontalReductionValueText
 id oneFoldButton
 id parallelAngleInput
 id parallelAngleInputLayout
@@ -43,6 +48,7 @@ string angle_range_hint
 string angle_value_default
 string angle_value_format
 string app_name
+string back_button
 string guide_angle_label_1
 string guide_angle_label_2
 string guide_center_distance
@@ -65,6 +71,12 @@ string tray_width_required_message
 string two_fold_center_distance_default
 string two_fold_center_distance_format
 string two_fold_center_distance_label
+string two_fold_connector_warning_clearance
+string two_fold_connector_warning_default
+string two_fold_connector_warning_invalid
+string two_fold_connector_warning_ok
+string two_fold_connector_warning_overlap
+string two_fold_connector_warning_shortage
 string two_fold_cut_default_1
 string two_fold_cut_default_2
 string two_fold_cut_label_1
@@ -79,6 +91,9 @@ string two_fold_gap_hint
 string two_fold_guide_caption
 string two_fold_guide_dialog_description
 string two_fold_guide_title
+string two_fold_horizontal_reduction_default
+string two_fold_horizontal_reduction_format
+string two_fold_horizontal_reduction_label
 string two_fold_parallel_angle_hint
 string two_fold_subtitle
 string two_fold_title

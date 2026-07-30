@@ -2913,6 +2913,7 @@ drawable design_ic_visibility
 drawable design_ic_visibility_off
 drawable design_password_eye
 drawable design_snackbar_background
+drawable gemini_generated_image_s42wtls42wtls42w
 drawable ic_arrow_back_black_24
 drawable ic_call_answer
 drawable ic_call_answer_low
@@ -2925,6 +2926,7 @@ drawable ic_clock_black_24dp
 drawable ic_keyboard_black_24dp
 drawable ic_launcher_background
 drawable ic_launcher_foreground
+drawable ic_launcher_foreground_art
 drawable ic_m3_chip_check
 drawable ic_m3_chip_checked_circle
 drawable ic_m3_chip_close
@@ -3093,6 +3095,7 @@ id auto
 id autoComplete
 id autoCompleteToEnd
 id autoCompleteToStart
+id backButton
 id barrier
 id baseline
 id beginOnFirstDraw
@@ -3121,6 +3124,7 @@ id clockwise
 id collapseActionView
 id compress
 id confirm_button
+id connectorWarningText
 id container
 id content
 id contentPanel
@@ -3205,6 +3209,7 @@ id hideable
 id home
 id homeAsUp
 id honorRequest
+id horizontalReductionValueText
 id icon
 id icon_group
 id ifRoom
@@ -3725,6 +3730,7 @@ string angle_value_default
 string angle_value_format
 string app_name
 string appbar_scrolling_view_behavior
+string back_button
 string bottom_sheet_behavior
 string bottomsheet_action_collapse
 string bottomsheet_action_expand
@@ -3884,6 +3890,12 @@ string tray_width_required_message
 string two_fold_center_distance_default
 string two_fold_center_distance_format
 string two_fold_center_distance_label
+string two_fold_connector_warning_clearance
+string two_fold_connector_warning_default
+string two_fold_connector_warning_invalid
+string two_fold_connector_warning_ok
+string two_fold_connector_warning_overlap
+string two_fold_connector_warning_shortage
 string two_fold_cut_default_1
 string two_fold_cut_default_2
 string two_fold_cut_label_1
@@ -3898,6 +3910,9 @@ string two_fold_gap_hint
 string two_fold_guide_caption
 string two_fold_guide_dialog_description
 string two_fold_guide_title
+string two_fold_horizontal_reduction_default
+string two_fold_horizontal_reduction_format
+string two_fold_horizontal_reduction_label
 string two_fold_parallel_angle_hint
 string two_fold_subtitle
 string two_fold_title

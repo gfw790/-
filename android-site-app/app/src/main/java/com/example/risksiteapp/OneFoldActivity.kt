@@ -22,6 +22,7 @@ class OneFoldActivity : AppCompatActivity() {
         val resultValueText = findViewById<TextView>(R.id.resultValueText)
         val anglePickerView = findViewById<AnglePickerView>(R.id.anglePickerView)
         val trayWidthInput = findViewById<MaterialAutoCompleteTextView>(R.id.trayWidthInput)
+        findViewById<android.widget.ImageButton>(R.id.backButton).setOnClickListener { finish() }
         val trayWidthOptions = resources.getStringArray(R.array.tray_width_options)
         var currentAngle = 0
 

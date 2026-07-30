@@ -670,3 +670,13 @@
 [2026-07-24T00:01:05+09:00] [retrying] prompt updated for attempt 2
 [2026-07-24T00:01:19+09:00] [attempt 2] AI 출력 검증 실패: 예방대책 길이가 171자입니다. 140~160자여야 합니다.
 [2026-07-24T00:01:19+09:00] [retrying] prompt updated for attempt 3
+[2026-07-25T00:01:02+09:00] [attempt 1] AI 출력 검증 실패: 예방대책 길이가 174자입니다. 140~160자여야 합니다.; 퀴즈 3개 총 글자 수가 431자입니다. 545~820자여야 합니다.
+[2026-07-25T00:01:02+09:00] [retrying] prompt updated for attempt 2
+[2026-07-27T00:00:36+09:00] [attempt 1] AI 출력 검증 실패: 예방대책 길이가 168자입니다. 140~160자여야 합니다.
+[2026-07-27T00:00:36+09:00] [retrying] prompt updated for attempt 2
+[2026-07-29T00:00:47+09:00] [attempt 1] AI 출력 검증 실패: 예방대책 길이가 163자입니다. 140~160자여야 합니다.
+[2026-07-29T00:00:47+09:00] [retrying] prompt updated for attempt 2
+[2026-07-30T00:00:35+09:00] [attempt 1] AI 출력 검증 실패: 예방대책 길이가 180자입니다. 140~160자여야 합니다.
+[2026-07-30T00:00:35+09:00] [retrying] prompt updated for attempt 2
+[2026-07-31T00:00:30+09:00] [attempt 1] AI 출력 검증 실패: 퀴즈 3개 총 글자 수가 493자입니다. 545~820자여야 합니다.
+[2026-07-31T00:00:30+09:00] [retrying] prompt updated for attempt 2
