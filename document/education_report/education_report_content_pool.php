@@ -228,6 +228,20 @@ function pool_translation_config(): array
     return $config;
 }
 
+function pool_translation_status_payload(): array
+{
+    $config = pool_translation_config();
+    $provider = (string)($config['provider'] ?? '');
+
+    return [
+        'translation_enabled' => !empty($config['enabled']),
+        'translation_provider' => $provider,
+        'translation_provider_label' => $provider === 'google_basic'
+            ? 'Google Basic'
+            : ($provider === 'libretranslate' ? 'LibreTranslate' : '미설정'),
+    ];
+}
+
 function pool_translate_http_post_json(string $url, array $payload, int $timeoutSeconds): ?array
 {
     $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -592,12 +606,11 @@ $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
 try {
     if ($method === 'GET') {
         $store = pool_read_store();
-        pool_json_out([
+        pool_json_out(array_merge([
             'ok' => true,
             'groups' => $store['groups'],
             'items' => $store['items'],
-            'translation_enabled' => pool_translation_config()['enabled'],
-        ]);
+        ], pool_translation_status_payload()));
     }
 
     if ($method !== 'POST') {
@@ -620,12 +633,12 @@ try {
             pool_json_out(['ok' => false, 'error' => 'write_failed'], 500);
         }
 
-        pool_json_out([
+        pool_json_out(array_merge([
             'ok' => true,
             'groups' => $groups,
             'items' => $items,
             'created_group' => $group,
-        ]);
+        ], pool_translation_status_payload()));
     }
 
     if ($action === 'save_item') {
@@ -688,12 +701,12 @@ try {
             pool_json_out(['ok' => false, 'error' => 'write_failed'], 500);
         }
 
-        pool_json_out([
+        pool_json_out(array_merge([
             'ok' => true,
             'groups' => $groups,
             'items' => $items,
             'saved_id' => $id,
-        ]);
+        ], pool_translation_status_payload()));
     }
 
     if ($action === 'translate_items') {
@@ -740,13 +753,12 @@ try {
             pool_json_out(['ok' => false, 'error' => 'write_failed'], 500);
         }
 
-        pool_json_out([
+        pool_json_out(array_merge([
             'ok' => true,
             'groups' => $groups,
             'items' => $items,
             'translated_ids' => array_values(array_unique($translatedIds)),
-            'translation_enabled' => pool_translation_config()['enabled'],
-        ]);
+        ], pool_translation_status_payload()));
     }
 
     if ($action === 'translate_missing') {
@@ -763,13 +775,12 @@ try {
             pool_json_out(['ok' => false, 'error' => 'write_failed'], 500);
         }
 
-        pool_json_out([
+        pool_json_out(array_merge([
             'ok' => true,
             'groups' => $groups,
             'items' => $items,
             'translated_ids' => array_values(array_unique($translatedIds)),
-            'translation_enabled' => pool_translation_config()['enabled'],
-        ]);
+        ], pool_translation_status_payload()));
     }
 
     if ($action === 'delete_item') {
@@ -787,12 +798,12 @@ try {
             pool_json_out(['ok' => false, 'error' => 'write_failed'], 500);
         }
 
-        pool_json_out([
+        pool_json_out(array_merge([
             'ok' => true,
             'groups' => $groups,
             'items' => pool_prepare_items($items),
             'deleted_id' => $id,
-        ]);
+        ], pool_translation_status_payload()));
     }
 
     if ($action === 'reset_defaults') {
@@ -802,11 +813,11 @@ try {
             pool_json_out(['ok' => false, 'error' => 'write_failed'], 500);
         }
 
-        pool_json_out([
+        pool_json_out(array_merge([
             'ok' => true,
             'groups' => $groups,
             'items' => $items,
-        ]);
+        ], pool_translation_status_payload()));
     }
 
     pool_json_out(['ok' => false, 'error' => 'invalid_action'], 400);

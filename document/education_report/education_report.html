@@ -1052,6 +1052,8 @@
         let currentPoolViewGroup = '';
         let currentPoolColors = {};
         let contentPoolTranslationEnabled = false;
+        let contentPoolTranslationProvider = '';
+        let contentPoolTranslationProviderLabel = '미설정';
         let kyrgyzOnlyEnabled = false;
         let currentSelectedTeam = '';
         let safetyTextMeasureContext = null;
@@ -2667,6 +2669,8 @@
 
             return {
                 translationEnabled: !!payload.translation_enabled,
+                translationProvider: String(payload.translation_provider || '').trim(),
+                translationProviderLabel: String(payload.translation_provider_label || '').trim(),
                 groups: Array.isArray(payload.groups) ? payload.groups.map(function (group) { return String(group || '').trim(); }).filter(Boolean) : [],
                 items: payload.items.map(normalizePoolItem).filter(Boolean)
             };
@@ -2697,6 +2701,8 @@
 
             return {
                 translationEnabled: !!payload.translation_enabled,
+                translationProvider: String(payload.translation_provider || '').trim(),
+                translationProviderLabel: String(payload.translation_provider_label || '').trim(),
                 groups: Array.isArray(payload.groups) ? payload.groups.map(function (group) { return String(group || '').trim(); }).filter(Boolean) : [],
                 items: payload.items.map(normalizePoolItem).filter(Boolean),
                 savedId: payload.saved_id || '',
@@ -2704,6 +2710,23 @@
                 createdGroup: payload.created_group || '',
                 translatedIds: Array.isArray(payload.translated_ids) ? payload.translated_ids.map(function (id) { return String(id || '').trim(); }).filter(Boolean) : []
             };
+        }
+
+        function updatePoolTranslationStatus() {
+            const statusNode = document.getElementById('education-pool-translation-status');
+            if (!statusNode) {
+                return;
+            }
+
+            const providerLabel = String(contentPoolTranslationProviderLabel || '').trim() || '미설정';
+            if (contentPoolTranslationEnabled) {
+                statusNode.className = 'translation-status is-enabled';
+                statusNode.textContent = '번역 엔진: ' + providerLabel + ' 연결됨';
+                return;
+            }
+
+            statusNode.className = 'translation-status is-disabled';
+            statusNode.textContent = '번역 엔진: 비활성 (' + providerLabel + ') - 저장된 번역만 사용';
         }
 
         function getItemsMissingStoredTranslation(ids, language) {
@@ -2743,6 +2766,8 @@
                 ids: JSON.stringify(missingIds)
             });
             contentPoolTranslationEnabled = !!result.translationEnabled;
+            contentPoolTranslationProvider = result.translationProvider;
+            contentPoolTranslationProviderLabel = result.translationProviderLabel || '미설정';
             currentPoolGroups = result.groups;
             currentPoolItems = result.items;
         }
@@ -2790,6 +2815,9 @@
                     + '#education-pool-panel h4 { margin: 0 0 8px 0; font-size: 13px; color: #0f172a; }'
                     + '#education-pool-panel .panel-drag-handle { display:block; padding-right:12px; }'
                     + '#education-pool-panel .hint { margin: 0 0 8px 0; font-size: 11px; color: #475569; }'
+                    + '#education-pool-panel .translation-status { margin: 0 0 10px 0; padding: 7px 9px; border-radius: 8px; font-size: 11px; font-weight: 700; }'
+                    + '#education-pool-panel .translation-status.is-enabled { background: #ecfdf3; border: 1px solid #bbf7d0; color: #166534; }'
+                    + '#education-pool-panel .translation-status.is-disabled { background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; }'
                     + '#education-pool-panel .usage { margin: 0 0 10px 0; font-size: 11px; font-weight: 700; }'
                     + '#education-pool-panel .locale-toggle { display:flex; align-items:center; gap:6px; margin: 0 0 10px 0; font-size: 12px; color:#1e293b; }'
                     + '#education-pool-panel .locale-toggle input { margin: 0; }'
@@ -2827,6 +2855,7 @@
             panel.innerHTML = ''
                 + '<h4 class="panel-drag-handle">' + escapeHtml(tk('pool_panel_title')) + '</h4>'
                 + '<p class="hint">' + escapeHtml(tk('pool_panel_hint')) + '</p>'
+                + '<div class="translation-status" id="education-pool-translation-status"></div>'
                 + '<div class="panel-row">'
                 + '  <select id="education-pool-group-select"></select>'
                 + '</div>'
@@ -2926,6 +2955,7 @@
 
             renderGroupOptions(currentPoolViewGroup);
             renderReferenceOptions();
+            updatePoolTranslationStatus();
             syncPoolCheckboxSelection(activeSelection);
             updatePoolUsageHint();
 
@@ -3000,6 +3030,8 @@
                     }
                     const result = await postContentPool('create_group', { group: groupName });
                     contentPoolTranslationEnabled = !!result.translationEnabled;
+                    contentPoolTranslationProvider = result.translationProvider;
+                    contentPoolTranslationProviderLabel = result.translationProviderLabel || '미설정';
                     currentPoolGroups = result.groups;
                     currentPoolItems = result.items;
                     currentPoolViewGroup = groupName;
@@ -3084,6 +3116,8 @@
                     const beforeIds = readSelectedPoolIdsFromPanel();
                     const result = await postContentPool('translate_missing', { language: 'zh' });
                     contentPoolTranslationEnabled = !!result.translationEnabled;
+                    contentPoolTranslationProvider = result.translationProvider;
+                    contentPoolTranslationProviderLabel = result.translationProviderLabel || '미설정';
                     currentPoolGroups = result.groups;
                     currentPoolItems = result.items;
                     renderContentPoolPanel(currentPoolItems);
@@ -3123,6 +3157,8 @@
                         content: normalizeTextareaContent(contentInput.value || '')
                     });
                     contentPoolTranslationEnabled = !!result.translationEnabled;
+                    contentPoolTranslationProvider = result.translationProvider;
+                    contentPoolTranslationProviderLabel = result.translationProviderLabel || '미설정';
                     currentPoolGroups = result.groups;
                     currentPoolItems = result.items;
                     currentPoolViewGroup = String(groupInput.value || '').trim();
@@ -3159,6 +3195,8 @@
                         content: normalizeTextareaContent(contentInput.value || '')
                     });
                     contentPoolTranslationEnabled = !!result.translationEnabled;
+                    contentPoolTranslationProvider = result.translationProvider;
+                    contentPoolTranslationProviderLabel = result.translationProviderLabel || '미설정';
                     currentPoolGroups = result.groups;
                     currentPoolItems = result.items;
                     currentPoolViewGroup = String(groupInput.value || '').trim();
@@ -3190,6 +3228,8 @@
                     const beforeIds = checkedIds.filter(function (id) { return id !== editorId; });
                     const result = await postContentPool('delete_item', { id: editorId });
                     contentPoolTranslationEnabled = !!result.translationEnabled;
+                    contentPoolTranslationProvider = result.translationProvider;
+                    contentPoolTranslationProviderLabel = result.translationProviderLabel || '미설정';
                     currentPoolGroups = result.groups;
                     currentPoolItems = result.items;
                     if (currentPoolViewGroup && currentPoolGroups.indexOf(currentPoolViewGroup) === -1) {
@@ -3211,6 +3251,8 @@
                     }
                     const result = await postContentPool('reset_defaults', {});
                     contentPoolTranslationEnabled = !!result.translationEnabled;
+                    contentPoolTranslationProvider = result.translationProvider;
+                    contentPoolTranslationProviderLabel = result.translationProviderLabel || '미설정';
                     currentPoolGroups = result.groups;
                     currentPoolItems = result.items;
                     currentPoolViewGroup = 'none';
@@ -3230,6 +3272,8 @@
         async function loadContentPool() {
             const payload = await fetchContentPool();
             contentPoolTranslationEnabled = !!payload.translationEnabled;
+            contentPoolTranslationProvider = payload.translationProvider;
+            contentPoolTranslationProviderLabel = payload.translationProviderLabel || '미설정';
             currentPoolGroups = payload.groups;
             currentPoolItems = payload.items;
             currentPoolViewGroup = 'none';
