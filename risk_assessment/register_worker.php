@@ -258,7 +258,18 @@ foreach ($storedAccounts as $loginId => $account) {
 }
 
 $orderedStoredAccountGroups = [];
+$activeTeams = [];
+$inactiveTeams = [];
 foreach ($teams as $teamName) {
+    $isTeamActive = array_key_exists($teamName, $teamStatuses) ? (bool)$teamStatuses[$teamName] : true;
+    if ($isTeamActive) {
+        $activeTeams[] = $teamName;
+        continue;
+    }
+    $inactiveTeams[] = $teamName;
+}
+
+foreach (array_merge($activeTeams, $inactiveTeams) as $teamName) {
     $normalizedTeamName = auth_normalize_team_name((string)$teamName);
     if ($normalizedTeamName === '' || !isset($storedAccountGroups[$normalizedTeamName])) {
         continue;
@@ -269,7 +280,14 @@ foreach ($teams as $teamName) {
 }
 
 if (!empty($storedAccountGroups)) {
-    uksort($storedAccountGroups, static fn(string $left, string $right): int => strnatcasecmp($left, $right));
+    uksort($storedAccountGroups, static function(string $left, string $right) use ($teamStatuses): int {
+        $leftActive = array_key_exists($left, $teamStatuses) ? (bool)$teamStatuses[$left] : true;
+        $rightActive = array_key_exists($right, $teamStatuses) ? (bool)$teamStatuses[$right] : true;
+        if ($leftActive !== $rightActive) {
+            return $leftActive ? -1 : 1;
+        }
+        return strnatcasecmp($left, $right);
+    });
     foreach ($storedAccountGroups as $teamName => $accounts) {
         $orderedStoredAccountGroups[$teamName] = $accounts;
     }
