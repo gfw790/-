@@ -496,25 +496,22 @@ function h(mixed $value): string
     padding: 14px;
   }
   .account-group-head {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    justify-content: space-between;
     gap: 10px;
-    flex-wrap: wrap;
     margin-bottom: 12px;
     padding-bottom: 10px;
     border-bottom: 1px solid #edf2f7;
     list-style: none;
     cursor: pointer;
   }
-  .account-group-head::-webkit-details-marker {
-    display: none;
-  }
   .account-group-title {
     display: flex;
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
+    min-width: 0;
   }
   .account-group-title h3 {
     font-size: 16px;
@@ -539,7 +536,8 @@ function h(mixed $value): string
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
-    margin-left: auto;
+    justify-self: end;
+    flex: 0 0 auto;
   }
   .account-group-toggle {
     display: inline-flex;
@@ -552,42 +550,58 @@ function h(mixed $value): string
     font-size: 12px;
     font-weight: 700;
     white-space: nowrap;
+    flex: 0 0 auto;
+    min-width: max-content;
   }
   .account-group-toggle-open,
   .account-group-toggle-closed {
     display: none;
   }
-  .account-group[open] .account-group-toggle-open {
-    display: inline;
-  }
-  .account-group:not([open]) .account-group-toggle-closed {
+  .account-group-toggle-closed {
     display: inline;
   }
   .account-item {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+    grid-template-columns: 1fr;
     gap: 10px;
-    align-items: center;
+    align-items: start;
     border: 1px solid #d7e3ef;
     border-radius: 14px;
     background: #fff;
     padding: 12px 14px;
   }
+  .account-item > div:first-child {
+    min-width: 0;
+  }
   .account-item-actions {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
     align-items: stretch;
+    width: 100%;
   }
   .account-item-actions form {
     margin: 0;
   }
   .account-role-form {
-    display: grid;
-    gap: 8px;
+    display: contents;
   }
-  .account-role-form select {
+  .account-item-actions select[name="update_role"] {
     width: 100%;
+    grid-column: 1 / -1;
+  }
+  .account-item-actions .btn-role-save {
+    grid-column: 1;
+    width: 100%;
+  }
+  .account-item-actions > form {
+    min-width: 0;
+  }
+  .account-item-actions > form:last-child {
+    grid-column: 2;
+  }
+  .account-item-actions > .btn-secondary[disabled] {
+    grid-column: 1 / -1;
   }
   .btn-role-save {
     margin-top: 0;
@@ -596,12 +610,15 @@ function h(mixed $value): string
     font-size: 15px;
     font-weight: 700;
     color: #12344d;
+    word-break: keep-all;
   }
   .account-meta {
     margin-top: 4px;
     color: #6b7c93;
     font-size: 13px;
     line-height: 1.5;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
   }
   .role-chip {
     display: inline-flex;
@@ -684,6 +701,14 @@ function h(mixed $value): string
     font-size: 13px;
     font-weight: 400;
   }
+  .team-pill.is-active {
+    border-color: #b9dec4;
+    background: linear-gradient(180deg, #f7fcf8 0%, #edf8f0 100%);
+  }
+  .team-pill.is-inactive {
+    border-color: #ead3b1;
+    background: linear-gradient(180deg, #fffaf2 0%, #fff3df 100%);
+  }
   .team-pill-header {
     display: flex;
     align-items: center;
@@ -691,6 +716,23 @@ function h(mixed $value): string
     gap: 12px;
     width: 100%;
     font-weight: 700;
+  }
+  .team-pill-state {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .team-pill.is-active .team-pill-state {
+    background: #dcf3e3;
+    color: #22643a;
+  }
+  .team-pill.is-inactive .team-pill-state {
+    background: #fde7c2;
+    color: #9a5a12;
   }
   .team-pill-supervisor {
     color: #49637a;
@@ -736,15 +778,17 @@ function h(mixed $value): string
     gap: 6px;
     align-items: center;
     margin-top: 7px;
+    flex-wrap: wrap;
   }
   .account-inline-form {
     display: flex;
     gap: 6px;
     align-items: center;
     margin-top: 7px;
+    flex-wrap: wrap;
   }
   .account-inline-form select {
-    flex: 1;
+    flex: 1 1 180px;
     min-width: 0;
     padding: 6px 10px;
     font-size: 12px;
@@ -755,7 +799,7 @@ function h(mixed $value): string
     font-family: inherit;
   }
   .phone-input {
-    flex: 1;
+    flex: 1 1 180px;
     padding: 6px 10px;
     font-size: 12px;
     border-radius: 8px;
@@ -783,6 +827,85 @@ function h(mixed $value): string
     font-size: 12px;
     color: #486581;
   }
+  .account-modal[hidden] {
+    display: none !important;
+  }
+  .account-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .account-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.48);
+  }
+  .account-modal-dialog {
+    position: relative;
+    width: min(1120px, 100%);
+    max-height: calc(100vh - 40px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid #d7e3ef;
+    border-radius: 22px;
+    background: #ffffff;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.24);
+  }
+  .account-modal-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 20px 22px 16px;
+    border-bottom: 1px solid #edf2f7;
+    background: linear-gradient(180deg, #fbfdff 0%, #f4f9ff 100%);
+  }
+  .account-modal-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .account-modal-title h3 {
+    font-size: 22px;
+    color: #12344d;
+  }
+  .account-modal-subtitle {
+    margin-top: 6px;
+    color: #6b7c93;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .account-modal-close {
+    width: auto;
+    margin-top: 0;
+    flex: 0 0 auto;
+  }
+  .account-modal-body {
+    padding: 18px 22px 22px;
+    overflow: auto;
+  }
+  .account-modal-body .account-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 12px;
+  }
+  .account-modal-body .account-item {
+    height: 100%;
+  }
+  body.modal-open {
+    overflow: hidden;
+  }
+  @media (min-width: 1440px) {
+    .account-modal-body .account-list {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
   @media (max-width: 860px) {
     body {
       padding-left: 12px;
@@ -798,8 +921,33 @@ function h(mixed $value): string
       grid-template-columns: 1fr;
     }
   }
-  @media (max-width: 640px) {
+  @media (max-width: 1200px) {
+    .account-group-head {
+      grid-template-columns: 1fr;
+      align-items: start;
+    }
+    .account-group-actions {
+      justify-self: start;
+    }
     .account-item {
+      grid-template-columns: 1fr;
+    }
+  }
+  @media (max-width: 720px) {
+    .account-modal {
+      padding: 10px;
+    }
+    .account-modal-dialog {
+      width: 100%;
+      max-height: calc(100vh - 20px);
+      border-radius: 18px;
+    }
+    .account-modal-header,
+    .account-modal-body {
+      padding-left: 16px;
+      padding-right: 16px;
+    }
+    .account-modal-body .account-list {
       grid-template-columns: 1fr;
     }
   }
@@ -940,10 +1088,10 @@ function h(mixed $value): string
                         <?php $memberCount = (int)($teamCounts[$teamName] ?? 0); ?>
                         <?php $supervisorTeam = auth_get_team_supervisor($teamName); ?>
                         <?php $isTeamActive = array_key_exists($teamName, $teamStatuses) ? (bool)$teamStatuses[$teamName] : true; ?>
-                        <div class="team-pill">
+                        <div class="team-pill <?= $isTeamActive ? 'is-active' : 'is-inactive' ?>">
                           <div class="team-pill-header">
                             <span><?= h($teamName) ?></span>
-                            <small><?= $memberCount ?>명 / <?= $isTeamActive ? '활성' : '비활성' ?></small>
+                            <small><?= $memberCount ?>명 / <span class="team-pill-state"><?= $isTeamActive ? '활성' : '비활성' ?></span></small>
                           </div>
                           <?php $isProtectedTeam = auth_is_protected_team_name($teamName); ?>
                           <?php if ($supervisorTeam !== ''): ?>
@@ -1005,24 +1153,36 @@ function h(mixed $value): string
                 <div class="account-group-list">
                   <?php foreach ($orderedStoredAccountGroups as $groupName => $groupAccounts): ?>
                     <?php $isUnassignedGroup = $groupName === $unassignedStoredAccountGroupLabel; ?>
-                    <details
-                      class="account-group"
-                      data-group-key="<?= h($isUnassignedGroup ? 'unassigned' : auth_team_key($groupName)) ?>"
-                      open
-                    >
-                      <summary class="account-group-head">
+                    <?php $groupKey = $isUnassignedGroup ? 'unassigned' : auth_team_key($groupName); ?>
+                    <div class="account-group" data-group-key="<?= h($groupKey) ?>">
+                      <div class="account-group-head">
                         <div class="account-group-title">
                           <h3><?= h($groupName) ?></h3>
                           <span class="account-group-count"><?= count($groupAccounts) ?>명</span>
                         </div>
                         <div class="account-group-actions">
                           <div class="account-group-note"><?= $isUnassignedGroup ? '팀 정보가 없는 계정' : '소속 팀 계정' ?></div>
-                          <span class="account-group-toggle">
+                          <button type="button" class="account-group-toggle" data-modal-open="account-modal-<?= h($groupKey) ?>">
                             <span class="account-group-toggle-open">명단 숨기기</span>
                             <span class="account-group-toggle-closed">명단 펼치기</span>
-                          </span>
+                          </button>
                         </div>
-                      </summary>
+                      </div>
+                    </div>
+                    <div class="account-modal" id="account-modal-<?= h($groupKey) ?>" hidden aria-hidden="true">
+                      <div class="account-modal-backdrop" data-modal-close></div>
+                      <div class="account-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="account-modal-title-<?= h($groupKey) ?>">
+                        <div class="account-modal-header">
+                          <div>
+                            <div class="account-modal-title">
+                              <h3 id="account-modal-title-<?= h($groupKey) ?>"><?= h($groupName) ?></h3>
+                              <span class="account-group-count"><?= count($groupAccounts) ?>명</span>
+                            </div>
+                            <div class="account-modal-subtitle"><?= $isUnassignedGroup ? '팀 정보가 없는 계정 명단입니다.' : '소속 팀 계정을 한 번에 확인하고 관리할 수 있습니다.' ?></div>
+                          </div>
+                          <button type="button" class="btn-secondary account-modal-close" data-modal-close>닫기</button>
+                        </div>
+                        <div class="account-modal-body">
                       <div class="account-list">
                         <?php foreach ($groupAccounts as $loginId => $account): ?>
                           <div class="account-item">
@@ -1080,7 +1240,9 @@ function h(mixed $value): string
                           </div>
                         <?php endforeach; ?>
                       </div>
-                    </details>
+                        </div>
+                      </div>
+                    </div>
                   <?php endforeach; ?>
                 </div>
               <?php else: ?>
@@ -1115,51 +1277,44 @@ function h(mixed $value): string
     })();
 
     (() => {
-      const storageKey = 'register_worker.account_group_visibility.v1';
-      const groups = Array.from(document.querySelectorAll('.account-group[data-group-key]'));
+      const openModal = (modal) => {
+        if (!modal) {
+          return;
+        }
+        modal.hidden = false;
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('modal-open');
+      };
 
-      if (groups.length === 0) {
-        return;
-      }
-
-      const readState = () => {
-        try {
-          const raw = window.localStorage.getItem(storageKey);
-          if (!raw) {
-            return {};
-          }
-
-          const parsed = JSON.parse(raw);
-          return parsed && typeof parsed === 'object' ? parsed : {};
-        } catch (error) {
-          return {};
+      const closeModal = (modal) => {
+        if (!modal) {
+          return;
+        }
+        modal.hidden = true;
+        modal.setAttribute('aria-hidden', 'true');
+        if (!document.querySelector('.account-modal:not([hidden])')) {
+          document.body.classList.remove('modal-open');
         }
       };
 
-      const writeState = (state) => {
-        try {
-          window.localStorage.setItem(storageKey, JSON.stringify(state));
-        } catch (error) {
-        }
-      };
-
-      const state = readState();
-
-      groups.forEach((group) => {
-        const groupKey = group.dataset.groupKey || '';
-        if (groupKey !== '' && Object.prototype.hasOwnProperty.call(state, groupKey)) {
-          group.open = state[groupKey] !== false;
+      document.querySelectorAll('[data-modal-open]').forEach((button) => {
+        const modalId = String(button.getAttribute('data-modal-open') || '').trim();
+        const modal = modalId ? document.getElementById(modalId) : null;
+        if (!modal) {
+          return;
         }
 
-        group.addEventListener('toggle', () => {
-          const nextKey = group.dataset.groupKey || '';
-          if (nextKey === '') {
-            return;
-          }
-
-          state[nextKey] = group.open;
-          writeState(state);
+        button.addEventListener('click', () => openModal(modal));
+        modal.querySelectorAll('[data-modal-close]').forEach((closeButton) => {
+          closeButton.addEventListener('click', () => closeModal(modal));
         });
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') {
+          return;
+        }
+        document.querySelectorAll('.account-modal:not([hidden])').forEach((modal) => closeModal(modal));
       });
     })();
   </script>
