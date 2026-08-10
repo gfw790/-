@@ -92,15 +92,29 @@ class OneFoldScreen extends StatefulWidget {
 class _OneFoldScreenState extends State<OneFoldScreen> {
   static const trayWidths = [100, 150, 200, 300, 400, 450, 500, 600, 750];
 
+  final _customTrayWidthController = TextEditingController();
+
   int? _trayWidth;
+  bool _useCustomTrayWidth = false;
   double _angle = 0;
 
+  double? get _effectiveTrayWidth => _useCustomTrayWidth
+      ? _readNumber(_customTrayWidthController.text)
+      : _trayWidth?.toDouble();
+
   int get _cutResult {
-    if (_trayWidth == null) {
+    final trayWidth = _effectiveTrayWidth;
+    if (trayWidth == null) {
       return 0;
     }
     final radians = _degToRad(_angle.abs() / 2);
-    return (_trayWidth! * math.tan(radians)).round();
+    return (trayWidth * math.tan(radians)).round();
+  }
+
+  @override
+  void dispose() {
+    _customTrayWidthController.dispose();
+    super.dispose();
   }
 
   @override
@@ -136,8 +150,30 @@ class _OneFoldScreenState extends State<OneFoldScreen> {
                 ),
               )
               .toList(),
-          onChanged: (value) => setState(() => _trayWidth = value),
+          onChanged: _useCustomTrayWidth
+              ? null
+              : (value) => setState(() => _trayWidth = value),
         ),
+        const SizedBox(height: 12),
+        SwitchListTile.adaptive(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('임의값 직접입력'),
+          subtitle: const Text('규격 외 트레이 폭을 mm 단위로 입력합니다.'),
+          value: _useCustomTrayWidth,
+          onChanged: (value) => setState(() => _useCustomTrayWidth = value),
+        ),
+        if (_useCustomTrayWidth) ...[
+          const SizedBox(height: 12),
+          TextField(
+            controller: _customTrayWidthController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+              labelText: '트레이 폭 직접입력',
+              hintText: '예: 275',
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+        ],
         const SizedBox(height: 24),
         InkWell(
           borderRadius: BorderRadius.circular(18),
@@ -194,7 +230,7 @@ class _OneFoldScreenState extends State<OneFoldScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                _trayWidth == null
+                _effectiveTrayWidth == null
                     ? '트레이를 선택하면 각도를 움직일 수 있습니다.'
                     : '-90도부터 90도까지 조절할 수 있습니다.',
                 style: const TextStyle(
@@ -208,7 +244,7 @@ class _OneFoldScreenState extends State<OneFoldScreen> {
                 max: 90,
                 divisions: 180,
                 label: '${_angle.round()}도',
-                onChanged: _trayWidth == null
+                onChanged: _effectiveTrayWidth == null
                     ? null
                     : (value) => setState(() => _angle = value),
               ),
@@ -225,7 +261,7 @@ class _OneFoldScreenState extends State<OneFoldScreen> {
   }
 
   Future<void> _showAngleInputDialog() async {
-    if (_trayWidth == null) {
+    if (_effectiveTrayWidth == null) {
       _showMessage('트레이를 선택해주세요');
       return;
     }
@@ -288,8 +324,10 @@ class _TwoFoldScreenState extends State<TwoFoldScreen> {
 
   final _angleController = TextEditingController();
   final _gapController = TextEditingController();
+  final _customTrayWidthController = TextEditingController();
 
   int? _trayWidth;
+  bool _useCustomTrayWidth = false;
   String? _gapError;
 
   @override
@@ -297,12 +335,14 @@ class _TwoFoldScreenState extends State<TwoFoldScreen> {
     super.initState();
     _angleController.addListener(_refresh);
     _gapController.addListener(_refresh);
+    _customTrayWidthController.addListener(_refresh);
   }
 
   @override
   void dispose() {
     _angleController.dispose();
     _gapController.dispose();
+    _customTrayWidthController.dispose();
     super.dispose();
   }
 
@@ -310,19 +350,25 @@ class _TwoFoldScreenState extends State<TwoFoldScreen> {
 
   double? get _trayGap => _readNumber(_gapController.text);
 
+  double? get _effectiveTrayWidth => _useCustomTrayWidth
+      ? _readNumber(_customTrayWidthController.text)
+      : _trayWidth?.toDouble();
+
   int get _cutPoint {
-    if (_trayWidth == null) {
+    final trayWidth = _effectiveTrayWidth;
+    if (trayWidth == null) {
       return 0;
     }
     final radians = _degToRad(_angle / 2);
-    return (_trayWidth! * math.tan(radians)).round();
+    return (trayWidth * math.tan(radians)).round();
   }
 
   int get _centerDistance {
-    if (_trayWidth == null || _trayGap == null) {
+    final trayWidth = _effectiveTrayWidth;
+    if (trayWidth == null || _trayGap == null) {
       return 0;
     }
-    final rise = _trayGap! - (_trayWidth! * 2);
+    final rise = _trayGap! - (trayWidth * 2);
     if (_angle <= 0 || rise <= 0) {
       return 0;
     }
@@ -364,13 +410,39 @@ class _TwoFoldScreenState extends State<TwoFoldScreen> {
                 ),
               )
               .toList(),
+          onChanged: _useCustomTrayWidth
+              ? null
+              : (value) {
+                  setState(() {
+                    _trayWidth = value;
+                  });
+                  _refresh();
+                },
+        ),
+        const SizedBox(height: 12),
+        SwitchListTile.adaptive(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('임의값 직접입력'),
+          subtitle: const Text('규격 외 트레이 사이즈를 mm 단위로 입력합니다.'),
+          value: _useCustomTrayWidth,
           onChanged: (value) {
             setState(() {
-              _trayWidth = value;
+              _useCustomTrayWidth = value;
             });
             _refresh();
           },
         ),
+        if (_useCustomTrayWidth) ...[
+          const SizedBox(height: 12),
+          TextField(
+            controller: _customTrayWidthController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+              labelText: '트레이 사이즈 직접입력',
+              hintText: '예: 275',
+            ),
+          ),
+        ],
         const SizedBox(height: 18),
         TextField(
           controller: _angleController,
@@ -431,7 +503,8 @@ class _TwoFoldScreenState extends State<TwoFoldScreen> {
 
   void _refresh() {
     setState(() {
-      if (_trayWidth != null && _trayGap != null && _trayGap! <= _trayWidth! * 2) {
+      final trayWidth = _effectiveTrayWidth;
+      if (trayWidth != null && _trayGap != null && _trayGap! <= trayWidth * 2) {
         _gapError = '트레이 간격은 위아래 트레이 길이의 합보다 커야 합니다.';
       } else {
         _gapError = null;
@@ -440,7 +513,7 @@ class _TwoFoldScreenState extends State<TwoFoldScreen> {
   }
 
   String _buildCenterDistanceMessage() {
-    if (_trayWidth == null || _trayGap == null || _gapError != null) {
+    if (_effectiveTrayWidth == null || _trayGap == null || _gapError != null) {
       return '평행 180도 모드에서 계산됩니다.';
     }
     return '아랫변 기준 중심점 간의 거리는 ${_centerDistance}mm입니다.';
@@ -471,6 +544,197 @@ class _TwoFoldScreenState extends State<TwoFoldScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+class ReducingScreen extends StatefulWidget {
+  const ReducingScreen({super.key});
+
+  @override
+  State<ReducingScreen> createState() => _ReducingScreenState();
+}
+
+class _ReducingScreenState extends State<ReducingScreen> {
+  final _startWidthController = TextEditingController();
+  final _endWidthController = TextEditingController();
+  final _lengthController = TextEditingController();
+  String _mode = 'concentric';
+
+  @override
+  void dispose() {
+    _startWidthController.dispose();
+    _endWidthController.dispose();
+    _lengthController.dispose();
+    super.dispose();
+  }
+
+  double? get _startWidth => _readNumber(_startWidthController.text);
+  double? get _endWidth => _readNumber(_endWidthController.text);
+  double? get _length => _readNumber(_lengthController.text);
+
+  double? get _totalReduction {
+    if (_startWidth == null || _endWidth == null || _startWidth! <= _endWidth!) {
+      return null;
+    }
+    return _startWidth! - _endWidth!;
+  }
+
+  double? get _sideReduction {
+    final totalReduction = _totalReduction;
+    if (totalReduction == null) {
+      return null;
+    }
+    return _mode == 'eccentric' ? totalReduction : totalReduction / 2;
+  }
+
+  double? get _reducingAngle {
+    final sideReduction = _sideReduction;
+    final length = _length;
+    if (sideReduction == null || length == null || length <= 0) {
+      return null;
+    }
+    return math.atan(sideReduction / length) * 180 / math.pi;
+  }
+
+  String get _errorText {
+    if (_startWidth == null || _endWidth == null) {
+      return '';
+    }
+    if (_startWidth! <= _endWidth!) {
+      return '시작 폭은 끝 폭보다 커야 합니다.';
+    }
+    return '';
+  }
+
+  String get _reductionLabel => _mode == 'eccentric' ? '편심 축소량' : '한쪽 축소량';
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+      children: [
+        const Text(
+          '레듀싱',
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF1C1917),
+          ),
+        ),
+        const SizedBox(height: 10),
+        const Text(
+          '시작 폭, 끝 폭, 레듀싱 길이를 입력하면 축소량과 한쪽 작업량을 바로 확인할 수 있습니다.',
+          style: TextStyle(fontSize: 16, color: Color(0xFF57534E)),
+        ),
+        const SizedBox(height: 24),
+        DropdownButtonFormField<String>(
+          value: _mode,
+          decoration: const InputDecoration(
+            labelText: '레듀싱 방식',
+          ),
+          items: const [
+            DropdownMenuItem(
+              value: 'concentric',
+              child: Text('동심'),
+            ),
+            DropdownMenuItem(
+              value: 'eccentric',
+              child: Text('편심'),
+            ),
+          ],
+          onChanged: (value) {
+            if (value == null) {
+              return;
+            }
+            setState(() => _mode = value);
+          },
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _startWidthController,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: '시작 폭',
+            hintText: '예: 300',
+          ),
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _endWidthController,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: '끝 폭',
+            hintText: '예: 200',
+          ),
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _lengthController,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: InputDecoration(
+            labelText: '레듀싱 길이',
+            hintText: '예: 400',
+            helperText: '모든 수치는 mm 기준입니다.',
+            errorText: _errorText.isEmpty ? null : _errorText,
+          ),
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 20),
+        _ResultCard(
+          title: '레듀싱 결과',
+          valueText: _totalReduction == null
+              ? '총 축소량 0mm'
+              : '총 축소량 ${_totalReduction!.round()}mm',
+          body: [
+            const SizedBox(height: 18),
+            Text(
+              _reductionLabel,
+              style: _resultLabelStyle,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _sideReduction == null
+                  ? '$_reductionLabel 0mm'
+                  : '$_reductionLabel ${_sideReduction!.round()}mm',
+              style: _resultValueStyle,
+            ),
+            const SizedBox(height: 18),
+            const Text(
+              '경사 각도',
+              style: _resultLabelStyle,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _reducingAngle == null
+                  ? '길이를 입력하면 각도를 계산합니다.'
+                  : '한쪽 기준 약 ${_reducingAngle!.toStringAsFixed(1)}도입니다.',
+              style: _resultValueStyle,
+            ),
+            const SizedBox(height: 18),
+            const Text(
+              '작업 메모',
+              style: _resultLabelStyle,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _sideReduction == null
+                  ? '시작 폭과 끝 폭을 입력해 레듀싱 작업량을 확인하세요.'
+                  : _mode == 'eccentric'
+                      ? '편심 기준으로 한쪽에서 약 ${_sideReduction!.round()}mm 줄어드는 기준입니다.'
+                      : '좌우 각각 약 ${_sideReduction!.round()}mm씩 줄어드는 기준입니다.',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF7C2D12),
+                height: 1.6,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

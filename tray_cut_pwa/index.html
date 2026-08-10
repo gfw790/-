@@ -44,7 +44,7 @@
     }
     .tabs {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 10px;
       margin-bottom: 20px;
     }
@@ -104,6 +104,38 @@
       margin-top: 6px;
       color: #78716c;
       font-size: 13px;
+    }
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 10px;
+      padding: 10px 14px;
+      border: 1px solid #f1dfd2;
+      border-radius: 14px;
+      background: #fff8f3;
+    }
+    .toggle-copy {
+      color: #7c2d12;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    input.toggle-input {
+      width: 50px;
+      height: 28px;
+      accent-color: #c2410c;
+      flex: 0 0 auto;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+    }
+    .field.is-hidden {
+      display: none;
+    }
+    .field-span-2 {
+      grid-column: 1 / -1;
     }
     .angle-row {
       display: flex;
@@ -269,7 +301,16 @@
             <option>600</option>
             <option>750</option>
           </select>
+          <div class="toggle-row">
+            <span class="toggle-copy">임의값 직접입력</span>
+            <input type="checkbox" id="one-custom-toggle" class="toggle-input" aria-controls="one-custom-width-field">
+          </div>
           <div class="hint">단위는 mm입니다.</div>
+        </div>
+        <div class="field is-hidden" id="one-custom-width-field">
+          <label for="one-custom-width">트레이 폭 직접입력</label>
+          <input type="number" id="one-custom-width" inputmode="decimal" placeholder="예: 275">
+          <div class="hint">임의 트레이 폭을 mm 단위로 입력하세요.</div>
         </div>
         <div class="field">
           <label>현재 각도</label>
@@ -315,6 +356,15 @@
               <option>600</option>
               <option>750</option>
             </select>
+            <div class="toggle-row">
+              <span class="toggle-copy">임의값 직접입력</span>
+              <input type="checkbox" id="two-custom-toggle" class="toggle-input" aria-controls="two-custom-width-field">
+            </div>
+          </div>
+          <div class="field field-span-2 is-hidden" id="two-custom-width-field">
+            <label for="two-custom-width">트레이 사이즈 직접입력</label>
+            <input type="number" id="two-custom-width" inputmode="decimal" placeholder="예: 275">
+            <div class="hint">임의 트레이 사이즈를 mm 단위로 입력하세요.</div>
           </div>
           <div class="field">
             <label for="two-gap">트레이 간격</label>
@@ -355,6 +405,7 @@
         </div>
       </div>
     </section>
+
   </div>
 
   <div class="overlay" id="guide-overlay" aria-hidden="true">
@@ -371,6 +422,12 @@
     const oneAngleCanvas = document.getElementById('one-angle-canvas');
 
     const twoWidth = document.getElementById('two-width');
+    const oneCustomToggle = document.getElementById('one-custom-toggle');
+    const oneCustomWidthField = document.getElementById('one-custom-width-field');
+    const oneCustomWidth = document.getElementById('one-custom-width');
+    const twoCustomToggle = document.getElementById('two-custom-toggle');
+    const twoCustomWidthField = document.getElementById('two-custom-width-field');
+    const twoCustomWidth = document.getElementById('two-custom-width');
     const twoGap = document.getElementById('two-gap');
     const twoAngle = document.getElementById('two-angle');
     const twoGapError = document.getElementById('two-gap-error');
@@ -389,6 +446,17 @@
       }
       const parsed = Number(value);
       return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    function syncWidthMode(toggle, selectField, customField, customInput) {
+      const customMode = toggle.checked;
+      selectField.disabled = customMode;
+      customField.classList.toggle('is-hidden', !customMode);
+      customInput.disabled = !customMode;
+    }
+
+    function readTrayWidth(selectEl, customToggleEl, customInputEl) {
+      return customToggleEl.checked ? toNumber(customInputEl.value) : toNumber(selectEl.value);
     }
 
     function degToRad(degree) {
@@ -540,7 +608,7 @@
     }
 
     function updateOneFold() {
-      const width = toNumber(oneWidth.value);
+      const width = readTrayWidth(oneWidth, oneCustomToggle, oneCustomWidth);
       const angle = oneAngleValue;
       oneAngleBadge.textContent = `${Math.round(angle)}도`;
 
@@ -555,7 +623,7 @@
     }
 
     function updateTwoFold() {
-      const width = toNumber(twoWidth.value);
+      const width = readTrayWidth(twoWidth, twoCustomToggle, twoCustomWidth);
       const gap = toNumber(twoGap.value);
       const angle = Math.min(90, Math.max(0, toNumber(twoAngle.value) ?? 0));
       drawAngleCanvas(twoAngleCanvas, angle, { lockPositive: true });
@@ -621,10 +689,22 @@
       }
     }
 
+
+    oneCustomToggle.addEventListener('change', () => {
+      syncWidthMode(oneCustomToggle, oneWidth, oneCustomWidthField, oneCustomWidth);
+      updateOneFold();
+    });
+    twoCustomToggle.addEventListener('change', () => {
+      syncWidthMode(twoCustomToggle, twoWidth, twoCustomWidthField, twoCustomWidth);
+      updateTwoFold();
+    });
+
     oneWidth.addEventListener('change', updateOneFold);
+    oneCustomWidth.addEventListener('input', updateOneFold);
+    oneCustomWidth.addEventListener('change', updateOneFold);
 
     oneAngleBadge.addEventListener('click', () => {
-      if (!oneWidth.value) {
+      if (readTrayWidth(oneWidth, oneCustomToggle, oneCustomWidth) === null) {
         showToast('트레이를 선택해주세요');
         return;
       }
@@ -641,7 +721,7 @@
       oneAngleCanvas,
       () => oneAngleValue,
       (angle) => {
-        if (!oneWidth.value) {
+        if (readTrayWidth(oneWidth, oneCustomToggle, oneCustomWidth) === null) {
           showToast('트레이를 선택해주세요');
           return;
         }
@@ -660,7 +740,7 @@
       { lockPositive: true }
     );
 
-    [twoWidth, twoGap, twoAngle].forEach((el) => {
+    [twoWidth, twoCustomWidth, twoGap, twoAngle].forEach((el) => {
       el.addEventListener('input', updateTwoFold);
       el.addEventListener('change', updateTwoFold);
     });
@@ -700,6 +780,8 @@
       });
     }
 
+    syncWidthMode(oneCustomToggle, oneWidth, oneCustomWidthField, oneCustomWidth);
+    syncWidthMode(twoCustomToggle, twoWidth, twoCustomWidthField, twoCustomWidth);
     updateOneFold();
     updateTwoFold();
     window.addEventListener('load', () => {
