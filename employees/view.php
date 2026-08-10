@@ -52,18 +52,49 @@ if (!is_dir($uploadDir)) {
     mkdir($uploadDir, 0755, true);
 }
 
+function document_extension(array $doc): string {
+    $name = strtolower((string)($doc['original_name'] ?? $doc['filename'] ?? ''));
+    return pathinfo($name, PATHINFO_EXTENSION);
+}
+
+function document_previewable(array $doc): bool {
+    return in_array(document_extension($doc), ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'txt'], true);
+}
+
+function document_mime_type(string $filePath, array $doc): string {
+    if (function_exists('mime_content_type')) {
+        $detected = @mime_content_type($filePath);
+        if (is_string($detected) && $detected !== '') {
+            return $detected;
+        }
+    }
+
+    return match (document_extension($doc)) {
+        'pdf' => 'application/pdf',
+        'jpg', 'jpeg' => 'image/jpeg',
+        'png' => 'image/png',
+        'gif' => 'image/gif',
+        'webp' => 'image/webp',
+        'bmp' => 'image/bmp',
+        'svg' => 'image/svg+xml',
+        'txt' => 'text/plain; charset=UTF-8',
+        default => 'application/octet-stream',
+    };
+}
+
 $id = (int)($_GET['id'] ?? 0);
 
-if (isset($_GET['download']) && $id > 0) {
-    $docId = (int)$_GET['download'];
+if ((isset($_GET['download']) || isset($_GET['preview'])) && $id > 0) {
+    $docId = (int)($_GET['download'] ?? $_GET['preview']);
     $doc = $pdo->prepare("SELECT * FROM employee_documents WHERE id=:did AND employee_id=:eid");
     $doc->execute([':did' => $docId, ':eid' => $id]);
     $docRow = $doc->fetch(PDO::FETCH_ASSOC);
     if ($docRow) {
         $filePath = $uploadDir . $docRow['filename'];
         if (is_file($filePath)) {
-            header('Content-Type: application/octet-stream');
-            header('Content-Disposition: attachment; filename="' . rawurlencode((string)$docRow['original_name']) . '"');
+            $isPreview = isset($_GET['preview']);
+            header('Content-Type: ' . document_mime_type($filePath, $docRow));
+            header('Content-Disposition: ' . ($isPreview ? 'inline' : 'attachment') . '; filename="' . rawurlencode((string)$docRow['original_name']) . '"');
             header('Content-Length: ' . filesize($filePath));
             readfile($filePath);
             exit;
@@ -331,7 +362,7 @@ function team_badge_colors(string $team): array {
     color: #243447;
     padding: 28px 16px 60px;
   }
-  .shell { max-width: 960px; margin: 0 auto; }
+  .shell { width: 100%; margin: 0 auto; }
   .page-head { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
   .btn {
     display: inline-flex;
@@ -366,9 +397,102 @@ function team_badge_colors(string $team): array {
   .doc-status-ok { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; background: #edfaf4; color: #1a7a4a; }
   .doc-status-no { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; background: #f3f4f6; color: #9ca3af; }
   .doc-actions { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
+  .doc-name-button {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    background: none;
+    border: none;
+    padding: 0;
+    color: #1e5f8e;
+    font: inherit;
+    cursor: pointer;
+    text-align: left;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    word-break: break-all;
+  }
+  .doc-name-button:hover { color: #17496d; }
+  .doc-name-text {
+    color: #486581;
+    font-size: 12px;
+    word-break: break-all;
+  }
   .doc-upload-label { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; background: #f0f7fd; color: #1a5f8e; border: 1px solid #b3d4ee; }
   .doc-upload-label:hover { background: #deeef9; }
   .doc-upload-input { display: none; }
+  .preview-modal {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(15, 23, 42, 0.46);
+    z-index: 1000;
+  }
+  .preview-modal.is-open { display: flex; }
+  .preview-dialog {
+    width: min(1120px, 100%);
+    max-height: min(88vh, 920px);
+    background: #fff;
+    border-radius: 24px;
+    border: 1px solid #d7e3ef;
+    box-shadow: 0 28px 60px rgba(15, 23, 42, 0.22);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .preview-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 18px 22px;
+    border-bottom: 1px solid #e6eef6;
+  }
+  .preview-title {
+    min-width: 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: #12344d;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .preview-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .preview-body {
+    min-height: 0;
+    padding: 18px 22px 22px;
+    background: #f8fbfe;
+  }
+  .preview-frame,
+  .preview-fallback {
+    width: 100%;
+    height: min(70vh, 760px);
+    background: #fff;
+    border: 1px solid #d7e3ef;
+    border-radius: 18px;
+  }
+  .preview-frame { display: none; }
+  .preview-frame.is-visible { display: block; }
+  .preview-fallback {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 12px;
+    padding: 24px;
+    text-align: center;
+    color: #486581;
+    line-height: 1.7;
+  }
+  .preview-fallback.is-visible { display: flex; }
   .card {
     background: rgba(255,255,255,0.97);
     border: 1px solid #d7e3ef;
@@ -510,10 +634,16 @@ function team_badge_colors(string $team): array {
   .msg-error { background: #fdf2f2; color: #c0392b; border: 1px solid #f5b7b1; }
   .msg-success { background: #edfaf4; color: #1a7a4a; border: 1px solid #a8e6c3; }
   @media (max-width: 768px) {
-    .shell { max-width: 100%; }
+    .shell { width: 100%; }
     .info-grid { grid-template-columns: 1fr; column-gap: 0; }
     .info-label, .info-value { white-space: normal; }
     .info-value { padding-left: 0; }
+    .preview-modal { padding: 12px; }
+    .preview-head,
+    .preview-body { padding-left: 14px; padding-right: 14px; }
+    .preview-dialog { border-radius: 18px; }
+    .preview-frame,
+    .preview-fallback { height: 68vh; }
   }
 </style>
 </head>
@@ -632,7 +762,20 @@ function team_badge_colors(string $team): array {
           <tr>
             <td><?= h($dlabel) ?></td>
             <td><?= $doc ? '<span class="doc-status-ok">등록됨</span>' : '<span class="doc-status-no">미등록</span>' ?></td>
-            <td style="color:#486581;font-size:12px"><?= $doc ? h((string)$doc['original_name']) : '-' ?></td>
+            <td>
+              <?php if ($doc): ?>
+                <button
+                  type="button"
+                  class="doc-name-button"
+                  data-previewable="<?= document_previewable($doc) ? 'true' : 'false' ?>"
+                  data-preview-url="?id=<?= $id ?>&preview=<?= (int)$doc['id'] ?>"
+                  data-download-url="?id=<?= $id ?>&download=<?= (int)$doc['id'] ?>"
+                  data-file-name="<?= h((string)$doc['original_name']) ?>"
+                ><?= h((string)$doc['original_name']) ?></button>
+              <?php else: ?>
+                <span class="doc-name-text">-</span>
+              <?php endif; ?>
+            </td>
             <td>
               <div class="doc-actions">
                 <?php if ($doc): ?>
@@ -848,6 +991,24 @@ function team_badge_colors(string $team): array {
     </div>
   </div>
 </div>
+<div class="preview-modal" id="preview-modal" aria-hidden="true">
+  <div class="preview-dialog" role="dialog" aria-modal="true" aria-labelledby="preview-title">
+    <div class="preview-head">
+      <div class="preview-title" id="preview-title">파일 미리보기</div>
+      <div class="preview-actions">
+        <a href="#" class="btn btn-secondary btn-sm" id="preview-download-link">다운로드</a>
+        <button type="button" class="btn btn-secondary btn-sm" id="preview-close-button">닫기</button>
+      </div>
+    </div>
+    <div class="preview-body">
+      <iframe class="preview-frame" id="preview-frame" title="첨부파일 미리보기"></iframe>
+      <div class="preview-fallback" id="preview-fallback">
+        <div>이 형식은 브라우저에서 바로 미리보기 어렵습니다.</div>
+        <div>다운로드 버튼으로 파일을 열어주세요.</div>
+      </div>
+    </div>
+  </div>
+</div>
 <script>
 function toggleEdit(forceShow) {
   const card = document.getElementById('edit-card');
@@ -858,6 +1019,64 @@ function toggleEdit(forceShow) {
     card.querySelector('input[name="name"]').focus();
   }
 }
+function openPreview(button) {
+  const modal = document.getElementById('preview-modal');
+  const title = document.getElementById('preview-title');
+  const frame = document.getElementById('preview-frame');
+  const fallback = document.getElementById('preview-fallback');
+  const downloadLink = document.getElementById('preview-download-link');
+  const previewable = button.dataset.previewable === 'true';
+
+  title.textContent = button.dataset.fileName || '파일 미리보기';
+  downloadLink.href = button.dataset.downloadUrl || '#';
+  modal.classList.add('is-open');
+  modal.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+
+  if (previewable && button.dataset.previewUrl) {
+    frame.src = button.dataset.previewUrl;
+    frame.classList.add('is-visible');
+    fallback.classList.remove('is-visible');
+  } else {
+    frame.removeAttribute('src');
+    frame.classList.remove('is-visible');
+    fallback.classList.add('is-visible');
+  }
+}
+
+function closePreview() {
+  const modal = document.getElementById('preview-modal');
+  const frame = document.getElementById('preview-frame');
+  const fallback = document.getElementById('preview-fallback');
+
+  modal.classList.remove('is-open');
+  modal.setAttribute('aria-hidden', 'true');
+  frame.removeAttribute('src');
+  frame.classList.remove('is-visible');
+  fallback.classList.remove('is-visible');
+  document.body.style.overflow = '';
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.doc-name-button').forEach((button) => {
+    button.addEventListener('click', () => openPreview(button));
+  });
+
+  const modal = document.getElementById('preview-modal');
+  const closeButton = document.getElementById('preview-close-button');
+
+  closeButton.addEventListener('click', closePreview);
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) {
+      closePreview();
+    }
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && modal.classList.contains('is-open')) {
+      closePreview();
+    }
+  });
+});
 <?php if ($showEdit && $error === '' && $success === ''): ?>
 document.addEventListener('DOMContentLoaded', () => toggleEdit(true));
 <?php endif; ?>

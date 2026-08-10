@@ -95,6 +95,12 @@ if ($rowCount === 0) {
 // ── POST 처리 ─────────────────────────────────────────────────
 $error   = '';
 $success = '';
+if (isset($_GET['success'])) {
+    $successKey = trim((string)$_GET['success']);
+    if ($successKey === 'edited') {
+        $success = '직원 정보가 수정되었습니다.';
+    }
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = trim((string)($_POST['action'] ?? ''));
@@ -209,7 +215,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':uhtop'  => trim((string)($_POST['uniform_heat_top']    ?? '')),
                 ':uhbot'  => trim((string)($_POST['uniform_heat_bottom'] ?? '')),
             ]);
-            $success = '직원 정보가 수정되었습니다.';
+            header('Location: index.php?success=edited');
+            exit;
         }
 
     } elseif ($action === 'delete') {
@@ -312,7 +319,11 @@ $memberOrder = "CASE
     WHEN team='제조팀' AND name LIKE '김진환%'  THEN 5
     WHEN team='경영지원' AND name LIKE '정주랑%' THEN 1
     ELSE 99 END";
-$sql = "SELECT * FROM employees" . (!empty($where) ? ' WHERE ' . implode(' AND ', $where) : '') . " ORDER BY $teamOrder, $memberOrder, name";
+$employmentOrder = "CASE
+    WHEN COALESCE(is_active, 1) = 0 OR COALESCE(employment_status, 'active') = 'retired' THEN 1
+    ELSE 0
+END";
+$sql = "SELECT * FROM employees" . (!empty($where) ? ' WHERE ' . implode(' AND ', $where) : '') . " ORDER BY $employmentOrder, $teamOrder, $memberOrder, name";
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -372,6 +383,7 @@ function employment_badge_compact(array $emp): string {
 <!DOCTYPE html>
 <html lang="ko">
 <head>
+<script src="https://t1.kakaocdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>직원명부</title>
@@ -386,7 +398,7 @@ function employment_badge_compact(array $emp): string {
     color: #243447;
     padding: 28px 16px 40px;
   }
-  .shell { max-width: 1100px; margin: 0 auto; }
+  .shell { width: 100%; margin: 0 auto; }
   .panel {
     background: rgba(255,255,255,0.96);
     border: 1px solid #d7e3ef;
@@ -504,6 +516,25 @@ function employment_badge_compact(array $emp): string {
   }
   .field textarea { resize: vertical; min-height: 60px; }
   .field-full { grid-column: 1 / -1; }
+  .address-stack {
+    display: grid;
+    gap: 8px;
+  }
+  .address-inline {
+    display: grid;
+    grid-template-columns: minmax(120px, 180px) auto;
+    gap: 8px;
+    align-items: center;
+  }
+  .btn-address-search {
+    width: auto;
+    padding: 8px 14px;
+  }
+  .address-help {
+    font-size: 12px;
+    color: #6b7c93;
+    line-height: 1.5;
+  }
   .form-actions { display: flex; gap: 8px; flex-wrap: wrap; }
   .msg { padding: 10px 14px; border-radius: 9px; font-size: 13px; margin-bottom: 14px; }
   .msg-error   { background: #fdf2f2; color: #c0392b; border: 1px solid #f5b7b1; }
@@ -515,6 +546,14 @@ function employment_badge_compact(array $emp): string {
     margin-bottom: 12px;
     padding-bottom: 8px;
     border-bottom: 1px solid #e8f0f8;
+  }
+  @media (max-width: 640px) {
+    .address-inline {
+      grid-template-columns: 1fr;
+    }
+    .btn-address-search {
+      width: 100%;
+    }
   }
 </style>
 </head>
@@ -621,7 +660,16 @@ function employment_badge_compact(array $emp): string {
           </div>
           <div class="field field-full">
             <label>주소</label>
-            <input type="text" name="address" value="<?= h((string)($editTarget['address'] ?? '')) ?>" placeholder="주소를 입력하세요">
+            <input type="hidden" name="address" id="address" value="<?= h((string)($editTarget['address'] ?? '')) ?>">
+            <div class="address-stack">
+              <div class="address-inline">
+                <input type="text" id="address_postcode" placeholder="우편번호" autocomplete="postal-code" readonly>
+                <button type="button" class="btn btn-secondary btn-address-search" id="address-search-button">주소 검색</button>
+              </div>
+              <input type="text" id="address_base" placeholder="기본 주소" autocomplete="address-line1">
+              <input type="text" id="address_detail" placeholder="상세 주소" autocomplete="address-line2">
+              <div class="address-help">주소 검색으로 기본 주소를 선택하고, 필요한 경우 상세 주소를 이어서 입력해 주세요.</div>
+            </div>
           </div>
           <div class="field field-full">
             <label>메모</label>
@@ -734,6 +782,7 @@ function employment_badge_compact(array $emp): string {
               <th>연락처</th>
               <th>이메일</th>
               <th>입사일</th>
+              <th>퇴사일</th>
               <th>비상연락처</th>
               <th>메모</th>
               <th>관리</th>
@@ -741,7 +790,7 @@ function employment_badge_compact(array $emp): string {
           </thead>
           <tbody>
             <?php if (empty($employees)): ?>
-              <tr class="empty-row"><td colspan="12">등록된 직원이 없습니다.</td></tr>
+              <tr class="empty-row"><td colspan="13">등록된 직원이 없습니다.</td></tr>
             <?php else: ?>
               <?php foreach ($employees as $emp): ?>
                 <tr>
@@ -754,6 +803,7 @@ function employment_badge_compact(array $emp): string {
                   <td><?= h((string)($emp['phone'] ?? '')) ?></td>
                   <td><?= h((string)($emp['email'] ?? '')) ?></td>
                   <td><?= h((string)($emp['join_date'] ?? '')) ?></td>
+                  <td><?= h((string)($emp['retired_at'] ?? '')) ?></td>
                   <td><?= h((string)($emp['emergency_contact'] ?? '')) ?></td>
                   <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="<?= h((string)($emp['memo'] ?? '')) ?>"><?= h((string)($emp['memo'] ?? '')) ?></td>
                   <td>
@@ -777,6 +827,86 @@ function employment_badge_compact(array $emp): string {
 
 </div>
 <script>
+function hydrateAddressFields() {
+  const hidden = document.getElementById('address');
+  const postcode = document.getElementById('address_postcode');
+  const base = document.getElementById('address_base');
+  const detail = document.getElementById('address_detail');
+  if (!hidden || !postcode || !base || !detail) {
+    return;
+  }
+
+  const raw = String(hidden.value || '').trim();
+  const match = raw.match(/^\[(\d{5})\]\s*(.+)$/);
+  if (match) {
+    postcode.value = match[1];
+    base.value = match[2];
+    detail.value = '';
+    return;
+  }
+
+  base.value = raw;
+}
+
+function syncAddressField() {
+  const hidden = document.getElementById('address');
+  const postcode = document.getElementById('address_postcode');
+  const base = document.getElementById('address_base');
+  const detail = document.getElementById('address_detail');
+  if (!hidden || !postcode || !base || !detail) {
+    return;
+  }
+
+  const zip = String(postcode.value || '').trim();
+  const primary = String(base.value || '').trim();
+  const extra = String(detail.value || '').trim();
+  let full = primary;
+  if (zip && primary) {
+    full = '[' + zip + '] ' + primary;
+  }
+  if (extra) {
+    full = full ? full + ' ' + extra : extra;
+  }
+  hidden.value = full;
+}
+
+function openAddressSearch() {
+  if (typeof window.daum === 'undefined' || typeof window.daum.Postcode === 'undefined') {
+    window.alert('주소 검색 서비스를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
+    return;
+  }
+
+  const postcode = document.getElementById('address_postcode');
+  const base = document.getElementById('address_base');
+  const detail = document.getElementById('address_detail');
+  if (!postcode || !base || !detail) {
+    return;
+  }
+
+  new daum.Postcode({
+    oncomplete: function(data) {
+      let extraAddress = '';
+      if (data.bname && /[동|로|가]$/g.test(data.bname)) {
+        extraAddress += data.bname;
+      }
+      if (data.buildingName && data.apartment === 'Y') {
+        extraAddress += (extraAddress ? ', ' + data.buildingName : data.buildingName);
+      }
+
+      postcode.value = String(data.zonecode || '').trim();
+      base.value = String(data.roadAddress || data.jibunAddress || '').trim();
+      if (extraAddress && !detail.value.trim()) {
+        detail.value = extraAddress;
+      }
+      syncAddressField();
+      detail.focus();
+    }
+  }).open({
+    popupTitle: '주소 검색',
+    popupKey: 'employees-address-search'
+  });
+}
+
 function toggleHeatFields() {
   const team = document.querySelector('select[name="team"]')?.value ?? '';
   document.querySelectorAll('.heat-field').forEach(el => {
@@ -786,6 +916,23 @@ function toggleHeatFields() {
 document.addEventListener('DOMContentLoaded', () => {
   const sel = document.querySelector('select[name="team"]');
   if (sel) { sel.addEventListener('change', toggleHeatFields); toggleHeatFields(); }
+
+  hydrateAddressFields();
+  const addressSearchButton = document.getElementById('address-search-button');
+  if (addressSearchButton) {
+    addressSearchButton.addEventListener('click', openAddressSearch);
+  }
+  ['address_postcode', 'address_base', 'address_detail'].forEach((id) => {
+    const input = document.getElementById(id);
+    if (input) {
+      input.addEventListener('input', syncAddressField);
+      input.addEventListener('change', syncAddressField);
+    }
+  });
+  const employeeForm = document.querySelector('#add-panel form');
+  if (employeeForm) {
+    employeeForm.addEventListener('submit', syncAddressField);
+  }
 });
 function toggleAddPanel() {
   const p = document.getElementById('add-panel');
