@@ -2747,10 +2747,12 @@
         app.activeEmbed = embed;
 
         // 본문 표시 사이즈(small/medium/large)에 따른 최대 너비
+        const contentWidth = Math.max(320, Math.round((app.contentEditor?.clientWidth || 0) - 40));
         const embedSizeMaxWidth = {
             small: 280,
             medium: 520,
-            large: 840
+            large: contentWidth,
+            full: contentWidth
         };
         const embedSize = embed.dataset.size || app.defaultEmbedOptions.size;
         const displayMaxWidth = embedSizeMaxWidth[embedSize] || 520;

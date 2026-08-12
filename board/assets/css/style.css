@@ -733,12 +733,13 @@ a:focus-visible {
 
 .content-editor {
     width: 100%;
-    min-height: 260px;
-    padding: 12px;
+    min-height: 320px;
+    padding: 14px 16px;
     border: 1px solid var(--border);
     border-radius: 12px;
     background: var(--bg3);
     color: var(--text);
+    font-size: 15px;
     line-height: 1.75;
     white-space: pre-wrap;
     word-break: break-word;
@@ -808,7 +809,19 @@ a:focus-visible {
 }
 
 .editor-embed.size-large {
-    width: min(840px, 100%);
+    width: 100%;
+}
+
+.editor-embed.size-large img {
+    width: 100%;
+}
+
+.editor-embed.size-full {
+    width: 100%;
+}
+
+.editor-embed.size-full img {
+    width: 100%;
 }
 
 .editor-image-toolbar {
@@ -874,8 +887,8 @@ a:focus-visible {
 }
 
 .image-edit-dialog {
-    width: min(900px, 100%);
-    max-height: calc(100vh - 40px);
+    width: min(1480px, calc(100vw - 40px));
+    max-height: calc(100vh - 24px);
     overflow: hidden;
     border-radius: 14px;
     border: 1px solid var(--border2);
@@ -1077,13 +1090,17 @@ a:focus-visible {
 
 .image-edit-body {
     flex: 1;
-    min-height: 320px;
-    padding: 12px;
+    min-height: 68vh;
+    padding: 16px 18px 18px;
     overflow: auto;
     background: var(--bg3);
 }
 
 .image-edit-canvas-stage-wrap {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: calc(68vh - 24px);
     overflow: auto;
 }
 
@@ -2059,8 +2076,20 @@ a:focus-visible {
     width: min(520px, 100%);
 }
 
+.write-preview-image-wrap.size-large {
+    width: 100%;
+}
+
 .write-preview-image-wrap.size-large img {
-    width: min(840px, 100%);
+    width: 100%;
+}
+
+.write-preview-image-wrap.size-full {
+    width: 100%;
+}
+
+.write-preview-image-wrap.size-full img {
+    width: 100%;
 }
 
 .post-view-head {
@@ -2151,8 +2180,20 @@ a:focus-visible {
     width: min(520px, 100%);
 }
 
+.inline-attachment-image.size-large {
+    width: 100%;
+}
+
 .inline-attachment-image.size-large img {
-    width: min(840px, 100%);
+    width: 100%;
+}
+
+.inline-attachment-image.size-full {
+    width: 100%;
+}
+
+.inline-attachment-image.size-full img {
+    width: 100%;
 }
 
 .inline-attachment-image figcaption {
@@ -2472,6 +2513,59 @@ a:focus-visible {
 
 .form-input textarea {
     min-height: 320px;
+}
+
+.content-form-row .form-input {
+    display: block;
+    padding: 18px;
+}
+
+.content-form-row textarea,
+.content-form-row .content-editor,
+.content-form-row .content-text-toolbar,
+.content-form-row .live-preview-box {
+    width: 100%;
+}
+
+@media (min-width: 1200px) {
+    .content-form-row .form-label {
+        width: 150px;
+    }
+
+    .content-form-row .form-input {
+        padding: 20px 22px 22px;
+    }
+
+    .content-form-row textarea {
+        min-height: 520px;
+    }
+
+    .content-form-row .content-editor {
+        min-height: 560px;
+        padding: 18px 20px;
+        font-size: 16px;
+        line-height: 1.85;
+    }
+
+    .image-edit-modal {
+        padding: 12px;
+    }
+
+    .image-edit-head,
+    .image-edit-tools,
+    .image-edit-foot {
+        padding-left: 16px;
+        padding-right: 16px;
+    }
+
+    .image-edit-body {
+        min-height: 74vh;
+        padding: 18px 20px 20px;
+    }
+
+    .image-edit-canvas-stage-wrap {
+        min-height: calc(74vh - 28px);
+    }
 }
 
 .form-input .help {

@@ -67,14 +67,14 @@
             }
         });
 
-        // 첨부 "본문삽입" 버튼 클릭 시 에디터 커서를 유지해 여러 장 연속 삽입을 안정화한다.
+        // 첨부 "본문삽입" 버튼 클릭 시 에디터 커서를 유지해 연속 삽입이 되도록 함
         document.addEventListener('mousedown', (e) => {
             const button = e.target.closest('.insert-attachment-token');
             if (!button) return;
             e.preventDefault();
         });
 
-        // 조치 후 스테이지 파일 "편집" 버튼
+        // 조치 전 스테이지 파일 "편집" 버튼
         document.addEventListener('click', (e) => {
             const btn = e.target.closest('.nm-edit-staged-file');
             if (!btn) return;
@@ -155,7 +155,7 @@
             document.addEventListener('click', (e) => {
                 const imageToolbar = getImageToolbar();
                 if (!imageToolbar || !imageToolbar.classList.contains('is-visible')) return;
-                // 이미지 편집 모달이 열려있는 동안은 툴바를 숨기지 않는다
+                // 이미지 편집 모달이 열려있는 동안은 툴바를 숨기지 않음
                 if (getImageEditorState()) return;
                 if (imageToolbar.contains(e.target)) return;
                 if (contentEditor.contains(e.target) && e.target.closest('.editor-embed')) return;
@@ -210,6 +210,31 @@
                 if (typeof syncTextareaFromEditor === 'function') {
                     syncTextareaFromEditor();
                 }
+
+                const maxUploadSize = Number(writeForm.dataset.maxUploadSize || 0);
+                const maxPostSize = Number(writeForm.dataset.maxPostSize || 0);
+                if (attachmentInput) {
+                    let totalSize = 0;
+                    for (const file of Array.from(attachmentInput.files || [])) {
+                        const fileSize = Number(file.size || 0);
+                        totalSize += fileSize;
+                        if (maxUploadSize > 0 && fileSize > maxUploadSize) {
+                            e.preventDefault();
+                            const maxFileMb = (maxUploadSize / (1024 * 1024)).toFixed(1).replace(/\.0$/, '');
+                            alert(`파일당 첨부 용량은 ${maxFileMb}MB까지 가능합니다.`);
+                            attachmentInput.focus();
+                            return;
+                        }
+                    }
+                    if (maxPostSize > 0 && totalSize > maxPostSize) {
+                        e.preventDefault();
+                        const maxMb = (maxPostSize / (1024 * 1024)).toFixed(1).replace(/\.0$/, '');
+                        alert(`첨부파일 총 용량이 ${maxMb}MB 제한을 초과했습니다.`);
+                        attachmentInput.focus();
+                        return;
+                    }
+                }
+
                 if (!String(contentTextarea?.value || '').trim()) {
                     e.preventDefault();
                     alert('내용을 입력해 주세요.');

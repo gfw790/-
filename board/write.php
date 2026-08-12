@@ -36,6 +36,7 @@ if ($editId > 0) {
 $canWriteAdminCat = $user['role'] === 'admin' || ($user['original_role'] ?? '') === 'safety_manager';
 $noticeTeamOptions = board_notice_team_options();
 $selectedNoticeTargetTeam = board_normalize_notice_target_team((string)($post['notice_target_team'] ?? 'ALL'));
+$postMaxSizeBytes = parseIniSizeToBytes(ini_get('post_max_size'));
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     checkCsrf($_POST['csrf'] ?? '');
@@ -181,7 +182,12 @@ if (!$selectedCat && !empty($_GET['cat'])) {
     <div class="alert alert-error"><?= h($error) ?></div>
 <?php endif; ?>
 
-<form id="write-form" class="write-form" method="post" enctype="multipart/form-data">
+<form id="write-form"
+      class="write-form"
+      method="post"
+      enctype="multipart/form-data"
+      data-max-upload-size="<?= (int)MAX_UPLOAD_SIZE ?>"
+      data-max-post-size="<?= (int)$postMaxSizeBytes ?>">
     <input type="hidden" name="csrf" value="<?= h(csrfToken()) ?>">
 
     <div class="form-row">
@@ -231,7 +237,7 @@ if (!$selectedCat && !empty($_GET['cat'])) {
         </div>
     </div>
 
-    <div class="form-row">
+    <div class="form-row content-form-row">
         <div class="form-label">내용<span class="req">*</span></div>
         <div class="form-input">
             <textarea id="content" name="content" required><?= h($post['content'] ?? '') ?></textarea>
@@ -246,6 +252,9 @@ if (!$selectedCat && !empty($_GET['cat'])) {
             <input type="file" id="attachments" name="attachments[]" multiple>
             <div class="help">
                 최대 <?= formatBytes(MAX_UPLOAD_SIZE) ?>, 허용: <?= str_replace(',', ', ', ALLOWED_EXTENSIONS) ?>
+            </div>
+            <div class="help">
+                전체 첨부 용량은 약 <?= formatBytes($postMaxSizeBytes) ?> 이내로 맞춰 주세요.
             </div>
             <div class="help">
                 본문 중간 삽입: <code>[[첨부:1]]</code>, <code>[[첨부:id:첨부ID]]</code>, <code>[[첨부:파일명.jpg]]</code>

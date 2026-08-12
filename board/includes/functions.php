@@ -243,6 +243,30 @@ function formatBytes($bytes) {
     return $bytes . ' B';
 }
 
+function parseIniSizeToBytes($value): int {
+    $value = trim((string)$value);
+    if ($value === '') {
+        return 0;
+    }
+
+    $unit = strtolower(substr($value, -1));
+    $number = (float)$value;
+
+    switch ($unit) {
+        case 'g':
+            $number *= 1024;
+            // fall through
+        case 'm':
+            $number *= 1024;
+            // fall through
+        case 'k':
+            $number *= 1024;
+            break;
+    }
+
+    return (int)round($number);
+}
+
 function normalizeUploadDirPath(string $path): string {
     $path = trim($path);
     if ($path === '') {
@@ -695,7 +719,7 @@ function renderPlainTextContent(string $text): string {
 /**
  * 첨부 이미지 토큰 렌더링
  * 지원: [[첨부:1]], [[첨부:id:123]], [[첨부:파일명.jpg]]
- * 옵션: |align=left|center|right, |size=small|medium|large, |rotate=0|90|180|270, |flip=0|1
+ * 옵션: |align=left|center|right, |size=small|medium|large|full, |rotate=0|90|180|270, |flip=0|1
  */
 function renderAttachmentToken(string $tokenValue, array $attachments): ?string {
     $tokenValue = trim($tokenValue);
@@ -722,7 +746,7 @@ function renderAttachmentToken(string $tokenValue, array $attachments): ?string 
         if ($key === 'align' && in_array($value, ['left', 'center', 'right'], true)) {
             $align = $value;
         }
-        if ($key === 'size' && in_array($value, ['small', 'medium', 'large'], true)) {
+        if ($key === 'size' && in_array($value, ['small', 'medium', 'large', 'full'], true)) {
             $size = $value;
         }
         if ($key === 'rotate' && is_numeric($value)) {

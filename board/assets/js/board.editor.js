@@ -12,7 +12,7 @@
                 String(flipRaw).toLowerCase() === 'true';
             return {
                 align: ['left', 'center', 'right'].includes(align) ? align : app.defaultEmbedOptions.align,
-                size: ['small', 'medium', 'large'].includes(size) ? size : app.defaultEmbedOptions.size,
+                size: ['small', 'medium', 'large', 'full'].includes(size) ? size : app.defaultEmbedOptions.size,
                 rotate,
                 flip,
             };
@@ -30,7 +30,7 @@
                 if (key === 'align' && ['left', 'center', 'right'].includes(value)) {
                     options.align = value;
                 }
-                if (key === 'size' && ['small', 'medium', 'large'].includes(value)) {
+                if (key === 'size' && ['small', 'medium', 'large', 'full'].includes(value)) {
                     options.size = value;
                 }
                 if (key === 'rotate') {
@@ -61,6 +61,7 @@
         app.cycleEmbedSize = (currentSize) => {
             if (currentSize === 'small') return 'medium';
             if (currentSize === 'medium') return 'large';
+            if (currentSize === 'large') return 'full';
             return 'small';
         };
 
@@ -87,7 +88,7 @@
             if (!figure) return;
             const normalized = app.normalizeEmbedOptions(options);
             figure.classList.remove('align-left', 'align-center', 'align-right',
-                'size-small', 'size-medium', 'size-large');
+                'size-small', 'size-medium', 'size-large', 'size-full');
             figure.classList.add(`align-${normalized.align}`, `size-${normalized.size}`);
             figure.dataset.align = normalized.align;
             figure.dataset.size = normalized.size;
