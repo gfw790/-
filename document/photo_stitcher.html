@@ -20,6 +20,10 @@
             box-sizing: border-box;
         }
 
+        [hidden] {
+            display: none !important;
+        }
+
         body {
             margin: 0;
             font-family: "Malgun Gothic", sans-serif;
@@ -346,8 +350,14 @@
         const resultCanvas = document.getElementById('resultCanvas');
         const emptyPreview = document.getElementById('emptyPreview');
         const statusText = document.getElementById('statusText');
+        const canvasWrap = document.querySelector('.canvas-wrap');
 
         const imageItems = [];
+        const MAX_PREVIEW_WIDTH = 1200;
+        const MAX_PREVIEW_HEIGHT = 4096;
+        const MAX_EXPORT_WIDTH = 16384;
+        const MAX_EXPORT_HEIGHT = 32767;
+        let lastMergeState = null;
 
         function formatBytes(bytes) {
             const size = Number(bytes) || 0;
@@ -433,6 +443,7 @@
                     imageItems[index - 1] = imageItems[index];
                     imageItems[index] = temp;
                     renderItemList();
+                    refreshDraftPreview();
                 });
 
                 const downButton = document.createElement('button');
@@ -448,6 +459,7 @@
                     imageItems[index + 1] = imageItems[index];
                     imageItems[index] = temp;
                     renderItemList();
+                    refreshDraftPreview();
                 });
 
                 const removeButton = document.createElement('button');
@@ -459,6 +471,8 @@
                     renderItemList();
                     if (!imageItems.length) {
                         resetPreview();
+                    } else {
+                        refreshDraftPreview();
                     }
                 });
 
@@ -479,7 +493,128 @@
             emptyPreview.hidden = false;
             downloadButton.disabled = true;
             downloadJpegButton.disabled = true;
+            lastMergeState = null;
             statusText.textContent = '사진을 선택하면 미리보기를 만들 수 있습니다.';
+        }
+
+        function buildMergePlan() {
+            if (!imageItems.length) {
+                return null;
+            }
+
+            const gap = Math.max(0, parseInt(imageGap.value, 10) || 0);
+            const targetWidth = getTargetWidth();
+            const fillColor = backgroundColor.value || '#ffffff';
+            if (!targetWidth) {
+                return null;
+            }
+
+            const resizedHeights = imageItems.map(function (item) {
+                return Math.round((item.height * targetWidth) / item.width);
+            });
+
+            const totalHeight = resizedHeights.reduce(function (sum, height) {
+                return sum + height;
+            }, 0) + (gap * Math.max(0, imageItems.length - 1));
+
+            return {
+                items: imageItems.slice(),
+                gap: gap,
+                targetWidth: targetWidth,
+                fillColor: fillColor,
+                resizedHeights: resizedHeights,
+                totalHeight: totalHeight
+            };
+        }
+
+        function renderMergeToCanvas(canvas, plan, scale) {
+            const safeScale = Math.max(0.01, Number(scale) || 1);
+            const drawWidth = Math.max(1, Math.round(plan.targetWidth * safeScale));
+            const drawGap = Math.round(plan.gap * safeScale);
+            const drawHeights = plan.resizedHeights.map(function (height) {
+                return Math.max(1, Math.round(height * safeScale));
+            });
+            const drawTotalHeight = drawHeights.reduce(function (sum, height) {
+                return sum + height;
+            }, 0) + (drawGap * Math.max(0, drawHeights.length - 1));
+
+            canvas.width = drawWidth;
+            canvas.height = drawTotalHeight;
+
+            const context = canvas.getContext('2d');
+            if (!context) {
+                throw new Error('canvas_context_unavailable');
+            }
+
+            context.imageSmoothingEnabled = true;
+            context.imageSmoothingQuality = 'high';
+            context.fillStyle = plan.fillColor;
+            context.fillRect(0, 0, drawWidth, drawTotalHeight);
+
+            let offsetY = 0;
+            plan.items.forEach(function (item, index) {
+                const drawHeight = drawHeights[index];
+                context.drawImage(item.image, 0, offsetY, drawWidth, drawHeight);
+                offsetY += drawHeight + drawGap;
+            });
+        }
+
+        function getPreviewScale(plan) {
+            return Math.min(
+                1,
+                MAX_PREVIEW_WIDTH / plan.targetWidth,
+                MAX_PREVIEW_HEIGHT / plan.totalHeight
+            );
+        }
+
+        function canRenderFullSize(plan) {
+            return plan.targetWidth <= MAX_EXPORT_WIDTH && plan.totalHeight <= MAX_EXPORT_HEIGHT;
+        }
+
+        function showPlanPreview(plan, options) {
+            if (!plan) {
+                resetPreview();
+                return;
+            }
+
+            const previewScale = getPreviewScale(plan);
+            renderMergeToCanvas(resultCanvas, plan, previewScale);
+            resultCanvas.hidden = false;
+            emptyPreview.hidden = true;
+            resultCanvas.style.setProperty('--canvas-width', Math.min(resultCanvas.width, 760) + 'px');
+            if (canvasWrap) {
+                canvasWrap.scrollTop = 0;
+                canvasWrap.scrollLeft = 0;
+            }
+
+            const isCommitted = !!(options && options.committed);
+            lastMergeState = isCommitted ? plan : null;
+            downloadButton.disabled = !isCommitted;
+            downloadJpegButton.disabled = !isCommitted;
+
+            if (previewScale < 1) {
+                const previewRate = Math.round(previewScale * 100);
+                statusText.textContent = isCommitted
+                    ? '완료: ' + plan.targetWidth + ' x ' + plan.totalHeight +
+                        ' 원본 기준, 미리보기는 ' + previewRate + '% 축소 표시 중입니다.'
+                    : '사진 선택됨: ' + plan.targetWidth + ' x ' + plan.totalHeight +
+                        ' 예상 결과를 ' + previewRate + '% 축소 미리보기로 표시 중입니다.';
+            } else {
+                statusText.textContent = isCommitted
+                    ? '완료: ' + plan.targetWidth + ' x ' + plan.totalHeight +
+                        ' PNG 또는 JPEG로 저장할 수 있습니다.'
+                    : '사진 선택됨: ' + plan.targetWidth + ' x ' + plan.totalHeight +
+                        ' 예상 결과를 미리보기로 표시 중입니다.';
+            }
+        }
+
+        function refreshDraftPreview() {
+            const plan = buildMergePlan();
+            if (!plan) {
+                resetPreview();
+                return;
+            }
+            showPlanPreview(plan, { committed: false });
         }
 
         async function appendFiles(fileList) {
@@ -503,7 +638,7 @@
                     imageItems.push(item);
                 });
                 renderItemList();
-                statusText.textContent = imageItems.length + '장의 사진이 준비되었습니다.';
+                refreshDraftPreview();
             } catch (error) {
                 window.alert('사진을 읽는 중 오류가 발생했습니다.');
                 statusText.textContent = '사진을 선택하면 미리보기를 만들 수 있습니다.';
@@ -530,61 +665,43 @@
                 return;
             }
 
-            const gap = Math.max(0, parseInt(imageGap.value, 10) || 0);
-            const targetWidth = getTargetWidth();
-            const fillColor = backgroundColor.value || '#ffffff';
-
-            if (!targetWidth) {
+            const plan = buildMergePlan();
+            if (!plan) {
                 return;
             }
 
-            const resizedHeights = imageItems.map(function (item) {
-                return Math.round((item.height * targetWidth) / item.width);
-            });
-
-            const totalHeight = resizedHeights.reduce(function (sum, height) {
-                return sum + height;
-            }, 0) + (gap * Math.max(0, imageItems.length - 1));
-
-            resultCanvas.width = targetWidth;
-            resultCanvas.height = totalHeight;
-
-            const context = resultCanvas.getContext('2d');
-            context.fillStyle = fillColor;
-            context.fillRect(0, 0, targetWidth, totalHeight);
-
-            let offsetY = 0;
-            imageItems.forEach(function (item, index) {
-                const drawHeight = resizedHeights[index];
-                context.drawImage(item.image, 0, offsetY, targetWidth, drawHeight);
-                offsetY += drawHeight + gap;
-            });
-
-            resultCanvas.hidden = false;
-            emptyPreview.hidden = true;
-            resultCanvas.style.setProperty('--canvas-width', Math.min(targetWidth, 760) + 'px');
-            downloadButton.disabled = false;
-            downloadJpegButton.disabled = false;
-            statusText.textContent = '완료: ' + targetWidth + ' x ' + totalHeight + ' PNG 또는 JPEG로 저장할 수 있습니다.';
+            showPlanPreview(plan, { committed: true });
         }
 
         function downloadMergedImage() {
-            if (resultCanvas.hidden) {
+            if (!lastMergeState) {
                 return;
             }
+            if (!canRenderFullSize(lastMergeState)) {
+                window.alert('결과 이미지가 너무 길어서 브라우저가 원본 크기 PNG 저장을 처리하지 못합니다. 사진 수를 줄이거나 가로 기준을 낮춰 주세요.');
+                return;
+            }
+            const exportCanvas = document.createElement('canvas');
+            renderMergeToCanvas(exportCanvas, lastMergeState, 1);
             const link = document.createElement('a');
-            link.href = resultCanvas.toDataURL('image/png');
+            link.href = exportCanvas.toDataURL('image/png');
             link.download = 'stitched-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.png';
             link.click();
         }
 
         function downloadMergedJpeg() {
-            if (resultCanvas.hidden) {
+            if (!lastMergeState) {
+                return;
+            }
+            if (!canRenderFullSize(lastMergeState)) {
+                window.alert('결과 이미지가 너무 길어서 브라우저가 원본 크기 JPEG 저장을 처리하지 못합니다. 사진 수를 줄이거나 가로 기준을 낮춰 주세요.');
                 return;
             }
             const quality = Math.max(0.1, Math.min(1, parseFloat(jpegQuality.value) || 0.85));
+            const exportCanvas = document.createElement('canvas');
+            renderMergeToCanvas(exportCanvas, lastMergeState, 1);
             const link = document.createElement('a');
-            link.href = resultCanvas.toDataURL('image/jpeg', quality);
+            link.href = exportCanvas.toDataURL('image/jpeg', quality);
             link.download = 'stitched-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.jpg';
             link.click();
         }
@@ -619,6 +736,9 @@
         mergeButton.addEventListener('click', mergeImages);
         downloadButton.addEventListener('click', downloadMergedImage);
         downloadJpegButton.addEventListener('click', downloadMergedJpeg);
+        widthMode.addEventListener('change', refreshDraftPreview);
+        imageGap.addEventListener('input', refreshDraftPreview);
+        backgroundColor.addEventListener('change', refreshDraftPreview);
         clearButton.addEventListener('click', function () {
             imageItems.length = 0;
             renderItemList();
