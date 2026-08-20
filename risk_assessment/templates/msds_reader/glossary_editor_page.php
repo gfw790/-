@@ -20,7 +20,7 @@
   <section class="pc-glossary-editor pc-glossary-editor-page" id="msds-glossary-editor">
     <div class="pc-glossary-editor-head">
       <h3>용어 설명 관리</h3>
-      <p>PC 브라우저에서 모바일 리더용 용어 설명을 별도 화면에서 정리할 수 있습니다.</p>
+      <p>PC 브라우저에서는 모바일 리더의 용어 설명을 별도 화면에서 정리할 수 있습니다.</p>
     </div>
     <form class="pc-glossary-editor-form" method="post" action="msds_reader.php?id=<?= h((string)($record['id'] ?? '')) ?>&glossary_editor=1#msds-glossary-editor">
       <input type="hidden" name="action" value="save_mobile_glossary_form">
@@ -47,7 +47,7 @@
             </label>
             <label class="pc-glossary-field pc-glossary-field-wide">
               <span>설명 내용</span>
-              <textarea name="glossary_content[]" rows="5" placeholder="작업자가 눌렀을 때 볼 설명을 입력해 주세요."><?= h((string)($entry['content'] ?? '')) ?></textarea>
+              <textarea class="js-glossary-content-textarea" name="glossary_content[]" rows="5" placeholder="작업자가 눌렀을 때 볼 설명을 입력해 주세요."><?= h((string)($entry['content'] ?? '')) ?></textarea>
             </label>
           </div>
         <?php endforeach; ?>
@@ -55,3 +55,109 @@
     </form>
   </section>
 </div>
+<script>
+  (function () {
+    const textareas = document.querySelectorAll('.js-glossary-content-textarea');
+
+    function cleanText(value) {
+      return String(value || '')
+        .replace(/\r\n?/g, '\n')
+        .replace(/\u00a0/g, ' ')
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n{3,}/g, '\n\n');
+    }
+
+    function nodeToPlainRichText(node) {
+      if (!node) {
+        return '';
+      }
+
+      if (node.nodeType === Node.TEXT_NODE) {
+        return node.textContent || '';
+      }
+
+      if (node.nodeType !== Node.ELEMENT_NODE) {
+        return '';
+      }
+
+      const tagName = String(node.nodeName || '').toLowerCase();
+
+      if (tagName === 'br') {
+        return '\n';
+      }
+
+      let content = '';
+      node.childNodes.forEach((child) => {
+        content += nodeToPlainRichText(child);
+      });
+
+      if (tagName === 'strong' || tagName === 'b') {
+        const trimmed = content.trim();
+        if (!trimmed) {
+          return '';
+        }
+
+        const leading = content.match(/^\s*/u);
+        const trailing = content.match(/\s*$/u);
+        return `${leading ? leading[0] : ''}**${trimmed}**${trailing ? trailing[0] : ''}`;
+      }
+
+      if (['p', 'div', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote'].includes(tagName)) {
+        return `${content}\n\n`;
+      }
+
+      return content;
+    }
+
+    function htmlToParagraphText(html) {
+      if (typeof html !== 'string' || html.trim() === '') {
+        return '';
+      }
+
+      const container = document.createElement('div');
+      container.innerHTML = html;
+
+      let output = '';
+      container.childNodes.forEach((node) => {
+        output += nodeToPlainRichText(node);
+      });
+
+      return cleanText(output).trim();
+    }
+
+    function insertAtCursor(textarea, text) {
+      const start = textarea.selectionStart || 0;
+      const end = textarea.selectionEnd || 0;
+      const currentValue = textarea.value || '';
+      const nextValue = currentValue.slice(0, start) + text + currentValue.slice(end);
+      const caret = start + text.length;
+
+      textarea.value = nextValue;
+      textarea.selectionStart = caret;
+      textarea.selectionEnd = caret;
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    textareas.forEach((textarea) => {
+      textarea.addEventListener('paste', (event) => {
+        const clipboard = event.clipboardData;
+        if (!clipboard) {
+          return;
+        }
+
+        const html = clipboard.getData('text/html');
+        if (!html) {
+          return;
+        }
+
+        const normalized = htmlToParagraphText(html);
+        if (!normalized) {
+          return;
+        }
+
+        event.preventDefault();
+        insertAtCursor(textarea, normalized);
+      });
+    });
+  }());
+</script>

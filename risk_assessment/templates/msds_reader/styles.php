@@ -733,6 +733,24 @@
     word-break: keep-all;
     overflow-wrap: anywhere;
   }
+  .mobile-glossary-content strong,
+  .mobile-glossary-content b {
+    color: #ffb347;
+    font-weight: 800;
+  }
+  .mobile-glossary-content .glossary-label-badge {
+    display: inline-block;
+    margin: 0 0.24em 0.18em 0;
+    padding: 0.18em 0.62em;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    color: #f4f7fb;
+    font-size: 0.92em;
+    font-weight: 800;
+    line-height: 1.45;
+    vertical-align: middle;
+  }
   .mobile-glossary-actions,
   .mobile-glossary-editor-actions {
     display: flex;

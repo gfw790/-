@@ -31,7 +31,7 @@
         <p class="mobile-glossary-eyebrow">TERM GUIDE</p>
         <h3 id="<?= h('mobile-glossary-sheet-title-' . $index) ?>"><?= h(trim((string)($entry['title'] ?? $entry['term'] ?? '용어 설명'))) ?></h3>
       </div>
-      <div class="mobile-glossary-content"><?= h(trim((string)($entry['content'] ?? ''))) ?></div>
+      <div class="mobile-glossary-content"><?= msds_reader_render_glossary_content_html((string)($entry['content'] ?? '')) ?></div>
       <div class="mobile-glossary-actions">
         <a class="btn btn-ghost mobile-glossary-sheet-close" href="#mobile-glossary-dismiss" onclick="return window.__closeMobileGlossarySheet ? window.__closeMobileGlossarySheet(event) : true;">닫기</a>
       </div>

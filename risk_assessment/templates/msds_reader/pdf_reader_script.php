@@ -110,6 +110,18 @@
       .replace(/'/g, '&#39;');
   }
 
+  function renderGlossaryContentHtml(value) {
+    const escaped = escapeHtml(value || '');
+    const whiteLabels = ['뜻', '분류 기준', '쉽게 말하면', '위험 표시', '현장에서는'];
+    return escaped.replace(/\*\*(.+?)\*\*/gs, (_, text) => {
+      const normalized = String(text || '').trim();
+      if (whiteLabels.includes(normalized)) {
+        return `<span class="glossary-label-badge">${text}</span>`;
+      }
+      return `<strong>${text}</strong>`;
+    });
+  }
+
   function normalizeLineText(value) {
     return String(value || '')
       .replace(/\s+/g, ' ')
@@ -417,7 +429,7 @@
     glossaryModalOpenedAt = Date.now();
     window.requestAnimationFrame(() => {
       mobileGlossaryTitle.textContent = entry.title || entry.term || '용어 설명';
-      mobileGlossaryContent.textContent = entry.content || '';
+      mobileGlossaryContent.innerHTML = renderGlossaryContentHtml(entry.content || '');
       mobileGlossaryModal.classList.add('is-open');
       mobileGlossaryModal.setAttribute('aria-hidden', 'false');
     });

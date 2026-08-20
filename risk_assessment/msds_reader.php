@@ -128,6 +128,21 @@ function msds_reader_normalize_block_text(string $value): string
     return trim(implode("\n", $lines));
 }
 
+function msds_reader_render_glossary_content_html(string $value): string
+{
+    $escaped = h(trim($value));
+    $whiteLabels = ['뜻', '분류 기준', '쉽게 말하면', '위험 표시', '현장에서는'];
+
+    return preg_replace_callback('/\*\*(.+?)\*\*/su', static function (array $matches) use ($whiteLabels): string {
+        $text = trim((string)($matches[1] ?? ''));
+        if (in_array($text, $whiteLabels, true)) {
+            return '<span class="glossary-label-badge">' . $matches[1] . '</span>';
+        }
+
+        return '<strong>' . $matches[1] . '</strong>';
+    }, $escaped) ?? $escaped;
+}
+
 function msds_reader_normalize_pictogram_key(string $value): string
 {
     $normalized = trim(mb_strtolower($value, 'UTF-8'));
