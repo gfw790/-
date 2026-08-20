@@ -44,7 +44,15 @@
     }
 
     function renderGlossaryContentHtml(value) {
-      var whiteLabels = ['뜻', '분류 기준', '쉽게 말하면', '위험 표시', '현장에서는'];
+      var whiteLabels = [
+        '뜻',
+        '분류 기준',
+        '쉽게 말하면',
+        '위험 표시',
+        '현장에서는',
+        '징크코트 스프레이에서의 역할',
+        '주요 위험성'
+      ];
       return escapeHtmlLegacy(value).replace(/\*\*(.+?)\*\*/gs, function (_, text) {
         var normalized = String(text || '').trim();
         if (whiteLabels.indexOf(normalized) !== -1) {

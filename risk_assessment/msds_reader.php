@@ -131,7 +131,15 @@ function msds_reader_normalize_block_text(string $value): string
 function msds_reader_render_glossary_content_html(string $value): string
 {
     $escaped = h(trim($value));
-    $whiteLabels = ['뜻', '분류 기준', '쉽게 말하면', '위험 표시', '현장에서는'];
+    $whiteLabels = [
+        '뜻',
+        '분류 기준',
+        '쉽게 말하면',
+        '위험 표시',
+        '현장에서는',
+        '징크코트 스프레이에서의 역할',
+        '주요 위험성',
+    ];
 
     return preg_replace_callback('/\*\*(.+?)\*\*/su', static function (array $matches) use ($whiteLabels): string {
         $text = trim((string)($matches[1] ?? ''));
