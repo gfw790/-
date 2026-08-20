@@ -658,7 +658,7 @@ function msds_reader_render_fallback_html(array $sections, bool $canEditMobileMs
                 continue;
             }
 
-            if (preg_match('/^(?:[○ㅇ]\s+|-\s*)/u', $line)) {
+            if (preg_match('/^(?:[○ㅇ]\s+|-\s*|\*\s*)/u', $line)) {
                 if ($glossaryEntry !== null) {
                     $bodyChunks[] = '<div class="mobile-text-fallback-detail">'
                         . msds_reader_render_glossary_inline_text($glossaryEntry, $line)

@@ -1032,7 +1032,7 @@
       return `<div class="mobile-text-fallback-subhead">${escaped}</div>`;
     }
 
-    if (/^(?:[○ㅇ]\s+|-\s*)/.test(normalized)) {
+    if (/^(?:[○ㅇ]\s+|-\s*|\*\s*)/.test(normalized)) {
       return `<div class="mobile-text-fallback-detail">${glossaryEntry ? renderGlossaryInlineText(normalized, glossaryEntry) : escaped}</div>`;
     }
 
@@ -1090,7 +1090,7 @@
           && !/^\d{1,2}\.\s+/.test(nextLine)
           && !/^[가-하]\.\s*/.test(nextLine)
           && !/^\d+\)\s*/.test(nextLine)
-          && !/^(?:[○ㅇ]\s+|-\s*)/.test(nextLine);
+          && !/^(?:[○ㅇ]\s+|-\s*|\*\s*)/.test(nextLine);
 
         if (shouldMergeWithNext) {
           normalizedLines.push(`${currentLine} ${nextLine}`.trim());
