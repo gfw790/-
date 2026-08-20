@@ -6489,3 +6489,52 @@
 [2026-08-20 00:00:57] [이미지 정리] 삭제: output/images/crop_a1f8b3f6be2c360b4480.jpg
 [2026-08-20 00:00:57] [이미지 정리] 삭제: output/images/siren_c1140a5ab470ce09.jpg
 [2026-08-20 00:00:57] [이미지 정리] 총 5개 미사용 파일 삭제
+[2026-08-21 00:00:01] [1순위] KOSHA 사이렌 수집 시작
+[2026-08-21 00:00:03] [KOSHA enrich 시작] title=(260820)중대재해 발생 알림(1)
+[2026-08-21 00:00:03] [KOSHA enrich 상태] has_image_file=N / has_image_base64=Y
+[2026-08-21 00:00:03] [KOSHA 이미지 저장 성공] output/images/siren_4d2ace315d2e7b88.jpg
+[2026-08-21 00:00:03] [KOSHA 이미지 crop 성공] output/images/crop_a41a241e3604681389e1.jpg
+[2026-08-21 00:00:03] [KOSHA crop 시도 완료]
+[2026-08-21 00:00:03] [KOSHA OCR 시작] image_file=output/images/crop_a41a241e3604681389e1.jpg
+[2026-08-21 00:00:03] [KOSHA OCR 대상] poster_image=output/images/siren_4d2ace315d2e7b88.jpg
+[2026-08-21 00:00:16] [KOSHA 후보] title=(260820)중대재해 발생 알림(1) / summary_len=89 / prevention_len=149 / image=Y / ocr_ok=Y / vision=N
+[2026-08-21 00:00:16] [KOSHA enrich 시작] title=(260819)중대재해 발생 알림(2)
+[2026-08-21 00:00:16] [KOSHA enrich 상태] has_image_file=N / has_image_base64=Y
+[2026-08-21 00:00:16] [KOSHA 이미지 저장 성공] output/images/siren_22fa7de179ab7832.jpg
+[2026-08-21 00:00:16] [KOSHA 이미지 crop 성공] output/images/crop_bd72a074206388cd8488.jpg
+[2026-08-21 00:00:16] [KOSHA crop 시도 완료]
+[2026-08-21 00:00:16] [KOSHA OCR 시작] image_file=output/images/crop_bd72a074206388cd8488.jpg
+[2026-08-21 00:00:16] [KOSHA OCR 대상] poster_image=output/images/siren_22fa7de179ab7832.jpg
+[2026-08-21 00:00:28] [KOSHA 후보] title=(260819)중대재해 발생 알림(2) / summary_len=92 / prevention_len=123 / image=Y / ocr_ok=Y / vision=N
+[2026-08-21 00:00:28] [KOSHA enrich 시작] title=(260819)중대재해 발생 알림(1)
+[2026-08-21 00:00:28] [KOSHA enrich 상태] has_image_file=N / has_image_base64=Y
+[2026-08-21 00:00:28] [KOSHA 이미지 저장 성공] output/images/siren_c1140a5ab470ce09.jpg
+[2026-08-21 00:00:28] [KOSHA 이미지 crop 성공] output/images/crop_a1f8b3f6be2c360b4480.jpg
+[2026-08-21 00:00:28] [KOSHA crop 시도 완료]
+[2026-08-21 00:00:28] [KOSHA OCR 시작] image_file=output/images/crop_a1f8b3f6be2c360b4480.jpg
+[2026-08-21 00:00:28] [KOSHA OCR 대상] poster_image=output/images/siren_c1140a5ab470ce09.jpg
+[2026-08-21 00:00:37] [KOSHA 후보] title=(260819)중대재해 발생 알림(1) / summary_len=95 / prevention_len=115 / image=Y / ocr_ok=Y / vision=N
+[2026-08-21 00:00:37] [KOSHA enrich 시작] title=(260820)중대재해 발생 알림(1)
+[2026-08-21 00:00:37] [KOSHA enrich 상태] has_image_file=Y / has_image_base64=Y
+[2026-08-21 00:00:37] [KOSHA 저장 스킵] image_file 이미 있거나 image_base64 없음
+[2026-08-21 00:00:37] [KOSHA OCR 시작] image_file=output/images/crop_a41a241e3604681389e1.jpg
+[2026-08-21 00:00:37] [KOSHA OCR 대상] poster_image=output/images/siren_4d2ace315d2e7b88.jpg
+[2026-08-21 00:00:37] [KOSHA enrich 시작] title=(260819)중대재해 발생 알림(2)
+[2026-08-21 00:00:37] [KOSHA enrich 상태] has_image_file=Y / has_image_base64=Y
+[2026-08-21 00:00:37] [KOSHA 저장 스킵] image_file 이미 있거나 image_base64 없음
+[2026-08-21 00:00:37] [KOSHA OCR 시작] image_file=output/images/crop_bd72a074206388cd8488.jpg
+[2026-08-21 00:00:37] [KOSHA OCR 대상] poster_image=output/images/siren_22fa7de179ab7832.jpg
+[2026-08-21 00:00:37] [KOSHA enrich 시작] title=(260819)중대재해 발생 알림(1)
+[2026-08-21 00:00:37] [KOSHA enrich 상태] has_image_file=Y / has_image_base64=Y
+[2026-08-21 00:00:37] [KOSHA 저장 스킵] image_file 이미 있거나 image_base64 없음
+[2026-08-21 00:00:37] [KOSHA OCR 시작] image_file=output/images/crop_a1f8b3f6be2c360b4480.jpg
+[2026-08-21 00:00:37] [KOSHA OCR 대상] poster_image=output/images/siren_c1140a5ab470ce09.jpg
+[2026-08-21 00:00:37] [1순위 선택] KOSHA siren_score=0 / title=(260820)중대재해 발생 알림(1) / summary_len=89 / prevention_len=149
+[2026-08-21 00:00:37] [fallback 이미지] 네이버 성공: http://imgnews.naver.net/image/119/2023/05/15/0002712700_001_20230515151401234.jpeg
+[2026-08-21 00:01:03] [이미지 정리] 미사용 fallback 삭제: output/images/article_4c026fbd19548215f7c619efa523dd0c.jpg
+[2026-08-21 00:01:03] [이미지 정리] 삭제: output/images/siren_4d2ace315d2e7b88.jpg
+[2026-08-21 00:01:03] [이미지 정리] 삭제: output/images/crop_bd72a074206388cd8488.jpg
+[2026-08-21 00:01:03] [이미지 정리] 삭제: output/images/siren_22fa7de179ab7832.jpg
+[2026-08-21 00:01:03] [이미지 정리] 삭제: output/images/crop_a1f8b3f6be2c360b4480.jpg
+[2026-08-21 00:01:03] [이미지 정리] 삭제: output/images/siren_c1140a5ab470ce09.jpg
+[2026-08-21 00:01:03] [이미지 정리] 총 5개 미사용 파일 삭제

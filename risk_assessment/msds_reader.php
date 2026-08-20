@@ -139,6 +139,10 @@ function msds_reader_render_glossary_content_html(string $value): string
         '현장에서는',
         '징크코트 스프레이에서의 역할',
         '주요 위험성',
+        '수치의 의미',
+        'Rat',
+        'EU Method B.1',
+        '주의할 점',
     ];
 
     return preg_replace_callback('/\*\*(.+?)\*\*/su', static function (array $matches) use ($whiteLabels): string {
@@ -344,6 +348,38 @@ function msds_reader_render_glossary_button(array $entry, string $label): string
         . '</a>';
 }
 
+function msds_reader_render_glossary_inline_text(?array $entry, string $text): string
+{
+    if (!is_array($entry)) {
+        return h($text);
+    }
+
+    $term = trim((string)($entry['term'] ?? ''));
+    if ($term === '') {
+        return h($text);
+    }
+
+    $pattern = preg_quote($term, '/');
+    $pattern = preg_replace('/\s+/u', '\\s+', $pattern) ?? $pattern;
+    $pattern = str_replace('\:', '\s*[:：]\s*', $pattern);
+
+    if (preg_match('/' . $pattern . '/iu', $text, $matches, PREG_OFFSET_CAPTURE) !== 1) {
+        return h($text);
+    }
+
+    $matchedText = (string)($matches[0][0] ?? '');
+    $byteOffset = (int)($matches[0][1] ?? 0);
+    $charOffset = mb_strlen(substr($text, 0, $byteOffset), 'UTF-8');
+    $matchLength = mb_strlen($matchedText, 'UTF-8');
+
+    $before = mb_substr($text, 0, $charOffset, 'UTF-8');
+    $after = mb_substr($text, $charOffset + $matchLength, null, 'UTF-8');
+
+    return h($before)
+        . msds_reader_render_glossary_button($entry, $matchedText)
+        . h($after);
+}
+
 function msds_reader_fallback_sections(string $rawText): array
 {
     $normalized = msds_reader_normalize_block_text($rawText);
@@ -358,8 +394,22 @@ function msds_reader_fallback_sections(string $rawText): array
 
     $sections = [];
     $current = null;
+    $pendingLeadingLines = [];
+    $lineCount = count($lines);
 
-    foreach ($lines as $line) {
+    for ($lineIndex = 0; $lineIndex < $lineCount; $lineIndex += 1) {
+        $line = $lines[$lineIndex];
+        $nextLine = $lines[$lineIndex + 1] ?? '';
+
+        if (
+            preg_match('/^[가-하]\.\s*/u', $line)
+            && $nextLine !== ''
+            && msds_reader_is_top_level_section_heading($nextLine)
+        ) {
+            $pendingLeadingLines[] = $line;
+            continue;
+        }
+
         if (msds_reader_is_top_level_section_heading($line)) {
             if ($current !== null) {
                 if ($current['body'] === []) {
@@ -373,16 +423,18 @@ function msds_reader_fallback_sections(string $rawText): array
 
             $current = [
                 'title' => $line,
-                'body' => [],
+                'body' => $pendingLeadingLines,
             ];
+            $pendingLeadingLines = [];
             continue;
         }
 
         if ($current === null) {
             $current = [
                 'title' => '',
-                'body' => [],
+                'body' => $pendingLeadingLines,
             ];
+            $pendingLeadingLines = [];
         }
 
         $current['body'][] = $line;
@@ -606,11 +658,22 @@ function msds_reader_render_fallback_html(array $sections, bool $canEditMobileMs
                 continue;
             }
 
+            if (preg_match('/^(?:[○ㅇ]\s+|-\s*)/u', $line)) {
+                if ($glossaryEntry !== null) {
+                    $bodyChunks[] = '<div class="mobile-text-fallback-detail">'
+                        . msds_reader_render_glossary_inline_text($glossaryEntry, $line)
+                        . '</div>';
+                } else {
+                    $bodyChunks[] = '<div class="mobile-text-fallback-detail">' . $escaped . '</div>';
+                }
+                continue;
+            }
+
             if (preg_match('/^(.{1,80}?[:：])\s*(.+)$/u', $line, $matches)) {
                 if ($glossaryEntry !== null) {
                     $prefixClass = preg_match('/^\d+\)\s*/u', $line) ? ' mobile-text-fallback-kv-detail' : '';
                     $bodyChunks[] = '<div class="mobile-text-fallback-kv has-glossary-trigger' . $prefixClass . '">'
-                        . msds_reader_render_glossary_button($glossaryEntry, $line)
+                        . msds_reader_render_glossary_inline_text($glossaryEntry, $line)
                         . '</div>';
                 } else {
                     $label = h(trim((string)$matches[1]));
@@ -627,7 +690,7 @@ function msds_reader_render_fallback_html(array $sections, bool $canEditMobileMs
             if (preg_match('/^\d+\)\s*/u', $line)) {
                 if ($glossaryEntry !== null) {
                     $bodyChunks[] = '<div class="mobile-text-fallback-detail">'
-                        . msds_reader_render_glossary_button($glossaryEntry, $line)
+                        . msds_reader_render_glossary_inline_text($glossaryEntry, $line)
                         . '</div>';
                 } else {
                     $bodyChunks[] = '<div class="mobile-text-fallback-detail">' . $escaped . '</div>';
@@ -637,7 +700,7 @@ function msds_reader_render_fallback_html(array $sections, bool $canEditMobileMs
 
             if ($glossaryEntry !== null) {
                 $bodyChunks[] = '<p class="mobile-text-paragraph mobile-text-fallback-body">'
-                    . msds_reader_render_glossary_button($glossaryEntry, $line)
+                    . msds_reader_render_glossary_inline_text($glossaryEntry, $line)
                     . '</p>';
             } else {
                 $bodyChunks[] = '<p class="mobile-text-paragraph mobile-text-fallback-body">' . $escaped . '</p>';

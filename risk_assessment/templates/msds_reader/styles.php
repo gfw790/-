@@ -733,6 +733,11 @@
     word-break: keep-all;
     overflow-wrap: anywhere;
   }
+  .mobile-text-paragraph + .mobile-text-fallback-detail,
+  .mobile-text-fallback-body + .mobile-text-fallback-detail,
+  .mobile-text-fallback-kv + .mobile-text-fallback-detail {
+    margin-top: 14px;
+  }
   .mobile-glossary-content strong,
   .mobile-glossary-content b {
     color: #ffb347;

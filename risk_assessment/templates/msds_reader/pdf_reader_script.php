@@ -120,6 +120,10 @@
       '현장에서는',
       '징크코트 스프레이에서의 역할',
       '주요 위험성',
+      '수치의 의미',
+      'Rat',
+      'EU Method B.1',
+      '주의할 점',
     ];
     return escaped.replace(/\*\*(.+?)\*\*/gs, (_, text) => {
       const normalized = String(text || '').trim();
@@ -153,6 +157,13 @@
     return normalizeGlossaryKey(value)
       .replace(/[^0-9A-Za-z가-힣]+/g, '')
       .toLowerCase();
+  }
+
+  function buildGlossaryPattern(term) {
+    return String(term || '')
+      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      .replace(/\s+/g, '\\s+')
+      .replace(/:/g, '\\s*[:：]\\s*');
   }
 
   function findGlossaryEntry(value) {
@@ -217,6 +228,24 @@
     }
 
     return `<a class="mobile-glossary-trigger" href="#mobile-glossary-entry-${entry._index}" data-glossary-index="${entry._index}" data-glossary-term="${escapeAttribute(entry.term || '')}" onclick="return window.__openMobileGlossaryFromButton ? window.__openMobileGlossaryFromButton(this) : true;">${escapeHtml(label)}</a>`;
+  }
+
+  function renderGlossaryInlineText(text, entry) {
+    if (!entry || !entry.term) {
+      return escapeHtml(text);
+    }
+
+    const pattern = new RegExp(buildGlossaryPattern(entry.term || ''), 'i');
+    const sourceText = String(text || '');
+    const match = pattern.exec(sourceText);
+    if (!match || typeof match.index !== 'number') {
+      return escapeHtml(sourceText);
+    }
+
+    const matchedText = String(match[0] || '');
+    const start = match.index;
+    const end = start + matchedText.length;
+    return `${escapeHtml(sourceText.slice(0, start))}${renderGlossaryButtonHtml(entry, matchedText)}${escapeHtml(sourceText.slice(end))}`;
   }
 
   function openGlossaryFromButton(button) {
@@ -360,7 +389,7 @@
         return;
       }
 
-      row.innerHTML = `<div class="mobile-text-table-value" style="grid-column: 1 / -1;">${renderGlossaryButtonHtml(glossaryEntry, combined)}</div>`;
+      row.innerHTML = `<div class="mobile-text-table-value" style="grid-column: 1 / -1;">${renderGlossaryInlineText(combined, glossaryEntry)}</div>`;
       row.classList.add('has-glossary-trigger');
     });
 
@@ -388,7 +417,7 @@
         return;
       }
 
-      node.innerHTML = renderGlossaryButtonHtml(glossaryEntry, text);
+      node.innerHTML = renderGlossaryInlineText(text, glossaryEntry);
       node.classList.add('has-glossary-trigger');
     });
 
@@ -422,7 +451,7 @@
         return;
       }
 
-      node.innerHTML = renderGlossaryButtonHtml(glossaryEntry, text);
+      node.innerHTML = renderGlossaryInlineText(text, glossaryEntry);
     });
 
     attachGlossaryTriggerHandlers(scope);
@@ -675,24 +704,34 @@
 
     const sections = [];
     let current = null;
+    let pendingLeadingLines = [];
 
-    lines.forEach((line) => {
+    lines.forEach((line, index) => {
+      const nextLine = lines[index + 1] || '';
+
+      if (/^[가-하]\.\s*/.test(line) && /^\d{1,2}\.\s+/.test(nextLine)) {
+        pendingLeadingLines.push(line);
+        return;
+      }
+
       if (/^\d{1,2}\.\s+/.test(line)) {
         if (current) {
           sections.push(current);
         }
         current = {
           title: line,
-          paragraphs: [],
+          paragraphs: pendingLeadingLines.slice(),
         };
+        pendingLeadingLines = [];
         return;
       }
 
       if (!current) {
         current = {
           title: '',
-          paragraphs: [],
+          paragraphs: pendingLeadingLines.slice(),
         };
+        pendingLeadingLines = [];
       }
 
       current.paragraphs.push(line);
@@ -993,11 +1032,15 @@
       return `<div class="mobile-text-fallback-subhead">${escaped}</div>`;
     }
 
+    if (/^(?:[○ㅇ]\s+|-\s*)/.test(normalized)) {
+      return `<div class="mobile-text-fallback-detail">${glossaryEntry ? renderGlossaryInlineText(normalized, glossaryEntry) : escaped}</div>`;
+    }
+
     const kvMatch = normalized.match(/^(.{1,80}?[:：])\s*(.+)$/);
     if (kvMatch) {
       if (glossaryEntry) {
         const detailClass = /^\d+\)\s*/.test(normalized) ? ' mobile-text-fallback-kv-detail' : '';
-        return `<div class="mobile-text-fallback-kv has-glossary-trigger${detailClass}">${renderGlossaryButtonHtml(glossaryEntry, normalized)}</div>`;
+        return `<div class="mobile-text-fallback-kv has-glossary-trigger${detailClass}">${renderGlossaryInlineText(normalized, glossaryEntry)}</div>`;
       }
 
       const label = escapeHtml(normalizeLineText(kvMatch[1]));
@@ -1007,10 +1050,10 @@
     }
 
     if (/^\d+\)\s*/.test(normalized)) {
-      return `<div class="mobile-text-fallback-detail">${glossaryEntry ? renderGlossaryButtonHtml(glossaryEntry, normalized) : escaped}</div>`;
+      return `<div class="mobile-text-fallback-detail">${glossaryEntry ? renderGlossaryInlineText(normalized, glossaryEntry) : escaped}</div>`;
     }
 
-    return `<p class="mobile-text-paragraph mobile-text-fallback-body">${glossaryEntry ? renderGlossaryButtonHtml(glossaryEntry, normalized) : escaped}</p>`;
+    return `<p class="mobile-text-paragraph mobile-text-fallback-body">${glossaryEntry ? renderGlossaryInlineText(normalized, glossaryEntry) : escaped}</p>`;
   }
 
   function renderSavedManualContent(statusText = '관리자가 정리한 모바일 전용 본문입니다.') {
@@ -1046,7 +1089,8 @@
           && nextLine
           && !/^\d{1,2}\.\s+/.test(nextLine)
           && !/^[가-하]\.\s*/.test(nextLine)
-          && !/^\d+\)\s*/.test(nextLine);
+          && !/^\d+\)\s*/.test(nextLine)
+          && !/^(?:[○ㅇ]\s+|-\s*)/.test(nextLine);
 
         if (shouldMergeWithNext) {
           normalizedLines.push(`${currentLine} ${nextLine}`.trim());
@@ -1518,7 +1562,7 @@
       const combinedLine = `${normalizeLineText(row.label)} : ${normalizeLineText(row.value)}`;
       const glossaryEntry = findGlossaryEntry(combinedLine);
       if (glossaryEntry) {
-        return `<div class="mobile-text-table-row has-glossary-trigger"><div class="mobile-text-table-value" style="grid-column: 1 / -1;">${renderGlossaryButtonHtml(glossaryEntry, combinedLine)}</div></div>`;
+        return `<div class="mobile-text-table-row has-glossary-trigger"><div class="mobile-text-table-value" style="grid-column: 1 / -1;">${renderGlossaryInlineText(combinedLine, glossaryEntry)}</div></div>`;
       }
 
       return `<div class="mobile-text-table-row"><div class="mobile-text-table-label">${escapeHtml(row.label)}</div><div class="mobile-text-table-value">${escapeHtml(row.value)}</div></div>`;
@@ -1528,7 +1572,7 @@
   function renderParagraphLines(lines) {
     return lines.map((line) => {
       const glossaryEntry = findGlossaryEntry(line);
-      return `<p class="mobile-text-paragraph">${glossaryEntry ? renderGlossaryButtonHtml(glossaryEntry, line) : escapeHtml(line)}</p>`;
+      return `<p class="mobile-text-paragraph">${glossaryEntry ? renderGlossaryInlineText(line, glossaryEntry) : escapeHtml(line)}</p>`;
     }).join('');
   }
 

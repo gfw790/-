@@ -51,7 +51,11 @@
         '위험 표시',
         '현장에서는',
         '징크코트 스프레이에서의 역할',
-        '주요 위험성'
+        '주요 위험성',
+        '수치의 의미',
+        'Rat',
+        'EU Method B.1',
+        '주의할 점'
       ];
       return escapeHtmlLegacy(value).replace(/\*\*(.+?)\*\*/gs, function (_, text) {
         var normalized = String(text || '').trim();
@@ -362,6 +366,22 @@
       return button;
     }
 
+    function splitTrailingGlossaryPunctuation(value) {
+      var text = String(value || '');
+      var match = text.match(/^(.*?)([\)\]\}〉》」』】〕〉》。,;:!?]+)$/u);
+      if (!match) {
+        return {
+          label: text,
+          trailing: ''
+        };
+      }
+
+      return {
+        label: match[1] || '',
+        trailing: match[2] || ''
+      };
+    }
+
     function replaceTextNodeWithGlossary(node, entries) {
       var text = String(node.nodeValue || '');
       if (!normalizeLineLegacy(text)) {
@@ -409,7 +429,13 @@
           fragment.appendChild(document.createTextNode(text.slice(cursor, matchedIndex)));
         }
 
-        fragment.appendChild(createGlossaryButton(matchedEntry.entry, matchedEntry.entryIndex, matchedEntry.labelText));
+        var splitLabel = splitTrailingGlossaryPunctuation(matchedEntry.labelText);
+        var buttonLabel = splitLabel.label || matchedEntry.labelText;
+
+        fragment.appendChild(createGlossaryButton(matchedEntry.entry, matchedEntry.entryIndex, buttonLabel));
+        if (splitLabel.trailing) {
+          fragment.appendChild(document.createTextNode(splitLabel.trailing));
+        }
         cursor = matchedIndex + matchedLength;
       }
 
