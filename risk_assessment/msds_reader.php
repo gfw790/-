@@ -348,36 +348,92 @@ function msds_reader_render_glossary_button(array $entry, string $label): string
         . '</a>';
 }
 
-function msds_reader_render_glossary_inline_text(?array $entry, string $text): string
+function msds_reader_render_glossary_inline_text(array $glossary, string $text): string
 {
-    if (!is_array($entry)) {
+    if ($text === '' || $glossary === []) {
         return h($text);
     }
 
-    $term = trim((string)($entry['term'] ?? ''));
-    if ($term === '') {
+    $candidates = [];
+    foreach (array_values($glossary) as $index => $entry) {
+        if (!is_array($entry)) {
+            continue;
+        }
+
+        $term = trim((string)($entry['term'] ?? ''));
+        $content = trim((string)($entry['content'] ?? ''));
+        if ($term === '' || $content === '') {
+            continue;
+        }
+
+        $pattern = preg_quote($term, '/');
+        $pattern = preg_replace('/\s+/u', '\\s+', $pattern) ?? $pattern;
+        $pattern = str_replace('\:', '\s*[:：]\s*', $pattern);
+
+        if (preg_match_all('/' . $pattern . '/iu', $text, $matches, PREG_OFFSET_CAPTURE) !== 1) {
+            continue;
+        }
+
+        foreach ($matches[0] as $match) {
+            $matchedText = (string)($match[0] ?? '');
+            $byteOffset = (int)($match[1] ?? 0);
+            if ($matchedText === '') {
+                continue;
+            }
+
+            $charOffset = mb_strlen(substr($text, 0, $byteOffset), 'UTF-8');
+            $matchLength = mb_strlen($matchedText, 'UTF-8');
+
+            $entry['_index'] = $index;
+            $candidates[] = [
+                'start' => $charOffset,
+                'end' => $charOffset + $matchLength,
+                'length' => $matchLength,
+                'label' => $matchedText,
+                'entry' => $entry,
+            ];
+        }
+    }
+
+    if ($candidates === []) {
         return h($text);
     }
 
-    $pattern = preg_quote($term, '/');
-    $pattern = preg_replace('/\s+/u', '\\s+', $pattern) ?? $pattern;
-    $pattern = str_replace('\:', '\s*[:：]\s*', $pattern);
+    usort($candidates, static function (array $left, array $right): int {
+        if ($left['start'] === $right['start']) {
+            return $right['length'] <=> $left['length'];
+        }
 
-    if (preg_match('/' . $pattern . '/iu', $text, $matches, PREG_OFFSET_CAPTURE) !== 1) {
+        return $left['start'] <=> $right['start'];
+    });
+
+    $selected = [];
+    $cursor = -1;
+    foreach ($candidates as $candidate) {
+        if ((int)$candidate['start'] < $cursor) {
+            continue;
+        }
+
+        $selected[] = $candidate;
+        $cursor = (int)$candidate['end'];
+    }
+
+    if ($selected === []) {
         return h($text);
     }
 
-    $matchedText = (string)($matches[0][0] ?? '');
-    $byteOffset = (int)($matches[0][1] ?? 0);
-    $charOffset = mb_strlen(substr($text, 0, $byteOffset), 'UTF-8');
-    $matchLength = mb_strlen($matchedText, 'UTF-8');
+    $output = '';
+    $position = 0;
+    foreach ($selected as $candidate) {
+        $start = (int)$candidate['start'];
+        $end = (int)$candidate['end'];
+        $output .= h(mb_substr($text, $position, $start - $position, 'UTF-8'));
+        $output .= msds_reader_render_glossary_button($candidate['entry'], (string)$candidate['label']);
+        $position = $end;
+    }
 
-    $before = mb_substr($text, 0, $charOffset, 'UTF-8');
-    $after = mb_substr($text, $charOffset + $matchLength, null, 'UTF-8');
-
-    return h($before)
-        . msds_reader_render_glossary_button($entry, $matchedText)
-        . h($after);
+    $output .= h(mb_substr($text, $position, null, 'UTF-8'));
+    return $output;
 }
 
 function msds_reader_fallback_sections(string $rawText): array
@@ -661,7 +717,7 @@ function msds_reader_render_fallback_html(array $sections, bool $canEditMobileMs
             if (preg_match('/^(?:[○ㅇ]\s+|-\s*|\*\s*)/u', $line)) {
                 if ($glossaryEntry !== null) {
                     $bodyChunks[] = '<div class="mobile-text-fallback-detail">'
-                        . msds_reader_render_glossary_inline_text($glossaryEntry, $line)
+                        . msds_reader_render_glossary_inline_text($glossary, $line)
                         . '</div>';
                 } else {
                     $bodyChunks[] = '<div class="mobile-text-fallback-detail">' . $escaped . '</div>';
@@ -673,7 +729,7 @@ function msds_reader_render_fallback_html(array $sections, bool $canEditMobileMs
                 if ($glossaryEntry !== null) {
                     $prefixClass = preg_match('/^\d+\)\s*/u', $line) ? ' mobile-text-fallback-kv-detail' : '';
                     $bodyChunks[] = '<div class="mobile-text-fallback-kv has-glossary-trigger' . $prefixClass . '">'
-                        . msds_reader_render_glossary_inline_text($glossaryEntry, $line)
+                        . msds_reader_render_glossary_inline_text($glossary, $line)
                         . '</div>';
                 } else {
                     $label = h(trim((string)$matches[1]));
@@ -690,7 +746,7 @@ function msds_reader_render_fallback_html(array $sections, bool $canEditMobileMs
             if (preg_match('/^\d+\)\s*/u', $line)) {
                 if ($glossaryEntry !== null) {
                     $bodyChunks[] = '<div class="mobile-text-fallback-detail">'
-                        . msds_reader_render_glossary_inline_text($glossaryEntry, $line)
+                        . msds_reader_render_glossary_inline_text($glossary, $line)
                         . '</div>';
                 } else {
                     $bodyChunks[] = '<div class="mobile-text-fallback-detail">' . $escaped . '</div>';
@@ -700,7 +756,7 @@ function msds_reader_render_fallback_html(array $sections, bool $canEditMobileMs
 
             if ($glossaryEntry !== null) {
                 $bodyChunks[] = '<p class="mobile-text-paragraph mobile-text-fallback-body">'
-                    . msds_reader_render_glossary_inline_text($glossaryEntry, $line)
+                    . msds_reader_render_glossary_inline_text($glossary, $line)
                     . '</p>';
             } else {
                 $bodyChunks[] = '<p class="mobile-text-paragraph mobile-text-fallback-body">' . $escaped . '</p>';
