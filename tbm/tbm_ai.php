@@ -740,6 +740,10 @@ function tbm_ai_trim_text_to_limit(string $text, int $maxLen, int $minSentenceCu
 
     // 단어 경계(공백)에서 자르기 — 문장 경계 미발견 시 단어 중간 절단 방지
     if (!$allowHardCut) {
+        $sentenceFit = tbm_ai_trim_text_by_sentence_unit($text, $maxLen, $minSentenceCut);
+        if ($sentenceFit !== '') {
+            return $sentenceFit;
+        }
         return $text;
     }
 
@@ -757,6 +761,53 @@ function tbm_ai_trim_text_to_limit(string $text, int $maxLen, int $minSentenceCu
     $trimmed = rtrim($trimmed, " ,;:\t\n\r\0\x0B");
 
     return $trimmed;
+}
+
+function tbm_ai_split_sentences(string $text): array
+{
+    $text = trim(preg_replace('/\s+/u', ' ', $text));
+    if ($text === '') {
+        return [];
+    }
+
+    $parts = preg_split('/(?<=[.!?])\s+/u', $text) ?: [];
+    $sentences = [];
+    foreach ($parts as $part) {
+        $part = trim((string)$part);
+        if ($part !== '') {
+            $sentences[] = $part;
+        }
+    }
+
+    return $sentences;
+}
+
+function tbm_ai_trim_text_by_sentence_unit(string $text, int $maxLen, int $minSentenceCut = 80): string
+{
+    $text = trim(preg_replace('/\s+/u', ' ', $text));
+    if ($text === '') {
+        return '';
+    }
+
+    if (mb_strlen($text, 'UTF-8') <= $maxLen) {
+        return $text;
+    }
+
+    $sentences = tbm_ai_split_sentences($text);
+    if (count($sentences) <= 1) {
+        return '';
+    }
+
+    for ($take = count($sentences) - 1; $take >= 1; $take--) {
+        $candidate = trim(implode(' ', array_slice($sentences, 0, $take)));
+        $candidate = tbm_ai_trim_to_complete_sentences($candidate);
+        $length = mb_strlen($candidate, 'UTF-8');
+        if ($candidate !== '' && $length >= $minSentenceCut && $length <= $maxLen) {
+            return $candidate;
+        }
+    }
+
+    return '';
 }
 
 function tbm_ai_has_sentence_ending(string $text): bool
