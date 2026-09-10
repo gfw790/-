@@ -893,6 +893,77 @@ if (($_GET['action'] ?? '') === 'law_api') {
     exit;
 }
 
+if (($_GET['action'] ?? '') === 'law_annex_popup') {
+    $lawName = safety_manual_normalize_law_reference((string)($_GET['law'] ?? ''));
+    $lawId = preg_replace('/[^0-9]/', '', (string)($_GET['law_id'] ?? '')) ?? '';
+    $annexNo = max(0, (int)($_GET['number'] ?? 0));
+    $annexSubNo = max(0, (int)($_GET['subnumber'] ?? 0));
+
+    if ($lawName === '' || mb_strlen($lawName, 'UTF-8') > 100 || mb_strlen($lawId, 'UTF-8') > 20) {
+        http_response_code(400);
+        header('Content-Type: text/html; charset=UTF-8');
+        echo '<!DOCTYPE html><html lang="ko"><meta charset="UTF-8"><body style="font-family:Malgun Gothic,sans-serif;padding:24px;">별표 조회 정보가 올바르지 않습니다.</body></html>';
+        exit;
+    }
+
+    $annexSearchParams = [
+        'OC' => safety_manual_law_api_oc(),
+        'target' => 'licbyl',
+        'type' => 'JSON',
+        'search' => 2,
+        'query' => $lawName,
+        'display' => 100,
+        'knd' => 1,
+    ];
+    $annexSearch = safety_manual_fetch_remote_json(safety_manual_build_open_api_url('lawSearch.do', $annexSearchParams));
+    $annexRoot = is_array($annexSearch['licBylSearch'] ?? null) ? $annexSearch['licBylSearch'] : [];
+    $annexItems = safety_manual_value_list($annexRoot['licbyl'] ?? []);
+    $selectedAnnex = null;
+    $wantedAnnexCode = sprintf('%04d%02d', $annexNo, $annexSubNo);
+    foreach ($annexItems as $annexItem) {
+        if (!is_array($annexItem)) {
+            continue;
+        }
+        $itemLawName = safety_manual_normalize_law_title((string)($annexItem['관련법령명'] ?? ''));
+        $itemAnnexCode = preg_replace('/[^0-9]/', '', (string)($annexItem['별표번호'] ?? '')) ?? '';
+        if ($annexNo > 0
+            && $itemLawName === safety_manual_normalize_law_title($lawName)
+            && str_pad($itemAnnexCode, 6, '0', STR_PAD_LEFT) === $wantedAnnexCode) {
+            $selectedAnnex = $annexItem;
+            break;
+        }
+    }
+
+    $remoteUrl = '';
+    if (is_array($selectedAnnex)) {
+        $detailPath = trim((string)($selectedAnnex['별표법령상세링크'] ?? ''));
+        if ($detailPath !== '') {
+            $remoteUrl = str_starts_with($detailPath, 'http') ? $detailPath : 'https://www.law.go.kr' . $detailPath;
+        }
+    }
+    if ($remoteUrl === '') {
+        $annexSearchParams['type'] = 'HTML';
+        $annexSearchParams['popYn'] = 'Y';
+        $remoteUrl = safety_manual_build_open_api_url('lawSearch.do', $annexSearchParams);
+    }
+
+    $html = safety_manual_fetch_remote_html($remoteUrl);
+    if ($html === '') {
+        http_response_code(502);
+        header('Content-Type: text/html; charset=UTF-8');
+        echo '<!DOCTYPE html><html lang="ko"><meta charset="UTF-8"><body style="font-family:Malgun Gothic,sans-serif;padding:24px;">별표 내용을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</body></html>';
+        exit;
+    }
+
+    if (stripos($html, '<head') !== false) {
+        $html = preg_replace('/<head([^>]*)>/i', '<head$1><base href="https://www.law.go.kr/">', $html, 1) ?? $html;
+    }
+
+    header('Content-Type: text/html; charset=UTF-8');
+    echo $html;
+    exit;
+}
+
 if (($_GET['action'] ?? '') === 'law_proxy') {
     $query = trim((string)($_GET['query'] ?? ''));
     if ($query === '' || mb_strlen($query, 'UTF-8') > 200) {
@@ -1552,7 +1623,7 @@ try {
     error_log('Safety manual revision DB failure: ' . $error->getMessage());
 }
 $flash = safety_manual_flash();
-$pageTitle = "\u{CDE8}\u{C5C5}\u{ADDC}\u{CE59}";
+$pageTitle = "\u{C911}\u{B300}\u{C7AC}\u{D574} \u{B4F1}\u{C5D0} \u{AD00}\u{D55C} \u{B9E4}\u{B274}\u{C5BC}";
 $summary = trim((string)($current['summary'] ?? ''));
 $toc = is_array($current['toc'] ?? null) ? $current['toc'] : [];
 $rawContentHtml = (string)($current['content_html'] ?? '');
@@ -2198,10 +2269,19 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
         }
 
         .law-content-search {
+            position: sticky;
+            top: 0;
+            z-index: 12;
             display: grid;
             grid-template-columns: minmax(0, 1fr) auto auto;
             gap: 7px;
             align-items: center;
+            padding: 10px 18px 8px;
+            border-top: 1px solid #e3eaf4;
+            border-bottom: 1px solid #ccd9e9;
+            background: rgba(248, 251, 255, 0.97);
+            box-shadow: 0 5px 12px rgba(30, 79, 149, 0.10);
+            backdrop-filter: blur(8px);
         }
 
         .law-content-search-status {
@@ -3144,6 +3224,12 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
 
         .law-ref-link:hover {
             color: #083f97;
+        }
+
+        .law-annex-link::after {
+            content: ' \2197';
+            font-size: 0.8em;
+            text-decoration: none;
         }
 
         .rule-table-wrap {
@@ -4182,13 +4268,13 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                             <button class="law-panel-back" id="law-panel-back" type="button" disabled aria-label="이전 법조문으로 돌아가기">← 뒤로가기</button>
                             <a class="law-panel-link" id="law-panel-open-link" href="https://www.law.go.kr/" target="_blank" rel="noopener">법제처 원문 열기</a>
                         </div>
-                        <form class="law-content-search" id="law-content-search-form" action="#" novalidate>
+                    </div>
+                    <form class="law-content-search" id="law-content-search-form" action="#" novalidate>
                             <input class="law-panel-search-input" id="law-content-search-input" type="search" placeholder="현재 법 내용에서 검색" aria-label="현재 법 내용에서 검색" autocomplete="off">
                             <button class="law-content-search-nav" id="law-content-search-prev" type="button" disabled>이전</button>
                             <button class="law-content-search-nav" id="law-content-search-next" type="submit" disabled>다음</button>
                             <span class="law-content-search-status" id="law-content-search-status">법조문을 불러온 뒤 본문을 검색할 수 있습니다.</span>
-                        </form>
-                    </div>
+                    </form>
                     <div class="law-panel-content law-panel-placeholder" id="law-panel-content">
                         <div>
                             <strong>관련 법조문 보기</strong>
@@ -4882,6 +4968,25 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                     riskAssessmentTitle.id = 'risk-assessment-clause';
                 }
 
+                if (riskAssessmentTitle && !document.getElementById('manual-risk-report-link')) {
+                    var riskSectionEnd = riskAssessmentTitle;
+                    var riskSectionCursor = riskAssessmentTitle.nextElementSibling;
+                    while (riskSectionCursor && !riskSectionCursor.classList.contains('manual-subtitle-box')) {
+                        riskSectionEnd = riskSectionCursor;
+                        riskSectionCursor = riskSectionCursor.nextElementSibling;
+                    }
+                    var riskReportActions = document.createElement('p');
+                    riskReportActions.id = 'manual-risk-report-link';
+                    var riskReportLink = document.createElement('a');
+                    riskReportLink.className = 'manual-policy-link';
+                    riskReportLink.href = 'risk_assessment_report.php';
+                    riskReportLink.target = '_blank';
+                    riskReportLink.rel = 'noopener';
+                    riskReportLink.textContent = '위험성평가 결과보고서 만들기';
+                    riskReportActions.appendChild(riskReportLink);
+                    riskSectionEnd.parentNode.insertBefore(riskReportActions, riskSectionEnd.nextSibling);
+                }
+
                 if (!targetNode) {
                     return;
                 }
@@ -5481,9 +5586,88 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                 linkBracketedLawCitationsInTextNodes(lawPanelContent);
                 linkLawCitationsInTextNodes(lawPanelContent);
                 linkBareLawNamesSafe(lawPanelContent);
+                linkLawPanelAnnexReferences(lawPanelContent, payload.law_name || payload.query || '', payload.law_id || '');
                 linkLawPanelDelegatedReferences(lawPanelContent, payload.law_name || payload.query || '');
                 linkLawPanelArticleReferences(lawPanelContent, payload.law_name || payload.query || '');
                 bindLawRefLinkEvents(lawPanelContent);
+            }
+
+            function linkLawPanelAnnexReferences(root, lawNameText, lawId) {
+                var lawName = normalizeLawReference(lawNameText).replace(/\s*\uC81C\s*\d+\s*\uC870.*$/u, '');
+                if (!root || !lawName || !document.createTreeWalker) {
+                    return 0;
+                }
+
+                var annexPattern = /(?:\[\s*)?\uBCC4\uD45C(?:\s*\uC81C?\s*(\d+)\s*\uD638?)?(?:\s*\uC758\s*(\d+))?(?:\s*\])?/g;
+                var nodes = [];
+                var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+                    acceptNode: function (node) {
+                        var parent = node.parentElement;
+                        if (!parent || !node.nodeValue || !parent.closest('.law-panel-section p') || parent.closest('a')) {
+                            return NodeFilter.FILTER_REJECT;
+                        }
+                        annexPattern.lastIndex = 0;
+                        return annexPattern.test(node.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+                    }
+                });
+                var node;
+                while ((node = walker.nextNode())) {
+                    nodes.push(node);
+                }
+
+                var count = 0;
+                nodes.forEach(function (textNode) {
+                    var value = textNode.nodeValue || '';
+                    var fragment = document.createDocumentFragment();
+                    var cursor = 0;
+                    annexPattern.lastIndex = 0;
+                    var match;
+                    while ((match = annexPattern.exec(value))) {
+                        fragment.appendChild(document.createTextNode(value.slice(cursor, match.index)));
+                        var params = new URLSearchParams({
+                            action: 'law_annex_popup',
+                            law: lawName,
+                            law_id: String(lawId || '')
+                        });
+                        if (match[1]) {
+                            params.set('number', match[1]);
+                        }
+                        if (match[2]) {
+                            params.set('subnumber', match[2]);
+                        }
+                        var anchor = document.createElement('a');
+                        anchor.className = 'law-ref-link law-annex-link';
+                        anchor.href = 'index.php?' + params.toString();
+                        anchor.target = '_blank';
+                        anchor.rel = 'noopener';
+                        anchor.textContent = match[0];
+                        anchor.title = '\uBCC4\uD45C \uD31D\uC5C5\uC73C\uB85C \uBCF4\uAE30';
+                        fragment.appendChild(anchor);
+                        cursor = annexPattern.lastIndex;
+                        count += 1;
+                    }
+                    fragment.appendChild(document.createTextNode(value.slice(cursor)));
+                    textNode.parentNode.replaceChild(fragment, textNode);
+                });
+
+                bindLawAnnexLinkEvents(root);
+                return count;
+            }
+
+            function bindLawAnnexLinkEvents(root) {
+                root.querySelectorAll('.law-annex-link').forEach(function (link) {
+                    if (link.dataset.boundAnnexClick === '1') {
+                        return;
+                    }
+                    link.dataset.boundAnnexClick = '1';
+                    link.addEventListener('click', function (event) {
+                        event.preventDefault();
+                        var popup = window.open(link.href, 'lawAnnexPopup', 'popup=yes,width=1050,height=820,resizable=yes,scrollbars=yes');
+                        if (popup) {
+                            popup.focus();
+                        }
+                    });
+                });
             }
 
             function linkBracketedLawCitationsInTextNodes(root) {
@@ -5971,6 +6155,9 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                 }
 
                 root.querySelectorAll('.law-ref-link').forEach(function (link) {
+                    if (link.classList.contains('law-annex-link')) {
+                        return;
+                    }
                     if (link.dataset.boundLawClick === '1') {
                         return;
                     }

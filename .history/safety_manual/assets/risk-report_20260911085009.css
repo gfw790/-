@@ -1,0 +1,29 @@
+:root { --blue: #17477f; --line: #7b8794; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #eef4fb; color: #17324f; font-family: "Malgun Gothic", sans-serif; }
+header { background: #17477f; color: #fff; }
+header > div, main { width: min(1400px, calc(100% - 40px)); margin: auto; }
+header > div { padding: 22px 0; }
+header small { color: #cfe2f8; letter-spacing: .08em; }
+header h1 { margin: 5px 0 0; font-size: 25px; }
+main { padding: 24px 0 42px; }
+.notice, .period, .card { border: 1px solid #cfdaea; border-radius: 8px; background: #fff; }
+.notice { padding: 12px 16px; }
+.success { color: #12633b; }.error { color: #a42626; }
+.period { display: flex; gap: 14px; align-items: end; margin-bottom: 18px; padding: 15px; }
+.period label, .fields label { display: grid; gap: 6px; font-weight: 700; }
+.period input, .period select { width: 130px; }
+.card { margin: 16px 0; padding: 20px; }
+.card h2 { margin: 0 0 15px; color: var(--blue); font-size: 19px; }
+.fields { display: grid; gap: 12px; }.fields.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }.fields.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }.fields.two { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 14px; }.fields .wide { grid-column: 1 / -1; }
+input, select, textarea, button, .button { font: inherit; }
+input, select, textarea { width: 100%; border: 1px solid #aebed3; border-radius: 4px; padding: 8px; background: #fff; }
+textarea { min-height: 80px; resize: vertical; }.scroll { overflow: auto; }
+table { width: 100%; min-width: 900px; border-collapse: collapse; table-layout: fixed; }
+th, td { border: 1px solid var(--line); padding: 6px; text-align: center; vertical-align: middle; }
+th { background: #e7ebef; font-weight: 700; }table input { min-width: 64px; text-align: center; }
+.actions { display: flex; justify-content: flex-end; gap: 10px; }.button, button { border: 1px solid #174f8d; border-radius: 4px; padding: 10px 16px; background: #174f8d; color: #fff; font-weight: 700; text-decoration: none; cursor: pointer; }.secondary { background: #fff; color: #174f8d; }
+.pdf { background: #fff; color: #111; font-family: "Malgun Gothic", sans-serif; font-size: 10pt; line-height: 1.45; }.pdf .page { position: relative; min-height: 270mm; page-break-after: always; }.pdf .page:last-child { page-break-after: auto; }.pdf table { min-width: 0; margin: 3mm 0; border-collapse: collapse; table-layout: fixed; }.pdf th, .pdf td { border: .25mm solid #666; padding: 2mm; text-align: center; vertical-align: middle; }.pdf th { background: #eceff1; font-weight: 700; }.pdf h2 { margin: 6mm 0 2mm; font-size: 14pt; }.pdf p { margin: 2mm 0; }.pdf .form-label { margin-bottom: 7mm; }.pdf .title-table { height: 38mm; }.pdf .title-table .report-title { font-size: 18pt; font-weight: 700; text-align: center; }.pdf .title-table td { height: 15mm; }.pdf .info-table th { width: 14%; }.pdf .info-table td { width: 36%; }.pdf .detail-table th { width: 18%; }.pdf .note { font-size: 8.5pt; }.pdf footer { position: absolute; bottom: 0; width: 100%; text-align: center; font-size: 9pt; }
+.print-toolbar { position: fixed; top: 12px; right: 12px; z-index: 2; display: flex; gap: 8px; }.print-toolbar a, .print-toolbar button { border: 1px solid #174f8d; border-radius: 4px; padding: 9px 14px; background: #fff; color: #174f8d; font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; }.print-toolbar button { background: #174f8d; color: #fff; }
+@media print { .print-toolbar { display: none; } @page { size: A4 portrait; margin: 12mm; } }
+@media (max-width: 800px) { header > div, main { width: calc(100% - 24px); }.fields.four, .fields.three, .fields.two { grid-template-columns: 1fr; }.actions { flex-wrap: wrap; }.actions > * { flex: 1; text-align: center; } }
