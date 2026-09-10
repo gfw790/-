@@ -1084,6 +1084,7 @@ function safety_manual_strip_buttons_html(string $contentHtml): string
 
 function safety_manual_normalize_saved_content_html(string $contentHtml): array
 {
+    $contentHtml=safety_manual_repair_clause_headings_html($contentHtml);
     $wrapper = '<div id="employment-rules-root">' . $contentHtml . '</div>';
     $dom = new DOMDocument();
     $loaded = @$dom->loadHTML(
@@ -1433,6 +1434,8 @@ function safety_manual_handle_upload(array $user): void
             'uploaded_by' => trim((string)($user['name'] ?? $user['login_id'] ?? "\u{AD00}\u{B9AC}\u{C790}")),
         ],
     ]);
+    $db=getDB();safety_manual_db_init($db);
+    safety_manual_db_save($db,$parsed['content_html'],safety_cover_load_data(),trim((string)($user['name']??$user['login_id']??'')));
 }
 
 function safety_manual_handle_save_edits(array $user): void
@@ -1527,6 +1530,11 @@ $selectedRevisionKey = trim((string)($_GET['revision'] ?? ''));
 try {
     $manualDb = getDB();
     safety_manual_db_init($manualDb);
+    $latestManual=safety_manual_db_latest($manualDb);
+    if($latestManual===null&&is_array($current)&&trim((string)($current['content_html']??''))!==''){
+        safety_manual_db_save($manualDb,(string)$current['content_html'],safety_cover_load_data(),'기존 JSON 마이그레이션');
+        $latestManual=safety_manual_db_latest($manualDb);
+    }
     $manualRevisions = safety_manual_db_revisions($manualDb);
     if ($selectedRevisionKey !== '') {
         $selectedRevision = safety_manual_db_current($manualDb, $selectedRevisionKey);
@@ -1535,6 +1543,10 @@ try {
             $current['updated_at'] = $selectedRevision['updated_at'];
             $current['updated_by'] = $selectedRevision['updated_by'];
         }
+    } elseif(is_array($latestManual)) {
+        $current['content_html']=$latestManual['content_html'];
+        $current['updated_at']=$latestManual['updated_at'];
+        $current['updated_by']=$latestManual['updated_by'];
     }
 } catch (Throwable $error) {
     error_log('Safety manual revision DB failure: ' . $error->getMessage());
@@ -4000,8 +4012,8 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                                 </svg>
                                 <div class="chart-item-list">
                                     <button type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제1호" data-scroll-target="safety-goal-management-policy">1. 안전·보건 목표와 경영방침의 설정</button>
-                                    <button type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제2호">2. 안전·보건 업무를 총괄·관리하는 전담 조직 설치</button>
-                                    <button id="chart-item-3" type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제3호">3. 유해·위험요인 확인 개선 절차 마련, 점검 및 조치</button>
+                                    <button type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제2호" data-scroll-target="safety-health-department">2. 안전·보건 업무를 총괄·관리하는 전담 조직 설치</button>
+                                    <button id="chart-item-3" type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제3호" data-scroll-target="risk-assessment-clause">3. 유해·위험요인 확인 개선 절차 마련, 점검 및 조치</button>
                                     <button type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제4호">4. 안전·보건에 관한 인력·시설·장비 구비와 유해·위험요인 개선 예산 편성 및 집행</button>
                                     <button id="chart-item-5" type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제5호">5. 안전보건관리책임자등의 충실한 업무수행 지원</button>
                                     <button type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제6호">6. 산업안전보건법에 따른 전문인력 배치</button>
@@ -4555,6 +4567,176 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                 return linkCount;
             }
 
+            function linkLawCitationsInTextNodes(root) {
+                if (!root || !document.createTreeWalker) {
+                    return 0;
+                }
+
+                var aliases = [
+                    { pattern: '\uC911\\s*\uB300\\s*\uC7AC\\s*\uD574\\s*\uCC98\\s*\uBC8C\\s*\uB4F1\uC5D0\\s*\uAD00\uD55C\\s*\uBC95\uB960', query: '\uC911\uB300\uC7AC\uD574 \uCC98\uBC8C \uB4F1\uC5D0 \uAD00\uD55C \uBC95\uB960' },
+                    { pattern: '\uC911\\s*\uB300\\s*\uC7AC\\s*\uD574\\s*\uCC98\\s*\uBC8C\\s*\uBC95', query: '\uC911\uB300\uC7AC\uD574 \uCC98\uBC8C \uB4F1\uC5D0 \uAD00\uD55C \uBC95\uB960' },
+                    { pattern: '\uC0B0\uC5C5\uC548\uC804\uBCF4\uAC74\uBC95\\s*\uC2DC\uD589\uADDC\uCE59', query: '\uC0B0\uC5C5\uC548\uC804\uBCF4\uAC74\uBC95 \uC2DC\uD589\uADDC\uCE59' },
+                    { pattern: '\uC0B0\uC5C5\uC548\uC804\uBCF4\uAC74\uBC95\\s*\uC2DC\uD589\uB839', query: '\uC0B0\uC5C5\uC548\uC804\uBCF4\uAC74\uBC95 \uC2DC\uD589\uB839' },
+                    { pattern: '\uC0B0\uC5C5\uC548\uC804\uBCF4\uAC74\uBC95|\uC0B0\uC548\uBC95|\uC0B0\uC5C5\uBC95', query: '\uC0B0\uC5C5\uC548\uC804\uBCF4\uAC74\uBC95' },
+                    { pattern: '\uADFC\uB85C\uAE30\uC900\uBC95', query: '\uADFC\uB85C\uAE30\uC900\uBC95' },
+                    { pattern: '\uC18C\uBC29\uAE30\uBCF8\uBC95', query: '\uC18C\uBC29\uAE30\uBCF8\uBC95' },
+                    { pattern: '\uC804\uAE30\uC548\uC804\uAD00\uB9AC\uBC95', query: '\uC804\uAE30\uC548\uC804\uAD00\uB9AC\uBC95' },
+                    { pattern: '\uACE0\uC555\uAC00\uC2A4\\s*\uC548\uC804\uAD00\uB9AC\uBC95', query: '\uACE0\uC555\uAC00\uC2A4 \uC548\uC804\uAD00\uB9AC\uBC95' },
+                    { pattern: '\uD654\uD559\uBB3C\uC9C8\uAD00\uB9AC\uBC95', query: '\uD654\uD559\uBB3C\uC9C8\uAD00\uB9AC\uBC95' },
+                    { pattern: '\uD3D0\uAE30\uBB3C\uAD00\uB9AC\uBC95', query: '\uD3D0\uAE30\uBB3C\uAD00\uB9AC\uBC95' }
+                ];
+                var aliasPattern = aliases.map(function (item) { return '(?:' + item.pattern + ')'; }).join('|');
+                var referencePattern = new RegExp(
+                    '(' + aliasPattern + ')(\\s*\uC81C\\s*\\d+\\s*\uC870(?:\\s*\uC758\\s*\\d+)?(?:\\s*\uC81C\\s*\\d+\\s*\uD56D(?:\\s*\uC81C\\s*\\d+\\s*\uD638)?)?(?:\\s*,\\s*\uC81C\\s*\\d+\\s*\uC870(?:\\s*\uC758\\s*\\d+)?(?:\\s*\uC81C\\s*\\d+\\s*\uD56D(?:\\s*\uC81C\\s*\\d+\\s*\uD638)?)?)*)?',
+                    'g'
+                );
+                var nodes = [];
+                var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+                    acceptNode: function (node) {
+                        var parent = node.parentElement;
+                        if (!parent || !node.nodeValue || !parent.closest('td')) {
+                            return NodeFilter.FILTER_REJECT;
+                        }
+                        if (parent.closest('a, script, style, textarea, input, select, option')) {
+                            return NodeFilter.FILTER_REJECT;
+                        }
+                        referencePattern.lastIndex = 0;
+                        return referencePattern.test(node.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+                    }
+                });
+                var node;
+                while ((node = walker.nextNode())) {
+                    nodes.push(node);
+                }
+
+                var count = 0;
+                nodes.forEach(function (textNode) {
+                    var value = textNode.nodeValue || '';
+                    var fragment = document.createDocumentFragment();
+                    var cursor = 0;
+                    referencePattern.lastIndex = 0;
+                    var match;
+                    while ((match = referencePattern.exec(value))) {
+                        fragment.appendChild(document.createTextNode(value.slice(cursor, match.index)));
+                        var label = match[0];
+                        var matchedAlias = match[1];
+                        var alias = aliases.find(function (item) {
+                            return new RegExp('^(?:' + item.pattern + ')$').test(matchedAlias);
+                        });
+                        var articleText = normalizeLawReference(match[2] || '');
+                        var queryText = normalizeLawReference((alias ? alias.query : matchedAlias) + (articleText ? ' ' + articleText : ''));
+                        var anchor = document.createElement('a');
+                        anchor.className = 'law-ref-link';
+                        anchor.href = buildLawSearchUrl(queryText);
+                        anchor.target = '_blank';
+                        anchor.rel = 'noopener';
+                        anchor.dataset.lawQuery = queryText;
+                        anchor.textContent = label;
+                        anchor.title = '\uBC95\uC870\uBB38 \uAC80\uC0C9 / \uC804\uBB38 \uBCF4\uAE30';
+                        fragment.appendChild(anchor);
+                        cursor = referencePattern.lastIndex;
+                        count += 1;
+                    }
+                    fragment.appendChild(document.createTextNode(value.slice(cursor)));
+                    textNode.parentNode.replaceChild(fragment, textNode);
+                });
+                return count;
+            }
+
+            function linkBareLawNamesSafe(root) {
+                if (!root || !document.createTreeWalker) {
+                    return 0;
+                }
+
+                var lawNames = [
+                    '\uC911\uB300\uC7AC\uD574 \uCC98\uBC8C \uB4F1\uC5D0 \uAD00\uD55C \uBC95\uB960',
+                    '\uC911\uB300\uC7AC\uD574\uCC98\uBC8C\uBC95',
+                    '\uC0B0\uC5C5\uC548\uC804\uBCF4\uAC74\uBC95 \uC2DC\uD589\uADDC\uCE59',
+                    '\uC0B0\uC5C5\uC548\uC804\uBCF4\uAC74\uBC95 \uC2DC\uD589\uB839',
+                    '\uC0B0\uC5C5\uC548\uC804\uBCF4\uAC74\uBC95',
+                    '\uADFC\uB85C\uAE30\uC900\uBC95 \uC2DC\uD589\uADDC\uCE59',
+                    '\uADFC\uB85C\uAE30\uC900\uBC95 \uC2DC\uD589\uB839',
+                    '\uADFC\uB85C\uAE30\uC900\uBC95',
+                    '\uC18C\uBC29\uAE30\uBCF8\uBC95',
+                    '\uD654\uC7AC\uC758 \uC608\uBC29 \uBC0F \uC548\uC804\uAD00\uB9AC\uC5D0 \uAD00\uD55C \uBC95\uB960',
+                    '\uC2B9\uAC15\uAE30 \uC548\uC804\uAD00\uB9AC\uBC95',
+                    '\uC804\uAE30\uC548\uC804\uAD00\uB9AC\uBC95',
+                    '\uACE0\uC555\uAC00\uC2A4 \uC548\uC804\uAD00\uB9AC\uBC95',
+                    '\uD654\uD559\uBB3C\uC9C8\uAD00\uB9AC\uBC95',
+                    '\uD3D0\uAE30\uBB3C\uAD00\uB9AC\uBC95',
+                    '\uD658\uACBD\uBCF4\uAC74\uBC95',
+                    '\uC7AC\uB09C \uBC0F \uC548\uC804\uAD00\uB9AC \uAE30\uBCF8\uBC95'
+                ];
+                root.querySelectorAll('.law-ref-link[data-law-query]').forEach(function (link) {
+                    var citedLawName = normalizeLawReference(String(link.dataset.lawQuery || ''))
+                        .replace(/\s*\uC81C\s*\d+\s*\uC870.*$/u, '')
+                        .trim();
+                    if (citedLawName && lawNames.indexOf(citedLawName) < 0) {
+                        lawNames.push(citedLawName);
+                    }
+                });
+                lawNames.sort(function (left, right) {
+                    return right.length - left.length;
+                });
+                var escapedNames = lawNames.map(function (name) {
+                    return name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                });
+                var lawNamePattern = new RegExp('(' + escapedNames.join('|') + ')(?!\\s*\\uC81C\\s*\\d+\\s*\\uC870)', 'g');
+                var textNodes = [];
+                var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+                    acceptNode: function (node) {
+                        var parent = node.parentElement;
+                        if (!parent || !node.nodeValue || !lawNamePattern.test(node.nodeValue)) {
+                            lawNamePattern.lastIndex = 0;
+                            return NodeFilter.FILTER_REJECT;
+                        }
+                        lawNamePattern.lastIndex = 0;
+                        if (parent.closest('a, script, style, textarea, input, select, option')) {
+                            return NodeFilter.FILTER_REJECT;
+                        }
+                        if (!parent.closest('td')) {
+                            return NodeFilter.FILTER_REJECT;
+                        }
+                        return NodeFilter.FILTER_ACCEPT;
+                    }
+                });
+                var currentNode;
+                while ((currentNode = walker.nextNode())) {
+                    textNodes.push(currentNode);
+                }
+
+                var linkCount = 0;
+                textNodes.forEach(function (textNode) {
+                    var textValue = textNode.nodeValue || '';
+                    var fragment = document.createDocumentFragment();
+                    var lastIndex = 0;
+                    lawNamePattern.lastIndex = 0;
+                    var match;
+                    while ((match = lawNamePattern.exec(textValue))) {
+                        if (match.index > lastIndex) {
+                            fragment.appendChild(document.createTextNode(textValue.slice(lastIndex, match.index)));
+                        }
+                        var lawName = normalizeLawReference(match[1]);
+                        var anchor = document.createElement('a');
+                        anchor.className = 'law-ref-link';
+                        anchor.href = buildLawSearchUrl(lawName);
+                        anchor.target = '_blank';
+                        anchor.rel = 'noopener';
+                        anchor.dataset.lawQuery = lawName;
+                        anchor.textContent = match[0];
+                        fragment.appendChild(anchor);
+                        linkCount += 1;
+                        lastIndex = lawNamePattern.lastIndex;
+                    }
+                    if (linkCount > 0 && lastIndex > 0) {
+                        fragment.appendChild(document.createTextNode(textValue.slice(lastIndex)));
+                        textNode.parentNode.replaceChild(fragment, textNode);
+                    }
+                });
+
+                return linkCount;
+            }
+
             var documentRoot = document.querySelector('.document');
             var lawLinkStatus = document.getElementById('law-link-status');
             var tocList = document.getElementById('toc-list');
@@ -4573,7 +4755,21 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                     targetNode.id = 'safety-goal-management-policy';
                 }
 
-                if (!targetNode || document.getElementById('manual-policy-link')) {
+                var departmentTitle = Array.prototype.find.call(documentRoot.querySelectorAll('p, h2, h3'), function (node) {
+                    return /^6\.\s*안전보건업무\s+주관부서$/.test(String(node.textContent || '').replace(/\s+/g, ' ').trim());
+                });
+                if (departmentTitle && !document.getElementById('safety-health-department')) {
+                    departmentTitle.id = 'safety-health-department';
+                }
+
+                var riskAssessmentTitle = Array.prototype.find.call(documentRoot.querySelectorAll('p, h2, h3'), function (node) {
+                    return /^7\.\s*위험성\s*평가(?:\s*및\s*조치)?$/.test(String(node.textContent || '').replace(/\s+/g, ' ').trim());
+                });
+                if (riskAssessmentTitle && !document.getElementById('risk-assessment-clause')) {
+                    riskAssessmentTitle.id = 'risk-assessment-clause';
+                }
+
+                if (!targetNode) {
                     return;
                 }
 
@@ -4581,16 +4777,25 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                     var title = String(node.textContent || '').replace(/\s+/g, ' ').trim();
                     return /^5\.11\s+안전보건\s+목표\s+및\s+경영방침의\s+설정/.test(title);
                 });
-                var policyLink = document.createElement('p');
-                policyLink.id = 'manual-policy-link';
-                policyLink.innerHTML = '<a class="manual-policy-link" href="management_policy.php">안전보건 경영방침 만들기</a>'
-                    + '<a class="manual-policy-link" href="goal_plan.php">목표 및 세부계획 만들기</a>';
-
-                if (!finalSectionParagraph) {
-                    return;
+                var policyLink = document.getElementById('manual-policy-link');
+                if (!policyLink) {
+                    if (!finalSectionParagraph) {
+                        return;
+                    }
+                    policyLink = document.createElement('p');
+                    policyLink.id = 'manual-policy-link';
+                    policyLink.innerHTML = '<a class="manual-policy-link" href="management_policy.php">안전보건 경영방침 만들기</a>'
+                        + '<a class="manual-policy-link" href="goal_plan.php">목표 및 세부계획 만들기</a>';
+                    finalSectionParagraph.parentNode.insertBefore(policyLink, finalSectionParagraph.nextSibling);
                 }
 
-                finalSectionParagraph.parentNode.insertBefore(policyLink, finalSectionParagraph.nextSibling);
+                if (!policyLink.querySelector('.manual-policy-view')) {
+                    var viewLink = document.createElement('a');
+                    viewLink.className = 'manual-policy-link manual-policy-view';
+                    viewLink.href = 'management_policy.php?print=1';
+                    viewLink.textContent = '안전보건 경영방침 보기';
+                    policyLink.appendChild(viewLink);
+                }
             }
 
             prepareSafetyManualSectionAnchor();
@@ -4691,7 +4896,7 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                 }
 
                 return node.tagName === 'H3'
-                    && /^\s*(?:#+\s*)?\uC81C\s*\d+\s*\uC870(?:\s*\uC758\s*\d+)?/.test((node.textContent || '').trim());
+                    && /^\s*\d+(?:\.\d+)*\.?\s+/.test((node.textContent || '').trim());
             }
 
             function collectClauseNodes(headingNode) {
@@ -4857,7 +5062,6 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                     return;
                 }
 
-                renumberArticleHeadings();
                 markArticleHeadingsEditable();
                 rebuildTocFromDocument();
             }
@@ -5083,17 +5287,21 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
             var chartQuickLawBody = document.getElementById('chart-quick-law-body');
 
             // 탭 전환 이벤트
+            function activateLawTab(targetId) {
+                if (!targetId) {
+                    return;
+                }
+                document.querySelectorAll('.law-tab-btn').forEach(function (button) {
+                    button.classList.toggle('is-active', button.getAttribute('data-target') === targetId);
+                });
+                document.querySelectorAll('.law-tab-content').forEach(function (content) {
+                    content.classList.toggle('is-active', content.id === targetId);
+                });
+            }
+
             document.querySelectorAll('.law-tab-btn').forEach(function (tabBtn) {
                 tabBtn.addEventListener('click', function () {
-                    document.querySelectorAll('.law-tab-btn').forEach(function (b) { b.classList.remove('is-active'); });
-                    document.querySelectorAll('.law-tab-content').forEach(function (c) { c.classList.remove('is-active'); });
-
-                    tabBtn.classList.add('is-active');
-                    var targetId = tabBtn.getAttribute('data-target');
-                    var targetContent = document.getElementById(targetId);
-                    if (targetContent) {
-                        targetContent.classList.add('is-active');
-                    }
+                    activateLawTab(tabBtn.getAttribute('data-target'));
                 });
             });
 
@@ -5323,7 +5531,14 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                         }
 
                         event.preventDefault();
+                        activateLawTab('law-tab-search');
                         loadLawPanel(queryText, link.href);
+                        if (window.matchMedia && window.matchMedia('(max-width: 1100px)').matches) {
+                            var searchPanel = document.getElementById('law-tab-search');
+                            if (searchPanel) {
+                                searchPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            }
+                        }
                     });
                 });
             }
@@ -5335,7 +5550,9 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
 
                 linkRelatedBasisReferences(documentRoot);
                 rebuildArticleRelatedBasisLinks(documentRoot, 2);
+                linkLawCitationsInTextNodes(documentRoot);
                 linkLawReferencesSafe(documentRoot);
+                linkBareLawNamesSafe(documentRoot);
                 bindLawRefLinkEvents();
                 updateLawLinkStatusCount();
             }
@@ -5688,10 +5905,11 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                         return;
                     }
 
-                    var subtitleCell = event.target.closest('.manual-subtitle-box td');
-                    if (subtitleCell && documentRoot.contains(subtitleCell)) {
+                    var subtitleWrapper = event.target.closest('.manual-subtitle-box');
+                    if (subtitleWrapper && documentRoot.contains(subtitleWrapper)) {
+                        var subtitleCell = subtitleWrapper.querySelector('td') || subtitleWrapper;
                         var subtitleNodes = [subtitleCell];
-                        var nextNode = subtitleCell.closest('.rule-table-wrap');
+                        var nextNode = subtitleWrapper;
                         nextNode = nextNode ? nextNode.nextElementSibling : null;
                         while (nextNode && !nextNode.classList.contains('rule-table-wrap') && nextNode.tagName !== 'H2' && nextNode.tagName !== 'H3') {
                             subtitleNodes.push(nextNode);

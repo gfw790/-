@@ -98,4 +98,7 @@
         if (!dialog.open) dialog.showModal();
         buildPreview();
     });
+    if (document.body.dataset.autoPrint === '1') {
+        document.getElementById('policy-preview-open').click();
+    }
 }());

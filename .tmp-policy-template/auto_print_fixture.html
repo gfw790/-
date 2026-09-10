@@ -1,0 +1,6 @@
+<!doctype html><html><body data-auto-print="1">
+<button id="policy-preview-open">인쇄하기</button><dialog id="policy-preview"><select id="policy-print-year"><option value="current" data-year="2026" selected>현재</option></select><button id="policy-preview-print"></button><button id="policy-preview-close"></button><div id="policy-print-pages"></div></dialog>
+<section class="page-card current"><input class="policy-date" value="2026-09-10"><textarea name="current[policy]">방침</textarea><div class="goal-row"><textarea>목표</textarea></div></section>
+<script src="file:///A:/risk_server/project/safety_manual/assets/policy-print.js"></script>
+<script>window.addEventListener('load',()=>{setTimeout(()=>document.body.dataset.test=document.getElementById('policy-preview').open&&document.querySelectorAll('.policy-sheet').length?'passed':'failed',100)});</script>
+</body></html>

@@ -57,6 +57,7 @@ $policySections = [
     ],
 ];
 $currentYear = (int)(new DateTimeImmutable('now', new DateTimeZone('Asia/Seoul')))->format('Y');
+$autoPrint = ($_GET['print'] ?? '') === '1';
 $policyYears = [
     ['key' => 'previous', 'label' => '전년도', 'year' => $currentYear - 1],
     ['key' => 'current', 'label' => '당해년도', 'year' => $currentYear],
@@ -209,7 +210,7 @@ try {
         }
     </style>
 </head>
-<body>
+<body data-auto-print="<?= $autoPrint ? '1' : '0' ?>">
 <header class="topbar">
     <div class="topbar-inner">
         <div class="brand">
@@ -288,7 +289,7 @@ try {
     </div>
     <div id="policy-print-pages"></div>
 </dialog>
-<script src="assets/policy-print.js"></script>
+<script src="assets/policy-print.js?v=<?= filemtime(__DIR__ . '/assets/policy-print.js') ?>"></script>
 <script>
     function resizeGoal(field) {
         field.style.height = 'auto';
