@@ -2172,6 +2172,75 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
             filter: brightness(1.03);
         }
 
+        .law-panel-actions {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr);
+            gap: 8px;
+        }
+
+        .law-panel-back {
+            min-height: 40px;
+            padding: 0 14px;
+            border: 1px solid #b8c9df;
+            border-radius: 12px;
+            background: #fff;
+            color: #234d82;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .law-panel-back:disabled {
+            border-color: #dce4ee;
+            background: #f3f6fa;
+            color: #98a6b8;
+            cursor: default;
+        }
+
+        .law-content-search {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto auto;
+            gap: 7px;
+            align-items: center;
+        }
+
+        .law-content-search-status {
+            grid-column: 1 / -1;
+            min-height: 18px;
+            color: #607089;
+            font-size: 12px;
+        }
+
+        .law-content-search-nav {
+            min-height: 38px;
+            padding: 0 11px;
+            border: 1px solid #c8d6e8;
+            border-radius: 10px;
+            background: #fff;
+            color: #234d82;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .law-content-search-nav:disabled {
+            color: #9aa8ba;
+            background: #f3f6fa;
+            cursor: default;
+        }
+
+        mark.law-content-match {
+            padding: 0 2px;
+            border-radius: 3px;
+            background: #fff0a6;
+            color: inherit;
+        }
+
+        mark.law-content-match.is-current {
+            background: #ffb84d;
+            box-shadow: 0 0 0 2px rgba(219, 119, 6, 0.22);
+        }
+
         .law-panel-body {
             flex: 1 1 auto;
             min-height: 0;
@@ -4109,7 +4178,16 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                             <button class="law-panel-search-button" type="submit">검색</button>
                         </form>
                         <div class="law-panel-query" id="law-panel-query">아직 선택한 법령이 없습니다.</div>
-                        <a class="law-panel-link" id="law-panel-open-link" href="https://www.law.go.kr/" target="_blank" rel="noopener">법제처 원문 열기</a>
+                        <div class="law-panel-actions">
+                            <button class="law-panel-back" id="law-panel-back" type="button" disabled aria-label="이전 법조문으로 돌아가기">← 뒤로가기</button>
+                            <a class="law-panel-link" id="law-panel-open-link" href="https://www.law.go.kr/" target="_blank" rel="noopener">법제처 원문 열기</a>
+                        </div>
+                        <form class="law-content-search" id="law-content-search-form" action="#" novalidate>
+                            <input class="law-panel-search-input" id="law-content-search-input" type="search" placeholder="현재 법 내용에서 검색" aria-label="현재 법 내용에서 검색" autocomplete="off">
+                            <button class="law-content-search-nav" id="law-content-search-prev" type="button" disabled>이전</button>
+                            <button class="law-content-search-nav" id="law-content-search-next" type="submit" disabled>다음</button>
+                            <span class="law-content-search-status" id="law-content-search-status">법조문을 불러온 뒤 본문을 검색할 수 있습니다.</span>
+                        </form>
                     </div>
                     <div class="law-panel-content law-panel-placeholder" id="law-panel-content">
                         <div>
@@ -4573,8 +4651,11 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                 }
 
                 var aliases = [
+                    { pattern: '\uC911\\s*\uB300\\s*\uC7AC\\s*\uD574\\s*\uCC98\\s*\uBC8C\\s*\uBC95\\s*\uC2DC\uD589\uB839', query: '\uC911\uB300\uC7AC\uD574 \uCC98\uBC8C \uB4F1\uC5D0 \uAD00\uD55C \uBC95\uB960 \uC2DC\uD589\uB839' },
                     { pattern: '\uC911\\s*\uB300\\s*\uC7AC\\s*\uD574\\s*\uCC98\\s*\uBC8C\\s*\uB4F1\uC5D0\\s*\uAD00\uD55C\\s*\uBC95\uB960', query: '\uC911\uB300\uC7AC\uD574 \uCC98\uBC8C \uB4F1\uC5D0 \uAD00\uD55C \uBC95\uB960' },
                     { pattern: '\uC911\\s*\uB300\\s*\uC7AC\\s*\uD574\\s*\uCC98\\s*\uBC8C\\s*\uBC95', query: '\uC911\uB300\uC7AC\uD574 \uCC98\uBC8C \uB4F1\uC5D0 \uAD00\uD55C \uBC95\uB960' },
+                    { pattern: '(?:\uC0B0\uC548\uBC95|\uC0B0\uC5C5\uBC95)\\s*\uC2DC\uD589\uADDC\uCE59', query: '\uC0B0\uC5C5\uC548\uC804\uBCF4\uAC74\uBC95 \uC2DC\uD589\uADDC\uCE59' },
+                    { pattern: '(?:\uC0B0\uC548\uBC95|\uC0B0\uC5C5\uBC95)\\s*\uC2DC\uD589\uB839', query: '\uC0B0\uC5C5\uC548\uC804\uBCF4\uAC74\uBC95 \uC2DC\uD589\uB839' },
                     { pattern: '\uC0B0\uC5C5\uC548\uC804\uBCF4\uAC74\uBC95\\s*\uC2DC\uD589\uADDC\uCE59', query: '\uC0B0\uC5C5\uC548\uC804\uBCF4\uAC74\uBC95 \uC2DC\uD589\uADDC\uCE59' },
                     { pattern: '\uC0B0\uC5C5\uC548\uC804\uBCF4\uAC74\uBC95\\s*\uC2DC\uD589\uB839', query: '\uC0B0\uC5C5\uC548\uC804\uBCF4\uAC74\uBC95 \uC2DC\uD589\uB839' },
                     { pattern: '\uC0B0\uC5C5\uC548\uC804\uBCF4\uAC74\uBC95|\uC0B0\uC548\uBC95|\uC0B0\uC5C5\uBC95', query: '\uC0B0\uC5C5\uC548\uC804\uBCF4\uAC74\uBC95' },
@@ -4587,14 +4668,25 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                 ];
                 var aliasPattern = aliases.map(function (item) { return '(?:' + item.pattern + ')'; }).join('|');
                 var referencePattern = new RegExp(
-                    '(' + aliasPattern + ')(\\s*\uC81C\\s*\\d+\\s*\uC870(?:\\s*\uC758\\s*\\d+)?(?:\\s*\uC81C\\s*\\d+\\s*\uD56D(?:\\s*\uC81C\\s*\\d+\\s*\uD638)?)?(?:\\s*,\\s*\uC81C\\s*\\d+\\s*\uC870(?:\\s*\uC758\\s*\\d+)?(?:\\s*\uC81C\\s*\\d+\\s*\uD56D(?:\\s*\uC81C\\s*\\d+\\s*\uD638)?)?)*)?',
+                    '(' + aliasPattern + ')(\\s*\uC81C\\s*\\d+\\s*\uC870(?:\\s*\uC758\\s*\\d+)?(?:\\s*\uC81C\\s*\\d+\\s*\uD56D(?:\\s*\uC81C\\s*\\d+\\s*\uD638)?)?(?:\\s*,\\s*(?:\uC81C\\s*)?\\d+\\s*\uC870(?:\\s*\uC758\\s*\\d+)?(?:\\s*\uC81C\\s*\\d+\\s*\uD56D(?:\\s*\uC81C\\s*\\d+\\s*\uD638)?)?)*)?',
                     'g'
                 );
+                function createLawReferenceAnchor(labelText, queryText) {
+                    var anchor = document.createElement('a');
+                    anchor.className = 'law-ref-link';
+                    anchor.href = buildLawSearchUrl(queryText);
+                    anchor.target = '_blank';
+                    anchor.rel = 'noopener';
+                    anchor.dataset.lawQuery = queryText;
+                    anchor.textContent = labelText;
+                    anchor.title = '\uBC95\uC870\uBB38 \uAC80\uC0C9 / \uC804\uBB38 \uBCF4\uAE30';
+                    return anchor;
+                }
                 var nodes = [];
                 var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
                     acceptNode: function (node) {
                         var parent = node.parentElement;
-                        if (!parent || !node.nodeValue || !parent.closest('td')) {
+                        if (!parent || !node.nodeValue || !parent.closest('p, li, h2, h3, td')) {
                             return NodeFilter.FILTER_REJECT;
                         }
                         if (parent.closest('a, script, style, textarea, input, select, option')) {
@@ -4618,24 +4710,45 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                     var match;
                     while ((match = referencePattern.exec(value))) {
                         fragment.appendChild(document.createTextNode(value.slice(cursor, match.index)));
-                        var label = match[0];
                         var matchedAlias = match[1];
                         var alias = aliases.find(function (item) {
                             return new RegExp('^(?:' + item.pattern + ')$').test(matchedAlias);
                         });
-                        var articleText = normalizeLawReference(match[2] || '');
-                        var queryText = normalizeLawReference((alias ? alias.query : matchedAlias) + (articleText ? ' ' + articleText : ''));
-                        var anchor = document.createElement('a');
-                        anchor.className = 'law-ref-link';
-                        anchor.href = buildLawSearchUrl(queryText);
-                        anchor.target = '_blank';
-                        anchor.rel = 'noopener';
-                        anchor.dataset.lawQuery = queryText;
-                        anchor.textContent = label;
-                        anchor.title = '\uBC95\uC870\uBB38 \uAC80\uC0C9 / \uC804\uBB38 \uBCF4\uAE30';
-                        fragment.appendChild(anchor);
-                        cursor = referencePattern.lastIndex;
+                        var canonicalLawName = alias ? alias.query : normalizeLawReference(matchedAlias);
+                        var articleSource = match[2] || '';
+                        if (!articleSource) {
+                            fragment.appendChild(createLawReferenceAnchor(match[0], canonicalLawName));
+                            count += 1;
+                            cursor = referencePattern.lastIndex;
+                            continue;
+                        }
+
+                        var firstArticleMatch = articleSource.match(/^(\s*\uC81C\s*\d+\s*\uC870(?:\s*\uC758\s*\d+)?(?:\s*\uC81C\s*\d+\s*\uD56D(?:\s*\uC81C\s*\d+\s*\uD638)?)?)/);
+                        var firstArticleLabel = firstArticleMatch ? firstArticleMatch[1] : articleSource;
+                        var firstArticleQuery = normalizeLawReference(canonicalLawName + ' ' + firstArticleLabel);
+                        fragment.appendChild(createLawReferenceAnchor(matchedAlias + firstArticleLabel, firstArticleQuery));
                         count += 1;
+
+                        var trailingSource = articleSource.slice(firstArticleLabel.length);
+                        var trailingPattern = /(\s*,\s*)((?:\uC81C\s*)?\d+\s*\uC870(?:\s*\uC758\s*\d+)?(?:\s*\uC81C\s*\d+\s*\uD56D(?:\s*\uC81C\s*\d+\s*\uD638)?)?)/g;
+                        var trailingCursor = 0;
+                        var trailingMatch;
+                        while ((trailingMatch = trailingPattern.exec(trailingSource))) {
+                            fragment.appendChild(document.createTextNode(trailingSource.slice(trailingCursor, trailingMatch.index) + trailingMatch[1]));
+                            var trailingLabel = trailingMatch[2];
+                            var normalizedTrailingArticle = normalizeLawReference(trailingLabel);
+                            if (!/^\uC81C/u.test(normalizedTrailingArticle)) {
+                                normalizedTrailingArticle = '\uC81C' + normalizedTrailingArticle;
+                            }
+                            fragment.appendChild(createLawReferenceAnchor(
+                                trailingLabel,
+                                normalizeLawReference(canonicalLawName + ' ' + normalizedTrailingArticle)
+                            ));
+                            count += 1;
+                            trailingCursor = trailingPattern.lastIndex;
+                        }
+                        fragment.appendChild(document.createTextNode(trailingSource.slice(trailingCursor)));
+                        cursor = referencePattern.lastIndex;
                     }
                     fragment.appendChild(document.createTextNode(value.slice(cursor)));
                     textNode.parentNode.replaceChild(fragment, textNode);
@@ -4694,7 +4807,7 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                         if (parent.closest('a, script, style, textarea, input, select, option')) {
                             return NodeFilter.FILTER_REJECT;
                         }
-                        if (!parent.closest('td')) {
+                        if (!parent.closest('p, li, h2, h3, td')) {
                             return NodeFilter.FILTER_REJECT;
                         }
                         return NodeFilter.FILTER_ACCEPT;
@@ -5129,8 +5242,139 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
             var lawPanelOpenLink = document.getElementById('law-panel-open-link');
             var lawPanelSearchForm = document.getElementById('law-panel-search-form');
             var lawPanelSearchInput = document.getElementById('law-panel-search-input');
+            var lawPanelBackButton = document.getElementById('law-panel-back');
+            var lawContentSearchForm = document.getElementById('law-content-search-form');
+            var lawContentSearchInput = document.getElementById('law-content-search-input');
+            var lawContentSearchPrev = document.getElementById('law-content-search-prev');
+            var lawContentSearchNext = document.getElementById('law-content-search-next');
+            var lawContentSearchStatus = document.getElementById('law-content-search-status');
             var lawPanelHeading = document.querySelector('.law-panel-head h2');
             var lawPanelDescription = document.querySelector('.law-panel-head p');
+            var lawPanelHistory = [];
+            var currentLawPanelEntry = null;
+            var lawContentMatches = [];
+            var lawContentMatchIndex = -1;
+            var lawContentSearchTerm = '';
+
+            function updateLawPanelBackButton() {
+                if (lawPanelBackButton) {
+                    lawPanelBackButton.disabled = lawPanelHistory.length === 0;
+                }
+            }
+
+            function clearLawContentSearchMarks() {
+                if (!lawPanelContent) {
+                    return;
+                }
+                lawPanelContent.querySelectorAll('mark.law-content-match').forEach(function (mark) {
+                    mark.replaceWith(document.createTextNode(mark.textContent || ''));
+                });
+                lawPanelContent.normalize();
+                lawContentMatches = [];
+                lawContentMatchIndex = -1;
+                lawContentSearchTerm = '';
+            }
+
+            function updateLawContentSearchControls(message) {
+                var hasMatches = lawContentMatches.length > 0;
+                if (lawContentSearchPrev) {
+                    lawContentSearchPrev.disabled = !hasMatches;
+                }
+                if (lawContentSearchNext) {
+                    lawContentSearchNext.disabled = !(hasMatches || (lawContentSearchInput && lawContentSearchInput.value.trim() !== ''));
+                }
+                if (lawContentSearchStatus) {
+                    lawContentSearchStatus.textContent = message || (hasMatches
+                        ? (lawContentMatchIndex + 1) + ' / ' + lawContentMatches.length + '\uAC74'
+                        : '\uAC80\uC0C9 \uACB0\uACFC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.');
+                }
+            }
+
+            function activateLawContentMatch(index) {
+                if (lawContentMatches.length === 0) {
+                    updateLawContentSearchControls();
+                    return;
+                }
+                lawContentMatchIndex = (index + lawContentMatches.length) % lawContentMatches.length;
+                lawContentMatches.forEach(function (mark, markIndex) {
+                    mark.classList.toggle('is-current', markIndex === lawContentMatchIndex);
+                });
+                lawContentMatches[lawContentMatchIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                updateLawContentSearchControls();
+            }
+
+            function searchWithinLawContent(searchTerm) {
+                clearLawContentSearchMarks();
+                var term = normalizeLawReference(searchTerm);
+                if (!term || !lawPanelContent || !lawPanelContent.querySelector('.law-panel-card')) {
+                    updateLawContentSearchControls(term ? '\uBC95\uC870\uBB38\uC744 \uBA3C\uC800 \uBD88\uB7EC\uC640 \uC8FC\uC138\uC694.' : '\uAC80\uC0C9\uC5B4\uB97C \uC785\uB825\uD574 \uC8FC\uC138\uC694.');
+                    return;
+                }
+                lawContentSearchTerm = term;
+                var textNodes = [];
+                lawPanelContent.querySelectorAll('.law-panel-section p').forEach(function (paragraph) {
+                    var walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT, {
+                        acceptNode: function (node) {
+                            return node.nodeValue && node.nodeValue.toLocaleLowerCase().indexOf(term.toLocaleLowerCase()) >= 0
+                                ? NodeFilter.FILTER_ACCEPT
+                                : NodeFilter.FILTER_REJECT;
+                        }
+                    });
+                    var node;
+                    while ((node = walker.nextNode())) {
+                        textNodes.push(node);
+                    }
+                });
+                textNodes.forEach(function (textNode) {
+                    var value = textNode.nodeValue || '';
+                    var lowerValue = value.toLocaleLowerCase();
+                    var lowerTerm = term.toLocaleLowerCase();
+                    var fragment = document.createDocumentFragment();
+                    var cursor = 0;
+                    var foundIndex;
+                    while ((foundIndex = lowerValue.indexOf(lowerTerm, cursor)) >= 0) {
+                        fragment.appendChild(document.createTextNode(value.slice(cursor, foundIndex)));
+                        var mark = document.createElement('mark');
+                        mark.className = 'law-content-match';
+                        mark.textContent = value.slice(foundIndex, foundIndex + term.length);
+                        fragment.appendChild(mark);
+                        lawContentMatches.push(mark);
+                        cursor = foundIndex + term.length;
+                    }
+                    fragment.appendChild(document.createTextNode(value.slice(cursor)));
+                    textNode.parentNode.replaceChild(fragment, textNode);
+                });
+                if (lawContentMatches.length > 0) {
+                    activateLawContentMatch(0);
+                } else {
+                    updateLawContentSearchControls('\u201C' + term + '\u201D \uAC80\uC0C9 \uACB0\uACFC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.');
+                }
+            }
+
+            if (lawContentSearchForm && lawContentSearchInput) {
+                lawContentSearchForm.addEventListener('submit', function (event) {
+                    event.preventDefault();
+                    var term = normalizeLawReference(lawContentSearchInput.value || '');
+                    if (term && term === lawContentSearchTerm && lawContentMatches.length > 0) {
+                        activateLawContentMatch(lawContentMatchIndex + 1);
+                    } else {
+                        searchWithinLawContent(term);
+                    }
+                });
+                lawContentSearchInput.addEventListener('input', function () {
+                    if (normalizeLawReference(lawContentSearchInput.value || '') === '') {
+                        clearLawContentSearchMarks();
+                        updateLawContentSearchControls('\uAC80\uC0C9\uC5B4\uB97C \uC785\uB825\uD574 \uC8FC\uC138\uC694.');
+                    } else if (lawContentSearchNext) {
+                        lawContentSearchNext.disabled = false;
+                    }
+                });
+            }
+            if (lawContentSearchPrev) {
+                lawContentSearchPrev.addEventListener('click', function () {
+                    activateLawContentMatch(lawContentMatchIndex - 1);
+                });
+            }
 
             function normalizeLawPanelCopy() {
                 if (lawPanelHeading) {
@@ -5228,19 +5472,215 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                     + '    <ul class="law-panel-list">' + infoItems.join('') + '</ul>'
                     + '  </section>'
                     + '</div>';
+
+                clearLawContentSearchMarks();
+                if (lawContentSearchInput) {
+                    lawContentSearchInput.value = '';
+                }
+                updateLawContentSearchControls('\uBCF8\uBB38 \uB0B4 \uAC80\uC0C9\uC5B4\uB97C \uC785\uB825\uD574 \uC8FC\uC138\uC694.');
+                linkBracketedLawCitationsInTextNodes(lawPanelContent);
+                linkLawCitationsInTextNodes(lawPanelContent);
+                linkBareLawNamesSafe(lawPanelContent);
+                linkLawPanelDelegatedReferences(lawPanelContent, payload.law_name || payload.query || '');
+                linkLawPanelArticleReferences(lawPanelContent, payload.law_name || payload.query || '');
+                bindLawRefLinkEvents(lawPanelContent);
             }
 
-            function loadLawPanel(queryText, openUrl) {
+            function linkBracketedLawCitationsInTextNodes(root) {
+                if (!root || !document.createTreeWalker) {
+                    return 0;
+                }
+
+                var citationPattern = /「([^」]{1,80}?(?:\uBC95\uB960|\uBC95|\uC2DC\uD589\uB839|\uC2DC\uD589\uADDC\uCE59))」(\s*\uC81C\s*\d+\s*\uC870(?:\s*\uC758\s*\d+)?(?:\s*\uC81C\s*\d+\s*\uD56D(?:\s*\uC81C\s*\d+\s*\uD638)?)?)?/g;
+                var nodes = [];
+                var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+                    acceptNode: function (node) {
+                        var parent = node.parentElement;
+                        if (!parent || !node.nodeValue || !parent.closest('p, li, td')) {
+                            return NodeFilter.FILTER_REJECT;
+                        }
+                        if (parent.closest('a')) {
+                            return NodeFilter.FILTER_REJECT;
+                        }
+                        citationPattern.lastIndex = 0;
+                        return citationPattern.test(node.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+                    }
+                });
+                var node;
+                while ((node = walker.nextNode())) {
+                    nodes.push(node);
+                }
+
+                var count = 0;
+                nodes.forEach(function (textNode) {
+                    var value = textNode.nodeValue || '';
+                    var fragment = document.createDocumentFragment();
+                    var cursor = 0;
+                    citationPattern.lastIndex = 0;
+                    var match;
+                    while ((match = citationPattern.exec(value))) {
+                        fragment.appendChild(document.createTextNode(value.slice(cursor, match.index)));
+                        var lawName = normalizeLawReference(match[1]);
+                        var articleText = normalizeLawReference(match[2] || '');
+                        var queryText = normalizeLawReference(lawName + (articleText ? ' ' + articleText : ''));
+                        var anchor = document.createElement('a');
+                        anchor.className = 'law-ref-link';
+                        anchor.href = buildLawSearchUrl(queryText);
+                        anchor.target = '_blank';
+                        anchor.rel = 'noopener';
+                        anchor.dataset.lawQuery = queryText;
+                        anchor.textContent = match[0];
+                        anchor.title = '\uBC95\uC870\uBB38 \uAC80\uC0C9 / \uC804\uBB38 \uBCF4\uAE30';
+                        fragment.appendChild(anchor);
+                        cursor = citationPattern.lastIndex;
+                        count += 1;
+                    }
+                    fragment.appendChild(document.createTextNode(value.slice(cursor)));
+                    textNode.parentNode.replaceChild(fragment, textNode);
+                });
+                return count;
+            }
+
+            function linkLawPanelDelegatedReferences(root, lawNameText) {
+                var currentLawName = normalizeLawReference(lawNameText).replace(/\s*\uC81C\s*\d+\s*\uC870.*$/u, '');
+                var baseLawName = currentLawName.replace(/\s*(?:\uC2DC\uD589\uADDC\uCE59|\uC2DC\uD589\uB839)$/u, '').trim();
+                if (!root || !baseLawName || !document.createTreeWalker) {
+                    return 0;
+                }
+
+                var delegatedPattern = /(\uBC95|\uC601|\uADDC\uCE59)\s*(\uC81C\s*\d+\s*\uC870(?:\s*\uC758\s*\d+)?(?:\s*\uC81C\s*\d+\s*\uD56D(?:\s*\uC81C\s*\d+\s*\uD638)?)?)/g;
+                var nodes = [];
+                var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+                    acceptNode: function (node) {
+                        var parent = node.parentElement;
+                        if (!parent || !node.nodeValue || !parent.closest('.law-panel-section p')) {
+                            return NodeFilter.FILTER_REJECT;
+                        }
+                        if (parent.closest('a')) {
+                            return NodeFilter.FILTER_REJECT;
+                        }
+                        delegatedPattern.lastIndex = 0;
+                        return delegatedPattern.test(node.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+                    }
+                });
+                var node;
+                while ((node = walker.nextNode())) {
+                    nodes.push(node);
+                }
+
+                var count = 0;
+                nodes.forEach(function (textNode) {
+                    var value = textNode.nodeValue || '';
+                    var fragment = document.createDocumentFragment();
+                    var cursor = 0;
+                    delegatedPattern.lastIndex = 0;
+                    var match;
+                    while ((match = delegatedPattern.exec(value))) {
+                        fragment.appendChild(document.createTextNode(value.slice(cursor, match.index)));
+                        var referenceType = match[1];
+                        var targetLawName = baseLawName;
+                        if (referenceType === '\uC601') {
+                            targetLawName += ' \uC2DC\uD589\uB839';
+                        } else if (referenceType === '\uADDC\uCE59') {
+                            targetLawName += ' \uC2DC\uD589\uADDC\uCE59';
+                        }
+                        var queryText = normalizeLawReference(targetLawName + ' ' + match[2]);
+                        var anchor = document.createElement('a');
+                        anchor.className = 'law-ref-link';
+                        anchor.href = buildLawSearchUrl(queryText);
+                        anchor.target = '_blank';
+                        anchor.rel = 'noopener';
+                        anchor.dataset.lawQuery = queryText;
+                        anchor.textContent = match[0];
+                        anchor.title = '\uBC95\uC870\uBB38 \uAC80\uC0C9 / \uC804\uBB38 \uBCF4\uAE30';
+                        fragment.appendChild(anchor);
+                        cursor = delegatedPattern.lastIndex;
+                        count += 1;
+                    }
+                    fragment.appendChild(document.createTextNode(value.slice(cursor)));
+                    textNode.parentNode.replaceChild(fragment, textNode);
+                });
+                return count;
+            }
+
+            function linkLawPanelArticleReferences(root, lawNameText) {
+                var lawName = normalizeLawReference(lawNameText).replace(/\s*\uC81C\s*\d+\s*\uC870.*$/u, '');
+                if (!root || !lawName || !document.createTreeWalker) {
+                    return 0;
+                }
+
+                var articlePattern = /\uC81C\s*\d+\s*\uC870(?:\s*\uC758\s*\d+)?(?:\s*\uC81C\s*\d+\s*\uD56D(?:\s*\uC81C\s*\d+\s*\uD638)?)?/g;
+                var nodes = [];
+                var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+                    acceptNode: function (node) {
+                        var parent = node.parentElement;
+                        if (!parent || !node.nodeValue || !parent.closest('.law-panel-section p')) {
+                            return NodeFilter.FILTER_REJECT;
+                        }
+                        if (parent.closest('a')) {
+                            return NodeFilter.FILTER_REJECT;
+                        }
+                        articlePattern.lastIndex = 0;
+                        return articlePattern.test(node.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+                    }
+                });
+                var node;
+                while ((node = walker.nextNode())) {
+                    nodes.push(node);
+                }
+
+                var count = 0;
+                nodes.forEach(function (textNode) {
+                    var value = textNode.nodeValue || '';
+                    var fragment = document.createDocumentFragment();
+                    var cursor = 0;
+                    articlePattern.lastIndex = 0;
+                    var match;
+                    while ((match = articlePattern.exec(value))) {
+                        fragment.appendChild(document.createTextNode(value.slice(cursor, match.index)));
+                        var articleText = normalizeLawReference(match[0]);
+                        var queryText = normalizeLawReference(lawName + ' ' + articleText);
+                        var anchor = document.createElement('a');
+                        anchor.className = 'law-ref-link';
+                        anchor.href = buildLawSearchUrl(queryText);
+                        anchor.target = '_blank';
+                        anchor.rel = 'noopener';
+                        anchor.dataset.lawQuery = queryText;
+                        anchor.textContent = match[0];
+                        anchor.title = '\uBC95\uC870\uBB38 \uAC80\uC0C9 / \uC804\uBB38 \uBCF4\uAE30';
+                        fragment.appendChild(anchor);
+                        cursor = articlePattern.lastIndex;
+                        count += 1;
+                    }
+                    fragment.appendChild(document.createTextNode(value.slice(cursor)));
+                    textNode.parentNode.replaceChild(fragment, textNode);
+                });
+
+                return count;
+            }
+
+            function loadLawPanel(queryText, openUrl, options) {
                 if (!queryText || !lawPanelContent || !lawPanelQuery || !lawPanelOpenLink) {
                     return;
                 }
+
+                options = options || {};
+                var nextEntry = {
+                    queryText: queryText,
+                    openUrl: openUrl || buildLawSearchUrl(queryText)
+                };
+                if (!options.skipHistory && currentLawPanelEntry && currentLawPanelEntry.queryText !== queryText) {
+                    lawPanelHistory.push(currentLawPanelEntry);
+                }
+                currentLawPanelEntry = nextEntry;
+                updateLawPanelBackButton();
 
                 if (lawPanelSearchInput) {
                     lawPanelSearchInput.value = queryText;
                 }
 
                 lawPanelQuery.textContent = queryText;
-                lawPanelOpenLink.href = openUrl || buildLawSearchUrl(queryText);
+                lawPanelOpenLink.href = nextEntry.openUrl;
                 renderLawPanelState(
                     'law-panel-loading',
                     '\uBD88\uB7EC\uC624\uB294 \uC911',
@@ -5279,6 +5719,17 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                             error && error.message ? error.message : '\uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694.'
                         );
                     });
+            }
+
+            if (lawPanelBackButton) {
+                lawPanelBackButton.addEventListener('click', function () {
+                    var previousEntry = lawPanelHistory.pop();
+                    if (!previousEntry) {
+                        updateLawPanelBackButton();
+                        return;
+                    }
+                    loadLawPanel(previousEntry.queryText, previousEntry.openUrl, { skipHistory: true });
+                });
             }
 
             var chartQuickLawView = document.getElementById('chart-quick-law-view');
@@ -5513,12 +5964,13 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                 });
             }
 
-            function bindLawRefLinkEvents() {
-                if (!documentRoot) {
+            function bindLawRefLinkEvents(root) {
+                root = root || documentRoot;
+                if (!root) {
                     return;
                 }
 
-                documentRoot.querySelectorAll('.law-ref-link').forEach(function (link) {
+                root.querySelectorAll('.law-ref-link').forEach(function (link) {
                     if (link.dataset.boundLawClick === '1') {
                         return;
                     }
