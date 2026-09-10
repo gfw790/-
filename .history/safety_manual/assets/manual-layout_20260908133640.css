@@ -1,0 +1,8 @@
+.document p.manual-indent-body { margin-left:1.25em; }
+.document p.manual-indent-clause { margin-left:1.25em; padding-left:3.6em; text-indent:-3.6em; }
+.document p.manual-indent-item { margin-left:2.5em; padding-left:1.8em; text-indent:-1.8em; }
+.document h2.manual-chapter-title { text-align:center; font-size:20px; line-height:1.35; }
+@media(max-width:600px) {
+    .document p.manual-indent-body,.document p.manual-indent-clause { margin-left:.6em; }
+    .document p.manual-indent-item { margin-left:1.2em; }
+}

@@ -1,0 +1,15 @@
+.document p.manual-indent-body { margin-left:1.25em; }
+.document p.manual-indent-clause { margin-left:1.25em; padding-left:3.6em; text-indent:-3.6em; }
+.document p.manual-indent-item { margin-left:2.5em; padding-left:1.8em; text-indent:-1.8em; }
+.document h2.manual-chapter-title { text-align:center; font-size:20px; line-height:1.35; }
+.document h2:not(.manual-chapter-title) { background:#dcecff; border:0; color:#17315c; text-align:left; padding:10px 16px; }
+.document .rule-table-wrap.manual-subtitle-box,
+.document .rule-table-wrap:has(table td:only-child) { border:0 !important; background:#dcecff !important; }
+.document .manual-subtitle-box .rule-table,
+.document .rule-table-wrap:has(table td:only-child) .rule-table { min-width:0; }
+.document .manual-subtitle-box td,
+.document .rule-table-wrap:has(table td:only-child) td { padding:8px 16px !important; color:#17315c !important; text-align:left !important; font-weight:700 !important; background:#dcecff !important; border:0 !important; }
+@media(max-width:600px) {
+    .document p.manual-indent-body,.document p.manual-indent-clause { margin-left:.6em; }
+    .document p.manual-indent-item { margin-left:1.2em; }
+}

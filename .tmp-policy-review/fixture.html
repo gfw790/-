@@ -1,0 +1,91 @@
+<!doctype html><html lang="ko"><head><base href="file:///A:/risk_server/project/safety_manual/">
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>안전보건방침 및 목표 검토 보고서</title><link rel="stylesheet" href="assets/policy-review.css?v=1788838092">
+</head><body>
+<header><div><small>SAFETY MANAGEMENT SYSTEM</small><h1>안전보건방침 및 목표 검토 보고서</h1></div></header>
+<main>
+    <div class="toolbar"><strong>2026년 보고서</strong>
+        <div class="history-tools"><label for="history-year">지난 연도 조회</label>
+            <select id="history-year" >
+                                <option value="2025">2025년</option>            </select><button type="button" id="history-open" >조회</button>
+        </div>
+    </div>
+    <div id="review-message" role="status" class="notice " hidden></div>
+    <form id="review-form" method="post" action="policy_review.php" data-year="2026">
+        <input type="hidden" name="csrf" value="fixture"><input type="hidden" name="year" value="2026"><input type="hidden" name="revision" value="0">
+        <div class="toolbar"><label for="review-date">검토일자</label><input type="date" id="review-date" name="review_date" value=""></div>
+        <section class="editor-card">
+            <div class="policy-editor"><label for="review-policy">검토 대상 안전보건방침 및 목표</label><p class="help">해당 연도의 안전보건 경영방침에 저장된 방침 내용과 목표를 불러옵니다. 인쇄 양식 왼쪽 영역에 표시됩니다.</p>
+                <input type="hidden" id="review-policy" name="policy_text" value="안전보건 경영방침
+
+주식회사 현대기전은 안전하고 쾌적한 작업환경을 조성하고, 근로자의 참여와 협의를 통해 안전보건관리체계를 지속적으로 개선한다.
+
+안전보건 목표
+1. 중대재해 예방
+2. 유해·위험요인 확인 및 개선
+3. 근로자 의견 청취
+4. 안전보건교육 실시
+5. 개선대책 이행 확인">
+                <div id="review-policy-output" class="policy-output" role="region" aria-label="검토 대상 안전보건방침 및 목표">안전보건 경영방침<br />
+<br />
+주식회사 현대기전은 안전하고 쾌적한 작업환경을 조성하고, 근로자의 참여와 협의를 통해 안전보건관리체계를 지속적으로 개선한다.<br />
+<br />
+안전보건 목표<br />
+1. 중대재해 예방<br />
+2. 유해·위험요인 확인 및 개선<br />
+3. 근로자 의견 청취<br />
+4. 안전보건교육 실시<br />
+5. 개선대책 이행 확인</div>
+            </div>
+            <div class="review-items"><h2>방침 유효성 검토 내용</h2>
+                                    <fieldset class="review-item"><legend>1. 안전하고 쾌적한 작업환경 조성 의지 표명</legend>
+                        <div class="review-item-fields"><div><label for="status-0">적합유무</label><select id="status-0" name="items[0][status]">
+                            <option value="" selected>선택</option><option value="적합" >적합</option><option value="부적합" >부적합</option><option value="해당없음" >해당없음</option>                        </select></div><div><label for="note-0">비고</label><textarea id="note-0" name="items[0][note]" rows="2" maxlength="2000"></textarea></div></div>
+                    </fieldset>
+                                    <fieldset class="review-item"><legend>2. 유해위험요인제거, 위험성 감소 주관부서행 및 안전보건경영시스템 지속적 개선 의지 표명</legend>
+                        <div class="review-item-fields"><div><label for="status-1">적합유무</label><select id="status-1" name="items[1][status]">
+                            <option value="" selected>선택</option><option value="적합" >적합</option><option value="부적합" >부적합</option><option value="해당없음" >해당없음</option>                        </select></div><div><label for="note-1">비고</label><textarea id="note-1" name="items[1][note]" rows="2" maxlength="2000"></textarea></div></div>
+                    </fieldset>
+                                    <fieldset class="review-item"><legend>3. 조직의 규모와 여건에 적합 여부</legend>
+                        <div class="review-item-fields"><div><label for="status-2">적합유무</label><select id="status-2" name="items[2][status]">
+                            <option value="" selected>선택</option><option value="적합" >적합</option><option value="부적합" >부적합</option><option value="해당없음" >해당없음</option>                        </select></div><div><label for="note-2">비고</label><textarea id="note-2" name="items[2][note]" rows="2" maxlength="2000"></textarea></div></div>
+                    </fieldset>
+                                    <fieldset class="review-item"><legend>4. 법적요구사항 및 그 밖의 요구사항 준수의지 표명</legend>
+                        <div class="review-item-fields"><div><label for="status-3">적합유무</label><select id="status-3" name="items[3][status]">
+                            <option value="" selected>선택</option><option value="적합" >적합</option><option value="부적합" >부적합</option><option value="해당없음" >해당없음</option>                        </select></div><div><label for="note-3">비고</label><textarea id="note-3" name="items[3][note]" rows="2" maxlength="2000">Follow-up inspection completed.</textarea></div></div>
+                    </fieldset>
+                                    <fieldset class="review-item"><legend>5. 대표자의 안전보건 경영철학 및 근로자의 참여 및 협의에 대한 의지 표명</legend>
+                        <div class="review-item-fields"><div><label for="status-4">적합유무</label><select id="status-4" name="items[4][status]">
+                            <option value="" selected>선택</option><option value="적합" >적합</option><option value="부적합" >부적합</option><option value="해당없음" >해당없음</option>                        </select></div><div><label for="note-4">비고</label><textarea id="note-4" name="items[4][note]" rows="2" maxlength="2000"></textarea></div></div>
+                    </fieldset>
+                                    <fieldset class="review-item"><legend>6. 안전보건방침 간결하게 문서화 여부</legend>
+                        <div class="review-item-fields"><div><label for="status-5">적합유무</label><select id="status-5" name="items[5][status]">
+                            <option value="" selected>선택</option><option value="적합" >적합</option><option value="부적합" >부적합</option><option value="해당없음" >해당없음</option>                        </select></div><div><label for="note-5">비고</label><textarea id="note-5" name="items[5][note]" rows="2" maxlength="2000"></textarea></div></div>
+                    </fieldset>
+                                    <fieldset class="review-item"><legend>7. 방침에 서명과 시행일 명기 여부</legend>
+                        <div class="review-item-fields"><div><label for="status-6">적합유무</label><select id="status-6" name="items[6][status]">
+                            <option value="" selected>선택</option><option value="적합" >적합</option><option value="부적합" >부적합</option><option value="해당없음" >해당없음</option>                        </select></div><div><label for="note-6">비고</label><textarea id="note-6" name="items[6][note]" rows="2" maxlength="2000">Signature verified.</textarea></div></div>
+                    </fieldset>
+                                    <fieldset class="review-item"><legend>8. 조직구성원 및 이해관계자가 쉽게 접할 수 있게 공개여부</legend>
+                        <div class="review-item-fields"><div><label for="status-7">적합유무</label><select id="status-7" name="items[7][status]">
+                            <option value="" selected>선택</option><option value="적합" >적합</option><option value="부적합" >부적합</option><option value="해당없음" >해당없음</option>                        </select></div><div><label for="note-7">비고</label><textarea id="note-7" name="items[7][note]" rows="2" maxlength="2000"></textarea></div></div>
+                    </fieldset>
+                            </div>
+        </section>
+        <div class="actions"><a class="button secondary" href="management_policy.php">경영방침 만들기로 돌아가기</a><button type="submit" id="review-save">저장하기</button><button type="button" id="review-print-open">인쇄 미리보기</button></div>
+    </form>
+</main>
+<dialog id="history-dialog" aria-labelledby="history-title"><div class="dialog-toolbar"><h2 id="history-title">지난 연도 검토 보고서</h2><button type="button" id="history-copy">당해년도 입력란에 불러오기</button><button type="button" class="secondary" id="history-close">닫기</button></div><div id="history-content"></div></dialog>
+<dialog id="review-print-dialog" aria-labelledby="print-title"><div class="dialog-toolbar"><h2 id="print-title">인쇄 미리보기</h2><button type="button" id="review-print">인쇄 / PDF 저장</button><button type="button" class="secondary" id="print-close">닫기</button><p id="print-overflow" role="alert" hidden>내용이 한 장을 초과합니다. 본문 또는 비고 내용을 줄여 주세요.</p></div><div id="review-print-pages"></div></dialog>
+<script id="review-labels" type="application/json">["안전하고 쾌적한 작업환경 조성 의지 표명","유해위험요인제거, 위험성 감소 주관부서행 및 안전보건경영시스템 지속적 개선 의지 표명","조직의 규모와 여건에 적합 여부","법적요구사항 및 그 밖의 요구사항 준수의지 표명","대표자의 안전보건 경영철학 및 근로자의 참여 및 협의에 대한 의지 표명","안전보건방침 간결하게 문서화 여부","방침에 서명과 시행일 명기 여부","조직구성원 및 이해관계자가 쉽게 접할 수 있게 공개여부"]</script>
+<script src="assets/policy-review.js?v=1788838092"></script>
+<script>
+window.addEventListener('load', async () => {
+    await document.fonts.ready;
+    document.getElementById('review-print-open').click();
+    await new Promise(resolve => setTimeout(resolve, 100));
+    const sheet=document.querySelector('.review-sheet');
+    const box=sheet.querySelector('.review-notes-box'),paper=sheet.querySelector('.review-paper');const report={notes:box.children.length,widthDifference:Math.abs(box.getBoundingClientRect().width-paper.getBoundingClientRect().width),bottomMm:(sheet.getBoundingClientRect().bottom-box.getBoundingClientRect().bottom)*25.4/96,rows:sheet.querySelectorAll('tr').length, fits:sheet.getBoundingClientRect().height<=1124, statuses:sheet.querySelectorAll('.review-result').length};
+    document.body.dataset.test=JSON.stringify(report);
+});
+</script></body></html>

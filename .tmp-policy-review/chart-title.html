@@ -1,0 +1,2223 @@
+<!doctype html><meta charset="utf-8"><style>
+        :root {
+            --law-blue: #1e4f95;
+            --law-deep-blue: #12386f;
+            --law-line: #d7e1ef;
+            --law-bg: #f4f7fb;
+            --law-card: #ffffff;
+            --law-text: #1f2937;
+            --law-muted: #5b6777;
+            --law-accent: #0b5bd3;
+            --law-heading: #17315c;
+            --law-gold: #b08a3c;
+            --header-sticky-offset: 104px;
+            --panel-sticky-gap: 8px;
+            --document-print-margin-top: 20mm;
+            --document-print-margin-right: 16mm;
+            --document-print-margin-bottom: 22mm;
+            --document-print-margin-left: 16mm;
+        }
+
+        * { box-sizing: border-box; }
+        @page {
+            size: A4 portrait;
+            margin: var(--document-print-margin-top) var(--document-print-margin-right) var(--document-print-margin-bottom) var(--document-print-margin-left);
+        }
+        html { scroll-behavior: smooth; }
+        body {
+            margin: 0;
+            background:
+                linear-gradient(180deg, #ebf1f8 0%, #f7f9fc 220px, #f4f7fb 220px, #f4f7fb 100%);
+            color: var(--law-text);
+            font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+        }
+
+        a { color: var(--law-accent); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        .topbar {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            background: linear-gradient(180deg, var(--law-blue), var(--law-deep-blue));
+            color: #fff;
+            border-bottom: 4px solid #0d2649;
+        }
+
+        .topbar-inner {
+            max-width: min(1920px, calc(100vw - 32px));
+            margin: 0 auto;
+            padding: 18px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .brand-mark {
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
+            background: url("현대기전 로고.png") center / 72% 72% no-repeat;
+            box-shadow: none;
+        }
+
+        .brand-copy small {
+            display: block;
+            color: rgba(255,255,255,0.75);
+            font-size: 12px;
+            letter-spacing: 0.08em;
+        }
+
+        .brand-copy strong {
+            display: block;
+            font-size: 25px;
+            letter-spacing: -0.04em;
+            margin-top: 4px;
+        }
+
+        .topbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .user-chip {
+            padding: 10px 14px;
+            border: 1px solid rgba(255,255,255,0.22);
+            border-radius: 999px;
+            background: rgba(255,255,255,0.08);
+            font-size: 13px;
+            color: rgba(255,255,255,0.92);
+            white-space: nowrap;
+        }
+
+        .search-band {
+            max-width: min(1920px, calc(100vw - 32px));
+            margin: 0 auto;
+            padding: 18px 24px 26px;
+        }
+
+        .search-box {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: #fff;
+            border: 1px solid #c1d0e5;
+            border-radius: 16px;
+            padding: 14px 18px;
+            box-shadow: 0 10px 30px rgba(15, 39, 74, 0.08);
+        }
+
+        .search-box .label {
+            color: var(--law-blue);
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .search-box .hint {
+            color: var(--law-muted);
+            font-size: 14px;
+        }
+
+        .layout {
+            max-width: min(1920px, calc(100vw - 32px));
+            margin: 20px auto 0;
+            padding: 0 24px 48px;
+            display: grid;
+            grid-template-columns: 220px minmax(0, 1.15fr) 540px;
+            gap: 24px;
+        }
+
+        .sidebar,
+        .law-panel,
+        .content-card,
+        .upload-card {
+            background: var(--law-card);
+            border: 1px solid var(--law-line);
+            border-radius: 20px;
+            box-shadow: 0 18px 38px rgba(21, 45, 83, 0.05);
+        }
+
+        .sidebar {
+            padding: 20px;
+            position: sticky;
+            top: calc(var(--header-sticky-offset) + var(--panel-sticky-gap));
+            align-self: start;
+            max-height: calc(100vh - var(--header-sticky-offset) - (var(--panel-sticky-gap) * 2));
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar h2,
+        .upload-card h2,
+        .content-card h1 {
+            margin: 0;
+        }
+
+        .document [id] {
+            scroll-margin-top: var(--header-sticky-offset);
+        }
+
+        .manual-policy-link {
+            display: inline-block;
+            margin: 22px 0 10px;
+            padding: 9px 14px;
+            border: 1px solid #b9c9de;
+            border-radius: 8px;
+            background: #f5f8fc;
+            color: var(--law-blue);
+            font-weight: 700;
+        }
+
+        .manual-policy-link:hover {
+            background: #eaf1fa;
+            text-decoration: none;
+        }
+
+        .manual-policy-link + .manual-policy-link {
+            margin-left: 8px;
+        }
+
+        .sidebar h2 {
+            font-size: 18px;
+            color: var(--law-heading);
+            padding-bottom: 14px;
+            border-bottom: 2px solid #e8eef7;
+        }
+
+        .meta-list {
+            margin: 18px 0 0;
+            padding: 0;
+            list-style: none;
+            display: grid;
+            gap: 10px;
+            font-size: 14px;
+        }
+
+        .sidebar-scroll {
+            margin-top: 16px;
+            padding-right: 6px;
+            overflow-y: auto;
+            min-height: 0;
+        }
+
+        .sidebar-scroll::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        .sidebar-scroll::-webkit-scrollbar-thumb {
+            background: #c5d3e7;
+            border-radius: 999px;
+            border: 2px solid #f8fbff;
+        }
+
+        .meta-list strong {
+            display: block;
+            color: var(--law-heading);
+            font-size: 12px;
+            margin-bottom: 3px;
+        }
+
+        .toc {
+            margin-top: 22px;
+            padding-top: 18px;
+            border-top: 1px solid #e8eef7;
+        }
+
+        .sidebar-scroll > .toc:first-child {
+            margin-top: 0;
+            padding-top: 0;
+            border-top: 0;
+        }
+
+        .toc h3 {
+            margin: 0 0 12px;
+            font-size: 16px;
+            color: var(--law-heading);
+        }
+
+        .toc-search-sticky {
+            position: sticky;
+            top: 0;
+            z-index: 3;
+            margin-bottom: 12px;
+            padding: 0 0 10px;
+            background: var(--law-card);
+            border-bottom: 1px solid #e8eef7;
+        }
+
+        .toc-search-label {
+            display: block;
+            margin: 0 0 8px;
+            color: #314765;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+
+        .toc-search-input {
+            width: 100%;
+            min-height: 38px;
+            border: 1px solid #cdd9eb;
+            border-radius: 10px;
+            padding: 0 10px;
+            font: inherit;
+            font-size: 13px;
+            color: #17345c;
+            background: #fff;
+            outline: none;
+        }
+
+        .toc-search-input:focus {
+            border-color: #2d63ae;
+            box-shadow: 0 0 0 3px rgba(45, 99, 174, 0.12);
+        }
+
+        .toc-header {
+            position: sticky;
+            top: 68px;
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 12px;
+            padding: 0 0 10px;
+            background: var(--law-card);
+        }
+
+        .toc-header h3 {
+            margin: 0;
+        }
+
+        .toc ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: grid;
+            gap: 8px;
+        }
+
+        .toc-list.is-collapsed {
+            display: none;
+        }
+
+        .toc-group {
+            border-top: 1px solid #edf2f8;
+            padding-top: 10px;
+            margin-top: 10px;
+        }
+
+        .toc-group:first-child {
+            border-top: 0;
+            padding-top: 0;
+            margin-top: 0;
+        }
+
+        .toc-group-toggle {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            border: 1px solid #d7e2f0;
+            background: #f8fbff;
+            color: var(--law-heading);
+            border-radius: 12px;
+            padding: 10px 12px;
+            font: inherit;
+            font-size: 14px;
+            font-weight: 700;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .toc-group-toggle:hover {
+            background: #eef4fc;
+        }
+
+        .toc-cover-link {
+            display: flex;
+            margin-bottom: 10px;
+            color: var(--law-heading);
+            text-decoration: none;
+        }
+
+        .toc-group-toggle .chevron {
+            flex: 0 0 auto;
+            color: #5d7397;
+            transition: transform 0.18s ease;
+        }
+
+        .toc-group.is-collapsed .toc-group-toggle .chevron {
+            transform: rotate(-90deg);
+        }
+
+        .toc-group-items {
+            list-style: none;
+            margin: 10px 0 0;
+            padding: 0;
+            display: grid;
+            gap: 8px;
+        }
+
+        .toc-group.is-collapsed .toc-group-items {
+            display: none;
+        }
+
+        .toc a {
+            display: block;
+            color: #334155;
+            font-size: 14px;
+            padding: 7px 10px;
+            border-radius: 10px;
+            background: #f8fafc;
+            border: 1px solid transparent;
+        }
+
+        .toc a.level-3 {
+            margin-left: 14px;
+            background: #fbfcfe;
+        }
+
+        .toc a:hover {
+            border-color: #c7d7ee;
+            color: var(--law-accent);
+            text-decoration: none;
+        }
+
+        .main {
+            display: grid;
+            gap: 20px;
+        }
+
+        .law-panel {
+            position: sticky;
+            top: calc(var(--header-sticky-offset) + var(--panel-sticky-gap));
+            align-self: start;
+            height: calc(100vh - var(--header-sticky-offset) - (var(--panel-sticky-gap) * 2));
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .law-panel-head {
+            padding: 18px 18px 14px;
+            border-bottom: 1px solid #e7eef8;
+            background: linear-gradient(180deg, #f8fbff, #ffffff);
+        }
+
+        .law-panel-head h2 {
+            margin: 0;
+            font-size: 18px;
+            color: var(--law-heading);
+        }
+
+        .law-panel-head p {
+            margin: 8px 0 0;
+            color: var(--law-muted);
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .law-panel-meta {
+            margin-top: 12px;
+            display: grid;
+            gap: 8px;
+        }
+
+        .law-panel-query {
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: #f4f8fd;
+            border: 1px solid #dbe5f3;
+            color: #1f355c;
+            font-size: 13px;
+            line-height: 1.5;
+            word-break: keep-all;
+        }
+
+        .law-panel-search {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 8px;
+        }
+
+        .law-panel-search-input {
+            width: 100%;
+            min-width: 0;
+            min-height: 40px;
+            padding: 0 12px;
+            border-radius: 12px;
+            border: 1px solid #cdd9eb;
+            background: #fff;
+            color: #17345c;
+            font-size: 13px;
+            outline: none;
+        }
+
+        .law-panel-search-input:focus {
+            border-color: #2d63ae;
+            box-shadow: 0 0 0 3px rgba(45, 99, 174, 0.14);
+        }
+
+        .law-panel-search-button {
+            min-height: 40px;
+            padding: 0 14px;
+            border: 0;
+            border-radius: 12px;
+            background: #dfeafb;
+            color: #1d4d93;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .law-panel-search-button:hover {
+            filter: brightness(0.98);
+        }
+
+        .law-panel-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 40px;
+            padding: 0 12px;
+            border-radius: 12px;
+            background: #1d4d93;
+            color: #fff;
+            font-size: 13px;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .law-panel-link:hover {
+            color: #fff;
+            text-decoration: none;
+            filter: brightness(1.03);
+        }
+
+        .law-panel-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            background: #eef4fb;
+            overflow-y: auto;
+        }
+
+        .law-panel-content {
+            min-height: 100%;
+            height: auto;
+            padding: 20px 18px 24px;
+            overflow: visible;
+            background: #fff;
+            color: #20324f;
+        }
+
+        .law-panel-placeholder,
+        .law-panel-loading,
+        .law-panel-error {
+            display: flex;
+            min-height: 560px;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            line-height: 1.8;
+            color: #50627f;
+        }
+
+        .law-panel-placeholder strong,
+        .law-panel-loading strong,
+        .law-panel-error strong {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 19px;
+            color: #17315b;
+        }
+
+        .law-panel-card {
+            display: grid;
+            gap: 18px;
+        }
+
+        .law-panel-card-head {
+            padding: 16px 18px;
+            border: 1px solid #dbe5f3;
+            border-radius: 16px;
+            background: linear-gradient(180deg, #f8fbff, #f2f7fd);
+        }
+
+        .law-panel-title {
+            margin: 0;
+            font-size: 22px;
+            line-height: 1.45;
+            color: #163157;
+        }
+
+        .law-panel-subtitle {
+            margin: 8px 0 0;
+            color: #4f6283;
+            font-size: 14px;
+        }
+
+        .law-panel-section {
+            padding: 16px 18px;
+            border: 1px solid #e3ebf7;
+            border-radius: 16px;
+            background: #fdfefe;
+        }
+
+        .law-panel-section h3 {
+            margin: 0 0 12px;
+            font-size: 15px;
+            color: #1e355d;
+        }
+
+        .law-panel-section p {
+            margin: 0 0 10px;
+            color: #243754;
+            line-height: 1.8;
+            font-size: 14px;
+            word-break: keep-all;
+        }
+
+        .law-panel-section p:last-child {
+            margin-bottom: 0;
+        }
+
+        .law-panel-list {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+            display: grid;
+            gap: 8px;
+        }
+
+        .law-panel-list li {
+            display: grid;
+            grid-template-columns: 80px minmax(0, 1fr);
+            gap: 10px;
+            font-size: 13px;
+            color: #334866;
+        }
+
+        .law-panel-list strong {
+            color: #18345f;
+        }
+
+        .law-panel-frame {
+            width: 100%;
+            height: 100%;
+            min-height: 560px;
+            border: 0;
+            background: #fff;
+        }
+
+        .upload-card {
+            padding: 22px 22px 20px;
+        }
+
+        .upload-card h2 {
+            font-size: 21px;
+            color: var(--law-heading);
+            margin-bottom: 8px;
+        }
+
+        .upload-card p {
+            margin: 0;
+            color: var(--law-muted);
+            line-height: 1.6;
+        }
+
+        .upload-form {
+            margin-top: 18px;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 12px;
+        }
+
+        .file-input {
+            position: relative;
+            overflow: hidden;
+            border: 1px dashed #9db3d6;
+            background: linear-gradient(180deg, #f9fbfe, #f2f6fc);
+            border-radius: 14px;
+            padding: 16px 18px;
+        }
+
+        .file-input input {
+            width: 100%;
+            font: inherit;
+        }
+
+        .button {
+            border: 0;
+            border-radius: 14px;
+            padding: 0 20px;
+            min-height: 56px;
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+            color: #fff;
+            background: linear-gradient(180deg, #2c67bd, #124686);
+            box-shadow: 0 10px 24px rgba(18, 70, 134, 0.22);
+        }
+
+        .button:hover {
+            filter: brightness(1.03);
+        }
+
+        .flash {
+            margin-top: 14px;
+            border-radius: 14px;
+            padding: 13px 15px;
+            font-size: 14px;
+            border: 1px solid transparent;
+        }
+
+        .flash.success {
+            background: #edf7ee;
+            color: #165c2b;
+            border-color: #b7dfbf;
+        }
+
+        .flash.error {
+            background: #fff1f1;
+            color: #8c1d1d;
+            border-color: #f0b8b8;
+        }
+
+        .content-card {
+            overflow: hidden;
+        }
+
+        .content-header {
+            padding: 28px 30px 20px;
+            border-bottom: 1px solid #e6edf7;
+            background:
+                linear-gradient(180deg, rgba(245, 249, 255, 0.98), rgba(255,255,255,0.98)),
+                linear-gradient(135deg, rgba(30,79,149,0.08), transparent 48%);
+        }
+
+        .content-header .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 12px;
+            border-radius: 999px;
+            background: #eef4fc;
+            color: var(--law-blue);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+        }
+
+        .content-header h1 {
+            font-size: 34px;
+            color: var(--law-heading);
+            margin-top: 16px;
+            letter-spacing: -0.05em;
+        }
+
+        .content-header p {
+            margin: 14px 0 0;
+            color: var(--law-muted);
+            line-height: 1.8;
+            font-size: 15px;
+        }
+
+        .content-header-meta {
+            margin-top: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .content-header-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #184d94;
+            border-radius: 12px;
+            background: #1d4d93;
+            color: #fff;
+            padding: 10px 14px;
+            font: inherit;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 10px 24px rgba(18, 70, 134, 0.16);
+        }
+
+        .content-header-button:hover {
+            filter: brightness(1.03);
+            text-decoration: none;
+        }
+
+        .content-header-button-secondary {
+            background: rgba(255, 255, 255, 0.14);
+            border-color: rgba(255, 255, 255, 0.36);
+            box-shadow: none;
+        }
+
+        .content-header-button-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .print-preview-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 1250;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: rgba(9, 18, 32, 0.72);
+            backdrop-filter: blur(4px);
+        }
+
+        .print-preview-modal.is-open {
+            display: flex;
+        }
+
+        .print-preview-dialog {
+            width: min(1120px, 100%);
+            max-height: calc(100vh - 48px);
+            overflow: hidden;
+            background: #eef3f9;
+            border: 1px solid #d4deed;
+            border-radius: 20px;
+            box-shadow: 0 28px 64px rgba(10, 25, 46, 0.3);
+            display: grid;
+            grid-template-rows: auto 1fr;
+        }
+
+        .print-preview-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 16px 18px;
+            border-bottom: 1px solid #d8e2f0;
+            background: linear-gradient(180deg, #f9fbfe, #f2f6fb);
+        }
+
+        .print-preview-copy h3 {
+            margin: 0;
+            color: #163965;
+            font-size: 18px;
+        }
+
+        .print-preview-copy p {
+            margin: 6px 0 0;
+            color: #5b6b82;
+            font-size: 13px;
+        }
+
+        .print-preview-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .print-preview-print-button {
+            background: #ffffff !important;
+            color: #163965 !important;
+            border-color: #b7c8de !important;
+            box-shadow: 0 8px 20px rgba(22, 57, 101, 0.12);
+        }
+
+        .print-preview-print-button:hover {
+            background: #f6f9fd !important;
+            color: #102f57 !important;
+        }
+
+        .print-preview-body {
+            overflow: auto;
+            padding: 24px;
+            background:
+                linear-gradient(180deg, rgba(216, 225, 237, 0.42), rgba(238, 243, 249, 0.12)),
+                #eef3f9;
+        }
+
+        .print-preview-paper {
+            width: min(210mm, 100%);
+            margin: 0 auto;
+            display: grid;
+            gap: 24px;
+        }
+
+        .print-preview-page {
+            position: relative;
+            height: 297mm;
+            min-height: 297mm;
+            background: #fff;
+            box-shadow: 0 20px 46px rgba(20, 36, 61, 0.18);
+            border: 1px solid #dbe4ef;
+            padding:
+                var(--document-print-margin-top)
+                var(--document-print-margin-right)
+                var(--document-print-margin-bottom)
+                var(--document-print-margin-left);
+            break-after: page;
+            page-break-after: always;
+        }
+
+        .print-preview-page .content-header {
+            padding: 0;
+            margin-bottom: 16px;
+        }
+
+        .print-preview-page .document {
+            padding: 6mm 5mm;
+            border: 1px solid #000;
+            background: #fff;
+            font-size: 16px;
+            line-height: 1.95;
+        }
+
+        .print-preview-page .print-chart-frame {
+            width: calc(100% - 5%);
+            margin-left: 5%;
+            margin-right: 0;
+            padding: 0;
+            border: 0;
+            box-shadow: none;
+            transform: scale(1);
+            transform-origin: top left;
+        }
+
+        .print-preview-page .print-chart-frame button {
+            cursor: default;
+            pointer-events: none;
+        }
+        .print-chart-frame .chart-section-blue { position: relative; }
+        .print-chart-title {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: var(--chart-branch-column);
+            padding: 8px 10px;
+            border-radius: 12px;
+            background: #17477f;
+            color: #fff;
+            text-align: center;
+            font-size: 20px;
+            font-weight: 800;
+            line-height: 1.35;
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+        }
+
+        .print-preview-page.print-chart-page {
+            height: auto;
+            min-height: 0;
+        }
+
+        .print-preview-page.print-chart-page .document {
+            height: auto !important;
+            min-height: 0;
+            overflow: visible;
+        }
+
+        .print-preview-page .manual-output-cover {
+            min-height: 220mm;
+            padding: 8mm 10mm;
+            color: #111;
+        }
+
+        .print-preview-page .manual-output-control {
+            margin: 8mm 0 14mm;
+            text-align: center;
+            font-size: 15px;
+        }
+
+        .print-preview-page .manual-output-info,
+        .print-preview-page .manual-output-approval {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        .print-preview-page .manual-output-info {
+            width: 58%;
+            margin: 0 auto 22mm;
+        }
+
+        .print-preview-page .manual-output-info th,
+        .print-preview-page .manual-output-info td,
+        .print-preview-page .manual-output-approval th,
+        .print-preview-page .manual-output-approval td {
+            border: 1px solid #222;
+            padding: 2mm;
+            text-align: center;
+        }
+
+        .print-preview-page .manual-output-info th,
+        .print-preview-page .manual-output-approval th,
+        .print-preview-page .manual-output-approval .approval-label {
+            background: #d0d0d0;
+            font-weight: 700;
+        }
+
+        .print-preview-page .manual-output-approval td {
+            height: 18mm;
+        }
+
+        .print-preview-page .manual-output-company {
+            margin-top: 34mm;
+            text-align: center;
+            font-size: 19px;
+        }
+
+        .print-preview-page .document button {
+                display: none !important;
+            }
+
+            .print-preview-page .document .manual-policy-link {
+                display: none !important;
+            }
+
+        .print-preview-page > .rule-table-wrap {
+            margin: 0 0 10px;
+            padding: 2px;
+            border: 1px solid #111827;
+            border-radius: 3px;
+        }
+
+        .print-preview-page > .rule-table-wrap .rule-table td,
+        .print-preview-page > .rule-table-wrap .rule-table th {
+            padding: 4px 6px;
+            font-size: 10px;
+            line-height: 1.25;
+            vertical-align: middle;
+        }
+
+        .print-preview-page > .rule-table-wrap .rule-table {
+            table-layout: fixed;
+        }
+
+        .print-preview-page > .rule-table-wrap .rule-table tr:first-child td[rowspan="4"]:first-child {
+            width: 16%;
+        }
+
+        .print-preview-page > .rule-table-wrap .rule-table tr:first-child td[rowspan="4"]:nth-child(2) {
+            width: 50%;
+        }
+
+        .print-preview-page > .rule-table-wrap .rule-table td:nth-last-child(2):not([rowspan]),
+        .print-preview-page > .rule-table-wrap .rule-table td:last-child:not([rowspan]) {
+            width: 17%;
+            height: 18px;
+            padding: 2px 4px;
+            white-space: nowrap;
+        }
+
+        .print-preview-page > .rule-table-wrap .rule-table tr:first-child td:last-child {
+            font-size: 9px;
+            padding-left: 3px;
+            padding-right: 3px;
+        }
+
+        .print-preview-page > .rule-table-wrap .rule-table tr:first-child td[rowspan="4"]:first-child,
+        .print-preview-page > .rule-table-wrap .rule-table tr:first-child td[rowspan="4"]:nth-child(2) {
+            font-size: 15px;
+            line-height: 1.35;
+            padding: 6px 8px;
+        }
+
+        .document h2,
+        .document h3,
+        .document p,
+        .document li,
+        .document table,
+        .document tr,
+        .document td {
+            break-inside: avoid-page;
+            break-inside: avoid;
+            page-break-inside: avoid;
+        }
+
+        .document h2,
+        .document h3 {
+            break-after: avoid-page;
+            page-break-after: avoid;
+        }
+
+        .document p,
+        .document li {
+            orphans: 3;
+            widows: 3;
+        }
+
+        .document h2:not(:first-of-type) {
+            break-before: page;
+            page-break-before: always;
+        }
+
+        @media print {
+            @page {
+                size: A4 portrait;
+                margin: 0;
+            }
+
+            body {
+                margin: 0;
+                background: #fff;
+            }
+
+            body.print-preview-open > *:not(.print-preview-modal) {
+                display: none !important;
+            }
+
+            .topbar,
+            .sidebar,
+            .law-panel,
+            .upload-card,
+            .flash,
+            .law-link-status,
+            .rule-edit-modal,
+            .print-preview-head {
+                display: none !important;
+            }
+
+            .layout,
+            .main {
+                display: block;
+                max-width: none;
+                margin: 0;
+                padding: 0;
+                width: 210mm;
+            }
+
+
+            .print-preview-body {
+                padding: 0;
+            }
+            .content-card,
+            .document,
+            .content-header {
+                padding: 0;
+                border: 0;
+                box-shadow: none;
+                background: #fff;
+            }
+
+            .print-preview-modal {
+                position: static;
+                display: block !important;
+                padding: 0;
+                background: #fff;
+            }
+
+            .print-preview-dialog,
+            .print-preview-body,
+            .print-preview-paper,
+            .print-preview-page {
+                width: auto;
+                max-height: none;
+                overflow: visible;
+                margin: 0;
+                border: 0;
+                border-radius: 0;
+                box-shadow: none;
+                background: #fff;
+            }
+
+            .print-preview-page {
+                padding: var(--document-print-margin-top) var(--document-print-margin-right) var(--document-print-margin-bottom) var(--document-print-margin-left);
+                border: 1px solid #aeb8c5 !important;
+            }
+
+            .print-preview-page .document {
+                border: 1px solid #000 !important;
+            }
+            .document button {
+                display: none !important;
+            }
+
+            .document .manual-policy-link {
+                display: none !important;
+            }
+
+            .print-preview-paper {
+                display: block;
+            }
+
+            .print-preview-page {
+                min-height: auto;
+                background: #fff;
+            }
+
+            .print-preview-page.print-chart-page {
+                height: 297mm;
+                min-height: 297mm;
+                overflow: hidden;
+            }
+
+            .document h2:not(:first-of-type) {
+                margin-top: 0;
+            }
+        }
+
+        .law-link-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: #eef6ff;
+            border: 1px solid #d7e5f7;
+            color: #1d4d93;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .document {
+            padding: 32px 30px 36px;
+            line-height: 1.95;
+            font-size: 16px;
+        }
+
+        .document h2,
+        .document h3 {
+            color: var(--law-heading);
+            letter-spacing: -0.02em;
+        }
+
+        .document h2 {
+            margin: 34px 0 14px;
+            font-size: 24px;
+        }
+
+        .document h2:not(.manual-chapter-title) {
+            padding: 10px 16px;
+            border: 0;
+            background: #dcecff;
+            color: #17315c;
+            text-align: left;
+        }
+
+        .document h2.manual-chapter-title {
+            text-align: center;
+            font-size: 20px;
+            line-height: 1.35;
+        }
+
+        .document h3 {
+            margin: 28px 0 10px;
+            font-size: 19px;
+        }
+
+        .document p {
+            margin: 10px 0;
+            color: #1f2937;
+        }
+
+        .document p.bullet {
+            padding-left: 12px;
+            color: #374151;
+        }
+
+        .document p.related-basis {
+            white-space: normal;
+        }
+
+        .rule-editable {
+            cursor: pointer;
+            border-radius: 8px;
+            transition: background-color 0.16s ease;
+        }
+
+        .rule-editable:hover {
+            background: #f6faff;
+        }
+
+        .rule-edit-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 1200;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: rgba(12, 22, 38, 0.56);
+        }
+
+        .rule-edit-modal.is-open {
+            display: flex;
+        }
+
+        .rule-edit-dialog {
+            width: min(1120px, 100%);
+            max-height: calc(100vh - 40px);
+            overflow: hidden;
+            background: #fff;
+            border: 1px solid #d6e0ee;
+            border-radius: 18px;
+            box-shadow: 0 24px 56px rgba(12, 26, 46, 0.24);
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+        }
+
+        .rule-edit-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 16px 18px;
+            border-bottom: 1px solid #e7eef8;
+            background: #f8fbff;
+        }
+
+        .rule-edit-head h3 {
+            margin: 0;
+            color: #163965;
+            font-size: 18px;
+        }
+
+        .rule-edit-close {
+            border: 1px solid #d3deed;
+            background: #fff;
+            color: #334155;
+            border-radius: 10px;
+            width: 34px;
+            height: 34px;
+            cursor: pointer;
+            font-size: 20px;
+            line-height: 1;
+        }
+
+        .rule-edit-body {
+            padding: 16px 18px;
+            display: grid;
+            gap: 10px;
+        }
+
+        .rule-edit-group {
+            display: grid;
+            gap: 8px;
+        }
+
+        .rule-edit-group.is-hidden {
+            display: none;
+        }
+
+        .rule-edit-select {
+            width: 100%;
+            min-height: 46px;
+            border: 1px solid #cdd9ea;
+            border-radius: 12px;
+            padding: 10px 12px;
+            font: inherit;
+            font-size: 14px;
+            color: #0f172a;
+            background: #fff;
+        }
+
+        .rule-edit-body label {
+            font-size: 13px;
+            color: #475569;
+            font-weight: 700;
+        }
+
+        .rule-edit-textarea {
+            width: 100%;
+            min-height: 260px;
+            resize: vertical;
+            border: 1px solid #cdd9ea;
+            border-radius: 12px;
+            padding: 12px 13px;
+            font: inherit;
+            font-size: 15px;
+            line-height: 1.7;
+            color: #0f172a;
+            background: #fff;
+        }
+
+        .rule-edit-textarea.secondary {
+            min-height: 110px;
+        }
+
+        .rule-edit-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+        .rule-edit-card { min-width: 0; padding: 14px; border: 1px solid #d7e1ef; border-radius: 12px; background: #f8fbff; }
+        .rule-edit-card h4 { margin: 0 0 10px; color: #17315c; }
+        .rule-edit-card textarea { width: 100%; min-height: 260px; }
+        .rule-edit-card.readonly textarea { background: #eef3f9; color: #5b6777; }
+        .insert-position-dialog { max-width: 520px; }
+        .insert-position-body { padding: 22px 20px; }
+        .insert-position-body label { display: block; margin-bottom: 8px; color: #17315c; font-weight: 700; }
+        .insert-position-body select { width: 100%; min-height: 44px; border: 1px solid #cdd9ea; border-radius: 10px; padding: 8px 10px; font: inherit; }
+        @media (max-width: 760px) { .rule-edit-card-grid { grid-template-columns: 1fr; } }
+
+        .rule-edit-foot {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            padding: 14px 18px 16px;
+            border-top: 1px solid #e7eef8;
+            background: #fcfdff;
+        }
+
+        .rule-edit-btn {
+            border-radius: 10px;
+            border: 1px solid #c9d7ea;
+            background: #fff;
+            color: #334155;
+            padding: 9px 13px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .rule-edit-btn.primary {
+            border-color: #184d94;
+            background: #1d4d93;
+            color: #fff;
+        }
+
+        .rule-edit-btn.danger {
+            margin-right: auto;
+            border-color: #d9b6b6;
+            background: #fff4f4;
+            color: #9a1f1f;
+        }
+
+        .law-ref-link {
+            color: var(--law-accent);
+            text-decoration: underline;
+            text-decoration-style: dotted;
+            text-underline-offset: 2px;
+            font-weight: 600;
+        }
+
+        .law-ref-link:hover {
+            color: #083f97;
+        }
+
+        .rule-table-wrap {
+            margin: 18px 0;
+            overflow-x: auto;
+            border: 1px solid #d6dfed;
+            border-radius: 12px;
+            background: #fff;
+        }
+
+        .rule-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #fff;
+            min-width: 560px;
+        }
+
+        .rule-table td,
+        .rule-table th {
+            border: 1px solid #4b5563;
+            padding: 8px 12px;
+            vertical-align: middle;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        /* 매뉴얼 헤더 전용 표 스타일 (현대기전 머리글 양식) */
+        .rule-table tr:first-child td[rowspan="4"]:first-child {
+            width: 16%;
+            text-align: center;
+            font-size: 18px;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            color: #111827;
+            background: #fafafa;
+        }
+
+        .rule-table tr:first-child td[rowspan="4"]:nth-child(2) {
+            text-align: center;
+            font-size: 18px;
+            font-weight: 800;
+            color: #111827;
+            line-height: 1.5;
+            padding: 12px 16px;
+        }
+
+        .rule-table td:nth-last-child(2):not([rowspan]) {
+            width: 14%;
+            text-align: center;
+            font-weight: 700;
+            color: #374151;
+            background: #f9fafb;
+            font-size: 13.5px;
+            white-space: nowrap;
+        }
+
+        .rule-table td:last-child:not([rowspan]) {
+            width: 18%;
+            text-align: center;
+            font-size: 13.5px;
+            color: #1f2937;
+        }
+
+        /* 이중 테두리 효과를 주는 감싸기 */
+        .manual-header-box,
+        .rule-table-wrap:has(td[rowspan="4"]) {
+            border: 2px solid #111827;
+            border-radius: 4px;
+            padding: 3px;
+            background: #fff;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+            margin: 16px 0 24px;
+        }
+
+        .rule-table-wrap:has(td[rowspan="4"]) .rule-table {
+            border: 1.5px solid #111827;
+        }
+
+        .rule-table-wrap.manual-subtitle-box {
+            border: 0 !important;
+            background: #dcecff !important;
+        }
+
+        .rule-table-wrap.manual-subtitle-box .rule-table {
+            min-width: 0;
+            border: 0 !important;
+        }
+
+        .rule-table-wrap.manual-subtitle-box td {
+            padding: 8px 16px !important;
+            color: #17315c !important;
+            text-align: left !important;
+            font-weight: 700 !important;
+            background: #dcecff !important;
+            border: 0 !important;
+            cursor: pointer;
+        }
+
+        .rule-table-wrap.manual-output-header tr:first-child td:last-child {
+            font-size: 12px;
+            padding-left: 3px;
+            padding-right: 3px;
+        }
+
+        .empty-state {
+            padding: 56px 30px 64px;
+            text-align: center;
+            color: var(--law-muted);
+        }
+
+        .empty-state strong {
+            display: block;
+            color: var(--law-heading);
+            font-size: 24px;
+            margin-bottom: 12px;
+        }
+
+        .footer-note {
+            max-width: min(1920px, calc(100vw - 32px));
+            margin: 0 auto;
+            padding: 0 24px 44px;
+            color: #6b7280;
+            font-size: 13px;
+        }
+
+        /* 안전 및 보건 확보의무 이행 체계도 탭 & 도식 전용 스타일 */
+        .law-panel-tabs {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 4px;
+        }
+
+        .law-tab-btn {
+            flex: 1;
+            padding: 9px 8px;
+            border-radius: 10px;
+            border: 1.5px solid #c9d8ea;
+            background: #f1f5fa;
+            color: #334e68;
+            font-size: 12.5px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            text-align: center;
+        }
+
+        .law-tab-btn.is-active {
+            background: #1d4d93;
+            color: #fff;
+            border-color: #1d4d93;
+            box-shadow: 0 4px 10px rgba(29, 77, 147, 0.2);
+        }
+
+        .law-tab-content {
+            display: none;
+        }
+
+        .law-tab-content.is-active {
+            display: block;
+        }
+
+        /* 체계도 외곽 프레임 (이미지와 동일한 외곽선 및 라운딩) */
+        .chart-frame {
+            --chart-branch-column: 244px;
+            --chart-column-gap: 10px;
+            border: 2px solid #2563eb;
+            border-radius: 16px;
+            padding: 12px;
+            background: #ffffff;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            font-family: inherit;
+            box-shadow: 0 6px 18px rgba(37, 99, 235, 0.06);
+        }
+
+        /* 체계도 버튼 공통 스타일 */
+        .chart-btn {
+            display: block;
+            width: 100%;
+            text-align: left;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.18s ease;
+            box-sizing: border-box;
+        }
+
+        .chart-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            filter: brightness(0.97);
+        }
+
+        .chart-btn:active, .chart-btn.is-selected {
+            transform: translateY(0);
+            outline: 2.5px solid #1d4d93;
+        }
+
+        /* 1호 (파란색 그룹) */
+        .chart-section-blue {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .chart-head-blue {
+            background: #e0f2fe;
+            border: 1.5px solid #0284c7;
+            border-radius: 12px;
+            width: calc(100% - var(--chart-branch-column) - var(--chart-column-gap));
+            padding: 7px 9px;
+            font-size: 11.5px;
+            font-weight: 800;
+            color: #0369a1;
+            line-height: 1.25;
+        }
+
+        .chart-row-flex {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) var(--chart-branch-column);
+            gap: var(--chart-column-gap);
+            align-items: center;
+            position: relative;
+        }
+
+        .chart-frame > .chart-head-orange,
+        .chart-frame > .chart-head-purple,
+        .chart-section-green > .chart-head-green {
+            width: calc(100% - var(--chart-branch-column) - var(--chart-column-gap));
+        }
+
+        .chart-item-list {
+            width: 100%;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .chart-section-blue .chart-item-list {
+            position: relative;
+        }
+
+        .chart-section-blue .chart-item-list::before {
+            display: none;
+        }
+
+        .chart-section-blue .chart-item-list > .chart-item-btn:nth-child(3)::after,
+        .chart-section-blue .chart-item-list > .chart-item-btn:nth-child(7)::after,
+        .chart-section-blue .chart-item-list > .chart-item-btn:nth-child(8)::after,
+        .chart-section-blue .chart-item-list > .chart-item-btn:nth-child(9)::after {
+            content: '';
+            position: absolute;
+            right: calc(var(--chart-column-gap) * -1);
+            width: var(--chart-column-gap);
+            border-top: 1.5px solid #38a3b5;
+        }
+
+        .chart-section-blue .chart-item-list > .chart-item-btn:nth-child(3),
+        .chart-section-blue .chart-item-list > .chart-item-btn:nth-child(7),
+        .chart-section-blue .chart-item-list > .chart-item-btn:nth-child(8),
+        .chart-section-blue .chart-item-list > .chart-item-btn:nth-child(9) {
+            position: relative;
+        }
+
+        .chart-section-blue .chart-item-list > .chart-item-btn:nth-child(3)::after,
+        .chart-section-blue .chart-item-list > .chart-item-btn:nth-child(7)::after,
+        .chart-section-blue .chart-item-list > .chart-item-btn:nth-child(8)::after,
+        .chart-section-blue .chart-item-list > .chart-item-btn:nth-child(9)::after {
+            top: 50%;
+        }
+
+        .chart-item-list .chart-btn {
+            width: 100%;
+            min-width: 0;
+        }
+
+        .chart-item-btn,
+        .chart-item-btn-green {
+            background: #ffffff;
+            border: 1.5px solid #38bdf8;
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-size: 11.5px;
+            font-weight: 600;
+            color: #0f172a;
+            line-height: 1.35;
+        }
+
+        .chart-item-btn:hover {
+            background: #f0f9ff;
+            border-color: #0284c7;
+        }
+
+        /* 브랜치 (평가·관리 / 점검) */
+        .chart-branch-col {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            position: relative;
+        }
+
+        .chart-branch-group {
+            display: flex;
+            align-items: center;
+            gap: 1px;
+            width: 100%;
+            position: relative;
+        }
+
+        .chart-section-blue .chart-branch-group:nth-child(1) {
+            top: 45px;
+        }
+
+        .chart-section-blue .chart-branch-group:nth-child(2) {
+            top: 71px;
+        }
+
+        .chart-section-green .chart-branch-group {
+            top: 26px;
+        }
+
+        .chart-branch-col::before {
+            content: '';
+            position: absolute;
+            left: -5px;
+            top: 20%;
+            bottom: 20%;
+            border-left: 1.5px solid #38a3b5;
+        }
+
+        .chart-section-blue .chart-branch-col::before {
+            display: none;
+        }
+
+        .chart-section-green .chart-branch-col::before {
+            display: none;
+        }
+
+        .chart-section-blue .chart-branch-group::before {
+            display: block;
+            width: calc(var(--chart-column-gap) + 1px);
+            height: 0;
+            margin-left: calc(var(--chart-column-gap) * -1);
+            border-top: 1.5px solid #38a3b5;
+            flex: 0 0 calc(var(--chart-column-gap) + 1px);
+        }
+
+        .chart-section-blue .chart-branch-group:first-child::before {
+            display: none;
+        }
+
+        .chart-branch-group::before {
+            content: '';
+            width: 10px;
+            border-top: 1.5px solid #38a3b5;
+            flex: 0 0 10px;
+        }
+
+        .chart-arrow-line {
+            color: #ea580c;
+            font-weight: 800;
+            font-size: 13px;
+            width: 16px;
+            flex: 0 0 16px;
+            text-align: center;
+        }
+
+        /* 출력 도식에서는 버튼 사이의 연결 선분을 표시하지 않는다. */
+        .chart-frame .chart-branch-col::before,
+        .chart-frame .chart-branch-group::before,
+        .chart-frame .chart-item-list > .chart-item-btn::after {
+            display: none !important;
+            content: none !important;
+        }
+
+        .chart-frame .chart-connectors {
+            display: none !important;
+        }
+
+        .chart-frame .chart-item-list > .chart-item-btn::after,
+        .chart-frame .chart-branch-col::before,
+        .chart-frame .chart-branch-group::before {
+            display: none !important;
+            content: none !important;
+        }
+
+        .chart-frame .chart-arrow-line {
+            display: block !important;
+        }
+
+        .chart-section-blue .chart-branch-group:nth-child(1) .chart-branch-badge-orange,
+        .chart-section-blue .chart-branch-group:nth-child(1) .chart-arrow-line,
+        .chart-section-blue .chart-branch-group:nth-child(1) .chart-branch-desc-orange,
+        .chart-section-blue .chart-branch-group:nth-child(2) .chart-branch-badge-teal,
+        .chart-section-blue .chart-branch-group:nth-child(2) .chart-arrow-line,
+        .chart-section-blue .chart-branch-group:nth-child(2) .chart-branch-desc-teal,
+        .chart-section-green .chart-branch-group .chart-branch-badge-green,
+        .chart-section-green .chart-branch-group .chart-arrow-line,
+        .chart-section-green .chart-branch-group .chart-branch-desc-green {
+            transform: translateX(14px);
+        }
+
+        .chart-connectors {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: visible;
+            z-index: 0;
+        }
+
+        .chart-connectors path {
+            fill: none;
+            stroke: #0284c7;
+            stroke-width: 1.5;
+            vector-effect: non-scaling-stroke;
+        }
+
+        .chart-row-flex > *:not(.chart-connectors) {
+            position: relative;
+            z-index: 1;
+        }
+
+        /* 3·7·8·9 버튼과 점검 배지를 연결하는 청록색 선분 */
+        .chart-frame .chart-section-blue .chart-connectors {
+            display: block !important;
+        }
+
+        .chart-frame .chart-section-blue .chart-connectors path {
+            stroke: #0284c7;
+        }
+
+        /* 녹색 섹션: 2·4번 버튼과 우측 오브젝트를 연결하는 녹색 선분 */
+        .chart-frame .chart-section-green .chart-connectors-green {
+            display: block !important;
+        }
+
+        .chart-frame .chart-section-green .chart-connectors-green path {
+            stroke: #16a34a;
+        }
+
+        /* 5번 버튼과 평가·관리 배지를 연결하는 주황색 선분 */
+        .chart-frame .chart-section-blue .chart-connectors path.chart-line-orange {
+            stroke: #ea580c;
+        }
+
+        /* 5번 버튼 테두리를 우측 평가 오브젝트 색상으로 통일 */
+        .chart-section-blue .chart-item-list > #chart-item-5 {
+            border-color: #ea580c;
+        }
+
+        .chart-section-blue .chart-item-list > .chart-item-btn:nth-child(3)::after,
+        .chart-section-blue .chart-item-list > .chart-item-btn:nth-child(7)::after,
+        .chart-section-blue .chart-item-list > .chart-item-btn:nth-child(8)::after,
+        .chart-section-blue .chart-item-list > .chart-item-btn:nth-child(9)::after {
+            display: none !important;
+            content: none !important;
+        }
+
+        .chart-section-blue .chart-branch-group:nth-child(2)::before {
+            display: none !important;
+            content: none !important;
+        }
+
+        /* 3·7·8·9 버튼 테두리를 우측 점검 오브젝트 색상으로 통일 */
+        .chart-section-blue .chart-item-list > #chart-item-3,
+        .chart-section-blue .chart-item-list > #chart-item-7,
+        .chart-section-blue .chart-item-list > #chart-item-8,
+        .chart-section-blue .chart-item-list > #chart-item-9 {
+            border-color: #0284c7;
+        }
+
+        .chart-branch-badge-orange {
+            background: #fff7ed;
+            border: 1.5px solid #ea580c;
+            border-radius: 12px;
+            padding: 7px 8px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #c2410c;
+            text-align: center;
+            line-height: 1.35;
+            width: 78px;
+            min-height: 48px;
+            flex: 0 0 78px;
+        }
+
+        .chart-branch-badge-teal {
+            background: #f0f9ff;
+            border: 1.5px solid #0284c7;
+            border-radius: 12px;
+            padding: 7px 8px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #0369a1;
+            text-align: center;
+            line-height: 1.35;
+            width: 78px;
+            min-height: 48px;
+            flex: 0 0 78px;
+        }
+
+        .chart-branch-desc-orange {
+            background: #ffffff;
+            border: 1.5px solid #ea580c;
+            border-radius: 10px;
+            padding: 7px 8px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #c2410c;
+            line-height: 1.35;
+            text-align: center;
+            width: 132px;
+            min-height: 48px;
+            flex: 0 0 132px;
+        }
+
+        .chart-branch-desc-teal {
+            background: #ffffff;
+            border: 1.5px solid #0284c7;
+            border-radius: 10px;
+            padding: 7px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #0369a1;
+            line-height: 1.4;
+            text-align: left;
+            width: 132px;
+            min-height: 48px;
+            flex: 0 0 132px;
+            transform: translateX(8px);
+        }
+
+        /* 2호 (주황색 그룹) */
+        .chart-head-orange {
+            background: #fff7ed;
+            border: 1.5px solid #f97316;
+            border-radius: 12px;
+            padding: 7px 9px;
+            font-size: 11.5px;
+            font-weight: 800;
+            color: #c2410c;
+            line-height: 1.25;
+        }
+
+        /* 3호 (남색/보라색 그룹) */
+        .chart-head-purple {
+            background: #eef2ff;
+            border: 1.5px solid #6366f1;
+            border-radius: 12px;
+            padding: 7px 9px;
+            font-size: 11.5px;
+            font-weight: 800;
+            color: #4338ca;
+            line-height: 1.25;
+        }
+
+        /* 4호 (연두색 그룹) */
+        .chart-section-green {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .chart-head-green {
+            background: #f0fdf4;
+            border: 1.5px solid #22c55e;
+            border-radius: 12px;
+            padding: 7px 9px;
+            font-size: 11.5px;
+            font-weight: 800;
+            color: #15803d;
+            line-height: 1.25;
+        }
+
+        .chart-item-btn-green {
+            background: #ffffff;
+            border: 1.5px solid #4ade80;
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-size: 11.5px;
+            font-weight: 600;
+            color: #0f172a;
+            line-height: 1.4;
+        }
+
+        .chart-item-btn-green:hover {
+            background: #f0fdf4;
+            border-color: #22c55e;
+        }
+
+        .chart-branch-badge-green {
+            background: #f0fdf4;
+            border: 1.5px solid #16a34a;
+            border-radius: 12px;
+            padding: 7px 8px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #15803d;
+            text-align: center;
+            line-height: 1.35;
+            width: 78px;
+            min-height: 48px;
+            flex: 0 0 78px;
+        }
+
+        .chart-branch-desc-green {
+            background: #ffffff;
+            border: 1.5px solid #16a34a;
+            border-radius: 10px;
+            padding: 7px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #166534;
+            line-height: 1.4;
+            text-align: left;
+            width: 132px;
+            min-height: 48px;
+            flex: 0 0 132px;
+            transform: translateX(8px);
+        }
+
+        /* 하단 실시간 법조문 미니 뷰어 */
+        .chart-quick-law-view {
+            margin-top: 12px;
+            border: 1.5px solid #cbd5e1;
+            border-radius: 12px;
+            background: #f8fafc;
+            padding: 12px 14px;
+            display: none;
+        }
+
+        .chart-quick-law-view.is-visible {
+            display: block;
+        }
+
+        .chart-quick-law-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .chart-quick-law-title {
+            font-size: 13px;
+            font-weight: 800;
+            color: #1e3a8a;
+        }
+
+        .chart-quick-law-link {
+            font-size: 11.5px;
+            color: #2563eb;
+            text-decoration: underline;
+        }
+
+        .chart-quick-law-body {
+            font-size: 12px;
+            line-height: 1.65;
+            color: #334155;
+            max-height: 220px;
+            overflow-y: auto;
+            white-space: pre-line;
+        }
+
+        @media (max-width: 1080px) {
+            .layout {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                position: static;
+                max-height: none;
+            }
+
+            .law-panel {
+                position: static;
+                height: auto;
+                max-height: none;
+            }
+        }
+
+        @media (max-width: 720px) {
+            .topbar-inner,
+            .search-band,
+            .layout,
+            .footer-note {
+                padding-left: 16px;
+                padding-right: 16px;
+            }
+
+            .brand-copy strong {
+                font-size: 22px;
+            }
+
+            .user-chip {
+                white-space: normal;
+            }
+
+            .upload-form {
+                grid-template-columns: 1fr;
+            }
+
+            .content-header,
+            .document,
+            .upload-card,
+            .sidebar {
+                padding-left: 18px;
+                padding-right: 18px;
+            }
+
+            .content-header h1 {
+                font-size: 28px;
+            }
+
+            .rule-edit-modal {
+                padding: 12px;
+            }
+
+            .rule-edit-dialog {
+                max-height: calc(100vh - 24px);
+            }
+
+            .rule-edit-textarea {
+                min-height: 200px;
+                font-size: 14px;
+            }
+        }
+    </style><section class="print-preview-page print-chart-page" style="width:210mm"><div class="document"><div class="chart-frame print-chart-frame">
+                        <!-- Group 1 (Blue) -->
+                        <div class="chart-section-blue"><div class="print-chart-title">안전 및 보건 확보<br>의무 이행 체계도</div>
+                            <div type="button" class="chart-btn chart-head-blue" data-law-query="중대재해처벌법 제4조 제1항 제1호" title="클릭 시 관련 법령 조회">
+                                재해예방에 필요한 인력 및 예산 등<br>안전보건관리체계의 구축 및 그 이행에 관한 조치<br><span style="font-size:11.5px; opacity:0.85;">(법 제4조제1항제1호)</span>
+                            </div>
+                            <div class="chart-row-flex">
+                                <svg class="chart-connectors" aria-hidden="true" preserveAspectRatio="none">
+                                    <path id="chart-line-3"></path>
+                                    <path id="chart-line-5" class="chart-line-orange"></path>
+                                    <path id="chart-line-7"></path>
+                                    <path id="chart-line-8"></path>
+                                    <path id="chart-line-9"></path>
+                                </svg>
+                                <div class="chart-item-list">
+                                    <div type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제1호" data-scroll-target="safety-goal-management-policy">1. 안전·보건 목표와 경영방침의 설정</div>
+                                    <div type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제2호">2. 안전·보건 업무를 총괄·관리하는 전담 조직 설치</div>
+                                    <div id="chart-item-3" type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제3호">3. 유해·위험요인 확인 개선 절차 마련, 점검 및 조치</div>
+                                    <div type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제4호">4. 안전·보건에 관한 인력·시설·장비 구비와 유해·위험요인 개선 예산 편성 및 집행</div>
+                                    <div id="chart-item-5" type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제5호">5. 안전보건관리책임자등의 충실한 업무수행 지원</div>
+                                    <div type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제6호">6. 산업안전보건법에 따른 전문인력 배치</div>
+                                    <div id="chart-item-7" type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제7호">7. 종사자 의견 청취 절차마련, 청취 및 개선방안 마련·이행 여부 점검</div>
+                                    <div id="chart-item-8" type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제8호">8. 중대산업재해 발생 시 등 조치 매뉴얼 마련 및 조치 여부 점검</div>
+                                    <div id="chart-item-9" type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제9호">9. 도급, 용역, 위탁 시 평가기준·절차 및 관리비용, 업무수행기관 관련 기준 마련·이행 여부 점검</div>
+                                </div>
+                                <div class="chart-branch-col">
+                                    <!-- Branch for Item 5 -->
+                                    <div class="chart-branch-group">
+                                        <div id="chart-blue-eval" class="chart-branch-badge-orange">평가·관리<br>반기 1회 이상</div>
+                                        <div class="chart-arrow-line">➔</div>
+                                        <div type="button" class="chart-btn chart-branch-desc-orange" data-law-query="중대재해처벌법 시행령 제4조 제5호">업무 수행<br>수준 평가</div>
+                                    </div>
+                                    <!-- Branch for Items 3, 7, 8, 9 -->
+                                    <div class="chart-branch-group" style="margin-top: 14px;">
+                                        <div id="chart-blue-check" class="chart-branch-badge-teal">점검 반기<br>1회 이상</div>
+                                        <div class="chart-arrow-line" style="color:#0284c7;">➔</div>
+                                        <div type="button" class="chart-btn chart-branch-desc-teal" data-law-query="중대재해처벌법 시행령 제4조 제3호">
+                                            3. 유해·위험요인 조치<br>
+                                            7. 의견 청취 절차<br>
+                                            8. 조치 매뉴얼<br>
+                                            9. 도급, 용역, 위탁 시 기준 및 절차 검토
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Group 2 (Orange) -->
+                        <div type="button" class="chart-btn chart-head-orange" data-law-query="중대재해처벌법 제4조 제1항 제2호" title="클릭 시 관련 법령 조회">
+                            재해 발생 시 재발방지 대책의 수립 및<br>그 이행에 관한 조치 <span style="font-size:11.5px; opacity:0.85;">(법 제4조제1항제2호)</span>
+                        </div>
+
+                        <!-- Group 3 (Purple/Blue) -->
+                        <div type="button" class="chart-btn chart-head-purple" data-law-query="중대재해처벌법 제4조 제1항 제3호" title="클릭 시 관련 법령 조회">
+                            중앙행정기관·지방자치단체가 관계 법령에 따라<br>개선, 시정 등을 명한 사항의 이행에 관한 조치<br><span style="font-size:11.5px; opacity:0.85;">(법 제4조제1항제3호)</span>
+                        </div>
+
+                        <!-- Group 4 (Green) -->
+                        <div class="chart-section-green">
+                            <div type="button" class="chart-btn chart-head-green" data-law-query="중대재해처벌법 제4조 제1항 제4호" title="클릭 시 관련 법령 조회">
+                                안전·보건 관계 법령에 따른 의무이행에 필요한<br>관리상의 조치 <span style="font-size:11.5px; opacity:0.85;">(법 제4조제1항제4호)</span>
+                            </div>
+                            <div class="chart-row-flex">
+                                <svg class="chart-connectors chart-connectors-green" aria-hidden="true" preserveAspectRatio="none">
+                                    <path id="chart-line-g2"></path>
+                                    <path id="chart-line-g4"></path>
+                                </svg>
+                                <div class="chart-item-list">
+                                    <div type="button" class="chart-btn chart-item-btn-green" data-law-query="중대재해처벌법 시행령 제5조 제1항">1. 안전·보건 관계 법령에 따른 의무 이행 여부에 대한 점검</div>
+                                    <div id="chart-item-g2" type="button" class="chart-btn chart-item-btn-green" data-law-query="중대재해처벌법 시행령 제5조 제2항">2. 인력 배치 및 예산 추가 편성·집행 등 의무 이행에 필요한 조치</div>
+                                    <div type="button" class="chart-btn chart-item-btn-green" data-law-query="중대재해처벌법 시행령 제5조 제3항">3. 유해·위험 작업에 대한 안전·보건 교육의 실시 여부를 점검</div>
+                                    <div id="chart-item-g4" type="button" class="chart-btn chart-item-btn-green" data-law-query="중대재해처벌법 시행령 제5조 제4항">4. 미실시 교육에 대한 이행의 지시, 예산의 확보 등 교육 실시에 필요한 조치</div>
+                                </div>
+                                <div class="chart-branch-col">
+                                    <div class="chart-branch-group">
+                                        <div id="chart-green-check" class="chart-branch-badge-green">점검 반기<br>1회 이상</div>
+                                        <div class="chart-arrow-line" style="color:#16a34a;">➔</div>
+                                        <div id="chart-green-desc" type="button" class="chart-btn chart-branch-desc-green" data-law-query="중대재해처벌법 시행령 제5조">
+                                            2. 의무 이행 필요조치<br>
+                                            4. 교육 실시 필요조치
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div></div></section><script>const t=document.querySelector('.print-chart-title'),h=document.querySelector('.chart-head-blue'),r=t.getBoundingClientRect(),b=h.getBoundingClientRect();document.body.dataset.test=JSON.stringify({font:getComputedStyle(t).fontSize,color:getComputedStyle(t).color,background:getComputedStyle(t).backgroundColor,rightGap:r.left-b.right,lines:t.querySelectorAll('br').length+1});</script>

@@ -1,0 +1,12 @@
+<Files "data.json">
+    Require all denied
+</Files>
+<Files "goal_plan_template.json">
+    Require all denied
+</Files>
+<Files "quarter_plan_template.json">
+    Require all denied
+</Files>
+<Files "cover_data.json">
+    Require all denied
+</Files>

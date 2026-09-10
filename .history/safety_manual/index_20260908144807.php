@@ -1,0 +1,5484 @@
+<?php
+declare(strict_types=1);
+
+require_once __DIR__ . '/../risk_assessment/auth.php';
+require_once __DIR__ . '/cover_storage.php';
+require_once __DIR__ . '/../risk_assessment/db_config.php';
+require_once __DIR__ . '/manual_db.php';
+
+$user = auth_current_user();
+if (!is_array($user)) {
+    header('Location: /risk_assessment/task_select.php');
+    exit;
+}
+
+$safetyManualAllowedLoginIds = [
+    '5878',
+];
+$isSafetyManualAllowed = auth_can_manage($user)
+    && in_array(trim((string)($user['login_id'] ?? '')), $safetyManualAllowedLoginIds, true);
+
+if (!$isSafetyManualAllowed) {
+    http_response_code(403);
+    ?>
+    <!DOCTYPE html>
+    <html lang="ko">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>권한이 없습니다</title>
+        <style>
+            body { margin: 0; padding: 40px 20px; background: #f5f7fb; color: #1f2937; font-family: "Malgun Gothic", sans-serif; }
+            .panel { max-width: 760px; margin: 0 auto; background: #fff; border: 1px solid #dbe2ea; border-radius: 20px; padding: 28px; }
+            a { color: #0b4ea2; }
+        </style>
+    </head>
+    <body>
+        <div class="panel">
+            <h1>권한이 없습니다</h1>
+            <p>이 페이지는 관리자 권한이 필요한 메뉴입니다. 접근 권한이 필요하면 관리자에게 문의해 주세요.</p>
+            <p><a href="/risk_assessment/work_list.php">작업 목록으로 돌아가기</a></p>
+        </div>
+    </body>
+    </html>
+    <?php
+    exit;
+}
+
+function h(string $value): string
+{
+    return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+}
+
+function safety_manual_pdf_autoload_path(): string
+{
+    return dirname(__DIR__) . '/risk_assessment/vendor/autoload.php';
+}
+
+function safety_manual_build_pdf_filename(?array $current = null): string
+{
+    $base = '중대재해 등에 관한 매뉴얼';
+    $updatedAt = trim((string)($current['updated_at'] ?? ''));
+    if ($updatedAt !== '') {
+        $timestamp = strtotime($updatedAt);
+        if ($timestamp !== false) {
+            return $base . '_' . date('Ymd_His', $timestamp) . '.pdf';
+        }
+    }
+
+    return $base . '.pdf';
+}
+
+function safety_manual_build_cover_html(array $coverData): string
+{
+    $controlType = (string)($coverData['control_type'] ?? '관리본');
+    $checkedManaged = $controlType === '관리본' ? '■' : '□';
+    $checkedUnmanaged = $controlType === '비관리본' ? '■' : '□';
+
+    return '<section class="manual-output-cover">'
+        . '<div class="manual-output-control">' . $checkedManaged . ' 관리본&nbsp;&nbsp;'
+        . $checkedUnmanaged . ' 비관리본</div>'
+        . '<table class="manual-output-info"><tbody>'
+        . '<tr><th>문서번호</th><td>' . h((string)($coverData['document_number'] ?? '')) . '</td></tr>'
+        . '<tr><th>제정일</th><td>' . h((string)($coverData['established_date'] ?? '')) . '</td></tr>'
+        . '<tr><th>개정일</th><td>' . h((string)($coverData['revision_date'] ?? '')) . '</td></tr>'
+        . '</tbody></table>'
+        . '<table class="manual-output-approval"><tbody>'
+        . '<tr><td class="approval-label" rowspan="3">결 재</td><th>작 성</th><th>검 토</th><th>승 인</th></tr>'
+        . '<tr><td></td><td></td><td></td></tr><tr><td></td><td></td><td></td></tr>'
+        . '</tbody></table>'
+        . '<div class="manual-output-company">주식회사 현대기전</div>'
+        . '</section>';
+}
+
+function safety_manual_build_pdf_html(string $title, string $contentHtml, ?array $current = null): string
+{
+    $updatedAt = trim((string)($current['updated_at'] ?? ''));
+    $updatedBy = trim((string)($current['updated_by'] ?? ''));
+    $metaParts = [];
+    if ($updatedAt !== '') {
+        $metaParts[] = '최종 반영일 ' . h($updatedAt);
+    }
+    if ($updatedBy !== '') {
+        $metaParts[] = '작성자 ' . h($updatedBy);
+    }
+    $metaHtml = $metaParts !== [] ? '<div class="doc-meta">' . implode(' | ', $metaParts) . '</div>' : '';
+
+    return '<!DOCTYPE html>'
+        . '<html lang="ko">'
+        . '<head>'
+        . '<meta charset="UTF-8">'
+        . '<title>' . h($title) . '</title>'
+        . '<style>'
+        . '@page { size: A4; margin: 20mm 16mm 22mm 16mm; }'
+        . 'body { margin: 0; color: #1f2937; font-family: dejavusans, sans-serif; font-size: 11pt; line-height: 1.9; }'
+        . '.document-shell { width: 100%; }'
+        . '.doc-title { margin: 0 0 8mm; text-align: center; font-size: 20pt; font-weight: 700; color: #17315c; letter-spacing: -0.02em; }'
+        . '.doc-meta { margin: 0 0 10mm; text-align: right; color: #5b6777; font-size: 9pt; }'
+        . '.document { margin: 0; padding: 0; }'
+        . '.document h2, .document h3, .document p, .document li, .document table, .document tr, .document td { page-break-inside: avoid; }'
+        . '.document h2 { margin: 0 0 5mm; padding-bottom: 3mm; border-bottom: 0.5mm solid #d7e1ef; font-size: 16pt; color: #17315c; page-break-after: avoid; }'
+        . '.document h2:not(.manual-chapter-title) { padding: 3mm 4mm; border: 0; background: #dcecff; color: #17315c; text-align: left; }'
+        . '.document h2:not(:first-of-type) { page-break-before: always; margin-top: 0; }'
+        . '.document h3 { margin: 7mm 0 3mm; font-size: 13pt; color: #17315c; page-break-after: avoid; }'
+        . '.document p { margin: 0 0 3mm; }'
+        . '.document p.bullet { padding-left: 4mm; color: #374151; }'
+        . '.document p.related-basis { color: #475569; }'
+        . file_get_contents(__DIR__.'/assets/manual-layout.css')
+        . '.document table { width: 100%; border-collapse: collapse; margin: 4mm 0 6mm; border: 0.5mm solid #111; }'
+        . '.document td, .document th { border: 0.3mm solid #444; padding: 2mm 2.5mm; vertical-align: middle; font-size: 9.5pt; text-align: center; }'
+        . '.document tr td[rowspan="4"]:first-child { width: 16%; font-size: 12pt; font-weight: bold; }'
+        . '.document tr td[rowspan="4"]:nth-child(2) { font-size: 12pt; font-weight: bold; }'
+        . '.document td:nth-last-child(2):not([rowspan]) { width: 15%; font-weight: bold; background: #f8f8f8; }'
+        . '.document td:last-child:not([rowspan]) { width: 19%; }'
+        . '.manual-output-cover { page-break-after: always; min-height: 230mm; padding: 8mm 10mm; color: #111; }'
+        . '.manual-output-control { margin: 8mm 0 14mm; text-align: center; font-size: 15px; }'
+        . '.manual-output-info, .manual-output-approval { width: 100%; border-collapse: collapse; table-layout: fixed; }'
+        . '.manual-output-info { width: 58%; margin: 0 auto 22mm; }'
+        . '.manual-output-info th, .manual-output-info td, .manual-output-approval th, .manual-output-approval td { border: 0.3mm solid #222; padding: 2mm; text-align: center; }'
+        . '.manual-output-info th { background: #dbe4f5; font-weight: 500; }'
+        . '.manual-output-approval .approval-label, .manual-output-approval th { background: #d0d0d0; font-weight: 700; }'
+        . '.manual-output-approval td { height: 18mm; }'
+        . '.manual-output-company { margin-top: 34mm; text-align: center; font-size: 15pt; }'
+        . '.document a { color: #1f2937; text-decoration: none; }'
+        . '</style>'
+        . '</head>'
+        . '<body>'
+        . '<div class="document-shell">'
+        . '<h1 class="doc-title">' . h($title) . '</h1>'
+        . $metaHtml
+        . '<div class="document">' . $contentHtml . '</div>'
+        . '</div>'
+        . '</body>'
+        . '</html>';
+}
+
+function safety_manual_output_pdf(string $title, string $contentHtml, ?array $current = null): void
+{
+    $contentHtml = safety_manual_strip_buttons_html($contentHtml);
+    $contentHtml = safety_manual_build_cover_html(safety_cover_load_data()) . $contentHtml;
+    $autoloadPath = safety_manual_pdf_autoload_path();
+    if (!is_file($autoloadPath)) {
+        throw new RuntimeException('PDF 라이브러리를 찾을 수 없습니다.');
+    }
+
+    require_once $autoloadPath;
+
+    $tempDir = dirname(__DIR__) . '/uploads/tmp';
+    if (!is_dir($tempDir) && !mkdir($tempDir, 0777, true) && !is_dir($tempDir)) {
+        throw new RuntimeException('PDF 임시 폴더를 생성하지 못했습니다.');
+    }
+
+    $mpdf = new \Mpdf\Mpdf([
+        'mode' => 'utf-8',
+        'format' => 'A4',
+        'margin_top' => 20,
+        'margin_right' => 16,
+        'margin_bottom' => 22,
+        'margin_left' => 16,
+        'tempDir' => $tempDir,
+    ]);
+    $mpdf->SetTitle($title);
+    $mpdf->SetAuthor(trim((string)($current['updated_by'] ?? $current['uploaded_by'] ?? '관리자')));
+    $mpdf->SetDisplayMode('fullpage');
+    $mpdf->WriteHTML(safety_manual_build_pdf_html($title, $contentHtml, $current));
+    $mpdf->Output(safety_manual_build_pdf_filename($current), \Mpdf\Output\Destination::DOWNLOAD);
+    exit;
+}
+
+function safety_manual_storage_path(): string
+{
+    return __DIR__ . '/data.json';
+}
+
+function safety_manual_upload_root(): string
+{
+    return dirname(__DIR__) . '/uploads/safety_manual';
+}
+
+function safety_manual_load_data(): array
+{
+    $path = safety_manual_storage_path();
+    if (!is_file($path)) {
+        return [
+            'current' => null,
+        ];
+    }
+
+    $raw = file_get_contents($path);
+    if ($raw === false || trim($raw) === '') {
+        return [
+            'current' => null,
+        ];
+    }
+
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        return [
+            'current' => null,
+        ];
+    }
+
+    if (!array_key_exists('current', $decoded)) {
+        $decoded['current'] = null;
+    }
+
+    return $decoded;
+}
+
+function safety_manual_save_data(array $data): void
+{
+    $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false) {
+        throw new RuntimeException('데이터를 JSON으로 인코딩하지 못했습니다.');
+    }
+
+    if (file_put_contents(safety_manual_storage_path(), $json, LOCK_EX) === false) {
+        throw new RuntimeException('데이터 파일을 저장하지 못했습니다.');
+    }
+}
+
+function safety_manual_flash(?string $type = null, ?string $message = null): ?array
+{
+    if ($type !== null && $message !== null) {
+        $_SESSION['safety_manual_flash'] = [
+            'type' => $type,
+            'message' => $message,
+        ];
+        return null;
+    }
+
+    $flash = $_SESSION['safety_manual_flash'] ?? null;
+    unset($_SESSION['safety_manual_flash']);
+
+    return is_array($flash) ? $flash : null;
+}
+
+function safety_manual_normalize_whitespace(string $text): string
+{
+    $text = str_replace(["\r\n", "\r"], "\n", $text);
+    $text = preg_replace("/[ \t\x{00A0}]+/u", ' ', $text);
+    $text = preg_replace("/\n{3,}/u", "\n\n", $text);
+    return trim((string)$text);
+}
+
+function safety_manual_decode_preview_text(string $bytes): string
+{
+    if ($bytes === '') {
+        return '';
+    }
+
+    if (str_starts_with($bytes, "\xFF\xFE")) {
+        $bytes = substr($bytes, 2);
+        return safety_manual_normalize_whitespace((string)mb_convert_encoding($bytes, 'UTF-8', 'UTF-16LE'));
+    }
+
+    if (str_starts_with($bytes, "\xFE\xFF")) {
+        $bytes = substr($bytes, 2);
+        return safety_manual_normalize_whitespace((string)mb_convert_encoding($bytes, 'UTF-8', 'UTF-16BE'));
+    }
+
+    $utf8 = @mb_convert_encoding($bytes, 'UTF-8', 'UTF-8');
+    if (is_string($utf8) && $utf8 !== '') {
+        return safety_manual_normalize_whitespace($utf8);
+    }
+
+    return safety_manual_normalize_whitespace((string)mb_convert_encoding($bytes, 'UTF-8', 'UTF-16LE'));
+}
+
+function safety_manual_detect_heading(string $line): ?array
+{
+    $line = trim($line);
+    if ($line === '') {
+        return null;
+    }
+
+    if (preg_match('/^\s*\x{C81C}\s*\d+\s*\x{C7A5}\b/u', $line) === 1) {
+        return ['tag' => 'h2', 'level' => 2];
+    }
+
+    if (preg_match('/^\s*\x{C81C}\s*\d+\s*\x{C870}(?:\s*\x{C758}\s*\d+)?\b/u', $line) === 1) {
+        return ['tag' => 'h3', 'level' => 3];
+    }
+
+    $normalizedHeading = preg_replace('/\s+/u', '', $line);
+    $genericHeadings = [
+        "\u{CD1D}\u{CE59}",
+        "\u{C778}\u{C0AC}",
+        "\u{BCF5}\u{BB34}",
+        "\u{ADFC}\u{B85C}\u{C2DC}\u{AC04}",
+        "\u{D734}\u{C77C}",
+        "\u{D734}\u{AC00}",
+        "\u{C784}\u{AE08}",
+        "\u{D1F4}\u{C9C1}",
+        "\u{C9D5}\u{ACC4}",
+        "\u{AD50}\u{C721}",
+        "\u{C548}\u{C804}\u{BCF4}\u{AC74}",
+        "\u{C7AC}\u{D574}\u{BCF4}\u{C0C1}",
+        "\u{C9C1}\u{C7A5}\u{B0B4}\u{AD34}\u{B86D}\u{D798}\u{C608}\u{BC29}",
+        "\u{C9C1}\u{C7A5}\u{ADDC}\u{C728}\u{ACFC}\u{C608}\u{C808}",
+        "\u{BD80}\u{CE59}",
+        "\u{BCC4}\u{C9C0}\u{C11C}\u{C2DD}",
+    ];
+    if (mb_strlen($line, 'UTF-8') <= 24 && in_array($normalizedHeading, $genericHeadings, true)) {
+        return ['tag' => 'h2', 'level' => 2];
+    }
+
+    return null;
+}
+
+function safety_manual_slugify(string $text, int $index): string
+{
+    $slug = preg_replace('/[^a-zA-Z0-9\x{AC00}-\x{D7A3}\-_]+/u', '-', trim($text));
+    $slug = trim((string)$slug, '-');
+    if ($slug === '') {
+        $slug = 'section-' . $index;
+    }
+    return $slug . '-' . $index;
+}
+
+function safety_manual_law_api_oc(): string
+{
+    return 'riskserver_law';
+}
+
+function safety_manual_normalize_law_reference(string $value): string
+{
+    $value = trim($value);
+    $value = str_replace(["\u{300C}", "\u{300D}", '"', "'"], '', $value);
+    $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+    return trim($value);
+}
+
+function safety_manual_normalize_law_title(string $value): string
+{
+    $value = safety_manual_normalize_law_reference($value);
+    $value = str_replace(["\u{318D}", "\u{00B7}", ' '], '', $value);
+    return mb_strtolower($value, 'UTF-8');
+}
+
+function safety_manual_build_law_article_code(int $articleNo, int $articleSubNo = 0, bool $forApi = false): string
+{
+    if ($forApi) {
+        return sprintf('%04d%02d', $articleNo, $articleSubNo);
+    }
+
+    return sprintf('%04d%02d000', $articleNo, $articleSubNo);
+}
+
+function safety_manual_build_law_article_label(int $articleNo, int $articleSubNo = 0, string $articleTitle = ''): string
+{
+    $label = "\u{C81C}" . $articleNo . "\u{C870}";
+    if ($articleSubNo > 0) {
+        $label .= "\u{C758}" . $articleSubNo;
+    }
+    if ($articleTitle !== '') {
+        $label .= '(' . $articleTitle . ')';
+    }
+
+    return $label;
+}
+
+function safety_manual_parse_law_reference(string $query): ?array
+{
+    $query = safety_manual_normalize_law_reference($query);
+    if ($query === '') {
+        return null;
+    }
+
+    if (preg_match('/^(.+?)\s*\x{C81C}\s*(\d+)\s*\x{C870}(?:\s*\x{C758}\s*(\d+))?(?:\s*\x{C81C}\s*(\d+)\s*\x{D56D}(?:\s*\x{C81C}\s*(\d+)\s*\x{D638})?)?$/u', $query, $matches) === 1) {
+        $lawName = safety_manual_normalize_law_reference((string)($matches[1] ?? ''));
+        $articleNo = (int)($matches[2] ?? 0);
+        $articleSubNo = (int)($matches[3] ?? 0);
+        $paragraphNo = (int)($matches[4] ?? 0);
+        $itemNo = (int)($matches[5] ?? 0);
+        if ($lawName === '' || $articleNo <= 0) {
+            return null;
+        }
+
+        return [
+            'query' => $query,
+            'law_name' => $lawName,
+            'article_no' => $articleNo,
+            'article_sub_no' => $articleSubNo,
+            'paragraph_no' => $paragraphNo,
+            'item_no' => $itemNo,
+        ];
+    }
+
+    $lawName = $query;
+    if ($lawName === '') {
+        return null;
+    }
+
+    return [
+        'query' => $query,
+        'law_name' => $lawName,
+        'article_no' => 0,
+        'article_sub_no' => 0,
+        'paragraph_no' => 0,
+        'item_no' => 0,
+    ];
+}
+
+function safety_manual_build_law_article_url(string $lawName, int $articleNo, int $articleSubNo = 0): string
+{
+    return 'https://www.law.go.kr/LSW/lsLinkProc.do?lsNm='
+        . rawurlencode($lawName)
+        . '&joNo='
+        . rawurlencode(safety_manual_build_law_article_code($articleNo, $articleSubNo, false))
+        . '&mode=10&lsClsCd=010101L';
+}
+
+function safety_manual_build_law_search_url(string $query): string
+{
+    $reference = safety_manual_parse_law_reference($query);
+    if ($reference !== null && (int)($reference['article_no'] ?? 0) > 0) {
+        return safety_manual_build_law_article_url(
+            (string)$reference['law_name'],
+            (int)$reference['article_no'],
+            (int)$reference['article_sub_no']
+        );
+    }
+
+    $query = safety_manual_normalize_law_reference($query);
+    if ($query === '') {
+        return 'https://www.law.go.kr/';
+    }
+
+    return 'https://www.law.go.kr/lsSc.do?menuId=1&query=' . rawurlencode($query) . '&subMenuId=15&tabMenuId=81';
+}
+
+function safety_manual_build_open_api_url(string $endpoint, array $params): string
+{
+    return 'https://www.law.go.kr/DRF/' . ltrim($endpoint, '/')
+        . '?'
+        . http_build_query($params, '', '&', PHP_QUERY_RFC3986);
+}
+
+function safety_manual_fetch_remote_html(string $url): string
+{
+    $headers = "User-Agent: Mozilla/5.0\r\nAccept-Language: ko-KR,ko;q=0.9,en;q=0.8\r\n";
+
+    if (function_exists('curl_init')) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_TIMEOUT => 12,
+            CURLOPT_HTTPHEADER => [
+                'User-Agent: Mozilla/5.0',
+                'Accept-Language: ko-KR,ko;q=0.9,en;q=0.8',
+            ],
+        ]);
+        $result = curl_exec($ch);
+        $statusCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if (is_string($result) && $result !== '' && $statusCode >= 200 && $statusCode < 400) {
+            return $result;
+        }
+    }
+
+    $context = stream_context_create([
+        'http' => [
+            'method' => 'GET',
+            'timeout' => 12,
+            'header' => $headers,
+        ],
+    ]);
+    $result = @file_get_contents($url, false, $context);
+    return is_string($result) ? $result : '';
+}
+
+function safety_manual_fetch_remote_json(string $url): array
+{
+    $raw = safety_manual_fetch_remote_html($url);
+    if ($raw === '') {
+        return [];
+    }
+
+    $decoded = json_decode($raw, true);
+    return is_array($decoded) ? $decoded : [];
+}
+
+function safety_manual_value_list(mixed $value): array
+{
+    if (!is_array($value)) {
+        return [];
+    }
+
+    if (function_exists('array_is_list')) {
+        return array_is_list($value) ? $value : [$value];
+    }
+
+    $expected = 0;
+    foreach (array_keys($value) as $key) {
+        if ($key !== $expected) {
+            return [$value];
+        }
+        $expected++;
+    }
+
+    return $value;
+}
+
+function safety_manual_extract_content_value(mixed $value): string
+{
+    if (is_array($value)) {
+        return trim((string)($value['content'] ?? ''));
+    }
+
+    return trim((string)$value);
+}
+
+function safety_manual_pick_law_search_result(array $items, string $lawName): ?array
+{
+    $normalizedLawName = safety_manual_normalize_law_title($lawName);
+
+    foreach ($items as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+
+        $candidateName = safety_manual_normalize_law_title((string)($item["\u{BC95}\u{B839}\u{BA85}\u{D55C}\u{AE00}"] ?? ""));
+        $candidateAlias = safety_manual_normalize_law_title((string)($item["\u{BC95}\u{B839}\u{C57D}\u{CE6D}\u{BA85}"] ?? ""));
+        if ($candidateName === $normalizedLawName || $candidateAlias === $normalizedLawName) {
+            return $item;
+        }
+    }
+
+    foreach ($items as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+
+        $candidateName = safety_manual_normalize_law_title((string)($item["\u{BC95}\u{B839}\u{BA85}\u{D55C}\u{AE00}"] ?? ""));
+        $candidateAlias = safety_manual_normalize_law_title((string)($item["\u{BC95}\u{B839}\u{C57D}\u{CE6D}\u{BA85}"] ?? ""));
+        if (
+            ($candidateName !== "" && str_contains($candidateName, $normalizedLawName))
+            || ($candidateAlias !== "" && str_contains($candidateAlias, $normalizedLawName))
+        ) {
+            return $item;
+        }
+    }
+
+    return isset($items[0]) && is_array($items[0]) ? $items[0] : null;
+}
+
+function safety_manual_format_law_date(string $value): string
+{
+    $value = trim($value);
+    if ($value === "") {
+        return "";
+    }
+
+    if (preg_match('/^(\d{4})(\d{2})(\d{2})$/', $value, $matches) === 1) {
+        return (int)$matches[1] . '. ' . (int)$matches[2] . '. ' . (int)$matches[3] . '.';
+    }
+
+    return $value;
+}
+
+function safety_manual_collect_law_text_lines(mixed $node, array &$lines): void
+{
+    if (!is_array($node)) {
+        return;
+    }
+
+    foreach (["\u{C870}\u{BB38}\u{B0B4}\u{C6A9}", "\u{D56D}\u{B0B4}\u{C6A9}", "\u{D638}\u{B0B4}\u{C6A9}", "\u{BAA9}\u{B0B4}\u{C6A9}"] as $textKey) {
+        $value = $node[$textKey] ?? "";
+        if (is_array($value)) {
+            $fragments = [];
+            array_walk_recursive($value, static function ($part) use (&$fragments): void {
+                if (is_scalar($part) || $part === null) {
+                    $text = trim((string)$part);
+                    if ($text !== "") {
+                        $fragments[] = $text;
+                    }
+                }
+            });
+            $value = implode(" ", $fragments);
+        }
+        $value = safety_manual_normalize_whitespace(trim((string)$value));
+        if ($value !== "" && !in_array($value, $lines, true)) {
+            $lines[] = $value;
+        }
+    }
+
+    foreach (["\u{D56D}", "\u{D638}", "\u{BAA9}"] as $childKey) {
+        foreach (safety_manual_value_list($node[$childKey] ?? []) as $child) {
+            safety_manual_collect_law_text_lines($child, $lines);
+        }
+    }
+}
+
+function safety_manual_pick_child_unit_by_number(array $units, string $numberKey, int $number): ?array
+{
+    foreach ($units as $unit) {
+        if (!is_array($unit)) {
+            continue;
+        }
+
+        $rawNumber = safety_manual_extract_content_value($unit[$numberKey] ?? '');
+        if ($rawNumber === '') {
+            continue;
+        }
+
+        if (preg_match('/\d+/', $rawNumber, $matches) !== 1) {
+            continue;
+        }
+
+        if ((int)($matches[0] ?? 0) === $number) {
+            return $unit;
+        }
+    }
+
+    $fallbackIndex = $number - 1;
+    return isset($units[$fallbackIndex]) && is_array($units[$fallbackIndex]) ? $units[$fallbackIndex] : null;
+}
+
+function safety_manual_strip_article_heading(string $line, int $articleNo, int $articleSubNo, string $articleTitle): string
+{
+    $patterns = [
+        safety_manual_build_law_article_label($articleNo, $articleSubNo, $articleTitle),
+        safety_manual_build_law_article_label($articleNo, $articleSubNo),
+    ];
+
+    foreach ($patterns as $pattern) {
+        if ($pattern === '') {
+            continue;
+        }
+
+        $quoted = preg_quote($pattern, '/');
+        $line = preg_replace('/^\s*' . $quoted . '\s*/u', '', $line, 1) ?? $line;
+    }
+
+    return trim($line);
+}
+
+function safety_manual_pick_law_article_unit(array $articleUnits): ?array
+{
+    foreach ($articleUnits as $unit) {
+        if (!is_array($unit)) {
+            continue;
+        }
+
+        if (trim((string)($unit['조문내용'] ?? '')) !== '' || trim((string)($unit['조문여부'] ?? '')) === '조문') {
+            return $unit;
+        }
+    }
+
+    return isset($articleUnits[0]) && is_array($articleUnits[0]) ? $articleUnits[0] : null;
+}
+
+function safety_manual_collect_full_law_lines(array $articleUnits): array
+{
+    $lines = [];
+
+    foreach ($articleUnits as $unit) {
+        if (!is_array($unit)) {
+            continue;
+        }
+
+        $unitLines = [];
+        safety_manual_collect_law_text_lines($unit, $unitLines);
+        foreach ($unitLines as $value) {
+            $value = safety_manual_normalize_whitespace(trim((string)$value));
+            if ($value === '' || in_array($value, $lines, true)) {
+                continue;
+            }
+
+            $lines[] = $value;
+        }
+    }
+
+    return $lines;
+}
+
+function safety_manual_build_law_api_payload(string $query): array
+{
+    return safety_manual_build_law_api_payload_v2($query);
+}
+
+function safety_manual_build_law_api_payload_v2(string $query): array
+{
+    $reference = safety_manual_parse_law_reference($query);
+    if ($reference === null) {
+        throw new InvalidArgumentException("\u{BC95}\u{B839}\u{BA85}\u{C744} \u{C785}\u{B825}\u{D574} \u{C8FC}\u{C138}\u{C694}. \u{C870}\u{BB38}\u{BC88}\u{D638}\u{B97C} \u{D568}\u{AED8} \u{C785}\u{B825}\u{D558}\u{BA74} \u{D574}\u{B2F9} \u{C870}\u{BB38}\u{C744}, \u{BC95}\u{B839}\u{BA85}\u{B9CC} \u{C785}\u{B825}\u{D558}\u{BA74} \u{C804}\u{CCB4} \u{BC95}\u{B839}\u{C744} \u{BCF4}\u{C5EC}\u{B4DC}\u{B9BD}\u{B2C8}\u{B2E4}.");
+    }
+
+    $searchUrl = safety_manual_build_open_api_url('lawSearch.do', [
+        'OC' => safety_manual_law_api_oc(),
+        'target' => 'law',
+        'type' => 'JSON',
+        'query' => (string)$reference['law_name'],
+    ]);
+    $searchData = safety_manual_fetch_remote_json($searchUrl);
+    $searchRoot = is_array($searchData['LawSearch'] ?? null) ? $searchData['LawSearch'] : [];
+    $searchItems = safety_manual_value_list($searchRoot['law'] ?? []);
+    $selectedLaw = safety_manual_pick_law_search_result($searchItems, (string)$reference['law_name']);
+    if (!is_array($selectedLaw)) {
+        throw new RuntimeException("\u{BC95}\u{C81C}\u{CC98}\u{C5D0}\u{C11C} \u{D574}\u{B2F9} \u{BC95}\u{B839}\u{C744} \u{CC3E}\u{C9C0} \u{BABB}\u{D588}\u{C2B5}\u{B2C8}\u{B2E4}.");
+    }
+
+    $lawId = trim((string)($selectedLaw["\u{BC95}\u{B839}ID"] ?? $selectedLaw['id'] ?? ''));
+    if ($lawId === '') {
+        throw new RuntimeException("\u{BC95}\u{B839} ID\u{B97C} \u{D655}\u{C778}\u{D558}\u{C9C0} \u{BABB}\u{D588}\u{C2B5}\u{B2C8}\u{B2E4}.");
+    }
+
+    $articleNo = (int)($reference['article_no'] ?? 0);
+    $articleSubNo = (int)($reference['article_sub_no'] ?? 0);
+    $paragraphNo = (int)($reference['paragraph_no'] ?? 0);
+    $itemNo = (int)($reference['item_no'] ?? 0);
+
+    $detailParams = [
+        'OC' => safety_manual_law_api_oc(),
+        'target' => $articleNo > 0 ? 'lawjosub' : 'eflaw',
+        'type' => 'JSON',
+        'ID' => $lawId,
+    ];
+    if ($articleNo > 0) {
+        $detailParams['JO'] = safety_manual_build_law_article_code($articleNo, $articleSubNo, true);
+    }
+
+    $detailUrl = safety_manual_build_open_api_url('lawService.do', $detailParams);
+    $detailData = safety_manual_fetch_remote_json($detailUrl);
+    $lawData = is_array($detailData["\u{BC95}\u{B839}"] ?? null) ? $detailData["\u{BC95}\u{B839}"] : [];
+    if ($lawData === []) {
+        throw new RuntimeException($articleNo > 0
+            ? "\u{C120}\u{D0DD}\u{D55C} \u{C870}\u{BB38}\u{C758} \u{C0C1}\u{C138} \u{B0B4}\u{C6A9}\u{C744} \u{BD88}\u{B7EC}\u{C624}\u{C9C0} \u{BABB}\u{D588}\u{C2B5}\u{B2C8}\u{B2E4}."
+            : "\u{C120}\u{D0DD}\u{D55C} \u{BC95}\u{B839}\u{C758} \u{C804}\u{CCB4} \u{B0B4}\u{C6A9}\u{C744} \u{BD88}\u{B7EC}\u{C624}\u{C9C0} \u{BABB}\u{D588}\u{C2B5}\u{B2C8}\u{B2E4}."
+        );
+    }
+
+    $baseInfo = is_array($lawData["\u{AE30}\u{BCF8}\u{C815}\u{BCF4}"] ?? null) ? $lawData["\u{AE30}\u{BCF8}\u{C815}\u{BCF4}"] : [];
+    $articleUnits = safety_manual_value_list($lawData["\u{C870}\u{BB38}"]["\u{C870}\u{BB38}\u{B2E8}\u{C704}"] ?? []);
+
+    $lawName = trim((string)($baseInfo["\u{BC95}\u{B839}\u{BA85}_\u{D55C}\u{AE00}"] ?? $selectedLaw["\u{BC95}\u{B839}\u{BA85}\u{D55C}\u{AE00}"] ?? $reference['law_name']));
+    $ministry = safety_manual_extract_content_value($baseInfo["\u{C18C}\u{AD00}\u{BD80}\u{CC98}"] ?? '');
+    $lawKind = safety_manual_extract_content_value($baseInfo["\u{BC95}\u{C885}\u{AD6C}\u{BD84}"] ?? '');
+    $effectiveAt = safety_manual_format_law_date((string)($baseInfo["\u{C2DC}\u{D589}\u{C77C}\u{C790}"] ?? ''));
+    $promulgationAt = safety_manual_format_law_date((string)($baseInfo["\u{ACF5}\u{D3EC}\u{C77C}\u{C790}"] ?? ''));
+    $promulgationNo = ltrim(trim((string)($baseInfo["\u{ACF5}\u{D3EC}\u{BC88}\u{D638}"] ?? '')), '0');
+    $revisionType = trim((string)($baseInfo["\u{C81C}\u{AC1C}\u{C815}\u{AD6C}\u{BD84}"] ?? ''));
+    $contactPhone = trim((string)($baseInfo["\u{C804}\u{D654}\u{BC88}\u{D638}"] ?? ''));
+
+    if ($articleNo <= 0) {
+        $bodyLines = safety_manual_collect_full_law_lines($articleUnits);
+        if ($bodyLines === []) {
+            throw new RuntimeException("\u{BC95}\u{B839} \u{C804}\u{CCB4} \u{BCF8}\u{BB38}\u{C744} \u{CC3E}\u{C9C0} \u{BABB}\u{D588}\u{C2B5}\u{B2C8}\u{B2E4}.");
+        }
+
+        $articleCount = 0;
+        foreach ($articleUnits as $unit) {
+            if (!is_array($unit)) {
+                continue;
+            }
+
+            if (trim((string)($unit["\u{C870}\u{BB38}\u{C5EC}\u{BD80}"] ?? '')) === "\u{C870}\u{BB38}") {
+                $articleCount++;
+            }
+        }
+
+        return [
+            'query' => (string)$reference['query'],
+            'law_name' => $lawName,
+            'article_label' => $lawName,
+            'article_title' => '',
+            'law_kind' => $lawKind,
+            'ministry' => $ministry,
+            'effective_at' => $effectiveAt,
+            'promulgation_at' => $promulgationAt,
+            'promulgation_no' => $promulgationNo,
+            'revision_type' => $revisionType,
+            'contact_phone' => $contactPhone,
+            'body_lines' => $bodyLines,
+            'open_url' => safety_manual_build_law_search_url((string)$reference['law_name']),
+            'law_id' => $lawId,
+            'is_full_law' => true,
+            'article_count' => $articleCount > 0 ? $articleCount : count($bodyLines),
+        ];
+    }
+
+    $articleUnit = safety_manual_pick_law_article_unit($articleUnits);
+    if (!is_array($articleUnit)) {
+        throw new RuntimeException("\u{C870}\u{BB38} \u{BCF8}\u{BB38}\u{C744} \u{CC3E}\u{C9C0} \u{BABB}\u{D588}\u{C2B5}\u{B2C8}\u{B2E4}.");
+    }
+
+    $articleTitle = trim((string)($articleUnit["\u{C870}\u{BB38}\u{C81C}\u{BAA9}"] ?? ''));
+    $articleLabel = safety_manual_build_law_article_label($articleNo, $articleSubNo, $articleTitle);
+    if ($paragraphNo > 0) {
+        $articleLabel .= ' ' . "\u{C81C}" . $paragraphNo . "\u{D56D}";
+    }
+    if ($itemNo > 0) {
+        $articleLabel .= ' ' . "\u{C81C}" . $itemNo . "\u{D638}";
+    }
+
+    $bodySourceNode = $articleUnit;
+    if ($paragraphNo > 0) {
+        $paragraphUnits = safety_manual_value_list($articleUnit["\u{D56D}"] ?? []);
+        $selectedParagraph = safety_manual_pick_child_unit_by_number($paragraphUnits, "\u{D56D}\u{BC88}\u{D638}", $paragraphNo);
+        if (is_array($selectedParagraph)) {
+            $bodySourceNode = $selectedParagraph;
+
+            if ($itemNo > 0) {
+                $itemUnits = safety_manual_value_list($selectedParagraph["\u{D638}"] ?? []);
+                $selectedItem = safety_manual_pick_child_unit_by_number($itemUnits, "\u{D638}\u{BC88}\u{D638}", $itemNo);
+                if (is_array($selectedItem)) {
+                    $bodySourceNode = $selectedItem;
+                }
+            }
+        }
+    }
+
+    $bodyLines = [];
+    safety_manual_collect_law_text_lines($bodySourceNode, $bodyLines);
+    if ($bodyLines !== [] && $paragraphNo <= 0) {
+        $bodyLines[0] = safety_manual_strip_article_heading((string)$bodyLines[0], $articleNo, $articleSubNo, $articleTitle);
+        if ($bodyLines[0] === '') {
+            array_shift($bodyLines);
+        }
+    }
+
+    if ($effectiveAt === '') {
+        $effectiveAt = safety_manual_format_law_date((string)($articleUnit["\u{C870}\u{BB38}\u{C2DC}\u{D589}\u{C77C}\u{C790}"] ?? ''));
+    }
+
+    return [
+        'query' => (string)$reference['query'],
+        'law_name' => $lawName,
+        'article_label' => $articleLabel,
+        'article_title' => $articleTitle,
+        'law_kind' => $lawKind,
+        'ministry' => $ministry,
+        'effective_at' => $effectiveAt,
+        'promulgation_at' => $promulgationAt,
+        'promulgation_no' => $promulgationNo,
+        'revision_type' => $revisionType,
+        'contact_phone' => $contactPhone,
+        'body_lines' => array_values(array_filter($bodyLines, static fn ($line): bool => trim((string)$line) !== '')),
+        'open_url' => safety_manual_build_law_article_url((string)$reference['law_name'], $articleNo, $articleSubNo),
+        'law_id' => $lawId,
+        'is_full_law' => false,
+    ];
+}
+
+if (($_GET['action'] ?? '') === 'law_api') {
+    header('Content-Type: application/json; charset=UTF-8');
+    $query = trim((string)($_GET['query'] ?? ''));
+
+    try {
+        if ($query === '' || mb_strlen($query, 'UTF-8') > 200) {
+            throw new InvalidArgumentException('법령 검색어를 1자 이상 200자 이하로 입력해 주세요.');
+        }
+
+        echo json_encode(
+            array_merge(['success' => true], safety_manual_build_law_api_payload_v2($query)),
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        );
+    } catch (Throwable $e) {
+        http_response_code($e instanceof InvalidArgumentException ? 400 : 502);
+        echo json_encode([
+            'success' => false,
+            'message' => $e->getMessage(),
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+    exit;
+}
+
+if (($_GET['action'] ?? '') === 'law_proxy') {
+    $query = trim((string)($_GET['query'] ?? ''));
+    if ($query === '' || mb_strlen($query, 'UTF-8') > 200) {
+        http_response_code(400);
+        header('Content-Type: text/html; charset=UTF-8');
+        echo '<!DOCTYPE html><html lang="ko"><meta charset="UTF-8"><body style="font-family:Malgun Gothic,sans-serif;padding:24px;">법령 검색어를 1자 이상 200자 이하로 입력해 주세요.</body></html>';
+        exit;
+    }
+
+    $remoteUrl = safety_manual_build_law_search_url($query);
+    $html = safety_manual_fetch_remote_html($remoteUrl);
+    if ($html === '') {
+        http_response_code(502);
+        header('Content-Type: text/html; charset=UTF-8');
+        echo '<!DOCTYPE html><html lang="ko"><meta charset="UTF-8"><body style="font-family:Malgun Gothic,sans-serif;padding:24px;">법령 페이지를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</body></html>';
+        exit;
+    }
+
+    if (stripos($html, '<head') !== false) {
+        $html = preg_replace('/<head([^>]*)>/i', '<head$1><base href="https://www.law.go.kr/">', $html, 1) ?? $html;
+    }
+
+    header('Content-Type: text/html; charset=UTF-8');
+    echo $html;
+    exit;
+}
+
+function safety_manual_build_html_from_text(string $text): array
+{
+    $lines = preg_split("/\n+/u", $text) ?: [];
+    $html = [];
+    $toc = [];
+    $headingIndex = 0;
+
+    foreach ($lines as $line) {
+        $line = safety_manual_normalize_whitespace($line);
+        if ($line === '') {
+            continue;
+        }
+
+        $line = trim($line, " \t\n\r\0\x0B\x{FEFF}");
+        if ($line === '') {
+            continue;
+        }
+
+        $heading = safety_manual_detect_heading($line);
+        if ($heading !== null) {
+            $headingIndex++;
+            $id = safety_manual_slugify($line, $headingIndex);
+            $html[] = sprintf('<%1$s id="%2$s">%3$s</%1$s>', $heading['tag'], h($id), h($line));
+            $toc[] = [
+                'id' => $id,
+                'title' => $line,
+                'level' => $heading['level'],
+            ];
+            continue;
+        }
+
+        if (preg_match('/^[\-\*\x{2022}]\s+/u', $line) === 1) {
+            $html[] = '<p class="bullet">' . h($line) . '</p>';
+            continue;
+        }
+
+        $html[] = '<p>' . h($line) . '</p>';
+    }
+
+    return [
+        'html' => implode("\n", $html),
+        'toc' => $toc,
+    ];
+}
+
+function safety_manual_extract_summary_from_plain_text(string $plainText, string $title = "\u{CDE8}\u{C5C5}\u{ADDC}\u{CE59}"): string
+{
+    $lines = preg_split("/\n+/u", $plainText) ?: [];
+    foreach ($lines as $line) {
+        $line = safety_manual_normalize_whitespace((string)$line);
+        if ($line === '' || $line === $title) {
+            continue;
+        }
+
+        return $line;
+    }
+
+    return '';
+}
+
+function safety_manual_dom_inner_html(DOMNode $node): string
+{
+    $owner = $node->ownerDocument;
+    if (!$owner instanceof DOMDocument) {
+        return '';
+    }
+
+    $html = '';
+    foreach ($node->childNodes as $child) {
+        $html .= $owner->saveHTML($child);
+    }
+
+    return $html;
+}
+
+function safety_manual_extract_manual_header_html(string $contentHtml): string
+{
+    $wrapper = '<div id="manual-header-root">' . $contentHtml . '</div>';
+    $dom = new DOMDocument();
+    $loaded = @$dom->loadHTML(
+        '<?xml encoding="utf-8" ?>' . $wrapper,
+        LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD | LIBXML_NONET | LIBXML_NOWARNING | LIBXML_NOERROR
+    );
+    if ($loaded === false) {
+        return '';
+    }
+
+    $xpath = new DOMXPath($dom);
+    $headerNodes = $xpath->query(
+        '//*[@id="manual-header-root"]//div[contains(concat(" ", normalize-space(@class), " "), " rule-table-wrap ")][.//td[contains(normalize-space(.), "현대기전-중대-01")]][1]'
+    );
+    if (!$headerNodes instanceof DOMNodeList || $headerNodes->length < 1) {
+        return '';
+    }
+
+    $headerNode = $headerNodes->item(0);
+    return $headerNode instanceof DOMNode ? $dom->saveHTML($headerNode) : '';
+}
+
+function safety_manual_apply_cover_to_header_html(string $headerHtml, array $coverData): string
+{
+    if ($headerHtml === '') return '';
+    $dom = new DOMDocument();
+    if (!@$dom->loadHTML('<?xml encoding="utf-8" ?><div id="header-root">' . $headerHtml . '</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD | LIBXML_NONET)) return $headerHtml;
+    $root = $dom->getElementById('header-root');
+    if (!$root instanceof DOMElement) return $headerHtml;
+    $cells = $root->getElementsByTagName('td');
+    foreach ($cells as $cell) {
+        if (!$cell instanceof DOMElement) continue;
+        $label = safety_manual_normalize_whitespace($cell->textContent);
+        $next = $cell->nextSibling;
+        while ($next instanceof DOMNode && $next->nodeType !== XML_ELEMENT_NODE) $next = $next->nextSibling;
+        if (!$next instanceof DOMElement) continue;
+        $value = null;
+        if (str_contains($label, '문서번호')) $value = (string)($coverData['document_number'] ?? '');
+        if (str_contains($label, '제') && str_contains($label, '정일자')) $value = (string)($coverData['established_date'] ?? '');
+        if (str_contains($label, '개정차수')) $value = (string)($coverData['revision_count'] ?? '');
+        if (str_contains($label, '페이지')) continue;
+        if ($value !== null) $next->nodeValue = $value;
+    }
+    return safety_manual_dom_inner_html($root);
+}
+
+function safety_manual_strip_buttons_html(string $contentHtml): string
+{
+    $wrapper = '<div id="manual-output-root">' . $contentHtml . '</div>';
+    $dom = new DOMDocument();
+    $loaded = @$dom->loadHTML(
+        '<?xml encoding="utf-8" ?>' . $wrapper,
+        LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD | LIBXML_NONET | LIBXML_NOWARNING | LIBXML_NOERROR
+    );
+    if ($loaded === false) {
+        return $contentHtml;
+    }
+
+    $xpath = new DOMXPath($dom);
+    $rootList = $xpath->query('//*[@id="manual-output-root"]');
+    $root = $rootList instanceof DOMNodeList ? $rootList->item(0) : null;
+    if (!$root instanceof DOMNode) {
+        return $contentHtml;
+    }
+
+    $buttons = $xpath->query(
+        './/button | .//*[contains(concat(" ", normalize-space(@class), " "), " manual-policy-link ")]'
+    , $root);
+    if ($buttons instanceof DOMNodeList) {
+        foreach ($buttons as $button) {
+            if ($button instanceof DOMNode && $button->parentNode instanceof DOMNode) {
+                $button->parentNode->removeChild($button);
+            }
+        }
+    }
+
+    return safety_manual_dom_inner_html($root);
+}
+
+function safety_manual_normalize_saved_content_html(string $contentHtml): array
+{
+    $wrapper = '<div id="employment-rules-root">' . $contentHtml . '</div>';
+    $dom = new DOMDocument();
+    $loaded = @$dom->loadHTML(
+        '<?xml encoding="utf-8" ?>' . $wrapper,
+        LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD | LIBXML_NONET | LIBXML_NOWARNING | LIBXML_NOERROR
+    );
+
+    if ($loaded === false) {
+        throw new RuntimeException('\uC800\uC7A5\uD560 \uBB38\uC11C HTML\uC744 \uD574\uC11D\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.');
+    }
+
+    $xpath = new DOMXPath($dom);
+    $rootList = $xpath->query('//*[@id="employment-rules-root"]');
+    if (!$rootList instanceof DOMNodeList || $rootList->length < 1) {
+        throw new RuntimeException('\uBB38\uC11C \uB8E8\uD2B8\uB97C \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.');
+    }
+
+    $root = $rootList->item(0);
+    if (!$root instanceof DOMElement) {
+        throw new RuntimeException('\uBB38\uC11C \uB8E8\uD2B8\uB97C \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.');
+    }
+
+    foreach (['script', 'style'] as $tag) {
+        while (true) {
+            $nodes = $root->getElementsByTagName($tag);
+            if ($nodes->length < 1) {
+                break;
+            }
+
+            $node = $nodes->item(0);
+            if ($node instanceof DOMNode && $node->parentNode instanceof DOMNode) {
+                $node->parentNode->removeChild($node);
+                continue;
+            }
+
+            break;
+        }
+    }
+
+    $toc = [];
+    $headingIndex = 0;
+    $headingNodes = $xpath->query('.//h2 | .//h3', $root);
+    if ($headingNodes instanceof DOMNodeList) {
+        foreach ($headingNodes as $headingNode) {
+            if (!$headingNode instanceof DOMElement) {
+                continue;
+            }
+
+            $tag = strtolower($headingNode->tagName);
+            $level = $tag === 'h2' ? 2 : 3;
+            $title = safety_manual_normalize_whitespace($headingNode->textContent ?? '');
+            if ($title === '') {
+                continue;
+            }
+
+            $headingIndex++;
+            $id = trim((string)$headingNode->getAttribute('id'));
+            if ($id === '') {
+                $id = safety_manual_slugify($title, $headingIndex);
+                $headingNode->setAttribute('id', $id);
+            }
+
+            $toc[] = [
+                'id' => $id,
+                'title' => $title,
+                'level' => $level,
+            ];
+        }
+    }
+
+    $plainLines = [];
+    $lineNodes = $xpath->query('.//h2 | .//h3 | .//p | .//td', $root);
+    if ($lineNodes instanceof DOMNodeList) {
+        foreach ($lineNodes as $lineNode) {
+            $line = safety_manual_normalize_whitespace($lineNode->textContent ?? '');
+            if ($line !== '') {
+                $plainLines[] = $line;
+            }
+        }
+    }
+
+    $plainText = trim(implode("\n", $plainLines));
+    $normalizedHtml = trim(safety_manual_dom_inner_html($root));
+
+    return [
+        'content_html' => $normalizedHtml,
+        'toc' => $toc,
+        'plain_text' => $plainText,
+    ];
+}
+
+function safety_manual_extract_table_html(DOMElement $tableNode): string
+{
+    $rows = [];
+    foreach ($tableNode->childNodes as $rowNode) {
+        if (!$rowNode instanceof DOMElement || $rowNode->localName !== 'tr') {
+            continue;
+        }
+
+        $cells = [];
+        foreach ($rowNode->childNodes as $cellNode) {
+            if (!$cellNode instanceof DOMElement || $cellNode->localName !== 'tc') {
+                continue;
+            }
+
+            $texts = [];
+            $textNodes = $cellNode->getElementsByTagNameNS('*', 't');
+            foreach ($textNodes as $textNode) {
+                $value = safety_manual_normalize_whitespace($textNode->textContent);
+                if ($value !== '') {
+                    $texts[] = $value;
+                }
+            }
+
+            $cellText = trim(implode(' ', $texts));
+            $attrs = '';
+            foreach ($cellNode->childNodes as $child) {
+                if (!$child instanceof DOMElement || $child->localName !== 'cellSpan') {
+                    continue;
+                }
+
+                $colSpan = (int)$child->getAttribute('colSpan');
+                $rowSpan = (int)$child->getAttribute('rowSpan');
+                if ($colSpan > 1) {
+                    $attrs .= ' colspan="' . $colSpan . '"';
+                }
+                if ($rowSpan > 1) {
+                    $attrs .= ' rowspan="' . $rowSpan . '"';
+                }
+                break;
+            }
+
+            $cells[] = '<td' . $attrs . '>' . h($cellText) . '</td>';
+        }
+
+        if ($cells !== []) {
+            $rows[] = '<tr>' . implode('', $cells) . '</tr>';
+        }
+    }
+
+    if ($rows === []) {
+        return '';
+    }
+
+    return '<div class="rule-table-wrap"><table class="rule-table"><tbody>' . implode('', $rows) . '</tbody></table></div>';
+}
+
+function safety_manual_extract_from_sections(ZipArchive $zip): array
+{
+    $xmlParts = [];
+    for ($i = 0; $i < $zip->numFiles; $i++) {
+        $name = (string)$zip->getNameIndex($i);
+        if (preg_match('#^Contents/section\d+\.xml$#', $name) === 1) {
+            $xmlParts[] = $name;
+        }
+    }
+
+    sort($xmlParts, SORT_NATURAL);
+
+    $html = [];
+    $toc = [];
+    $headingIndex = 0;
+
+    foreach ($xmlParts as $partName) {
+        $xml = $zip->getFromName($partName);
+        if (!is_string($xml) || trim($xml) === '') {
+            continue;
+        }
+
+        $dom = new DOMDocument();
+        if (@$dom->loadXML($xml, LIBXML_NONET | LIBXML_NOWARNING | LIBXML_NOERROR) === false) {
+            continue;
+        }
+
+        $paragraphs = $dom->getElementsByTagNameNS('*', 'p');
+        foreach ($paragraphs as $paragraph) {
+            if (!$paragraph instanceof DOMElement) {
+                continue;
+            }
+
+            $tables = $paragraph->getElementsByTagNameNS('*', 'tbl');
+            if ($tables->length > 0) {
+                foreach ($tables as $tableNode) {
+                    if ($tableNode instanceof DOMElement) {
+                        $tableHtml = safety_manual_extract_table_html($tableNode);
+                        if ($tableHtml !== '') {
+                            $html[] = $tableHtml;
+                        }
+                    }
+                }
+                continue;
+            }
+
+            $texts = [];
+            $textNodes = $paragraph->getElementsByTagNameNS('*', 't');
+            foreach ($textNodes as $textNode) {
+                $value = safety_manual_normalize_whitespace($textNode->textContent);
+                if ($value !== '') {
+                    $texts[] = $value;
+                }
+            }
+
+            $line = safety_manual_normalize_whitespace(implode(' ', $texts));
+            if ($line === '') {
+                continue;
+            }
+
+            $heading = safety_manual_detect_heading($line);
+            if ($heading !== null) {
+                $headingIndex++;
+                $id = safety_manual_slugify($line, $headingIndex);
+                $html[] = sprintf('<%1$s id="%2$s">%3$s</%1$s>', $heading['tag'], h($id), h($line));
+                $toc[] = [
+                    'id' => $id,
+                    'title' => $line,
+                    'level' => $heading['level'],
+                ];
+                continue;
+            }
+
+            $html[] = '<p>' . h($line) . '</p>';
+        }
+    }
+
+    return [
+        'html' => implode("\n", $html),
+        'toc' => $toc,
+    ];
+}
+
+function safety_manual_parse_hwpx(string $path): array
+{
+    $zip = new ZipArchive();
+    if ($zip->open($path) !== true) {
+    throw new RuntimeException('HWPX 파일을 열 수 없습니다.');
+    }
+
+    try {
+        $previewText = '';
+        $previewBytes = $zip->getFromName('Preview/PrvText.txt');
+        if (is_string($previewBytes) && $previewBytes !== '') {
+            $previewText = safety_manual_decode_preview_text($previewBytes);
+        }
+
+        $previewBuilt = ['html' => '', 'toc' => []];
+        if ($previewText !== '') {
+            $previewBuilt = safety_manual_build_html_from_text($previewText);
+        }
+
+        $sectionBuilt = safety_manual_extract_from_sections($zip);
+        $previewPlainText = trim(strip_tags(str_replace(['</p>', '</h2>', '</h3>'], ["\n", "\n", "\n"], $previewBuilt['html'])));
+        $sectionPlainText = trim(strip_tags(str_replace(['</p>', '</h2>', '</h3>'], ["\n", "\n", "\n"], $sectionBuilt['html'])));
+
+        $built = $previewBuilt;
+        if ($sectionPlainText !== '') {
+            $previewLength = mb_strlen($previewPlainText, 'UTF-8');
+            $sectionLength = mb_strlen($sectionPlainText, 'UTF-8');
+
+            if ($sectionLength > $previewLength) {
+                $built = $sectionBuilt;
+            }
+        } elseif ($previewPlainText === '') {
+            $built = $sectionBuilt;
+        }
+
+        $plainText = trim(strip_tags(str_replace(['</p>', '</h2>', '</h3>'], ["\n", "\n", "\n"], $built['html'])));
+        if ($plainText === '') {
+            throw new RuntimeException('문서에서 추출 가능한 본문이 없습니다. HWPX 파일 내용을 확인해 주세요.');
+        }
+
+        $lines = preg_split("/\n+/u", $plainText) ?: [];
+        $title = "\u{CDE8}\u{C5C5}\u{ADDC}\u{CE59}";
+
+        $summary = '';
+        foreach ($lines as $line) {
+            $line = safety_manual_normalize_whitespace($line);
+            if ($line === '' || $line === $title) {
+                continue;
+            }
+            $summary = $line;
+            break;
+        }
+
+        return [
+            'title' => $title,
+            'summary' => $summary,
+            'content_html' => $built['html'],
+            'toc' => $built['toc'],
+            'plain_text' => $plainText,
+        ];
+    } finally {
+        $zip->close();
+    }
+}
+
+function safety_manual_handle_upload(array $user): void
+{
+    $file = $_FILES['draft_file'] ?? null;
+    if (!is_array($file) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+    throw new RuntimeException('업로드할 HWPX 파일을 선택해 주세요.');
+    }
+
+    $originalName = trim((string)($file['name'] ?? ''));
+    $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+    if ($extension !== 'hwpx') {
+        throw new RuntimeException('HWPX 확장자 파일만 업로드할 수 있습니다.');
+    }
+
+    $tmpName = (string)($file['tmp_name'] ?? '');
+    if (!is_uploaded_file($tmpName)) {
+        throw new RuntimeException('업로드된 임시 파일을 확인하지 못했습니다.');
+    }
+
+    $uploadRoot = safety_manual_upload_root();
+    $relativeDir = date('Y/m');
+    $targetDir = $uploadRoot . '/' . $relativeDir;
+    if (!is_dir($targetDir) && !mkdir($targetDir, 0775, true) && !is_dir($targetDir)) {
+        throw new RuntimeException('업로드 폴더를 생성하지 못했습니다.');
+    }
+
+    $safeBaseName = preg_replace('/[^a-zA-Z0-9\x{AC00}-\x{D7A3}_\-]/u', '_', pathinfo($originalName, PATHINFO_FILENAME));
+    $safeBaseName = trim((string)$safeBaseName, '_');
+    if ($safeBaseName === '') {
+        $safeBaseName = 'safety_manual';
+    }
+
+    $storedName = sprintf('%s_%s_%s.hwpx', $safeBaseName, date('Ymd_His'), substr(bin2hex(random_bytes(4)), 0, 8));
+    $targetPath = $targetDir . '/' . $storedName;
+
+    if (!move_uploaded_file($tmpName, $targetPath)) {
+        throw new RuntimeException('업로드 파일을 저장하지 못했습니다.');
+    }
+
+    $parsed = safety_manual_parse_hwpx($targetPath);
+    $now = date('Y-m-d H:i:s');
+
+    safety_manual_save_data([
+        'current' => [
+            'title' => $parsed['title'],
+            'summary' => $parsed['summary'],
+            'content_html' => $parsed['content_html'],
+            'toc' => $parsed['toc'],
+            'plain_text' => $parsed['plain_text'],
+            'source_name' => $originalName,
+            'source_path' => '/uploads/safety_manual/' . $relativeDir . '/' . $storedName,
+            'uploaded_at' => $now,
+            'uploaded_by' => trim((string)($user['name'] ?? $user['login_id'] ?? "\u{AD00}\u{B9AC}\u{C790}")),
+        ],
+    ]);
+}
+
+function safety_manual_handle_save_edits(array $user): void
+{
+    header('Content-Type: application/json; charset=UTF-8');
+
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        http_response_code(405);
+        echo json_encode([
+            'success' => false,
+            'message' => 'POST \uC694\uCCAD\uB9CC \uD5C8\uC6A9\uB429\uB2C8\uB2E4.',
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
+    try {
+        $raw = file_get_contents('php://input');
+        $payload = json_decode(is_string($raw) ? $raw : '', true);
+        if (!is_array($payload)) {
+            throw new InvalidArgumentException('\uC800\uC7A5 \uC694\uCCAD \uB370\uC774\uD130\uB97C \uD574\uC11D\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.');
+        }
+
+        $contentHtml = trim((string)($payload['content_html'] ?? ''));
+        if ($contentHtml === '') {
+            throw new InvalidArgumentException('\uC800\uC7A5\uD560 \uBCF8\uBB38\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.');
+        }
+        if (mb_strlen($contentHtml, '8bit') > 2_000_000) {
+            throw new InvalidArgumentException('\uBB38\uC11C\uAC00 \uB108\uBB34 \uD07D\uB2C8\uB2E4. \uBCF8\uBB38 \uD06C\uAE30\uB97C \uC904\uC778 \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694.');
+        }
+
+        $data = safety_manual_load_data();
+        $current = is_array($data['current'] ?? null) ? $data['current'] : null;
+        if (!is_array($current)) {
+            throw new InvalidArgumentException('\uC800\uC7A5\uD560 \uB300\uC0C1 \uBB38\uC11C\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.');
+        }
+
+        $normalized = safety_manual_normalize_saved_content_html($contentHtml);
+        $now = date('Y-m-d H:i:s');
+        $title = trim((string)($current['title'] ?? "\u{CDE8}\u{C5C5}\u{ADDC}\u{CE59}"));
+
+        $current['content_html'] = (string)$normalized['content_html'];
+        $current['toc'] = is_array($normalized['toc'] ?? null) ? $normalized['toc'] : [];
+        $current['plain_text'] = (string)($normalized['plain_text'] ?? '');
+        $current['summary'] = safety_manual_extract_summary_from_plain_text($current['plain_text'], $title);
+        $current['updated_at'] = $now;
+        $current['updated_by'] = trim((string)($user['name'] ?? $user['login_id'] ?? "\u{AD00}\u{B9AC}\u{C790}"));
+
+        $data['current'] = $current;
+        safety_manual_save_data($data);
+
+        $db = getDB();
+        safety_manual_db_init($db);
+        $coverData = safety_cover_load_data();
+        safety_manual_db_save($db, $current['content_html'], $coverData, trim((string)($user['name'] ?? $user['login_id'] ?? '')));
+
+        echo json_encode([
+            'success' => true,
+            'updated_at' => $now,
+            'summary' => $current['summary'],
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    } catch (Throwable $e) {
+        http_response_code($e instanceof InvalidArgumentException ? 400 : 500);
+        echo json_encode([
+            'success' => false,
+            'message' => $e->getMessage(),
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    exit;
+}
+
+if (($_GET['action'] ?? '') === 'save_edits') {
+    safety_manual_handle_save_edits($user);
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    try {
+        safety_manual_handle_upload($user);
+        safety_manual_flash('success', 'HWPX 파일을 업로드하여 중대재해 등에 관한 매뉴얼을 반영했습니다.');
+    } catch (Throwable $e) {
+        safety_manual_flash('error', $e->getMessage());
+    }
+
+    header('Location: ' . $_SERVER['PHP_SELF']);
+    exit;
+}
+
+$data = safety_manual_load_data();
+$current = is_array($data['current'] ?? null) ? $data['current'] : null;
+$manualRevisions = [];
+$selectedRevisionKey = trim((string)($_GET['revision'] ?? ''));
+try {
+    $manualDb = getDB();
+    safety_manual_db_init($manualDb);
+    $manualRevisions = safety_manual_db_revisions($manualDb);
+    if ($selectedRevisionKey !== '') {
+        $selectedRevision = safety_manual_db_current($manualDb, $selectedRevisionKey);
+        if (is_array($selectedRevision)) {
+            $current['content_html'] = $selectedRevision['content_html'];
+            $current['updated_at'] = $selectedRevision['updated_at'];
+            $current['updated_by'] = $selectedRevision['updated_by'];
+        }
+    }
+} catch (Throwable $error) {
+    error_log('Safety manual revision DB failure: ' . $error->getMessage());
+}
+$flash = safety_manual_flash();
+$pageTitle = "\u{CDE8}\u{C5C5}\u{ADDC}\u{CE59}";
+$summary = trim((string)($current['summary'] ?? ''));
+$toc = is_array($current['toc'] ?? null) ? $current['toc'] : [];
+$rawContentHtml = (string)($current['content_html'] ?? '');
+$manualHeaderHtml = safety_manual_extract_manual_header_html($rawContentHtml);
+$manualCoverData = safety_cover_load_data();
+$manualCoverHtml = safety_manual_build_cover_html($manualCoverData);
+$manualHeaderHtml = safety_manual_apply_cover_to_header_html($manualHeaderHtml, $manualCoverData);
+$renderedContentHtml = $rawContentHtml;
+$chapterOneMarker = '<h2 id="제1장-총-칙-1">';
+$chapterOnePosition = strpos($renderedContentHtml, $chapterOneMarker);
+if ($chapterOnePosition !== false) {
+    $renderedContentHtml = substr($renderedContentHtml, $chapterOnePosition);
+}
+require_once __DIR__.'/manual_layout.php';
+$renderedContentHtml=safety_manual_indent_html($renderedContentHtml);
+$tocGroups = [];
+$appendixGroups = [];
+$annexGroups = [];
+$currentGroupIndex = -1;
+$currentCollection = 'chapters';
+foreach ($toc as $item) {
+    $level = (int)($item['level'] ?? 0);
+    $title = trim((string)($item['title'] ?? ''));
+    $id = trim((string)($item['id'] ?? ''));
+    if ($title === '' || $id === '') {
+        continue;
+    }
+
+    $isAppendixHeading = preg_match('/^\x{BD80}\x{CE59}(?:\s|\(|$)/u', $title) === 1;
+    $isAnnexHeading = preg_match('/^\x{BCC4}\x{C9C0}(?:\s*\x{C11C}\x{C2DD})?(?:\s|\(|$)/u', $title) === 1;
+    if ($level === 2 || $currentGroupIndex < 0) {
+        if ($isAppendixHeading) {
+            $appendixGroups[] = [
+                'heading' => [
+                    'id' => $id,
+                    'title' => $title,
+                    'level' => $level > 0 ? $level : 2,
+                ],
+                'items' => [],
+            ];
+            $currentCollection = 'appendix';
+            $currentGroupIndex = count($appendixGroups) - 1;
+            continue;
+        }
+        if ($isAnnexHeading) {
+            $annexGroups[] = [
+                'heading' => [
+                    'id' => $id,
+                    'title' => $title,
+                    'level' => $level > 0 ? $level : 2,
+                ],
+                'items' => [],
+            ];
+            $currentCollection = 'annex';
+            $currentGroupIndex = count($annexGroups) - 1;
+            continue;
+        }
+
+        $tocGroups[] = [
+            'heading' => [
+                'id' => $id,
+                'title' => $title,
+                'level' => $level > 0 ? $level : 2,
+            ],
+            'items' => [],
+        ];
+        $currentCollection = 'chapters';
+        $currentGroupIndex = count($tocGroups) - 1;
+        continue;
+    }
+
+    if ($currentCollection === 'appendix') {
+        $appendixGroups[$currentGroupIndex]['items'][] = [
+            'id' => $id,
+            'title' => $title,
+            'level' => $level,
+        ];
+        continue;
+    }
+    if ($currentCollection === 'annex') {
+        $annexGroups[$currentGroupIndex]['items'][] = [
+            'id' => $id,
+            'title' => $title,
+            'level' => $level,
+        ];
+        continue;
+    }
+
+    $tocGroups[$currentGroupIndex]['items'][] = [
+        'id' => $id,
+        'title' => $title,
+        'level' => $level,
+    ];
+}
+
+if (($_GET['action'] ?? '') === 'download_pdf') {
+    if (!$current || trim((string)($current['content_html'] ?? '')) === '') {
+        http_response_code(404);
+        echo 'PDF로 다운로드할 중대재해 등에 관한 매뉴얼 문서가 없습니다.';
+        exit;
+    }
+
+    safety_manual_output_pdf($pageTitle, $renderedContentHtml, $current);
+}
+?>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= h($pageTitle) ?></title>
+    <style>
+        :root {
+            --law-blue: #1e4f95;
+            --law-deep-blue: #12386f;
+            --law-line: #d7e1ef;
+            --law-bg: #f4f7fb;
+            --law-card: #ffffff;
+            --law-text: #1f2937;
+            --law-muted: #5b6777;
+            --law-accent: #0b5bd3;
+            --law-heading: #17315c;
+            --law-gold: #b08a3c;
+            --header-sticky-offset: 104px;
+            --panel-sticky-gap: 8px;
+            --document-print-margin-top: 20mm;
+            --document-print-margin-right: 16mm;
+            --document-print-margin-bottom: 22mm;
+            --document-print-margin-left: 16mm;
+        }
+
+        * { box-sizing: border-box; }
+        @page {
+            size: A4 portrait;
+            margin: var(--document-print-margin-top) var(--document-print-margin-right) var(--document-print-margin-bottom) var(--document-print-margin-left);
+        }
+        html { scroll-behavior: smooth; }
+        body {
+            margin: 0;
+            background:
+                linear-gradient(180deg, #ebf1f8 0%, #f7f9fc 220px, #f4f7fb 220px, #f4f7fb 100%);
+            color: var(--law-text);
+            font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+        }
+
+        a { color: var(--law-accent); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        .topbar {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            background: linear-gradient(180deg, var(--law-blue), var(--law-deep-blue));
+            color: #fff;
+            border-bottom: 4px solid #0d2649;
+        }
+
+        .topbar-inner {
+            max-width: min(1920px, calc(100vw - 32px));
+            margin: 0 auto;
+            padding: 18px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .brand-mark {
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
+            background: url("현대기전 로고.png") center / 72% 72% no-repeat;
+            box-shadow: none;
+        }
+
+        .brand-copy small {
+            display: block;
+            color: rgba(255,255,255,0.75);
+            font-size: 12px;
+            letter-spacing: 0.08em;
+        }
+
+        .brand-copy strong {
+            display: block;
+            font-size: 25px;
+            letter-spacing: -0.04em;
+            margin-top: 4px;
+        }
+
+        .topbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .user-chip {
+            padding: 10px 14px;
+            border: 1px solid rgba(255,255,255,0.22);
+            border-radius: 999px;
+            background: rgba(255,255,255,0.08);
+            font-size: 13px;
+            color: rgba(255,255,255,0.92);
+            white-space: nowrap;
+        }
+
+        .search-band {
+            max-width: min(1920px, calc(100vw - 32px));
+            margin: 0 auto;
+            padding: 18px 24px 26px;
+        }
+
+        .search-box {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: #fff;
+            border: 1px solid #c1d0e5;
+            border-radius: 16px;
+            padding: 14px 18px;
+            box-shadow: 0 10px 30px rgba(15, 39, 74, 0.08);
+        }
+
+        .search-box .label {
+            color: var(--law-blue);
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .search-box .hint {
+            color: var(--law-muted);
+            font-size: 14px;
+        }
+
+        .layout {
+            max-width: min(1920px, calc(100vw - 32px));
+            margin: 20px auto 0;
+            padding: 0 24px 48px;
+            display: grid;
+            grid-template-columns: 220px minmax(0, 1.15fr) 540px;
+            gap: 24px;
+        }
+
+        .sidebar,
+        .law-panel,
+        .content-card,
+        .upload-card {
+            background: var(--law-card);
+            border: 1px solid var(--law-line);
+            border-radius: 20px;
+            box-shadow: 0 18px 38px rgba(21, 45, 83, 0.05);
+        }
+
+        .sidebar {
+            padding: 20px;
+            position: sticky;
+            top: calc(var(--header-sticky-offset) + var(--panel-sticky-gap));
+            align-self: start;
+            max-height: calc(100vh - var(--header-sticky-offset) - (var(--panel-sticky-gap) * 2));
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar h2,
+        .upload-card h2,
+        .content-card h1 {
+            margin: 0;
+        }
+
+        .document [id] {
+            scroll-margin-top: var(--header-sticky-offset);
+        }
+
+        .manual-policy-link {
+            display: inline-block;
+            margin: 22px 0 10px;
+            padding: 9px 14px;
+            border: 1px solid #b9c9de;
+            border-radius: 8px;
+            background: #f5f8fc;
+            color: var(--law-blue);
+            font-weight: 700;
+        }
+
+        .manual-policy-link:hover {
+            background: #eaf1fa;
+            text-decoration: none;
+        }
+
+        .manual-policy-link + .manual-policy-link {
+            margin-left: 8px;
+        }
+
+        .sidebar h2 {
+            font-size: 18px;
+            color: var(--law-heading);
+            padding-bottom: 14px;
+            border-bottom: 2px solid #e8eef7;
+        }
+
+        .meta-list {
+            margin: 18px 0 0;
+            padding: 0;
+            list-style: none;
+            display: grid;
+            gap: 10px;
+            font-size: 14px;
+        }
+
+        .sidebar-scroll {
+            margin-top: 16px;
+            padding-right: 6px;
+            overflow-y: auto;
+            min-height: 0;
+        }
+
+        .sidebar-scroll::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        .sidebar-scroll::-webkit-scrollbar-thumb {
+            background: #c5d3e7;
+            border-radius: 999px;
+            border: 2px solid #f8fbff;
+        }
+
+        .meta-list strong {
+            display: block;
+            color: var(--law-heading);
+            font-size: 12px;
+            margin-bottom: 3px;
+        }
+
+        .toc {
+            margin-top: 22px;
+            padding-top: 18px;
+            border-top: 1px solid #e8eef7;
+        }
+
+        .sidebar-scroll > .toc:first-child {
+            margin-top: 0;
+            padding-top: 0;
+            border-top: 0;
+        }
+
+        .toc h3 {
+            margin: 0 0 12px;
+            font-size: 16px;
+            color: var(--law-heading);
+        }
+
+        .toc-search-sticky {
+            position: sticky;
+            top: 0;
+            z-index: 3;
+            margin-bottom: 12px;
+            padding: 0 0 10px;
+            background: var(--law-card);
+            border-bottom: 1px solid #e8eef7;
+        }
+
+        .toc-search-label {
+            display: block;
+            margin: 0 0 8px;
+            color: #314765;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+
+        .toc-search-input {
+            width: 100%;
+            min-height: 38px;
+            border: 1px solid #cdd9eb;
+            border-radius: 10px;
+            padding: 0 10px;
+            font: inherit;
+            font-size: 13px;
+            color: #17345c;
+            background: #fff;
+            outline: none;
+        }
+
+        .toc-search-input:focus {
+            border-color: #2d63ae;
+            box-shadow: 0 0 0 3px rgba(45, 99, 174, 0.12);
+        }
+
+        .toc-header {
+            position: sticky;
+            top: 68px;
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 12px;
+            padding: 0 0 10px;
+            background: var(--law-card);
+        }
+
+        .toc-header h3 {
+            margin: 0;
+        }
+
+        .toc ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: grid;
+            gap: 8px;
+        }
+
+        .toc-list.is-collapsed {
+            display: none;
+        }
+
+        .toc-group {
+            border-top: 1px solid #edf2f8;
+            padding-top: 10px;
+            margin-top: 10px;
+        }
+
+        .toc-group:first-child {
+            border-top: 0;
+            padding-top: 0;
+            margin-top: 0;
+        }
+
+        .toc-group-toggle {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            border: 1px solid #d7e2f0;
+            background: #f8fbff;
+            color: var(--law-heading);
+            border-radius: 12px;
+            padding: 10px 12px;
+            font: inherit;
+            font-size: 14px;
+            font-weight: 700;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .toc-group-toggle:hover {
+            background: #eef4fc;
+        }
+
+        .toc-cover-link {
+            display: flex;
+            margin-bottom: 10px;
+            color: var(--law-heading);
+            text-decoration: none;
+        }
+
+        .toc-group-toggle .chevron {
+            flex: 0 0 auto;
+            color: #5d7397;
+            transition: transform 0.18s ease;
+        }
+
+        .toc-group.is-collapsed .toc-group-toggle .chevron {
+            transform: rotate(-90deg);
+        }
+
+        .toc-group-items {
+            list-style: none;
+            margin: 10px 0 0;
+            padding: 0;
+            display: grid;
+            gap: 8px;
+        }
+
+        .toc-group.is-collapsed .toc-group-items {
+            display: none;
+        }
+
+        .toc a {
+            display: block;
+            color: #334155;
+            font-size: 14px;
+            padding: 7px 10px;
+            border-radius: 10px;
+            background: #f8fafc;
+            border: 1px solid transparent;
+        }
+
+        .toc a.level-3 {
+            margin-left: 14px;
+            background: #fbfcfe;
+        }
+
+        .toc a:hover {
+            border-color: #c7d7ee;
+            color: var(--law-accent);
+            text-decoration: none;
+        }
+
+        .main {
+            display: grid;
+            gap: 20px;
+        }
+
+        .law-panel {
+            position: sticky;
+            top: calc(var(--header-sticky-offset) + var(--panel-sticky-gap));
+            align-self: start;
+            height: calc(100vh - var(--header-sticky-offset) - (var(--panel-sticky-gap) * 2));
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .law-panel-head {
+            padding: 18px 18px 14px;
+            border-bottom: 1px solid #e7eef8;
+            background: linear-gradient(180deg, #f8fbff, #ffffff);
+        }
+
+        .law-panel-head h2 {
+            margin: 0;
+            font-size: 18px;
+            color: var(--law-heading);
+        }
+
+        .law-panel-head p {
+            margin: 8px 0 0;
+            color: var(--law-muted);
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .law-panel-meta {
+            margin-top: 12px;
+            display: grid;
+            gap: 8px;
+        }
+
+        .law-panel-query {
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: #f4f8fd;
+            border: 1px solid #dbe5f3;
+            color: #1f355c;
+            font-size: 13px;
+            line-height: 1.5;
+            word-break: keep-all;
+        }
+
+        .law-panel-search {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 8px;
+        }
+
+        .law-panel-search-input {
+            width: 100%;
+            min-width: 0;
+            min-height: 40px;
+            padding: 0 12px;
+            border-radius: 12px;
+            border: 1px solid #cdd9eb;
+            background: #fff;
+            color: #17345c;
+            font-size: 13px;
+            outline: none;
+        }
+
+        .law-panel-search-input:focus {
+            border-color: #2d63ae;
+            box-shadow: 0 0 0 3px rgba(45, 99, 174, 0.14);
+        }
+
+        .law-panel-search-button {
+            min-height: 40px;
+            padding: 0 14px;
+            border: 0;
+            border-radius: 12px;
+            background: #dfeafb;
+            color: #1d4d93;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .law-panel-search-button:hover {
+            filter: brightness(0.98);
+        }
+
+        .law-panel-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 40px;
+            padding: 0 12px;
+            border-radius: 12px;
+            background: #1d4d93;
+            color: #fff;
+            font-size: 13px;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .law-panel-link:hover {
+            color: #fff;
+            text-decoration: none;
+            filter: brightness(1.03);
+        }
+
+        .law-panel-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            background: #eef4fb;
+            overflow-y: auto;
+        }
+
+        .law-panel-content {
+            min-height: 100%;
+            height: auto;
+            padding: 20px 18px 24px;
+            overflow: visible;
+            background: #fff;
+            color: #20324f;
+        }
+
+        .law-panel-placeholder,
+        .law-panel-loading,
+        .law-panel-error {
+            display: flex;
+            min-height: 560px;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            line-height: 1.8;
+            color: #50627f;
+        }
+
+        .law-panel-placeholder strong,
+        .law-panel-loading strong,
+        .law-panel-error strong {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 19px;
+            color: #17315b;
+        }
+
+        .law-panel-card {
+            display: grid;
+            gap: 18px;
+        }
+
+        .law-panel-card-head {
+            padding: 16px 18px;
+            border: 1px solid #dbe5f3;
+            border-radius: 16px;
+            background: linear-gradient(180deg, #f8fbff, #f2f7fd);
+        }
+
+        .law-panel-title {
+            margin: 0;
+            font-size: 22px;
+            line-height: 1.45;
+            color: #163157;
+        }
+
+        .law-panel-subtitle {
+            margin: 8px 0 0;
+            color: #4f6283;
+            font-size: 14px;
+        }
+
+        .law-panel-section {
+            padding: 16px 18px;
+            border: 1px solid #e3ebf7;
+            border-radius: 16px;
+            background: #fdfefe;
+        }
+
+        .law-panel-section h3 {
+            margin: 0 0 12px;
+            font-size: 15px;
+            color: #1e355d;
+        }
+
+        .law-panel-section p {
+            margin: 0 0 10px;
+            color: #243754;
+            line-height: 1.8;
+            font-size: 14px;
+            word-break: keep-all;
+        }
+
+        .law-panel-section p:last-child {
+            margin-bottom: 0;
+        }
+
+        .law-panel-list {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+            display: grid;
+            gap: 8px;
+        }
+
+        .law-panel-list li {
+            display: grid;
+            grid-template-columns: 80px minmax(0, 1fr);
+            gap: 10px;
+            font-size: 13px;
+            color: #334866;
+        }
+
+        .law-panel-list strong {
+            color: #18345f;
+        }
+
+        .law-panel-frame {
+            width: 100%;
+            height: 100%;
+            min-height: 560px;
+            border: 0;
+            background: #fff;
+        }
+
+        .upload-card {
+            padding: 22px 22px 20px;
+        }
+
+        .upload-card h2 {
+            font-size: 21px;
+            color: var(--law-heading);
+            margin-bottom: 8px;
+        }
+
+        .upload-card p {
+            margin: 0;
+            color: var(--law-muted);
+            line-height: 1.6;
+        }
+
+        .upload-form {
+            margin-top: 18px;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 12px;
+        }
+
+        .file-input {
+            position: relative;
+            overflow: hidden;
+            border: 1px dashed #9db3d6;
+            background: linear-gradient(180deg, #f9fbfe, #f2f6fc);
+            border-radius: 14px;
+            padding: 16px 18px;
+        }
+
+        .file-input input {
+            width: 100%;
+            font: inherit;
+        }
+
+        .button {
+            border: 0;
+            border-radius: 14px;
+            padding: 0 20px;
+            min-height: 56px;
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+            color: #fff;
+            background: linear-gradient(180deg, #2c67bd, #124686);
+            box-shadow: 0 10px 24px rgba(18, 70, 134, 0.22);
+        }
+
+        .button:hover {
+            filter: brightness(1.03);
+        }
+
+        .flash {
+            margin-top: 14px;
+            border-radius: 14px;
+            padding: 13px 15px;
+            font-size: 14px;
+            border: 1px solid transparent;
+        }
+
+        .flash.success {
+            background: #edf7ee;
+            color: #165c2b;
+            border-color: #b7dfbf;
+        }
+
+        .flash.error {
+            background: #fff1f1;
+            color: #8c1d1d;
+            border-color: #f0b8b8;
+        }
+
+        .content-card {
+            overflow: hidden;
+        }
+
+        .content-header {
+            padding: 28px 30px 20px;
+            border-bottom: 1px solid #e6edf7;
+            background:
+                linear-gradient(180deg, rgba(245, 249, 255, 0.98), rgba(255,255,255,0.98)),
+                linear-gradient(135deg, rgba(30,79,149,0.08), transparent 48%);
+        }
+
+        .content-header .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 12px;
+            border-radius: 999px;
+            background: #eef4fc;
+            color: var(--law-blue);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+        }
+
+        .content-header h1 {
+            font-size: 34px;
+            color: var(--law-heading);
+            margin-top: 16px;
+            letter-spacing: -0.05em;
+        }
+
+        .content-header p {
+            margin: 14px 0 0;
+            color: var(--law-muted);
+            line-height: 1.8;
+            font-size: 15px;
+        }
+
+        .content-header-meta {
+            margin-top: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .content-header-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #184d94;
+            border-radius: 12px;
+            background: #1d4d93;
+            color: #fff;
+            padding: 10px 14px;
+            font: inherit;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 10px 24px rgba(18, 70, 134, 0.16);
+        }
+
+        .content-header-button:hover {
+            filter: brightness(1.03);
+            text-decoration: none;
+        }
+
+        .content-header-button-secondary {
+            background: rgba(255, 255, 255, 0.14);
+            border-color: rgba(255, 255, 255, 0.36);
+            box-shadow: none;
+        }
+
+        .content-header-button-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .print-preview-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 1250;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: rgba(9, 18, 32, 0.72);
+            backdrop-filter: blur(4px);
+        }
+
+        .print-preview-modal.is-open {
+            display: flex;
+        }
+
+        .print-preview-dialog {
+            width: min(1120px, 100%);
+            max-height: calc(100vh - 48px);
+            overflow: hidden;
+            background: #eef3f9;
+            border: 1px solid #d4deed;
+            border-radius: 20px;
+            box-shadow: 0 28px 64px rgba(10, 25, 46, 0.3);
+            display: grid;
+            grid-template-rows: auto 1fr;
+        }
+
+        .print-preview-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 16px 18px;
+            border-bottom: 1px solid #d8e2f0;
+            background: linear-gradient(180deg, #f9fbfe, #f2f6fb);
+        }
+
+        .print-preview-copy h3 {
+            margin: 0;
+            color: #163965;
+            font-size: 18px;
+        }
+
+        .print-preview-copy p {
+            margin: 6px 0 0;
+            color: #5b6b82;
+            font-size: 13px;
+        }
+
+        .print-preview-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .print-preview-print-button {
+            background: #ffffff !important;
+            color: #163965 !important;
+            border-color: #b7c8de !important;
+            box-shadow: 0 8px 20px rgba(22, 57, 101, 0.12);
+        }
+
+        .print-preview-print-button:hover {
+            background: #f6f9fd !important;
+            color: #102f57 !important;
+        }
+
+        .print-preview-body {
+            overflow: auto;
+            padding: 24px;
+            background:
+                linear-gradient(180deg, rgba(216, 225, 237, 0.42), rgba(238, 243, 249, 0.12)),
+                #eef3f9;
+        }
+
+        .print-preview-paper {
+            width: min(210mm, 100%);
+            margin: 0 auto;
+            display: grid;
+            gap: 24px;
+        }
+
+        .print-preview-page {
+            position: relative;
+            height: 297mm;
+            min-height: 297mm;
+            background: #fff;
+            box-shadow: 0 20px 46px rgba(20, 36, 61, 0.18);
+            border: 1px solid #dbe4ef;
+            padding:
+                var(--document-print-margin-top)
+                var(--document-print-margin-right)
+                var(--document-print-margin-bottom)
+                var(--document-print-margin-left);
+            break-after: page;
+            page-break-after: always;
+        }
+
+        .print-preview-page .content-header {
+            padding: 0;
+            margin-bottom: 16px;
+        }
+
+        .print-preview-page .document {
+            padding: 6mm 5mm;
+            border: 1px solid #000;
+            background: #fff;
+        }
+
+        .print-preview-page .manual-output-cover {
+            min-height: 220mm;
+            padding: 8mm 10mm;
+            color: #111;
+        }
+
+        .print-preview-page .manual-output-control {
+            margin: 8mm 0 14mm;
+            text-align: center;
+            font-size: 15px;
+        }
+
+        .print-preview-page .manual-output-info,
+        .print-preview-page .manual-output-approval {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        .print-preview-page .manual-output-info {
+            width: 58%;
+            margin: 0 auto 22mm;
+        }
+
+        .print-preview-page .manual-output-info th,
+        .print-preview-page .manual-output-info td,
+        .print-preview-page .manual-output-approval th,
+        .print-preview-page .manual-output-approval td {
+            border: 1px solid #222;
+            padding: 2mm;
+            text-align: center;
+        }
+
+        .print-preview-page .manual-output-info th,
+        .print-preview-page .manual-output-approval th,
+        .print-preview-page .manual-output-approval .approval-label {
+            background: #d0d0d0;
+            font-weight: 700;
+        }
+
+        .print-preview-page .manual-output-approval td {
+            height: 18mm;
+        }
+
+        .print-preview-page .manual-output-company {
+            margin-top: 34mm;
+            text-align: center;
+            font-size: 19px;
+        }
+
+        .print-preview-page .document button {
+                display: none !important;
+            }
+
+            .print-preview-page .document .manual-policy-link {
+                display: none !important;
+            }
+
+        .print-preview-page > .rule-table-wrap {
+            margin: 0 0 10px;
+            padding: 2px;
+            border: 1px solid #111827;
+            border-radius: 3px;
+        }
+
+        .print-preview-page > .rule-table-wrap .rule-table td,
+        .print-preview-page > .rule-table-wrap .rule-table th {
+            padding: 4px 6px;
+            font-size: 10px;
+            line-height: 1.25;
+            vertical-align: middle;
+        }
+
+        .print-preview-page > .rule-table-wrap .rule-table {
+            table-layout: fixed;
+        }
+
+        .print-preview-page > .rule-table-wrap .rule-table tr:first-child td[rowspan="4"]:first-child {
+            width: 16%;
+        }
+
+        .print-preview-page > .rule-table-wrap .rule-table tr:first-child td[rowspan="4"]:nth-child(2) {
+            width: 50%;
+        }
+
+        .print-preview-page > .rule-table-wrap .rule-table td:nth-last-child(2):not([rowspan]),
+        .print-preview-page > .rule-table-wrap .rule-table td:last-child:not([rowspan]) {
+            width: 17%;
+            height: 18px;
+            padding: 2px 4px;
+            white-space: nowrap;
+        }
+
+        .print-preview-page > .rule-table-wrap .rule-table tr:first-child td[rowspan="4"]:first-child,
+        .print-preview-page > .rule-table-wrap .rule-table tr:first-child td[rowspan="4"]:nth-child(2) {
+            font-size: 15px;
+            line-height: 1.35;
+            padding: 6px 8px;
+        }
+
+        .document h2,
+        .document h3,
+        .document p,
+        .document li,
+        .document table,
+        .document tr,
+        .document td {
+            break-inside: avoid-page;
+            break-inside: avoid;
+            page-break-inside: avoid;
+        }
+
+        .document h2,
+        .document h3 {
+            break-after: avoid-page;
+            page-break-after: avoid;
+        }
+
+        .document p,
+        .document li {
+            orphans: 3;
+            widows: 3;
+        }
+
+        .document h2:not(:first-of-type) {
+            break-before: page;
+            page-break-before: always;
+        }
+
+        @media print {
+            @page {
+                size: A4 portrait;
+                margin: 0;
+            }
+
+            body {
+                margin: 0;
+                background: #fff;
+            }
+
+            body.print-preview-open > *:not(.print-preview-modal) {
+                display: none !important;
+            }
+
+            .topbar,
+            .sidebar,
+            .law-panel,
+            .upload-card,
+            .flash,
+            .law-link-status,
+            .rule-edit-modal,
+            .print-preview-head {
+                display: none !important;
+            }
+
+            .layout,
+            .main {
+                display: block;
+                max-width: none;
+                margin: 0;
+                padding: 0;
+                width: 210mm;
+            }
+
+
+            .print-preview-body {
+                padding: 0;
+            }
+            .content-card,
+            .document,
+            .content-header {
+                padding: 0;
+                border: 0;
+                box-shadow: none;
+                background: #fff;
+            }
+
+            .print-preview-modal {
+                position: static;
+                display: block !important;
+                padding: 0;
+                background: #fff;
+            }
+
+            .print-preview-dialog,
+            .print-preview-body,
+            .print-preview-paper,
+            .print-preview-page {
+                width: auto;
+                max-height: none;
+                overflow: visible;
+                margin: 0;
+                border: 0;
+                border-radius: 0;
+                box-shadow: none;
+                background: #fff;
+            }
+
+            .print-preview-page {
+                padding: var(--document-print-margin-top) var(--document-print-margin-right) var(--document-print-margin-bottom) var(--document-print-margin-left);
+                border: 1px solid #aeb8c5 !important;
+            }
+
+            .print-preview-page .document {
+                border: 1px solid #000 !important;
+            }
+            .document button {
+                display: none !important;
+            }
+
+            .document .manual-policy-link {
+                display: none !important;
+            }
+
+            .print-preview-paper {
+                display: block;
+            }
+
+            .print-preview-page {
+                min-height: auto;
+                background: #fff;
+            }
+
+            .document h2:not(:first-of-type) {
+                margin-top: 0;
+            }
+        }
+
+        .law-link-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: #eef6ff;
+            border: 1px solid #d7e5f7;
+            color: #1d4d93;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .document {
+            padding: 32px 30px 36px;
+            line-height: 1.95;
+            font-size: 16px;
+        }
+
+        .document h2,
+        .document h3 {
+            color: var(--law-heading);
+            letter-spacing: -0.02em;
+        }
+
+        .document h2 {
+            margin: 34px 0 14px;
+            font-size: 24px;
+        }
+
+        .document h2:not(.manual-chapter-title) {
+            padding: 10px 16px;
+            border: 0;
+            background: #dcecff;
+            color: #17315c;
+            text-align: left;
+        }
+
+        .document h2.manual-chapter-title {
+            text-align: center;
+            font-size: 20px;
+            line-height: 1.35;
+        }
+
+        .document h3 {
+            margin: 28px 0 10px;
+            font-size: 19px;
+        }
+
+        .document p {
+            margin: 10px 0;
+            color: #1f2937;
+        }
+
+        .document p.bullet {
+            padding-left: 12px;
+            color: #374151;
+        }
+
+        .document p.related-basis {
+            white-space: normal;
+        }
+
+        .rule-editable {
+            cursor: pointer;
+            border-radius: 8px;
+            transition: background-color 0.16s ease;
+        }
+
+        .rule-editable:hover {
+            background: #f6faff;
+        }
+
+        .rule-edit-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 1200;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: rgba(12, 22, 38, 0.56);
+        }
+
+        .rule-edit-modal.is-open {
+            display: flex;
+        }
+
+        .rule-edit-dialog {
+            width: min(1120px, 100%);
+            max-height: calc(100vh - 40px);
+            overflow: hidden;
+            background: #fff;
+            border: 1px solid #d6e0ee;
+            border-radius: 18px;
+            box-shadow: 0 24px 56px rgba(12, 26, 46, 0.24);
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+        }
+
+        .rule-edit-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 16px 18px;
+            border-bottom: 1px solid #e7eef8;
+            background: #f8fbff;
+        }
+
+        .rule-edit-head h3 {
+            margin: 0;
+            color: #163965;
+            font-size: 18px;
+        }
+
+        .rule-edit-close {
+            border: 1px solid #d3deed;
+            background: #fff;
+            color: #334155;
+            border-radius: 10px;
+            width: 34px;
+            height: 34px;
+            cursor: pointer;
+            font-size: 20px;
+            line-height: 1;
+        }
+
+        .rule-edit-body {
+            padding: 16px 18px;
+            display: grid;
+            gap: 10px;
+        }
+
+        .rule-edit-group {
+            display: grid;
+            gap: 8px;
+        }
+
+        .rule-edit-group.is-hidden {
+            display: none;
+        }
+
+        .rule-edit-select {
+            width: 100%;
+            min-height: 46px;
+            border: 1px solid #cdd9ea;
+            border-radius: 12px;
+            padding: 10px 12px;
+            font: inherit;
+            font-size: 14px;
+            color: #0f172a;
+            background: #fff;
+        }
+
+        .rule-edit-body label {
+            font-size: 13px;
+            color: #475569;
+            font-weight: 700;
+        }
+
+        .rule-edit-textarea {
+            width: 100%;
+            min-height: 260px;
+            resize: vertical;
+            border: 1px solid #cdd9ea;
+            border-radius: 12px;
+            padding: 12px 13px;
+            font: inherit;
+            font-size: 15px;
+            line-height: 1.7;
+            color: #0f172a;
+            background: #fff;
+        }
+
+        .rule-edit-textarea.secondary {
+            min-height: 110px;
+        }
+
+        .rule-edit-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+        .rule-edit-card { min-width: 0; padding: 14px; border: 1px solid #d7e1ef; border-radius: 12px; background: #f8fbff; }
+        .rule-edit-card h4 { margin: 0 0 10px; color: #17315c; }
+        .rule-edit-card textarea { width: 100%; min-height: 260px; }
+        .rule-edit-card.readonly textarea { background: #eef3f9; color: #5b6777; }
+        @media (max-width: 760px) { .rule-edit-card-grid { grid-template-columns: 1fr; } }
+
+        .rule-edit-foot {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            padding: 14px 18px 16px;
+            border-top: 1px solid #e7eef8;
+            background: #fcfdff;
+        }
+
+        .rule-edit-btn {
+            border-radius: 10px;
+            border: 1px solid #c9d7ea;
+            background: #fff;
+            color: #334155;
+            padding: 9px 13px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .rule-edit-btn.primary {
+            border-color: #184d94;
+            background: #1d4d93;
+            color: #fff;
+        }
+
+        .rule-edit-btn.danger {
+            margin-right: auto;
+            border-color: #d9b6b6;
+            background: #fff4f4;
+            color: #9a1f1f;
+        }
+
+        .law-ref-link {
+            color: var(--law-accent);
+            text-decoration: underline;
+            text-decoration-style: dotted;
+            text-underline-offset: 2px;
+            font-weight: 600;
+        }
+
+        .law-ref-link:hover {
+            color: #083f97;
+        }
+
+        .rule-table-wrap {
+            margin: 18px 0;
+            overflow-x: auto;
+            border: 1px solid #d6dfed;
+            border-radius: 12px;
+            background: #fff;
+        }
+
+        .rule-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #fff;
+            min-width: 560px;
+        }
+
+        .rule-table td,
+        .rule-table th {
+            border: 1px solid #4b5563;
+            padding: 8px 12px;
+            vertical-align: middle;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        /* 매뉴얼 헤더 전용 표 스타일 (현대기전 머리글 양식) */
+        .rule-table tr:first-child td[rowspan="4"]:first-child {
+            width: 16%;
+            text-align: center;
+            font-size: 18px;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            color: #111827;
+            background: #fafafa;
+        }
+
+        .rule-table tr:first-child td[rowspan="4"]:nth-child(2) {
+            text-align: center;
+            font-size: 18px;
+            font-weight: 800;
+            color: #111827;
+            line-height: 1.5;
+            padding: 12px 16px;
+        }
+
+        .rule-table td:nth-last-child(2):not([rowspan]) {
+            width: 14%;
+            text-align: center;
+            font-weight: 700;
+            color: #374151;
+            background: #f9fafb;
+            font-size: 13.5px;
+            white-space: nowrap;
+        }
+
+        .rule-table td:last-child:not([rowspan]) {
+            width: 18%;
+            text-align: center;
+            font-size: 13.5px;
+            color: #1f2937;
+        }
+
+        /* 이중 테두리 효과를 주는 감싸기 */
+        .manual-header-box,
+        .rule-table-wrap:has(td[rowspan="4"]) {
+            border: 2px solid #111827;
+            border-radius: 4px;
+            padding: 3px;
+            background: #fff;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+            margin: 16px 0 24px;
+        }
+
+        .rule-table-wrap:has(td[rowspan="4"]) .rule-table {
+            border: 1.5px solid #111827;
+        }
+
+        .rule-table-wrap.manual-subtitle-box {
+            border: 0 !important;
+            background: #dcecff !important;
+        }
+
+        .rule-table-wrap.manual-subtitle-box .rule-table {
+            min-width: 0;
+            border: 0 !important;
+        }
+
+        .rule-table-wrap.manual-subtitle-box td {
+            padding: 8px 16px !important;
+            color: #17315c !important;
+            text-align: left !important;
+            font-weight: 700 !important;
+            background: #dcecff !important;
+            border: 0 !important;
+            cursor: pointer;
+        }
+
+        .empty-state {
+            padding: 56px 30px 64px;
+            text-align: center;
+            color: var(--law-muted);
+        }
+
+        .empty-state strong {
+            display: block;
+            color: var(--law-heading);
+            font-size: 24px;
+            margin-bottom: 12px;
+        }
+
+        .footer-note {
+            max-width: min(1920px, calc(100vw - 32px));
+            margin: 0 auto;
+            padding: 0 24px 44px;
+            color: #6b7280;
+            font-size: 13px;
+        }
+
+        /* 안전 및 보건 확보의무 이행 체계도 탭 & 도식 전용 스타일 */
+        .law-panel-tabs {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 4px;
+        }
+
+        .law-tab-btn {
+            flex: 1;
+            padding: 9px 8px;
+            border-radius: 10px;
+            border: 1.5px solid #c9d8ea;
+            background: #f1f5fa;
+            color: #334e68;
+            font-size: 12.5px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            text-align: center;
+        }
+
+        .law-tab-btn.is-active {
+            background: #1d4d93;
+            color: #fff;
+            border-color: #1d4d93;
+            box-shadow: 0 4px 10px rgba(29, 77, 147, 0.2);
+        }
+
+        .law-tab-content {
+            display: none;
+        }
+
+        .law-tab-content.is-active {
+            display: block;
+        }
+
+        /* 체계도 외곽 프레임 (이미지와 동일한 외곽선 및 라운딩) */
+        .chart-frame {
+            border: 2px solid #2563eb;
+            border-radius: 16px;
+            padding: 12px;
+            background: #ffffff;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            font-family: inherit;
+            box-shadow: 0 6px 18px rgba(37, 99, 235, 0.06);
+        }
+
+        /* 체계도 버튼 공통 스타일 */
+        .chart-btn {
+            display: block;
+            width: 100%;
+            text-align: left;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.18s ease;
+            box-sizing: border-box;
+        }
+
+        .chart-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            filter: brightness(0.97);
+        }
+
+        .chart-btn:active, .chart-btn.is-selected {
+            transform: translateY(0);
+            outline: 2.5px solid #1d4d93;
+        }
+
+        /* 1호 (파란색 그룹) */
+        .chart-section-blue {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .chart-head-blue {
+            background: #e0f2fe;
+            border: 1.5px solid #0284c7;
+            border-radius: 12px;
+            padding: 10px 12px;
+            font-size: 13.5px;
+            font-weight: 800;
+            color: #0369a1;
+            line-height: 1.45;
+        }
+
+        .chart-row-flex {
+            display: grid;
+            grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+            gap: 10px;
+            align-items: center;
+        }
+
+        .chart-item-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .chart-item-btn {
+            background: #ffffff;
+            border: 1.5px solid #38bdf8;
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-size: 11.5px;
+            font-weight: 600;
+            color: #0f172a;
+            line-height: 1.4;
+        }
+
+        .chart-item-btn:hover {
+            background: #f0f9ff;
+            border-color: #0284c7;
+        }
+
+        /* 브랜치 (평가·관리 / 점검) */
+        .chart-branch-col {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            position: relative;
+        }
+
+        .chart-branch-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .chart-arrow-line {
+            color: #f59e0b;
+            font-weight: 800;
+            font-size: 13px;
+            flex: 0 0 auto;
+        }
+
+        .chart-branch-badge-orange {
+            background: #fffbeb;
+            border: 1.5px solid #f59e0b;
+            border-radius: 12px;
+            padding: 7px 8px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #d97706;
+            text-align: center;
+            line-height: 1.35;
+            flex: 0 0 auto;
+        }
+
+        .chart-branch-badge-teal {
+            background: #f0fdfa;
+            border: 1.5px solid #0d9488;
+            border-radius: 12px;
+            padding: 7px 8px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #0f766e;
+            text-align: center;
+            line-height: 1.35;
+            flex: 0 0 auto;
+        }
+
+        .chart-branch-desc-orange {
+            background: #ffffff;
+            border: 1.5px solid #ea580c;
+            border-radius: 10px;
+            padding: 7px 8px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #c2410c;
+            line-height: 1.35;
+            text-align: center;
+            flex: 1;
+        }
+
+        .chart-branch-desc-teal {
+            background: #ffffff;
+            border: 1.5px solid #0284c7;
+            border-radius: 10px;
+            padding: 7px 8px;
+            font-size: 10.5px;
+            font-weight: 600;
+            color: #0369a1;
+            line-height: 1.4;
+            text-align: left;
+            flex: 1;
+        }
+
+        /* 2호 (주황색 그룹) */
+        .chart-head-orange {
+            background: #fff7ed;
+            border: 1.5px solid #f97316;
+            border-radius: 12px;
+            padding: 10px 12px;
+            font-size: 13.5px;
+            font-weight: 800;
+            color: #c2410c;
+            line-height: 1.45;
+        }
+
+        /* 3호 (남색/보라색 그룹) */
+        .chart-head-purple {
+            background: #eef2ff;
+            border: 1.5px solid #6366f1;
+            border-radius: 12px;
+            padding: 10px 12px;
+            font-size: 13.5px;
+            font-weight: 800;
+            color: #4338ca;
+            line-height: 1.45;
+        }
+
+        /* 4호 (연두색 그룹) */
+        .chart-section-green {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .chart-head-green {
+            background: #f0fdf4;
+            border: 1.5px solid #22c55e;
+            border-radius: 12px;
+            padding: 10px 12px;
+            font-size: 13.5px;
+            font-weight: 800;
+            color: #15803d;
+            line-height: 1.45;
+        }
+
+        .chart-item-btn-green {
+            background: #ffffff;
+            border: 1.5px solid #4ade80;
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-size: 11.5px;
+            font-weight: 600;
+            color: #0f172a;
+            line-height: 1.4;
+        }
+
+        .chart-item-btn-green:hover {
+            background: #f0fdf4;
+            border-color: #22c55e;
+        }
+
+        .chart-branch-badge-green {
+            background: #f0fdf4;
+            border: 1.5px solid #16a34a;
+            border-radius: 12px;
+            padding: 7px 8px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #15803d;
+            text-align: center;
+            line-height: 1.35;
+            flex: 0 0 auto;
+        }
+
+        .chart-branch-desc-green {
+            background: #ffffff;
+            border: 1.5px solid #16a34a;
+            border-radius: 10px;
+            padding: 7px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #166534;
+            line-height: 1.4;
+            text-align: left;
+            flex: 1;
+        }
+
+        /* 하단 실시간 법조문 미니 뷰어 */
+        .chart-quick-law-view {
+            margin-top: 12px;
+            border: 1.5px solid #cbd5e1;
+            border-radius: 12px;
+            background: #f8fafc;
+            padding: 12px 14px;
+            display: none;
+        }
+
+        .chart-quick-law-view.is-visible {
+            display: block;
+        }
+
+        .chart-quick-law-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .chart-quick-law-title {
+            font-size: 13px;
+            font-weight: 800;
+            color: #1e3a8a;
+        }
+
+        .chart-quick-law-link {
+            font-size: 11.5px;
+            color: #2563eb;
+            text-decoration: underline;
+        }
+
+        .chart-quick-law-body {
+            font-size: 12px;
+            line-height: 1.65;
+            color: #334155;
+            max-height: 220px;
+            overflow-y: auto;
+            white-space: pre-line;
+        }
+
+        @media (max-width: 1080px) {
+            .layout {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                position: static;
+                max-height: none;
+            }
+
+            .law-panel {
+                position: static;
+                height: auto;
+                max-height: none;
+            }
+        }
+
+        @media (max-width: 720px) {
+            .topbar-inner,
+            .search-band,
+            .layout,
+            .footer-note {
+                padding-left: 16px;
+                padding-right: 16px;
+            }
+
+            .brand-copy strong {
+                font-size: 22px;
+            }
+
+            .user-chip {
+                white-space: normal;
+            }
+
+            .upload-form {
+                grid-template-columns: 1fr;
+            }
+
+            .content-header,
+            .document,
+            .upload-card,
+            .sidebar {
+                padding-left: 18px;
+                padding-right: 18px;
+            }
+
+            .content-header h1 {
+                font-size: 28px;
+            }
+
+            .rule-edit-modal {
+                padding: 12px;
+            }
+
+            .rule-edit-dialog {
+                max-height: calc(100vh - 24px);
+            }
+
+            .rule-edit-textarea {
+                min-height: 200px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <div class="brand">
+                <div class="brand-mark" aria-hidden="true"></div>
+                <div class="brand-copy">
+                    <small>SAFETY MANAGEMENT SYSTEM</small>
+                    <strong>현대기전 중대재해 등에 관한 매뉴얼</strong>
+                </div>
+            </div>
+            <div class="topbar-actions">
+                <button type="button" class="content-header-button content-header-button-secondary" id="manual-upload-trigger">📁 HWPX 업로드</button>
+                <button type="button" class="content-header-button" id="rule-download-pdf">출력</button>
+                <a class="content-header-button content-header-button-secondary" href="/risk_assessment/work_list.php">메인으로 돌아가기</a>
+                <div class="user-chip"><?= h(trim((string)($user['name'] ?? $user['login_id'] ?? "\u{AD00}\u{B9AC}\u{C790}"))) ?> 님</div>
+            </div>
+            <form action="index.php" method="post" enctype="multipart/form-data" id="manual-upload-hidden-form" style="display:none;">
+                <input type="file" name="draft_file" id="manual-draft-file-input" accept=".hwpx">
+            </form>
+        </div>
+    </header>
+
+    <main class="layout">
+        <aside class="sidebar">
+            <div class="sidebar-scroll" id="sidebar-scroll-area">
+                <?php if ($tocGroups !== [] || $appendixGroups !== [] || $annexGroups !== []): ?>
+                    <div class="toc-search-sticky">
+                        <label for="toc-keyword-search" class="toc-search-label">키워드 검색</label>
+                        <input type="search" id="toc-keyword-search" class="toc-search-input" placeholder="조문 제목으로 검색" autocomplete="off" spellcheck="false">
+                        <?php if ($manualRevisions !== []): ?>
+                            <label for="manual-revision-select" class="toc-search-label" style="margin-top:10px;">개정본 선택</label>
+                            <select id="manual-revision-select" class="toc-search-input" onchange="if (this.value) window.location.href='index.php?revision=' + encodeURIComponent(this.value);">
+                                <option value="">현재 본문</option>
+                                <?php foreach ($manualRevisions as $revision): ?>
+                                    <option value="<?= h((string)$revision['revision_key']) ?>" <?= $selectedRevisionKey === (string)$revision['revision_key'] ? 'selected' : '' ?>><?= h((string)($revision['revision_date'] ?: $revision['updated_at'])) ?> / <?= h((string)$revision['revision_count']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        <?php endif; ?>
+                    </div>
+                    <div class="toc">
+                        <div class="toc-header">
+                            <h3>목차</h3>
+                        </div>
+                        <a class="toc-group-toggle toc-cover-link" href="manual_cover.php">표지</a>
+                        <div class="toc-list" id="toc-list">
+                            <?php foreach ($tocGroups as $groupIndex => $group): ?>
+                                <?php
+                                $heading = $group['heading'];
+                                $items = $group['items'];
+                                $headingId = trim((string)($heading['id'] ?? ''));
+                                $headingTitle = trim((string)($heading['title'] ?? ''));
+                                if ($headingId === '' || $headingTitle === '') {
+                                    continue;
+                                }
+                                ?>
+                                <div class="toc-group is-collapsed" data-toc-group>
+                                    <button type="button" class="toc-group-toggle" data-toc-toggle aria-expanded="false" aria-controls="toc-group-items-<?= $groupIndex ?>">
+                                        <span><?= h($headingTitle) ?></span>
+                                        <span class="chevron">&#9662;</span>
+                                    </button>
+                                    <ul class="toc-group-items" id="toc-group-items-<?= $groupIndex ?>">
+                                        <li><a class="level-2" href="#<?= h($headingId) ?>"><?= h($headingTitle) ?></a></li>
+                                        <?php foreach ($items as $item): ?>
+                                            <?php
+                                            $anchorId = trim((string)($item['id'] ?? ''));
+                                            $anchorTitle = trim((string)($item['title'] ?? ''));
+                                            $levelClass = 'level-' . (int)($item['level'] ?? 3);
+                                            if ($anchorId === '' || $anchorTitle === '') {
+                                                continue;
+                                            }
+                                            ?>
+                                            <li><a class="<?= h($levelClass) ?>" href="#<?= h($anchorId) ?>"><?= h($anchorTitle) ?></a></li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                </div>
+                            <?php endforeach; ?>
+                            <?php if ($appendixGroups !== []): ?>
+                                <div class="toc-header" style="margin-top:16px;">
+                                    <h3>부칙</h3>
+                                </div>
+                                <?php foreach ($appendixGroups as $groupIndex => $group): ?>
+                                    <?php
+                                    $heading = $group['heading'];
+                                    $items = $group['items'];
+                                    $headingId = trim((string)($heading['id'] ?? ''));
+                                    $headingTitle = trim((string)($heading['title'] ?? ''));
+                                    if ($headingId === '' || $headingTitle === '') {
+                                        continue;
+                                    }
+                                    $appendixDomId = 'toc-appendix-items-' . $groupIndex;
+                                    ?>
+                                    <div class="toc-group is-collapsed" data-toc-group>
+                                        <button type="button" class="toc-group-toggle" data-toc-toggle aria-expanded="false" aria-controls="<?= h($appendixDomId) ?>">
+                                            <span><?= h($headingTitle) ?></span>
+                                            <span class="chevron">&#9662;</span>
+                                        </button>
+                                        <ul class="toc-group-items" id="<?= h($appendixDomId) ?>">
+                                            <li><a class="level-2" href="#<?= h($headingId) ?>"><?= h($headingTitle) ?></a></li>
+                                            <?php foreach ($items as $item): ?>
+                                                <?php
+                                                $anchorId = trim((string)($item['id'] ?? ''));
+                                                $anchorTitle = trim((string)($item['title'] ?? ''));
+                                                $levelClass = 'level-' . (int)($item['level'] ?? 3);
+                                                if ($anchorId === '' || $anchorTitle === '') {
+                                                    continue;
+                                                }
+                                                ?>
+                                                <li><a class="<?= h($levelClass) ?>" href="#<?= h($anchorId) ?>"><?= h($anchorTitle) ?></a></li>
+                                            <?php endforeach; ?>
+                                        </ul>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                            <?php if ($annexGroups !== []): ?>
+                                <div class="toc-header" style="margin-top:16px;">
+                                    <h3>별지 서식</h3>
+                                </div>
+                                <?php foreach ($annexGroups as $groupIndex => $group): ?>
+                                    <?php
+                                    $heading = $group['heading'];
+                                    $items = $group['items'];
+                                    $headingId = trim((string)($heading['id'] ?? ''));
+                                    $headingTitle = trim((string)($heading['title'] ?? ''));
+                                    if ($headingId === '' || $headingTitle === '') {
+                                        continue;
+                                    }
+                                    $annexDomId = 'toc-annex-items-' . $groupIndex;
+                                    ?>
+                                    <div class="toc-group is-collapsed" data-toc-group>
+                                        <button type="button" class="toc-group-toggle" data-toc-toggle aria-expanded="false" aria-controls="<?= h($annexDomId) ?>">
+                                            <span><?= h($headingTitle) ?></span>
+                                            <span class="chevron">&#9662;</span>
+                                        </button>
+                                        <ul class="toc-group-items" id="<?= h($annexDomId) ?>">
+                                            <li><a class="level-2" href="#<?= h($headingId) ?>"><?= h($headingTitle) ?></a></li>
+                                            <?php foreach ($items as $item): ?>
+                                                <?php
+                                                $anchorId = trim((string)($item['id'] ?? ''));
+                                                $anchorTitle = trim((string)($item['title'] ?? ''));
+                                                $levelClass = 'level-' . (int)($item['level'] ?? 3);
+                                                if ($anchorId === '' || $anchorTitle === '') {
+                                                    continue;
+                                                }
+                                                ?>
+                                                <li><a class="<?= h($levelClass) ?>" href="#<?= h($anchorId) ?>"><?= h($anchorTitle) ?></a></li>
+                                            <?php endforeach; ?>
+                                        </ul>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </aside>
+        
+        <section class="main">
+            <article class="content-card">
+                <template id="manual-header-template"><?= $manualHeaderHtml ?></template>
+                <template id="manual-cover-template"><?= $manualCoverHtml ?></template>
+                <?php if ($current): ?>
+                    <div class="content-header">
+                        <span class="badge">최신 반영본</span>
+                        <h1>중대재해 등에 관한 매뉴얼</h1>
+                    </div>
+                    <div class="document">
+                        <?= $renderedContentHtml ?>
+                    </div>
+                <?php else: ?>
+                    <div class="empty-state">
+                        <strong>아직 반영된 중대재해 등에 관한 매뉴얼이 없습니다.</strong>
+                        <div>중대재해 등에 관한 매뉴얼 본문 데이터가 없습니다.</div>
+                    </div>
+                <?php endif; ?>
+            </article>
+        </section>
+
+        <aside class="law-panel">
+            <div class="law-panel-head">
+                <div class="law-panel-tabs">
+                    <button type="button" class="law-tab-btn is-active" id="law-tab-btn-chart" data-target="law-tab-chart">안전 및 보건 확보의무 이행 체계도</button>
+                    <button type="button" class="law-tab-btn" id="law-tab-btn-search" data-target="law-tab-search">법조문 검색 / 전문</button>
+                </div>
+            </div>
+            <div class="law-panel-body">
+                <!-- Tab 1: 안전 및 보건 확보의무 이행 체계도 (버튼 도식) -->
+                <div class="law-tab-content is-active" id="law-tab-chart" style="padding: 14px 12px 18px;">
+                    <div class="chart-frame">
+                        <!-- Group 1 (Blue) -->
+                        <div class="chart-section-blue">
+                            <button type="button" class="chart-btn chart-head-blue" data-law-query="중대재해처벌법 제4조 제1항 제1호" title="클릭 시 관련 법령 조회">
+                                재해예방에 필요한 인력 및 예산 등<br>안전보건관리체계의 구축 및 그 이행에 관한 조치<br><span style="font-size:11.5px; opacity:0.85;">(법 제4조제1항제1호)</span>
+                            </button>
+                            <div class="chart-row-flex">
+                                <div class="chart-item-list">
+                                    <button type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제1호" data-scroll-target="safety-goal-management-policy">1. 안전·보건 목표와 경영방침의 설정</button>
+                                    <button type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제2호">2. 안전·보건 업무를 총괄·관리하는 전담 조직 설치</button>
+                                    <button type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제3호">3. 유해·위험요인 확인 개선 절차 마련, 점검 및 조치</button>
+                                    <button type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제4호">4. 안전·보건에 관한 인력·시설·장비 구비와 유해·위험요인 개선 예산 편성 및 집행</button>
+                                    <button type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제5호">5. 안전보건관리책임자등의 충실한 업무수행 지원</button>
+                                    <button type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제6호">6. 산업안전보건법에 따른 전문인력 배치</button>
+                                    <button type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제7호">7. 종사자 의견 청취 절차마련, 청취 및 개선방안 마련·이행 여부 점검</button>
+                                    <button type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제8호">8. 중대산업재해 발생 시 등 조치 매뉴얼 마련 및 조치 여부 점검</button>
+                                    <button type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제9호">9. 도급, 용역, 위탁 시 평가기준·절차 및 관리비용, 업무수행기관 관련 기준 마련·이행 여부 점검</button>
+                                </div>
+                                <div class="chart-branch-col">
+                                    <!-- Branch for Item 5 -->
+                                    <div class="chart-branch-group">
+                                        <div class="chart-branch-badge-orange">평가·관리<br>반기 1회 이상</div>
+                                        <div class="chart-arrow-line">➔</div>
+                                        <button type="button" class="chart-btn chart-branch-desc-orange" data-law-query="중대재해처벌법 시행령 제4조 제5호">업무 수행<br>수준 평가</button>
+                                    </div>
+                                    <!-- Branch for Items 3, 7, 8, 9 -->
+                                    <div class="chart-branch-group" style="margin-top: 14px;">
+                                        <div class="chart-branch-badge-teal">점검 반기<br>1회 이상</div>
+                                        <div class="chart-arrow-line" style="color:#0d9488;">➔</div>
+                                        <button type="button" class="chart-btn chart-branch-desc-teal" data-law-query="중대재해처벌법 시행령 제4조 제3호">
+                                            3. 유해·위험요인 조치<br>
+                                            7. 의견 청취 절차<br>
+                                            8. 조치 매뉴얼<br>
+                                            9. 도급, 용역, 위탁 시 기준 및 절차 검토
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Group 2 (Orange) -->
+                        <button type="button" class="chart-btn chart-head-orange" data-law-query="중대재해처벌법 제4조 제1항 제2호" title="클릭 시 관련 법령 조회">
+                            재해 발생 시 재발방지 대책의 수립 및<br>그 이행에 관한 조치 <span style="font-size:11.5px; opacity:0.85;">(법 제4조제1항제2호)</span>
+                        </button>
+
+                        <!-- Group 3 (Purple/Blue) -->
+                        <button type="button" class="chart-btn chart-head-purple" data-law-query="중대재해처벌법 제4조 제1항 제3호" title="클릭 시 관련 법령 조회">
+                            중앙행정기관·지방자치단체가 관계 법령에 따라<br>개선, 시정 등을 명한 사항의 이행에 관한 조치<br><span style="font-size:11.5px; opacity:0.85;">(법 제4조제1항제3호)</span>
+                        </button>
+
+                        <!-- Group 4 (Green) -->
+                        <div class="chart-section-green">
+                            <button type="button" class="chart-btn chart-head-green" data-law-query="중대재해처벌법 제4조 제1항 제4호" title="클릭 시 관련 법령 조회">
+                                안전·보건 관계 법령에 따른 의무이행에 필요한<br>관리상의 조치 <span style="font-size:11.5px; opacity:0.85;">(법 제4조제1항제4호)</span>
+                            </button>
+                            <div class="chart-row-flex">
+                                <div class="chart-item-list">
+                                    <button type="button" class="chart-btn chart-item-btn-green" data-law-query="중대재해처벌법 시행령 제5조 제1항">1. 안전·보건 관계 법령에 따른 의무 이행 여부에 대한 점검</button>
+                                    <button type="button" class="chart-btn chart-item-btn-green" data-law-query="중대재해처벌법 시행령 제5조 제2항">2. 인력 배치 및 예산 추가 편성·집행 등 의무 이행에 필요한 조치</button>
+                                    <button type="button" class="chart-btn chart-item-btn-green" data-law-query="중대재해처벌법 시행령 제5조 제3항">3. 유해·위험 작업에 대한 안전·보건 교육의 실시 여부를 점검</button>
+                                    <button type="button" class="chart-btn chart-item-btn-green" data-law-query="중대재해처벌법 시행령 제5조 제4항">4. 미실시 교육에 대한 이행의 지시, 예산의 확보 등 교육 실시에 필요한 조치</button>
+                                </div>
+                                <div class="chart-branch-col">
+                                    <div class="chart-branch-group">
+                                        <div class="chart-branch-badge-green">점검 반기<br>1회 이상</div>
+                                        <div class="chart-arrow-line" style="color:#16a34a;">➔</div>
+                                        <button type="button" class="chart-btn chart-branch-desc-green" data-law-query="중대재해처벌법 시행령 제5조">
+                                            2. 의무 이행 필요조치<br>
+                                            4. 교육 실시 필요조치
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 하단 실시간 법조문 미니 뷰어 -->
+                    <div class="chart-quick-law-view" id="chart-quick-law-view">
+                        <div class="chart-quick-law-head">
+                            <span class="chart-quick-law-title" id="chart-quick-law-title">법령 조문</span>
+                            <a class="chart-quick-law-link" id="chart-quick-law-link" href="https://www.law.go.kr/" target="_blank" rel="noopener">법제처 원문 ↗</a>
+                        </div>
+                        <div class="chart-quick-law-body" id="chart-quick-law-body">버튼을 클릭하면 해당 조문이 여기에 표시됩니다.</div>
+                    </div>
+                </div>
+
+                <!-- Tab 2: 법조문 검색 및 전문 뷰어 -->
+                <div class="law-tab-content" id="law-tab-search">
+                    <div class="law-panel-meta" style="margin-top:0; padding:16px 18px 0;">
+                        <form class="law-panel-search" id="law-panel-search-form" action="#" method="get" novalidate>
+                            <input
+                                class="law-panel-search-input"
+                                id="law-panel-search-input"
+                                type="search"
+                                placeholder="예: 중대재해처벌법 / 중대재해처벌법 제4조"
+                                aria-label="관련 법조문 검색"
+                                autocomplete="off"
+                                spellcheck="false"
+                            >
+                            <button class="law-panel-search-button" type="submit">검색</button>
+                        </form>
+                        <div class="law-panel-query" id="law-panel-query">아직 선택한 법령이 없습니다.</div>
+                        <a class="law-panel-link" id="law-panel-open-link" href="https://www.law.go.kr/" target="_blank" rel="noopener">법제처 원문 열기</a>
+                    </div>
+                    <div class="law-panel-content law-panel-placeholder" id="law-panel-content">
+                        <div>
+                            <strong>관련 법조문 보기</strong>
+                            <span>본문의 법령 링크를 클릭하거나 위 검색창에서 법령을 조회하세요.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <div class="rule-edit-modal" id="rule-edit-modal" aria-hidden="true">
+        <div class="rule-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="rule-edit-title">
+            <div class="rule-edit-head">
+                <h3 id="rule-edit-title">조문 내용 수정</h3>
+                <button type="button" class="rule-edit-close" id="rule-edit-close" aria-label="닫기">&times;</button>
+            </div>
+            <div class="rule-edit-body">
+                <div class="rule-edit-card-grid">
+                    <div class="rule-edit-card readonly"><h4>기존 내용</h4><textarea id="rule-edit-original-textarea" class="rule-edit-textarea" readonly></textarea></div>
+                    <div class="rule-edit-card"><h4>수정 내용</h4><textarea id="rule-edit-textarea" class="rule-edit-textarea"></textarea></div>
+                </div>
+                <div class="rule-edit-group">
+                    <label for="rule-edit-insert-after">새 조항 위치</label>
+                    <select id="rule-edit-insert-after" class="rule-edit-select"></select>
+                </div>
+                <div class="rule-edit-group">
+                    <label for="rule-edit-basis-textarea">관련근거</label>
+                    <textarea id="rule-edit-basis-textarea" class="rule-edit-textarea secondary" placeholder="예: 중대재해처벌법 제4조, 산업안전보건법 제36조"></textarea>
+                </div>
+            </div>
+            <div class="rule-edit-foot">
+                <button type="button" class="rule-edit-btn danger" id="rule-edit-delete">삭제</button>
+                <button type="button" class="rule-edit-btn" id="rule-edit-cancel">취소</button>
+                <button type="button" class="rule-edit-btn primary" id="rule-edit-save">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="print-preview-modal" id="print-preview-modal" aria-hidden="true">
+        <div class="print-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="print-preview-title">
+            <div class="print-preview-head">
+                <div class="print-preview-copy">
+                    <h3 id="print-preview-title">PDF 문서 미리보기</h3>
+                    <p>문서 배치를 확인한 뒤 출력 또는 PDF 저장을 진행할 수 있습니다.</p>
+                </div>
+                <div class="print-preview-actions">
+                    <button type="button" class="content-header-button" id="print-preview-download">다운로드</button>
+                    <button type="button" class="content-header-button print-preview-print-button" id="print-preview-print">출력</button>
+                    <button type="button" class="content-header-button content-header-button-secondary" id="print-preview-close">닫기</button>
+                </div>
+            </div>
+            <div class="print-preview-body">
+                <div class="print-preview-paper" id="print-preview-paper"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer-note">중대재해 등에 관한 매뉴얼 문서는 관리자 권한으로만 수정할 수 있습니다.</div>
+    <script>
+        (function () {
+            function bindTocToggleEvents(scope) {
+                var root = scope || document;
+                root.querySelectorAll('[data-toc-toggle]').forEach(function (toggle) {
+                    if (toggle.dataset.boundTocToggle === '1') {
+                        return;
+                    }
+
+                    toggle.dataset.boundTocToggle = '1';
+                    toggle.addEventListener('click', function () {
+                        var group = toggle.closest('[data-toc-group]');
+                        if (!group) {
+                            return;
+                        }
+
+                        var isCollapsed = group.classList.toggle('is-collapsed');
+                        toggle.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+                    });
+                });
+            }
+
+            bindTocToggleEvents();
+
+            function buildLawSearchUrl(query) {
+                var normalizedQuery = normalizeLawReference(query);
+                var matched = normalizedQuery.match(/(.+?(?:\uBC95\uB960|\uBC95|\uC2DC\uD589\uB839|\uC2DC\uD589\uADDC\uCE59))\s*\uC81C\s*(\d+)\s*\uC870(?:\s*\uC758\s*(\d+))?(?:\s*\uC81C\s*(\d+)\s*\uD56D(?:\s*\uC81C\s*(\d+)\s*\uD638)?)?/);
+                if (!matched) {
+                    return 'https://www.law.go.kr/lsSc.do?menuId=1&query=' + encodeURIComponent(normalizedQuery) + '&subMenuId=15&tabMenuId=81';
+                }
+
+                var lawName = normalizeLawReference(matched[1] || '');
+                var articleNumber = parseInt(matched[2] || '0', 10);
+                var articleSubNumber = parseInt(matched[3] || '0', 10);
+                if (!lawName || !articleNumber) {
+                    return 'https://www.law.go.kr/lsSc.do?menuId=1&query=' + encodeURIComponent(normalizedQuery) + '&subMenuId=15&tabMenuId=81';
+                }
+
+                return 'https://www.law.go.kr/LSW/lsLinkProc.do?lsNm='
+                    + encodeURIComponent(lawName)
+                    + '&joNo='
+                    + encodeURIComponent(buildLawArticleNo(articleNumber, articleSubNumber))
+                    + '&mode=10&lsClsCd=010101L';
+            }
+
+            function escapeHtml(text) {
+                return String(text)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            function normalizeLawReference(text) {
+                return String(text || '')
+                    .replace(/[\u300C\u300D"']/g, '')
+                    .replace(/\s+/g, ' ')
+                    .replace(/[\s,.;:]+$/g, '')
+                    .trim();
+            }
+
+            function splitRelatedBasisItems(text) {
+                var source = String(text || '')
+                    .replace(/^\s*\[?\s*\uAD00\uB828\uADFC\uAC70\s*[:\uFF1A]?\s*/u, '')
+                    .replace(/\]\s*$/u, '');
+
+                var citationMatches = source.match(/([\uAC00-\uD7A3A-Za-z0-9\s\(\)\-\u00B7\u318D]+?(?:\uBC95\uB960|\uBC95|\uC2DC\uD589\uB839|\uC2DC\uD589\uADDC\uCE59)\s*\uC81C\s*\d+\s*\uC870(?:\s*\uC758\s*\d+)?(?:\s*\uC81C\s*\d+\s*\uD56D(?:\s*\uC81C\s*\d+\s*\uD638)?)?)/gu);
+                if (citationMatches && citationMatches.length > 0) {
+                    return citationMatches
+                        .map(function (item) {
+                            return normalizeLawReference(item);
+                        })
+                        .filter(function (item) {
+                            return item !== '';
+                        });
+                }
+
+                var rawItems = source.split(/[,;\n]+/);
+                var output = [];
+                var lastLawName = '';
+
+                rawItems.forEach(function (item) {
+                    var normalized = normalizeLawReference(item);
+                    if (!normalized) {
+                        return;
+                    }
+
+                    var lawMatch = normalized.match(/(.+?(?:\uBC95\uB960|\uBC95|\uC2DC\uD589\uB839|\uC2DC\uD589\uADDC\uCE59))\s*(\uC81C\s*\d+\s*\uC870(?:\s*\uC758\s*\d+)?)/u);
+                    if (lawMatch) {
+                        lastLawName = normalizeLawReference(lawMatch[1] || '');
+                        output.push(normalizeLawReference((lawMatch[1] || '') + ' ' + (lawMatch[2] || '')));
+                        return;
+                    }
+
+                    if (/^\uC81C\s*\d+\s*\uC870(?:\s*\uC758\s*\d+)?/u.test(normalized) && lastLawName) {
+                        output.push(normalizeLawReference(lastLawName + ' ' + normalized));
+                        return;
+                    }
+
+                    output.push(normalized);
+                });
+
+                return output.filter(function (item) {
+                    return item !== '';
+                });
+            }
+
+            function padNumber(value, size) {
+                var output = String(Math.max(0, parseInt(value || 0, 10) || 0));
+                while (output.length < size) {
+                    output = '0' + output;
+                }
+                return output;
+            }
+
+            function buildLawArticleNo(articleNumber, articleSubNumber) {
+                return padNumber(articleNumber, 4) + padNumber(articleSubNumber || 0, 2) + '000';
+            }
+
+            function buildLawReferenceLink(lawName, articleNumber, articleSubNumber, labelText) {
+                var queryText = normalizeLawReference(
+                    lawName + ' ' + '\uC81C' + articleNumber + '\uC870' + (articleSubNumber ? '\uC758' + articleSubNumber : '')
+                );
+                return {
+                    href: buildLawSearchUrl(queryText),
+                    queryText: queryText,
+                    labelText: labelText
+                };
+            }
+
+            function buildLawAnchorHtmlFromItem(itemText) {
+                var normalized = normalizeLawReference(itemText);
+                if (!normalized) {
+                    return '';
+                }
+
+                var matched = normalized.match(/(.+?(?:\uBC95\uB960|\uBC95|\uC2DC\uD589\uB839|\uC2DC\uD589\uADDC\uCE59))\s*\uC81C\s*(\d+)\s*\uC870(?:\s*\uC758\s*(\d+))?((?:\s*\uC81C\s*\d+\s*\uD56D(?:\s*\uC81C\s*\d+\s*\uD638)?)?)/u);
+                if (!matched) {
+                    return escapeHtml(normalized);
+                }
+
+                var lawName = normalizeLawReference(matched[1] || '');
+                var articleNumber = parseInt(matched[2] || '0', 10);
+                var articleSubNumber = parseInt(matched[3] || '0', 10);
+                var extraClause = normalizeLawReference(matched[4] || '');
+                if (!lawName || !articleNumber) {
+                    return escapeHtml(normalized);
+                }
+
+                var labelText = lawName + ' ' + '\uC81C' + articleNumber + '\uC870' + (articleSubNumber ? '\uC758' + articleSubNumber : '');
+                if (extraClause) {
+                    labelText += ' ' + extraClause;
+                }
+                var queryText = normalizeLawReference(labelText);
+                var linkData = {
+                    href: buildLawSearchUrl(queryText),
+                    queryText: queryText,
+                    labelText: labelText,
+                };
+
+                return '<a class="law-ref-link" href="'
+                    + escapeHtml(linkData.href)
+                    + '" target="_blank" rel="noopener" data-law-query="'
+                    + escapeHtml(linkData.queryText)
+                    + '">'
+                    + escapeHtml(linkData.labelText)
+                    + '</a>';
+            }
+
+            function linkRelatedBasisReferences(root) {
+                if (!root) {
+                    return;
+                }
+
+                root.querySelectorAll('p').forEach(function (element) {
+                    var rawText = String(element.textContent || '').trim();
+                    if (!/^\[?\s*\uAD00\uB828\uADFC\uAC70\s*[:\uFF1A]?/u.test(rawText)) {
+                        return;
+                    }
+
+                    var items = splitRelatedBasisItems(rawText);
+                    if (items.length === 0) {
+                        return;
+                    }
+
+                    element.classList.add('related-basis');
+                    element.innerHTML = '\uAD00\uB828\uADFC\uAC70: ' + items.map(function (item) {
+                        return buildLawAnchorHtmlFromItem(item);
+                    }).join(', ');
+                });
+            }
+
+            function rebuildArticleRelatedBasisLinks(root, articleNo) {
+                if (!root || !articleNo) {
+                    return;
+                }
+
+                var headingPattern = new RegExp('^\\s*\\uC81C\\s*' + String(articleNo) + '\\s*\\uC870(?:\\s*\\uC758\\s*\\d+)?');
+
+                root.querySelectorAll('h3').forEach(function (heading) {
+                    var headingText = String(heading.textContent || '').trim();
+                    if (!headingPattern.test(headingText)) {
+                        return;
+                    }
+
+                    var current = heading.nextElementSibling;
+                    while (current) {
+                        if (current.tagName === 'H2' || current.tagName === 'H3') {
+                            break;
+                        }
+
+                        if (current.tagName === 'P') {
+                            var text = String(current.textContent || '').trim();
+                            if (/^\[?\s*\uAD00\uB828\uADFC\uAC70\s*[:\uFF1A]?/u.test(text)) {
+                                current.classList.add('related-basis');
+                                var items = splitRelatedBasisItems(text);
+                                current.innerHTML = items.length > 0
+                                    ? '\uAD00\uB828\uADFC\uAC70: ' + items.map(function (item) {
+                                        return buildLawAnchorHtmlFromItem(item);
+                                    }).join(', ')
+                                    : '\uAD00\uB828\uADFC\uAC70 \uC5C6\uC74C';
+                            }
+                        }
+
+                        current = current.nextElementSibling;
+                    }
+                });
+            }
+
+            function linkLawReferences(root) {
+                if (!root) {
+                    return;
+                }
+
+                var pattern = /([^\[\]\n,;:<]*?(?:\uBC95\uB960|\uBC95|\uC2DC\uD589\uB839|\uC2DC\uD589\uADDC\uCE59)\s*\uC81C\s*\d+\s*\uC870(?:\s*\uC758\s*\d+)?(?:\s*\uC81C\s*\d+\s*\uD56D(?:\s*\uC81C\s*\d+\s*\uD638)?)?)/g;
+                root.querySelectorAll('p, h2, h3, td').forEach(function (element) {
+                    if (element.querySelector('a')) {
+                        return;
+                    }
+
+                    var text = element.textContent || '';
+                    if (!pattern.test(text)) {
+                        pattern.lastIndex = 0;
+                        return;
+                    }
+
+                    pattern.lastIndex = 0;
+                    var replacedHtml = escapeHtml(text).replace(pattern, function (matchedText) {
+                        var queryText = matchedText.replace(/[\[\]"']/g, '').replace(/\s+/g, ' ').trim();
+                        var href = buildLawSearchUrl(queryText);
+                        return '<a class=\"law-ref-link\" href=\"' + href + '\" target=\"_blank\" rel=\"noopener\" data-law-query=\"' + escapeHtml(queryText) + '\">' + escapeHtml(matchedText) + '</a>';
+                    });
+                    element.innerHTML = replacedHtml;
+                });
+            }
+
+            function linkLawReferencesSafe(root) {
+                if (!root) {
+                    return 0;
+                }
+
+                var citationPattern = /([^\[\]\n;:<]*?(?:\uBC95\uB960|\uBC95|\uC2DC\uD589\uB839|\uC2DC\uD589\uADDC\uCE59))\s*\uC81C\s*(\d+)\s*\uC870(?:\s*\uC758\s*(\d+))?(?:\s*\uC81C\s*(\d+)\s*\uD56D(?:\s*\uC81C\s*(\d+)\s*\uD638)?)?((?:\s*,\s*\uC81C\s*\d+\s*\uC870(?:\s*\uC758\s*\d+)?(?:\s*\uC81C\s*\d+\s*\uD56D(?:\s*\uC81C\s*\d+\s*\uD638)?)?)*)/g;
+                var trailingPattern = /(\s*,\s*)\uC81C\s*(\d+)\s*\uC870(?:\s*\uC758\s*(\d+))?(?:\s*\uC81C\s*(\d+)\s*\uD56D(?:\s*\uC81C\s*(\d+)\s*\uD638)?)?/g;
+                var linkCount = 0;
+
+                root.querySelectorAll('td').forEach(function (element) {
+                    var plainText = String(element.textContent || '').trim();
+                    if (/^\[?\s*\uAD00\uB828\uADFC\uAC70\s*[:\uFF1A]?/u.test(plainText) || element.classList.contains('related-basis')) {
+                        return;
+                    }
+
+                    if (element.querySelector('a')) {
+                        return;
+                    }
+
+                    var text = element.textContent || '';
+                    if (!citationPattern.test(text)) {
+                        citationPattern.lastIndex = 0;
+                        return;
+                    }
+
+                    citationPattern.lastIndex = 0;
+                    var replacedHtml = escapeHtml(text).replace(citationPattern, function (matchedText, lawNameText, articleNumber, articleSubNumber, paragraphNumber, itemNumber, trailingArticles) {
+                        var rawLawName = normalizeLawReference(lawNameText);
+                        var lawName = rawLawName;
+                        var stopWords = ['\uBCF8', '\uC774', '\uD574\uB2F9', '\uB3D9', '\uADDC\uC815\uC740', '\uADDC\uC815', '\uC870\uBB38\uC740', '\uC870\uBB38', '\uBC0F', '\uC640', '\uACFC'];
+                        var parts = rawLawName.split(' ').filter(Boolean);
+                        for (var i = 0; i < parts.length; i++) {
+                            var candidate = parts.slice(i).join(' ');
+                            if (!/(\uBC95\uB960|\uBC95|\uC2DC\uD589\uB839|\uC2DC\uD589\uADDC\uCE59)$/u.test(candidate)) {
+                                continue;
+                            }
+                            if (stopWords.indexOf(parts[i]) >= 0) {
+                                continue;
+                            }
+                            lawName = candidate;
+                            break;
+                        }
+
+                        var prefixText = '';
+                        var prefixIndex = rawLawName.lastIndexOf(lawName);
+                        if (prefixIndex > 0) {
+                            prefixText = rawLawName.slice(0, prefixIndex);
+                        }
+
+                        var firstArticleNumber = parseInt(articleNumber || '0', 10);
+                        var firstArticleSubNumber = parseInt(articleSubNumber || '0', 10);
+                        var firstParagraphNumber = parseInt(paragraphNumber || '0', 10);
+                        var firstItemNumber = parseInt(itemNumber || '0', 10);
+                        if (!lawName || !firstArticleNumber) {
+                            return escapeHtml(matchedText);
+                        }
+
+                        var firstLabelText = normalizeLawReference(
+                            lawName
+                            + ' '
+                            + '\uC81C' + firstArticleNumber + '\uC870'
+                            + (firstArticleSubNumber ? '\uC758' + firstArticleSubNumber : '')
+                            + (firstParagraphNumber ? ' \uC81C' + firstParagraphNumber + '\uD56D' : '')
+                            + (firstItemNumber ? ' \uC81C' + firstItemNumber + '\uD638' : '')
+                        );
+                        var firstLink = {
+                            href: buildLawSearchUrl(firstLabelText),
+                            queryText: firstLabelText,
+                            labelText: firstLabelText,
+                        };
+                        linkCount += 1;
+
+                        var trailingHtml = escapeHtml(trailingArticles || '').replace(trailingPattern, function (subMatchedText, delimiter, nextArticleNumber, nextArticleSubNumber, nextParagraphNumber, nextItemNumber) {
+                            var nextArticle = parseInt(nextArticleNumber || '0', 10);
+                            var nextSubArticle = parseInt(nextArticleSubNumber || '0', 10);
+                            var nextParagraph = parseInt(nextParagraphNumber || '0', 10);
+                            var nextItem = parseInt(nextItemNumber || '0', 10);
+                            if (!nextArticle) {
+                                return escapeHtml(subMatchedText);
+                            }
+
+                            var nextLabelText = normalizeLawReference(
+                                lawName
+                                + ' '
+                                + '\uC81C' + nextArticle + '\uC870'
+                                + (nextSubArticle ? '\uC758' + nextSubArticle : '')
+                                + (nextParagraph ? ' \uC81C' + nextParagraph + '\uD56D' : '')
+                                + (nextItem ? ' \uC81C' + nextItem + '\uD638' : '')
+                            );
+                            var nextLink = {
+                                href: buildLawSearchUrl(nextLabelText),
+                                queryText: nextLabelText,
+                                labelText: nextLabelText,
+                            };
+                            linkCount += 1;
+
+                            return escapeHtml(delimiter)
+                                + '<a class="law-ref-link" href="'
+                                + nextLink.href
+                                + '" target="_blank" rel="noopener" data-law-query="'
+                                + escapeHtml(nextLink.queryText)
+                                + '">'
+                                + escapeHtml(nextLink.labelText)
+                                + '</a>';
+                        });
+
+                        return escapeHtml(prefixText)
+                            + '<a class="law-ref-link" href="'
+                            + firstLink.href
+                            + '" target="_blank" rel="noopener" data-law-query="'
+                            + escapeHtml(firstLink.queryText)
+                            + '">'
+                            + escapeHtml(firstLink.labelText)
+                            + '</a>'
+                            + trailingHtml;
+                    });
+
+                    element.innerHTML = replacedHtml;
+                });
+
+                return linkCount;
+            }
+
+            var documentRoot = document.querySelector('.document');
+            var lawLinkStatus = document.getElementById('law-link-status');
+            var tocList = document.getElementById('toc-list');
+            var tocSearchInput = document.getElementById('toc-keyword-search');
+
+            function prepareSafetyManualSectionAnchor() {
+                if (!documentRoot) {
+                    return;
+                }
+
+                var targetTitle = '5. 안전보건목표 및 경영방침의 설정';
+                var targetNode = Array.prototype.find.call(documentRoot.querySelectorAll('p, h2, h3'), function (node) {
+                    return String(node.textContent || '').replace(/\s+/g, ' ').trim() === targetTitle;
+                });
+                if (targetNode && !document.getElementById('safety-goal-management-policy')) {
+                    targetNode.id = 'safety-goal-management-policy';
+                }
+
+                if (!targetNode || document.getElementById('manual-policy-link')) {
+                    return;
+                }
+
+                var finalSectionParagraph = Array.prototype.find.call(documentRoot.querySelectorAll('p'), function (node) {
+                    var title = String(node.textContent || '').replace(/\s+/g, ' ').trim();
+                    return /^5\.11\s+안전보건\s+목표\s+및\s+경영방침의\s+설정/.test(title);
+                });
+                var policyLink = document.createElement('p');
+                policyLink.id = 'manual-policy-link';
+                policyLink.innerHTML = '<a class="manual-policy-link" href="management_policy.php">안전보건 경영방침 만들기</a>'
+                    + '<a class="manual-policy-link" href="goal_plan.php">목표 및 세부계획 만들기</a>';
+
+                if (!finalSectionParagraph) {
+                    return;
+                }
+
+                finalSectionParagraph.parentNode.insertBefore(policyLink, finalSectionParagraph.nextSibling);
+            }
+
+            prepareSafetyManualSectionAnchor();
+
+            function setTocGroupExpanded(group, expanded) {
+                if (!group) {
+                    return;
+                }
+
+                group.classList.toggle('is-collapsed', !expanded);
+                var toggle = group.querySelector('[data-toc-toggle]');
+                if (toggle) {
+                    toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+                }
+            }
+
+            function applyTocKeywordFilter(rawKeyword) {
+                if (!tocList) {
+                    return;
+                }
+
+                var keyword = String(rawKeyword || '').trim().toLowerCase();
+                var hasKeyword = keyword !== '';
+
+                tocList.querySelectorAll('[data-toc-group]').forEach(function (group) {
+                    var headingToggle = group.querySelector('[data-toc-toggle]');
+                    var headingText = headingToggle ? String(headingToggle.textContent || '').toLowerCase() : '';
+                    var headingMatched = hasKeyword && headingText.indexOf(keyword) >= 0;
+                    var visibleItemCount = 0;
+
+                    group.querySelectorAll('.toc-group-items li').forEach(function (item) {
+                        var link = item.querySelector('a');
+                        var itemText = link ? String(link.textContent || '').toLowerCase() : '';
+                        var itemMatched = !hasKeyword || headingMatched || itemText.indexOf(keyword) >= 0;
+                        item.style.display = itemMatched ? '' : 'none';
+                        if (itemMatched) {
+                            visibleItemCount += 1;
+                        }
+                    });
+
+                    var showGroup = !hasKeyword || headingMatched || visibleItemCount > 0;
+                    group.style.display = showGroup ? '' : 'none';
+
+                    if (!hasKeyword) {
+                        if (group.dataset.searchExpanded === '1') {
+                            setTocGroupExpanded(group, false);
+                        }
+                        delete group.dataset.searchExpanded;
+                        return;
+                    }
+
+                    if (showGroup) {
+                        group.dataset.searchExpanded = '1';
+                        setTocGroupExpanded(group, true);
+                    }
+                });
+
+                tocList.querySelectorAll('.toc-header').forEach(function (header) {
+                    if (!hasKeyword) {
+                        header.style.display = '';
+                        return;
+                    }
+
+                    var current = header.nextElementSibling;
+                    var hasVisibleGroup = false;
+                    while (current) {
+                        if (current.classList && current.classList.contains('toc-header')) {
+                            break;
+                        }
+                        if (current.matches && current.matches('[data-toc-group]') && current.style.display !== 'none') {
+                            hasVisibleGroup = true;
+                            break;
+                        }
+                        current = current.nextElementSibling;
+                    }
+
+                    header.style.display = hasVisibleGroup ? '' : 'none';
+                });
+            }
+
+            if (tocSearchInput) {
+                tocSearchInput.addEventListener('input', function () {
+                    applyTocKeywordFilter(tocSearchInput.value);
+                });
+            }
+
+            function isArticleHeading(node) {
+                if (!node || node.tagName !== 'H3') {
+                    return false;
+                }
+
+                return /^\s*(?:#+\s*)?\uC81C\s*\d+\s*\uC870(?:\s*\uC758\s*\d+)?/.test((node.textContent || '').trim());
+            }
+
+            function collectClauseNodes(headingNode) {
+                var nodes = [headingNode];
+                var current = headingNode.nextElementSibling;
+                while (current) {
+                    if (current.tagName === 'H2' || current.tagName === 'H3') {
+                        break;
+                    }
+
+                    nodes.push(current);
+                    current = current.nextElementSibling;
+                }
+
+                return nodes;
+            }
+
+            function getArticleHeadingNodes() {
+                if (!documentRoot) {
+                    return [];
+                }
+
+                return Array.prototype.filter.call(documentRoot.querySelectorAll('h3'), function (node) {
+                    return isArticleHeading(node);
+                });
+            }
+
+            function normalizeHeadingText(text) {
+                return String(text || '').replace(/\s+/g, ' ').trim();
+            }
+
+            function slugifyHeading(text, index) {
+                var slug = String(text || '')
+                    .trim()
+                    .replace(/[^a-zA-Z0-9\uAC00-\uD7A3\-_]+/g, '-')
+                    .replace(/^-+|-+$/g, '');
+                if (!slug) {
+                    slug = 'section-' + index;
+                }
+                return slug + '-' + index;
+            }
+
+            function formatArticleHeadingText(articleNumber, headingText) {
+                var remainder = normalizeHeadingText(headingText).replace(/^(?:#+\s*)?\uC81C\s*\d+\s*\uC870(?:\s*\uC758\s*\d+)?\s*/u, '');
+                var prefix = '\uC81C' + articleNumber + '\uC870';
+                if (!remainder) {
+                    return prefix;
+                }
+
+                return prefix + (/^\(/.test(remainder) ? '' : ' ') + remainder;
+            }
+
+            function markArticleHeadingsEditable() {
+                getArticleHeadingNodes().forEach(function (node) {
+                    node.classList.add('rule-editable');
+                });
+            }
+
+            function renumberArticleHeadings() {
+                var nextNumber = 1;
+                getArticleHeadingNodes().forEach(function (node) {
+                    node.textContent = formatArticleHeadingText(nextNumber, node.textContent || '');
+                    nextNumber += 1;
+                });
+            }
+
+            function buildTocGroupsFromDocument() {
+                var groups = {
+                    chapters: [],
+                    appendix: [],
+                    annex: [],
+                };
+                var currentCollection = 'chapters';
+                var currentGroup = null;
+
+                if (!documentRoot) {
+                    return groups;
+                }
+
+                documentRoot.querySelectorAll('h2, h3').forEach(function (node, index) {
+                    var level = node.tagName === 'H2' ? 2 : 3;
+                    var title = normalizeHeadingText(node.textContent || '');
+                    if (!title) {
+                        return;
+                    }
+
+                    var id = slugifyHeading(title, index + 1);
+                    node.id = id;
+
+                    var item = {
+                        id: id,
+                        title: title,
+                        level: level,
+                    };
+                    var isAppendixHeading = /^\uBD80\uCE59(?:\s|\(|$)/.test(title);
+                    var isAnnexHeading = /^\uBCC4\uC9C0(?:\s*\uC11C\uC2DD)?(?:\s|\(|$)/.test(title);
+
+                    if (level === 2 || !currentGroup) {
+                        currentCollection = isAppendixHeading ? 'appendix' : (isAnnexHeading ? 'annex' : 'chapters');
+                        currentGroup = {
+                            heading: item,
+                            items: [],
+                        };
+                        groups[currentCollection].push(currentGroup);
+                        return;
+                    }
+
+                    currentGroup.items.push(item);
+                });
+
+                return groups;
+            }
+
+            function buildTocGroupHtml(groups, domIdPrefix) {
+                return groups.map(function (group, groupIndex) {
+                    var heading = group.heading || {};
+                    var items = Array.isArray(group.items) ? group.items : [];
+                    var domId = domIdPrefix + '-' + groupIndex;
+                    var itemsHtml = items.map(function (item) {
+                        var levelClass = 'level-' + (item.level || 3);
+                        return '<li><a class="' + escapeHtml(levelClass) + '" href="#' + escapeHtml(item.id || '') + '">' + escapeHtml(item.title || '') + '</a></li>';
+                    }).join('');
+
+                    return ''
+                        + '<div class="toc-group is-collapsed" data-toc-group>'
+                        + '  <button type="button" class="toc-group-toggle" data-toc-toggle aria-expanded="false" aria-controls="' + escapeHtml(domId) + '">'
+                        + '    <span>' + escapeHtml(heading.title || '') + '</span>'
+                        + '    <span class="chevron">&#9662;</span>'
+                        + '  </button>'
+                        + '  <ul class="toc-group-items" id="' + escapeHtml(domId) + '">'
+                        + '    <li><a class="level-2" href="#' + escapeHtml(heading.id || '') + '">' + escapeHtml(heading.title || '') + '</a></li>'
+                        + itemsHtml
+                        + '  </ul>'
+                        + '</div>';
+                }).join('');
+            }
+
+            function rebuildTocFromDocument() {
+                if (!tocList) {
+                    return;
+                }
+
+                var groups = buildTocGroupsFromDocument();
+                var html = buildTocGroupHtml(groups.chapters, 'toc-group-items');
+
+                if (groups.appendix.length > 0) {
+                    html += '<div class="toc-header" style="margin-top:16px;"><h3>부칙</h3></div>';
+                    html += buildTocGroupHtml(groups.appendix, 'toc-appendix-items');
+                }
+
+                if (groups.annex.length > 0) {
+                    html += '<div class="toc-header" style="margin-top:16px;"><h3>별지 서식</h3></div>';
+                    html += buildTocGroupHtml(groups.annex, 'toc-annex-items');
+                }
+
+                tocList.innerHTML = html;
+                bindTocToggleEvents(tocList);
+                applyTocKeywordFilter(tocSearchInput ? tocSearchInput.value : '');
+            }
+
+            function syncDocumentStructure() {
+                if (!documentRoot) {
+                    return;
+                }
+
+                renumberArticleHeadings();
+                markArticleHeadingsEditable();
+                rebuildTocFromDocument();
+            }
+
+            function buildPersistableDocumentHtml() {
+                if (!documentRoot) {
+                    return '';
+                }
+
+                var clone = documentRoot.cloneNode(true);
+                clone.querySelectorAll('a.law-ref-link').forEach(function (anchor) {
+                    var textNode = document.createTextNode(anchor.textContent || '');
+                    anchor.replaceWith(textNode);
+                });
+
+                clone.querySelectorAll('[data-bound-law-click]').forEach(function (node) {
+                    node.removeAttribute('data-bound-law-click');
+                });
+
+                return clone.innerHTML;
+            }
+
+            function persistCurrentDocumentEdits() {
+                if (!documentRoot) {
+                    return Promise.reject(new Error('\uBCF8\uBB38 \uC601\uC5ED\uC744 \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.'));
+                }
+
+                return fetch('index.php?action=save_edits', {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        content_html: buildPersistableDocumentHtml()
+                    })
+                })
+                    .then(function (response) {
+                        return response.json()
+                            .catch(function () {
+                                return {
+                                    success: false,
+                                    message: '\uC800\uC7A5 \uC751\uB2F5\uC744 \uD574\uC11D\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.'
+                                };
+                            })
+                            .then(function (payload) {
+                                if (!response.ok || !payload.success) {
+                                    throw new Error(payload.message || '\uBCC0\uACBD\uC0AC\uD56D\uC744 \uC800\uC7A5\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.');
+                                }
+                                return payload;
+                            });
+                    });
+            }
+
+            function updateLawLinkStatusCount() {
+                if (!lawLinkStatus || !documentRoot) {
+                    return;
+                }
+
+                lawLinkStatus.textContent = '\uBC95\uB839 \uB9C1\uD06C \uAC10\uC9C0 ' + documentRoot.querySelectorAll('.law-ref-link').length + '\uAC74';
+            }
+
+            var lawPanelContent = document.getElementById('law-panel-content');
+            var lawPanelQuery = document.getElementById('law-panel-query');
+            var lawPanelOpenLink = document.getElementById('law-panel-open-link');
+            var lawPanelSearchForm = document.getElementById('law-panel-search-form');
+            var lawPanelSearchInput = document.getElementById('law-panel-search-input');
+            var lawPanelHeading = document.querySelector('.law-panel-head h2');
+            var lawPanelDescription = document.querySelector('.law-panel-head p');
+
+            function normalizeLawPanelCopy() {
+                if (lawPanelHeading) {
+                    lawPanelHeading.textContent = '\uAD00\uB828 \uBC95\uC870\uBB38';
+                }
+                if (lawPanelDescription) {
+                    lawPanelDescription.textContent = '\uBCF8\uBB38\uC758 \uBC95\uB839 \uB9C1\uD06C\uB97C \uB204\uB974\uAC70\uB098 \uC9C1\uC811 \uAC80\uC0C9\uD558\uBA74 \uC120\uD0DD\uD55C \uC870\uBB38\uC744 \uC774 \uC601\uC5ED\uC5D0\uC11C \uBC14\uB85C \uD655\uC778\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.';
+                }
+                if (lawPanelQuery) {
+                    lawPanelQuery.textContent = '\uC544\uC9C1 \uC120\uD0DD\uD55C \uBC95\uB839\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.';
+                }
+                if (lawPanelOpenLink) {
+                    lawPanelOpenLink.textContent = '\uBC95\uC81C\uCC98 \uC6D0\uBB38 \uC5F4\uAE30';
+                }
+                if (lawPanelContent && lawPanelContent.classList.contains('law-panel-placeholder')) {
+                    lawPanelContent.innerHTML = '<div><strong>\uAD00\uB828 \uBC95\uC870\uBB38 \uBCF4\uAE30</strong><span>\uBCF8\uBB38\uC758 \uBC95\uB839 \uB9C1\uD06C\uB97C \uD074\uB9AD\uD558\uAC70\uB098 \uAC80\uC0C9\uD558\uBA74 \uC120\uD0DD\uD55C \uC870\uBB38\uC744 \uC774\uACF3\uC5D0 \uD45C\uC2DC\uD569\uB2C8\uB2E4.</span></div>';
+                }
+            }
+
+            normalizeLawPanelCopy();
+
+            function renderLawPanelState(className, title, description) {
+                if (!lawPanelContent) {
+                    return;
+                }
+
+                lawPanelContent.className = 'law-panel-content ' + className;
+                lawPanelContent.innerHTML = '<div><strong>' + escapeHtml(title) + '</strong><span>' + escapeHtml(description) + '</span></div>';
+            }
+
+            function renderLawPanelResult(payload) {
+                if (!lawPanelContent) {
+                    return;
+                }
+
+                var infoItems = [];
+                if (payload.is_full_law) {
+                    infoItems.push('<li><strong>\uBCF4\uAE30\uBC94\uC704</strong><span>\uC804\uCCB4 \uBC95\uB839</span></li>');
+                }
+                if (payload.law_kind) {
+                    infoItems.push('<li><strong>\uBC95\uC885</strong><span>' + escapeHtml(payload.law_kind) + '</span></li>');
+                }
+                if (payload.ministry) {
+                    infoItems.push('<li><strong>\uC18C\uAD00\uBD80\uCC98</strong><span>' + escapeHtml(payload.ministry) + '</span></li>');
+                }
+                if (payload.effective_at) {
+                    infoItems.push('<li><strong>\uC2DC\uD589\uC77C</strong><span>' + escapeHtml(payload.effective_at) + '</span></li>');
+                }
+                if (payload.promulgation_at || payload.promulgation_no || payload.revision_type) {
+                    var promulgationMeta = [];
+                    if (payload.promulgation_no) {
+                        promulgationMeta.push('\uC81C' + escapeHtml(payload.promulgation_no) + '\uD638');
+                    }
+                    if (payload.promulgation_at) {
+                        promulgationMeta.push(escapeHtml(payload.promulgation_at));
+                    }
+                    if (payload.revision_type) {
+                        promulgationMeta.push(escapeHtml(payload.revision_type));
+                    }
+                    infoItems.push('<li><strong>\uACF5\uD3EC\uC815\uBCF4</strong><span>' + promulgationMeta.join(' / ') + '</span></li>');
+                }
+                if (payload.contact_phone) {
+                    infoItems.push('<li><strong>\uBB38\uC758\uC804\uD654</strong><span>' + escapeHtml(payload.contact_phone) + '</span></li>');
+                }
+                if (payload.is_full_law && payload.article_count) {
+                    infoItems.push('<li><strong>\uC870\uBB38\uC218</strong><span>' + escapeHtml(payload.article_count) + '</span></li>');
+                }
+
+                var bodyLines = Array.isArray(payload.body_lines) ? payload.body_lines : [];
+                var bodyHtml = bodyLines.length
+                    ? bodyLines.map(function (line) { return '<p>' + escapeHtml(line) + '</p>'; }).join('')
+                    : '<p>' + (payload.is_full_law
+                        ? '\uBC95\uB839 \uC804\uCCB4 \uBCF8\uBB38\uC744 \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.'
+                        : '\uC870\uBB38 \uBCF8\uBB38\uC744 \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.') + '</p>';
+                var headerTitle = payload.article_label || payload.query || '';
+                var headerSubtitle = payload.law_name || '';
+                if (payload.is_full_law && headerSubtitle === headerTitle) {
+                    headerSubtitle = payload.law_kind || '';
+                }
+                var bodySectionTitle = payload.is_full_law ? '\uBC95\uB839 \uC804\uCCB4' : '\uC870\uBB38 \uB0B4\uC6A9';
+
+                lawPanelContent.className = 'law-panel-content';
+                lawPanelContent.innerHTML = ''
+                    + '<div class="law-panel-card">'
+                    + '  <div class="law-panel-card-head">'
+                    + '    <h3 class="law-panel-title">' + escapeHtml(headerTitle) + '</h3>'
+                    + '    <p class="law-panel-subtitle">' + escapeHtml(headerSubtitle) + '</p>'
+                    + '  </div>'
+                    + '  <section class="law-panel-section">'
+                    + '    <h3>' + bodySectionTitle + '</h3>'
+                    +      bodyHtml
+                    + '  </section>'
+                    + '  <section class="law-panel-section">'
+                    + '    <h3>\uAE30\uBCF8 \uC815\uBCF4</h3>'
+                    + '    <ul class="law-panel-list">' + infoItems.join('') + '</ul>'
+                    + '  </section>'
+                    + '</div>';
+            }
+
+            function loadLawPanel(queryText, openUrl) {
+                if (!queryText || !lawPanelContent || !lawPanelQuery || !lawPanelOpenLink) {
+                    return;
+                }
+
+                if (lawPanelSearchInput) {
+                    lawPanelSearchInput.value = queryText;
+                }
+
+                lawPanelQuery.textContent = queryText;
+                lawPanelOpenLink.href = openUrl || buildLawSearchUrl(queryText);
+                renderLawPanelState(
+                    'law-panel-loading',
+                    '\uBD88\uB7EC\uC624\uB294 \uC911',
+                    ''
+                );
+
+                fetch('index.php?action=law_api&query=' + encodeURIComponent(queryText), {
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                })
+                    .then(function (response) {
+                        return response.json()
+                            .catch(function () {
+                                return {
+                                    success: false,
+                                    message: '\uBC95\uB839 \uC751\uB2F5\uC744 \uD574\uC11D\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.'
+                                };
+                            })
+                            .then(function (payload) {
+                                if (!response.ok || !payload.success) {
+                                    throw new Error(payload.message || '\uBC95\uB839 \uC815\uBCF4\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.');
+                                }
+
+                                return payload;
+                            });
+                    })
+                    .then(function (payload) {
+                        lawPanelOpenLink.href = payload.open_url || lawPanelOpenLink.href;
+                        renderLawPanelResult(payload);
+                    })
+                    .catch(function (error) {
+                        renderLawPanelState(
+                            'law-panel-error',
+                            '\uBC95\uB839 \uC870\uD68C \uC2E4\uD328',
+                            error && error.message ? error.message : '\uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694.'
+                        );
+                    });
+            }
+
+            var chartQuickLawView = document.getElementById('chart-quick-law-view');
+            var chartQuickLawTitle = document.getElementById('chart-quick-law-title');
+            var chartQuickLawLink = document.getElementById('chart-quick-law-link');
+            var chartQuickLawBody = document.getElementById('chart-quick-law-body');
+
+            // 탭 전환 이벤트
+            document.querySelectorAll('.law-tab-btn').forEach(function (tabBtn) {
+                tabBtn.addEventListener('click', function () {
+                    document.querySelectorAll('.law-tab-btn').forEach(function (b) { b.classList.remove('is-active'); });
+                    document.querySelectorAll('.law-tab-content').forEach(function (c) { c.classList.remove('is-active'); });
+
+                    tabBtn.classList.add('is-active');
+                    var targetId = tabBtn.getAttribute('data-target');
+                    var targetContent = document.getElementById(targetId);
+                    if (targetContent) {
+                        targetContent.classList.add('is-active');
+                    }
+                });
+            });
+
+            // 체계도 도식 내 버튼 클릭 이벤트
+            function loadChartLawSnippet(queryText, triggerBtn) {
+                if (!queryText) return;
+
+                document.querySelectorAll('.chart-btn').forEach(function (b) { b.classList.remove('is-selected'); });
+                if (triggerBtn) {
+                    triggerBtn.classList.add('is-selected');
+                }
+
+                if (chartQuickLawView && chartQuickLawTitle && chartQuickLawBody && chartQuickLawLink) {
+                    chartQuickLawView.classList.add('is-visible');
+                    chartQuickLawTitle.textContent = queryText + ' (조회 중...)';
+                    chartQuickLawBody.textContent = '법제처에서 해당 조문 내용을 불러오는 중입니다...';
+                    chartQuickLawLink.href = buildLawSearchUrl(queryText);
+
+                    fetch('index.php?action=law_api&query=' + encodeURIComponent(queryText), {
+                        headers: { 'Accept': 'application/json' }
+                    })
+                    .then(function (res) { return res.json(); })
+                    .then(function (res) {
+                        var payload = res.data || res;
+                        if (res.success && payload && payload.body_lines) {
+                            chartQuickLawTitle.textContent = (payload.article_label || payload.law_name || queryText);
+                            chartQuickLawBody.textContent = payload.body_lines.join('\n\n');
+                            if (payload.open_url) {
+                                chartQuickLawLink.href = payload.open_url;
+                            }
+                        } else {
+                            chartQuickLawTitle.textContent = queryText;
+                            chartQuickLawBody.textContent = (res.message || '해당 조문의 상세 내용을 찾지 못했습니다.');
+                        }
+                    })
+                    .catch(function (err) {
+                        chartQuickLawBody.textContent = '법령 조회 중 오류가 발생했습니다: ' + (err.message || '네트워크 오류');
+                    });
+                }
+
+                // 백그라운드로 검색 탭의 메인 패널에도 로드
+                loadLawPanel(queryText, buildLawSearchUrl(queryText));
+            }
+
+            document.querySelectorAll('.chart-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var scrollTargetId = btn.getAttribute('data-scroll-target');
+                    var scrollTarget = scrollTargetId ? document.getElementById(scrollTargetId) : null;
+                    if (scrollTarget) {
+                        scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                    var query = btn.getAttribute('data-law-query') || btn.textContent.trim();
+                    loadChartLawSnippet(query, btn);
+                });
+            });
+
+            if (lawPanelSearchForm && lawPanelSearchInput) {
+                lawPanelSearchForm.addEventListener('submit', function (event) {
+                    event.preventDefault();
+
+                    var queryText = normalizeLawReference(lawPanelSearchInput.value || '');
+                    if (!queryText) {
+                        if (lawPanelQuery) {
+                            lawPanelQuery.textContent = '\uAC80\uC0C9\uC5B4\uB97C \uC785\uB825\uD574 \uC8FC\uC138\uC694.';
+                        }
+                        if (lawPanelOpenLink) {
+                            lawPanelOpenLink.href = 'https://www.law.go.kr/';
+                        }
+                        renderLawPanelState(
+                            'law-panel-error',
+                            '\uAC80\uC0C9\uC5B4 \uC785\uB825 \uD544\uC694',
+                            '\uC608: \uADFC\uB85C\uAE30\uC900\uBC95 \uB610\uB294 \uADFC\uB85C\uAE30\uC900\uBC95 \uC81C93\uC870'
+                        );
+                        lawPanelSearchInput.focus();
+                        return;
+                    }
+
+                    loadLawPanel(queryText, buildLawSearchUrl(queryText));
+                });
+            }
+
+            function bindLawRefLinkEvents() {
+                if (!documentRoot) {
+                    return;
+                }
+
+                documentRoot.querySelectorAll('.law-ref-link').forEach(function (link) {
+                    if (link.dataset.boundLawClick === '1') {
+                        return;
+                    }
+
+                    link.dataset.boundLawClick = '1';
+                    link.addEventListener('click', function (event) {
+                        var queryText = normalizeLawReference(String(link.dataset.lawQuery || link.textContent || ''));
+                        if (!queryText || !lawPanelContent || !lawPanelQuery || !lawPanelOpenLink) {
+                            return;
+                        }
+
+                        event.preventDefault();
+                        loadLawPanel(queryText, link.href);
+                    });
+                });
+            }
+
+            function refreshLawReferences() {
+                if (!documentRoot) {
+                    return;
+                }
+
+                linkRelatedBasisReferences(documentRoot);
+                rebuildArticleRelatedBasisLinks(documentRoot, 2);
+                linkLawReferencesSafe(documentRoot);
+                bindLawRefLinkEvents();
+                updateLawLinkStatusCount();
+            }
+
+            function setupClauseEditorModal() {
+                if (!documentRoot) {
+                    return;
+                }
+
+                var modal = document.getElementById('rule-edit-modal');
+                var closeBtn = document.getElementById('rule-edit-close');
+                var cancelBtn = document.getElementById('rule-edit-cancel');
+                var deleteBtn = document.getElementById('rule-edit-delete');
+                var addArticleBtn = document.getElementById('rule-add-article');
+                var saveBtn = document.getElementById('rule-edit-save');
+                var textarea = document.getElementById('rule-edit-textarea');
+                var originalTextarea = document.getElementById('rule-edit-original-textarea');
+                var insertAfterSelect = document.getElementById('rule-edit-insert-after');
+                var insertAfterGroup = insertAfterSelect ? insertAfterSelect.closest('.rule-edit-group') : null;
+                var basisTextarea = document.getElementById('rule-edit-basis-textarea');
+                var modalTitle = document.getElementById('rule-edit-title');
+                var editingClause = null;
+
+                if (!modal || !closeBtn || !cancelBtn || !deleteBtn || !saveBtn || !textarea || !originalTextarea || !insertAfterSelect || !basisTextarea || !modalTitle || !insertAfterGroup || !addArticleBtn) {
+                    return;
+                }
+
+                function setModalBusyState(isBusy, activeButton, pendingText) {
+                    [deleteBtn, cancelBtn, saveBtn, closeBtn].forEach(function (button) {
+                        button.disabled = isBusy;
+                    });
+
+                    [deleteBtn, saveBtn].forEach(function (button) {
+                        if (!button.dataset.originalText) {
+                            button.dataset.originalText = button.textContent;
+                        }
+                        button.textContent = isBusy && button === activeButton
+                            ? pendingText
+                            : button.dataset.originalText;
+                    });
+                }
+
+                function closeModal() {
+                    modal.classList.remove('is-open');
+                    modal.setAttribute('aria-hidden', 'true');
+                    editingClause = null;
+                    setModalBusyState(false);
+                }
+
+                function setModalMode(mode) {
+                    var isInsertMode = mode === 'insert';
+                    modalTitle.textContent = isInsertMode ? '\uC0C8 \uC870\uD56D \uCD94\uAC00' : '\uC870\uBB38 \uB0B4\uC6A9 \uC218\uC815';
+                    saveBtn.textContent = isInsertMode ? '\uCD94\uAC00' : '\uC800\uC7A5';
+                    saveBtn.dataset.originalText = saveBtn.textContent;
+                    deleteBtn.style.display = isInsertMode ? 'none' : '';
+                    insertAfterGroup.classList.toggle('is-hidden', !isInsertMode);
+                }
+
+                function populateInsertAfterOptions(selectedHeading) {
+                    var articleNodes = getArticleHeadingNodes();
+                    insertAfterSelect.innerHTML = '';
+
+                    articleNodes.forEach(function (node, index) {
+                        var option = document.createElement('option');
+                        option.value = String(index);
+                        option.textContent = normalizeHeadingText(node.textContent || '') + ' \uB4A4\uC5D0 \uC0BD\uC785';
+                        if (selectedHeading && node === selectedHeading) {
+                            option.selected = true;
+                        }
+                        insertAfterSelect.appendChild(option);
+                    });
+
+                    insertAfterSelect.disabled = articleNodes.length === 0;
+                }
+
+                function getClauseDraftFromModal() {
+                    var lines = textarea.value
+                        .replace(/\r\n?/g, '\n')
+                        .split('\n')
+                        .map(function (line) {
+                            return line.trim();
+                        })
+                        .filter(function (line) {
+                            return line !== '';
+                        });
+
+                    var basisLines = basisTextarea.value
+                        .replace(/\r\n?/g, '\n')
+                        .split('\n')
+                        .map(function (line) {
+                            return line.trim();
+                        })
+                        .filter(function (line) {
+                            return line !== '';
+                        });
+
+                    var normalizedLines = [];
+                    lines.forEach(function (line) {
+                        var movedInline = [];
+                        var cleanedLine = line.replace(/\[\s*\uAD00\uB828\s*\uADFC\uAC70\s*[:\uFF1A]\s*([^\]]+)\]/gu, function (_, basisText) {
+                            var normalized = String(basisText || '').trim();
+                            if (normalized !== '') {
+                                movedInline.push(normalized);
+                            }
+                            return '';
+                        }).trim();
+
+                        movedInline.forEach(function (basisText) {
+                            splitRelatedBasisItems(basisText).forEach(function (item) {
+                                basisLines.push(item);
+                            });
+                        });
+
+                        if (/^\s*\[?\s*\uAD00\uB828\s*\uADFC\uAC70\s*[:\uFF1A]?/u.test(cleanedLine)) {
+                            var extracted = cleanedLine
+                                .replace(/^\s*\[?\s*\uAD00\uB828\s*\uADFC\uAC70\s*[:\uFF1A]?\s*/u, '')
+                                .replace(/\]\s*$/u, '')
+                                .trim();
+                            if (extracted !== '') {
+                                splitRelatedBasisItems(extracted).forEach(function (item) {
+                                    basisLines.push(item);
+                                });
+                            }
+                            return;
+                        }
+
+                        if (cleanedLine !== '') {
+                            normalizedLines.push(cleanedLine);
+                        }
+                    });
+
+                    if (normalizedLines.length === 0) {
+                        return null;
+                    }
+
+                    return {
+                        headingText: normalizedLines[0],
+                        bodyLines: normalizedLines.slice(1),
+                        basisLines: Array.from(new Set(basisLines)),
+                    };
+                }
+
+                function buildClauseDomNodes(draft) {
+                    var nodes = [];
+                    var headingNode = document.createElement('h3');
+                    headingNode.className = 'rule-editable';
+                    headingNode.textContent = draft.headingText;
+                    nodes.push(headingNode);
+
+                    draft.bodyLines.forEach(function (line) {
+                        var p = document.createElement('p');
+                        p.textContent = line;
+                        nodes.push(p);
+                    });
+
+                    if (draft.basisLines.length > 0) {
+                        var basisParagraph = document.createElement('p');
+                        basisParagraph.className = 'related-basis';
+                        basisParagraph.textContent = '\uAD00\uB828\uADFC\uAC70: ' + draft.basisLines.join(', ');
+                        nodes.push(basisParagraph);
+                    }
+
+                    return nodes;
+                }
+
+                function replaceExistingClause(clause, draft) {
+                    var headingNode = clause.heading;
+                    var oldNodes = clause.nodes || [headingNode];
+
+                    headingNode.textContent = draft.headingText;
+                    oldNodes.slice(1).forEach(function (node) {
+                        if (node && node.parentNode) {
+                            node.parentNode.removeChild(node);
+                        }
+                    });
+
+                    var insertBeforeNode = headingNode.nextElementSibling;
+                    draft.bodyLines.forEach(function (line) {
+                        var p = document.createElement('p');
+                        p.textContent = line;
+                        headingNode.parentNode.insertBefore(p, insertBeforeNode);
+                    });
+
+                    if (draft.basisLines.length > 0) {
+                        var basisParagraph = document.createElement('p');
+                        basisParagraph.className = 'related-basis';
+                        basisParagraph.textContent = '\uAD00\uB828\uADFC\uAC70: ' + draft.basisLines.join(', ');
+                        headingNode.parentNode.insertBefore(basisParagraph, insertBeforeNode);
+                    }
+                }
+
+                function insertClauseAfterHeading(afterHeading, draft) {
+                    if (!afterHeading || !afterHeading.parentNode) {
+                        return;
+                    }
+
+                    var parentNode = afterHeading.parentNode;
+                    var insertBeforeNode = afterHeading.nextElementSibling;
+                    while (insertBeforeNode && insertBeforeNode.tagName !== 'H2' && insertBeforeNode.tagName !== 'H3') {
+                        insertBeforeNode = insertBeforeNode.nextElementSibling;
+                    }
+
+                    buildClauseDomNodes(draft).forEach(function (node) {
+                        parentNode.insertBefore(node, insertBeforeNode);
+                    });
+                }
+
+                function persistModalMutation(activeButton, pendingText, mutation) {
+                    setModalBusyState(true, activeButton, pendingText);
+                    try {
+                        mutation();
+                        syncDocumentStructure();
+                        refreshLawReferences();
+                    } catch (error) {
+                        setModalBusyState(false);
+                        alert(error && error.message ? error.message : '\uBCC0\uACBD\uC744 \uCC98\uB9AC\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.');
+                        return;
+                    }
+
+                    persistCurrentDocumentEdits()
+                        .then(function () {
+                            closeModal();
+                        })
+                        .catch(function (error) {
+                            alert(error && error.message ? error.message : '\uC800\uC7A5\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4. \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694.');
+                        })
+                        .finally(function () {
+                            setModalBusyState(false);
+                        });
+                }
+
+                function openModal(clause) {
+                    editingClause = clause;
+                    setModalMode(clause && clause.mode ? clause.mode : 'edit');
+                    var clauseLines = clause.nodes
+                        .map(function (node) {
+                            return (node.textContent || '').trim();
+                        })
+                        .filter(function (line) {
+                            return line !== '';
+                        });
+
+                    var contentLines = [];
+                    var basisLines = [];
+
+                    function extractInlineBasis(line) {
+                        var extracted = [];
+                        var cleaned = line.replace(/\[\s*\uAD00\uB828\s*\uADFC\uAC70\s*[:\uFF1A]\s*([^\]]+)\]/gu, function (_, basisText) {
+                            var normalized = String(basisText || '').trim();
+                            if (normalized !== '') {
+                                extracted.push(normalized);
+                            }
+                            return '';
+                        });
+
+                        return {
+                            cleaned: cleaned.trim(),
+                            extracted: extracted,
+                        };
+                    }
+
+                    clauseLines.forEach(function (line) {
+                        if (/^\s*\[?\s*\uAD00\uB828\s*\uADFC\uAC70\s*[:\uFF1A]?/u.test(line)) {
+                            var extracted = line
+                                .replace(/^\s*\[?\s*\uAD00\uB828\s*\uADFC\uAC70\s*[:\uFF1A]?\s*/u, '')
+                                .replace(/\]\s*$/u, '')
+                                .trim();
+                            if (extracted !== '') {
+                                splitRelatedBasisItems(extracted).forEach(function (item) {
+                                    basisLines.push(item);
+                                });
+                            }
+                            return;
+                        }
+
+                        var inlineSplit = extractInlineBasis(line);
+                        inlineSplit.extracted.forEach(function (basisText) {
+                            splitRelatedBasisItems(basisText).forEach(function (item) {
+                                basisLines.push(item);
+                            });
+                        });
+                        if (inlineSplit.cleaned !== '') {
+                            contentLines.push(inlineSplit.cleaned);
+                        }
+                    });
+
+                    textarea.value = contentLines.join('\n');
+                    originalTextarea.value = contentLines.join('\n');
+                    basisTextarea.value = Array.from(new Set(basisLines)).join('\n');
+                    populateInsertAfterOptions(clause.heading);
+
+                    modal.classList.add('is-open');
+                    modal.setAttribute('aria-hidden', 'false');
+                    textarea.focus();
+                    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+                }
+
+                function openInsertModal() {
+                    var articleNodes = getArticleHeadingNodes();
+                    if (articleNodes.length === 0) {
+                        alert('\uC0BD\uC785\uD560 \uAE30\uC900 \uC870\uD56D\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.');
+                        return;
+                    }
+
+                    openModal({
+                        mode: 'insert',
+                        heading: articleNodes[articleNodes.length - 1],
+                        nodes: [{ textContent: '' }],
+                    });
+                    textarea.value = '';
+                    basisTextarea.value = '';
+                    populateInsertAfterOptions(articleNodes[articleNodes.length - 1]);
+                }
+
+                markArticleHeadingsEditable();
+
+                documentRoot.addEventListener('click', function (event) {
+                    if (event.target.closest('.law-ref-link')) {
+                        return;
+                    }
+
+                    var subtitleCell = event.target.closest('.manual-subtitle-box td');
+                    if (subtitleCell && documentRoot.contains(subtitleCell)) {
+                        var subtitleNodes = [subtitleCell];
+                        var nextNode = subtitleCell.closest('.rule-table-wrap');
+                        nextNode = nextNode ? nextNode.nextElementSibling : null;
+                        while (nextNode && !nextNode.classList.contains('rule-table-wrap') && nextNode.tagName !== 'H2' && nextNode.tagName !== 'H3') {
+                            subtitleNodes.push(nextNode);
+                            nextNode = nextNode.nextElementSibling;
+                        }
+                        openModal({ heading: subtitleCell, nodes: subtitleNodes });
+                        return;
+                    }
+
+                    var target = event.target.closest('h3');
+                    if (!target || !documentRoot.contains(target) || !isArticleHeading(target)) {
+                        return;
+                    }
+
+                    openModal({
+                        heading: target,
+                        nodes: collectClauseNodes(target),
+                    });
+                });
+
+                closeBtn.addEventListener('click', closeModal);
+                cancelBtn.addEventListener('click', closeModal);
+                addArticleBtn.addEventListener('click', openInsertModal);
+
+                deleteBtn.addEventListener('click', function () {
+                    if (!editingClause || editingClause.mode === 'insert' || !editingClause.heading) {
+                        closeModal();
+                        return;
+                    }
+
+                    if (!window.confirm('\uC774 \uC870\uD56D\uC744 \uC0AD\uC81C\uD560\uAE4C\uC694?')) {
+                        return;
+                    }
+
+                    persistModalMutation(deleteBtn, '\uC0AD\uC81C \uC911...', function () {
+                        (editingClause.nodes || []).forEach(function (node) {
+                            if (node && node.parentNode) {
+                                node.parentNode.removeChild(node);
+                            }
+                        });
+                    });
+                });
+
+                saveBtn.addEventListener('click', function () {
+                    if (!editingClause || !editingClause.heading) {
+                        closeModal();
+                        return;
+                    }
+
+                    var draft = getClauseDraftFromModal();
+                    if (!draft) {
+                        alert(editingClause.mode === 'insert'
+                            ? '\uC0C8 \uC870\uD56D \uB0B4\uC6A9\uC744 \uC785\uB825\uD574 \uC8FC\uC138\uC694.'
+                            : '\uC218\uC815\uD560 \uB0B4\uC6A9\uC744 \uC785\uB825\uD574 \uC8FC\uC138\uC694.');
+                        textarea.focus();
+                        return;
+                    }
+
+                    if (editingClause.mode === 'insert') {
+                        var articleNodes = getArticleHeadingNodes();
+                        var targetIndex = parseInt(insertAfterSelect.value || '-1', 10);
+                        var targetHeading = articleNodes[targetIndex] || editingClause.heading;
+                        if (!targetHeading) {
+                            alert('\uC0BD\uC785\uD560 \uC870\uD56D \uC704\uCE58\uB97C \uC120\uD0DD\uD574 \uC8FC\uC138\uC694.');
+                            insertAfterSelect.focus();
+                            return;
+                        }
+
+                        persistModalMutation(saveBtn, '\uCD94\uAC00 \uC911...', function () {
+                            insertClauseAfterHeading(targetHeading, draft);
+                        });
+                        return;
+                    }
+
+                    persistModalMutation(saveBtn, '\uC800\uC7A5 \uC911...', function () {
+                        replaceExistingClause(editingClause, draft);
+                    });
+                });
+
+                modal.addEventListener('click', function (event) {
+                    if (event.target === modal) {
+                        closeModal();
+                    }
+                });
+
+                document.addEventListener('keydown', function (event) {
+                    if (event.key === 'Escape' && modal.classList.contains('is-open')) {
+                        closeModal();
+                    }
+                });
+            }
+
+            refreshLawReferences();
+            setupClauseEditorModal();
+            var pdfBtn = document.getElementById('rule-download-pdf');
+            var printPreviewModal = document.getElementById('print-preview-modal');
+            var printPreviewPaper = document.getElementById('print-preview-paper');
+            var printPreviewCloseBtn = document.getElementById('print-preview-close');
+            var printPreviewPrintBtn = document.getElementById('print-preview-print');
+            var printPreviewDownloadBtn = document.getElementById('print-preview-download');
+
+            function collectChapterSections(container) {
+                var chapters = [];
+                var currentChapter = [];
+
+                Array.prototype.forEach.call(container.children || [], function (node) {
+                    if (node.tagName === 'H2' && currentChapter.length > 0) {
+                        chapters.push(currentChapter);
+                        currentChapter = [];
+                    }
+
+                    currentChapter.push(node);
+                });
+
+                if (currentChapter.length > 0) {
+                    chapters.push(currentChapter);
+                }
+
+                return chapters;
+            }
+
+            function buildPrintPreview() {
+                if (!printPreviewPaper || !documentRoot) {
+                    return;
+                }
+
+                printPreviewPaper.innerHTML = '';
+                var sourceHeader = document.querySelector('.content-header');
+                var headerTemplate = document.getElementById('manual-header-template');
+                var sampleHeaderTable = headerTemplate && headerTemplate.content
+                    ? headerTemplate.content.querySelector('.rule-table-wrap')
+                    : null;
+                var documentClone = documentRoot.cloneNode(true);
+                documentClone.querySelectorAll('button, .manual-policy-link').forEach(function (button) {
+                    button.remove();
+                });
+                var contentNodes = Array.prototype.filter.call(documentClone.children || [], function (node) {
+                    return !(sampleHeaderTable && node.classList
+                        && node.classList.contains('rule-table-wrap')
+                        && node.querySelector('td[rowspan="4"]'));
+                });
+                var pages = [];
+                var page = null;
+                var pageDocument = null;
+                var availableHeight = 0;
+
+                function startPage() {
+                    page = document.createElement('section');
+                    page.className = 'print-preview-page';
+
+                    if (sampleHeaderTable) {
+                        page.appendChild(sampleHeaderTable.cloneNode(true));
+                    } else if (pages.length === 0 && sourceHeader) {
+                        page.appendChild(sourceHeader.cloneNode(true));
+                    }
+
+                    pageDocument = document.createElement('div');
+                    pageDocument.className = 'document';
+                    page.appendChild(pageDocument);
+                    printPreviewPaper.appendChild(page);
+
+                    var pageStyle = window.getComputedStyle(page);
+                    var verticalPadding = parseFloat(pageStyle.paddingTop || '0') + parseFloat(pageStyle.paddingBottom || '0');
+                    var header = page.querySelector('.rule-table-wrap');
+                    var headerHeight = header ? header.offsetHeight : 0;
+                    availableHeight = Math.max(0, page.clientHeight - verticalPadding - headerHeight);
+                    pageDocument.style.height = availableHeight + 'px';
+                    pageDocument.style.overflow = 'hidden';
+                    if (pages.length === 0) {
+                        var coverTemplate = document.getElementById('manual-cover-template');
+                        if (coverTemplate && coverTemplate.content) {
+                            pageDocument.appendChild(coverTemplate.content.cloneNode(true));
+                        }
+                    }
+                    pages.push(page);
+                }
+
+                contentNodes.forEach(function (node) {
+                    if (!page) {
+                        startPage();
+                    }
+
+                    pageDocument.appendChild(node);
+                    if (pageDocument.scrollHeight > availableHeight + 1 && pageDocument.children.length > 1) {
+                        pageDocument.removeChild(node);
+                        startPage();
+                        pageDocument.appendChild(node);
+                    }
+                });
+
+                if (pages.length === 0) {
+                    startPage();
+                }
+
+                pages.forEach(function (page, index) {
+                    var pageHdr = page.querySelector('.rule-table-wrap');
+                    if (!pageHdr) {
+                        return;
+                    }
+
+                    // Update the page number after physical A4 pagination is complete.
+                    var pageCells = pageHdr.querySelectorAll('td');
+                    for (var c = 0; c < pageCells.length; c++) {
+                        if (/페\s*이\s*지/u.test(pageCells[c].textContent || '') && pageCells[c + 1]) {
+                            pageCells[c + 1].textContent = (index + 1) + '/' + pages.length;
+                            break;
+                        }
+                    }
+                });
+            }
+
+            function openPrintPreview() {
+                if (!printPreviewModal) {
+                    return;
+                }
+
+                printPreviewModal.classList.add('is-open');
+                printPreviewModal.setAttribute('aria-hidden', 'false');
+                document.body.classList.add('print-preview-open');
+                buildPrintPreview();
+            }
+
+            function closePrintPreview() {
+                if (!printPreviewModal) {
+                    return;
+                }
+
+                printPreviewModal.classList.remove('is-open');
+                printPreviewModal.setAttribute('aria-hidden', 'true');
+                document.body.classList.remove('print-preview-open');
+            }
+
+            if (pdfBtn) {
+                pdfBtn.addEventListener('click', function () {
+                    openPrintPreview();
+                });
+            }
+
+            if (printPreviewCloseBtn) {
+                printPreviewCloseBtn.addEventListener('click', function () {
+                    closePrintPreview();
+                });
+            }
+
+            if (printPreviewPrintBtn) {
+                printPreviewPrintBtn.addEventListener('click', function () {
+                    window.print();
+                });
+            }
+
+            if (printPreviewDownloadBtn) {
+                printPreviewDownloadBtn.addEventListener('click', function () {
+                    var url = new URL(window.location.href);
+                    url.searchParams.set('action', 'download_pdf');
+                    window.location.href = url.toString();
+                });
+            }
+
+            if (printPreviewModal) {
+                printPreviewModal.addEventListener('click', function (event) {
+                    if (event.target === printPreviewModal) {
+                        closePrintPreview();
+                    }
+                });
+            }
+
+            var uploadTrigger = document.getElementById('manual-upload-trigger');
+            var draftFileInput = document.getElementById('manual-draft-file-input');
+            var uploadHiddenForm = document.getElementById('manual-upload-hidden-form');
+            if (uploadTrigger && draftFileInput && uploadHiddenForm) {
+                uploadTrigger.addEventListener('click', function () {
+                    draftFileInput.click();
+                });
+                draftFileInput.addEventListener('change', function () {
+                    if (draftFileInput.files && draftFileInput.files.length > 0) {
+                        if (confirm('선택한 파일(' + draftFileInput.files[0].name + ')을 업로드하여 매뉴얼에 반영하시겠습니까?')) {
+                            uploadHiddenForm.submit();
+                        } else {
+                            draftFileInput.value = '';
+                        }
+                    }
+                });
+            }
+
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape' && printPreviewModal && printPreviewModal.classList.contains('is-open')) {
+                    closePrintPreview();
+                }
+            });
+        }());
+    </script>
+    <link rel="stylesheet" href="assets/manual-layout.css?v=<?= filemtime(__DIR__.'/assets/manual-layout.css') ?>">
+    <link rel="stylesheet" href="assets/manual-form-preview.css?v=<?= filemtime(__DIR__.'/assets/manual-form-preview.css') ?>">
+    <script>document.body.dataset.manualYear=<?= json_encode((int)(new DateTimeImmutable('now',new DateTimeZone('Asia/Seoul')))->format('Y')) ?>;</script>
+    <script src="assets/manual-form-preview.js?v=<?= filemtime(__DIR__.'/assets/manual-form-preview.js') ?>"></script>
+</body>
+</html>
+

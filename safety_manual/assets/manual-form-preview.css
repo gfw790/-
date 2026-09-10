@@ -1,0 +1,13 @@
+#manual-form-dialog { width:min(1180px,96vw); max-width:96vw; max-height:95vh; padding:20px; border:1px solid #7c94b0; border-radius:12px; background:#fff; color:#17315c; }
+#manual-form-dialog::backdrop { background:#142333aa; }
+.manual-form-heading,.manual-form-options { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+.manual-form-heading { justify-content:space-between; margin-bottom:16px; }
+.manual-form-heading h2 { margin:0; font-size:20px; }
+.manual-form-options label { display:flex; gap:8px; align-items:center; }
+#manual-form-dialog select,#manual-form-dialog input,#manual-form-dialog button { font:inherit; padding:9px 12px; border:1px solid #7c94b0; border-radius:6px; }
+#manual-form-dialog button { background:#17477f; color:white; cursor:pointer; }
+#manual-form-year { width:100px; }
+#manual-form-frame { margin-top:18px; width:100%; height:70vh; border:1px solid #b9c9de; }
+#manual-form-dialog [hidden] { display:none; }
+a[data-manual-form] { color:#17477f; text-decoration:underline; text-underline-offset:3px; }
+@media print { #manual-form-dialog { display:none!important; } }

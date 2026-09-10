@@ -1,0 +1,21 @@
+.quarter-nav { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 22px; }
+.quarter-nav a[aria-current="page"] { background: #103563; color: white; }
+.quarter-table { min-width: 1250px; }
+.quarter-table input, .quarter-table textarea { width: 100%; min-height: 38px; border: 1px solid #b9c9de; border-radius: 6px; padding: 7px; font: inherit; background: white; color: #24364e; }
+.quarter-table textarea { resize: vertical; line-height: 1.5; }
+.quarter-table input:focus, .quarter-table textarea:focus { outline: 2px solid #17477f66; border-color: #17477f; }
+.quarter-table input[readonly] { background: #edf2f7; }
+.quarter-result { display: block; padding: 8px; text-align: center; font-weight: 700; }
+.percent-help { display: block; font-size: 11px; color: #63738a; padding-left: 5px; }
+#quarter-pages { padding: 24px; overflow: auto; }
+#quarter-overflow { color: #9b2626; }
+.quarter-sheet { padding: 16mm 13mm 8mm; }
+.quarter-sheet .plan-caption { margin-bottom: 3mm; }
+.quarter-sheet .plan-print-table { font-size: 7.5pt; }
+.quarter-sheet .print-item { height: 5mm; }
+.quarter-sheet .quarter-title { font-size: 13pt; padding: 1.5mm 0; background: white; }
+@media print {
+    body.quarter-page > :not(#quarter-preview) { display: none !important; }
+    body.quarter-page > #quarter-preview { display: block !important; position: static !important; width: auto !important; max-width: none !important; height: auto !important; max-height: none !important; margin: 0; padding: 0; border: 0; overflow: visible; background: white; }
+    #quarter-pages { padding: 0; overflow: visible; }
+}

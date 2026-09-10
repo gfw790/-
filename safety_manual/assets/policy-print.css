@@ -1,0 +1,31 @@
+#policy-preview { width: min(1100px, 96vw); max-width: 96vw; height: 94vh; max-height: 94vh; padding: 0; border: 0; border-radius: 12px; background: #e5e9ed; }
+#policy-preview::backdrop { background: #142333aa; }
+.policy-preview-toolbar { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 16px 20px; background: white; border-bottom: 1px solid #ccd6df; }
+.policy-preview-toolbar label { margin: 0; }
+.policy-preview-toolbar select { padding: 9px; font: inherit; }
+#policy-print-pages { padding: 24px; overflow: auto; }
+.policy-sheet { position: relative; box-sizing: border-box; width: 210mm; height: 297mm; margin: 0 auto 24px; padding: 24mm 22mm 26mm; color: #000; background: #fff; font-family: "한컴 말랑말랑 Bold", "Malgun Gothic", sans-serif; box-shadow: 0 4px 20px #0002; isolation: isolate; }
+.policy-sheet::before { content: ""; position: absolute; z-index: -1; inset: 73% 0 0; background: #dbeaed; clip-path: polygon(0 0, 100% 100%, 0 100%); }
+.policy-sheet::after { content: ""; position: absolute; bottom: 0; left: 0; right: 0; height: 4mm; background: #008597; }
+.policy-sheet .policy-ribbon { position: absolute; top: 0; left: 0; width: 31mm; height: 47mm; object-fit: fill; }
+.policy-sheet .policy-ribbon.right { left: auto; right: 0; transform: scaleX(-1); }
+.policy-sheet h1 { margin: 0 0 12mm; text-align: center; white-space: nowrap; color: #000; font-size: 36pt; line-height: 1.2; font-weight: 700; letter-spacing: .3pt; }
+.policy-sheet-content { height: 186mm; overflow: hidden; }
+.policy-print-intro { margin: 0 0 6mm; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16pt; font-weight: 700; line-height: 1.5; }
+.policy-print-goal { display: flex; align-items: center; gap: 3mm; margin: 0 0 3mm; min-height: 15mm; break-inside: avoid; }
+.policy-print-number { flex: 0 0 15mm; height: 15mm; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: #32646c; background: #9ed1d8; font-size: 16pt; font-weight: 700; }
+.policy-print-goal-text { flex: 1; min-width: 0; margin: 0; padding: 2mm 3mm; background: #9ed1d8; border: .4mm solid white; outline: .3mm solid #9ed1d8; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16pt; line-height: 1.3; font-weight: 700; }
+.policy-sheet-footer { position: absolute; bottom: 28mm; left: 22mm; right: 22mm; text-align: center; font-size: 16pt; line-height: 1.5; }
+.policy-sheet-company { margin-top: 4mm; display: flex; align-items: center; justify-content: center; gap: 2mm; }
+.policy-sheet-company img { width: 11.6mm; height: 13.4mm; object-fit: contain; }
+.policy-sheet-page { position: absolute; bottom: 9mm; left: 0; right: 0; text-align: center; color: #46656a; font-size: 9pt; }
+@media print {
+    @page { size: A4 portrait; margin: 0; }
+    html, body { margin: 0 !important; padding: 0 !important; background: white !important; }
+    body > :not(#policy-preview) { display: none !important; }
+    #policy-preview { display: block !important; position: static !important; width: auto !important; height: auto !important; max-width: none !important; max-height: none !important; margin: 0 !important; padding: 0 !important; overflow: visible !important; border: 0; background: white; }
+    #policy-preview::backdrop, .policy-preview-toolbar { display: none !important; }
+    #policy-print-pages { padding: 0; overflow: visible; }
+    .policy-sheet { margin: 0; box-shadow: none; break-after: page; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    .policy-sheet:last-child { break-after: auto; }
+}

@@ -1,0 +1,602 @@
+<!doctype html><html lang="ko"><head><base href="file:///A:/risk_server/project/safety_manual/"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>2026년 2분기 세부계획 및 실적</title><link rel="stylesheet" href="assets/goal-plan.css"><link rel="stylesheet" href="assets/quarter-plan.css">
+</head><body class="quarter-page">
+<header><div><small>SAFETY MANAGEMENT SYSTEM</small><h1>2026년 2분기 세부계획 및 실적</h1></div></header>
+<main>
+    <div class="page-heading"><h2>안전보건활동 2분기 추진계획 및 실적</h2><p>계획과 월별 실적을 입력하세요. 분기 실적은 자동 합산하며, 인원수는 입력된 월의 평균으로 계산합니다.</p></div>
+    <nav class="quarter-nav" aria-label="분기 선택"><a class="button secondary" href="goal_plan_quarter.php?year=2026&amp;quarter=1" >1분기</a><a class="button secondary" href="goal_plan_quarter.php?year=2026&amp;quarter=2" aria-current="page">2분기</a><a class="button secondary" href="goal_plan_quarter.php?year=2026&amp;quarter=3" >3분기</a><a class="button secondary" href="goal_plan_quarter.php?year=2026&amp;quarter=4" >4분기</a></nav>
+        <form id="quarter-plan-form" method="post" action="goal_plan_quarter.php?year=2026&amp;quarter=2" data-year="2026" data-quarter="2">
+        <input type="hidden" name="csrf" value="fixture"><input type="hidden" name="year" value="2026"><input type="hidden" name="quarter" value="2"><input type="hidden" name="revision" value="1">
+        <div class="table-scroll"><table class="editor-table quarter-table"><colgroup><col style="width:300px"><col style="width:100px"><col style="width:110px"><col style="width:110px"><col style="width:110px"><col style="width:110px"><col style="width:110px"><col style="width:110px"><col style="width:180px"></colgroup>
+        <thead><tr><th colspan="2" rowspan="3">구분</th><th colspan="7">YTD</th></tr><tr><th>2025년</th><th colspan="6">2026년</th></tr><tr><th>실적</th><th>계획</th><th>2분기 실적</th><th>4월</th><th>5월</th><th>6월</th><th>비고</th></tr></thead>
+        <tbody>            <tr class="section major"><th colspan="9">▣ 안전보건관리 목표</th></tr>
+                                                <tr data-row-id="qr7"><td class="cell-name"><div class="cell-output">안전보건 인력 평가 및 보고</div></td><td><div class="cell-output">상/하반기</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">1</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr7][plan]" data-field="plan" aria-label="안전보건 인력 평가 및 보고 계획" value="1">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">0</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr7][m1]" data-field="m1" aria-label="안전보건 인력 평가 및 보고 4월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr7][m2]" data-field="m2" aria-label="안전보건 인력 평가 및 보고 5월 실적" value="">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr7][m3]" data-field="m3" aria-label="안전보건 인력 평가 및 보고 6월 실적" value="">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr7][note]" data-field="note" aria-label="안전보건 인력 평가 및 보고 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                                <tr data-row-id="qr8"><td class="cell-name"><div class="cell-output">안전활동평가(CSM) 개선율</div><small class="percent-help">월별 값: 1 = 100%, 0.5 = 50%</small></td><td><div class="cell-output">%</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">100</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr8][plan]" data-field="plan" aria-label="안전활동평가(CSM) 개선율 계획" value="100">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">0%</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr8][m1]" data-field="m1" aria-label="안전활동평가(CSM) 개선율 4월 실적" value="-">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr8][m2]" data-field="m2" aria-label="안전활동평가(CSM) 개선율 5월 실적" value="-">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr8][m3]" data-field="m3" aria-label="안전활동평가(CSM) 개선율 6월 실적" value="-">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr8][note]" data-field="note" aria-label="안전활동평가(CSM) 개선율 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                                <tr data-row-id="qr9"><td class="cell-name"><div class="cell-output">재해율</div></td><td><div class="cell-output">%</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">0.0%</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr9][plan]" data-field="plan" aria-label="재해율 계획" value="0">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">0</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr9][m1]" data-field="m1" aria-label="재해율 4월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr9][m2]" data-field="m2" aria-label="재해율 5월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr9][m3]" data-field="m3" aria-label="재해율 6월 실적" value="0">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr9][note]" data-field="note" aria-label="재해율 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                                <tr data-row-id="qr10"><td class="cell-name"><div class="cell-output">인원수</div></td><td><div class="cell-output">인</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">22</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr10][plan]" data-field="plan" aria-label="인원수 계획" value="20">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">23</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr10][m1]" data-field="m1" aria-label="인원수 4월 실적" value="23">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr10][m2]" data-field="m2" aria-label="인원수 5월 실적" value="24">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr10][m3]" data-field="m3" aria-label="인원수 6월 실적" value="23">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr10][note]" data-field="note" aria-label="인원수 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                                <tr data-row-id="qr11"><td class="cell-name"><div class="cell-output">재해건수</div></td><td><div class="cell-output">n</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">0</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr11][plan]" data-field="plan" aria-label="재해건수 계획" value="0">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">0</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr11][m1]" data-field="m1" aria-label="재해건수 4월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr11][m2]" data-field="m2" aria-label="재해건수 5월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr11][m3]" data-field="m3" aria-label="재해건수 6월 실적" value="0">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr11][note]" data-field="note" aria-label="재해건수 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                                <tr data-row-id="qr12"><td class="cell-name"><div class="cell-output">LTI (Lost Time Injury)</div></td><td><div class="cell-output">건</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">0</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr12][plan]" data-field="plan" aria-label="LTI (Lost Time Injury) 계획" value="0">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">0</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr12][m1]" data-field="m1" aria-label="LTI (Lost Time Injury) 4월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr12][m2]" data-field="m2" aria-label="LTI (Lost Time Injury) 5월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr12][m3]" data-field="m3" aria-label="LTI (Lost Time Injury) 6월 실적" value="0">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr12][note]" data-field="note" aria-label="LTI (Lost Time Injury) 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                                <tr data-row-id="qr13"><td class="cell-name"><div class="cell-output">MTI (Medical Treatment injury)</div></td><td><div class="cell-output">건</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">0</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr13][plan]" data-field="plan" aria-label="MTI (Medical Treatment injury) 계획" value="0">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">0</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr13][m1]" data-field="m1" aria-label="MTI (Medical Treatment injury) 4월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr13][m2]" data-field="m2" aria-label="MTI (Medical Treatment injury) 5월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr13][m3]" data-field="m3" aria-label="MTI (Medical Treatment injury) 6월 실적" value="0">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr13][note]" data-field="note" aria-label="MTI (Medical Treatment injury) 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                <tr class="section major"><th colspan="9">▣ 안전보건활동</th></tr>
+                                <tr class="section "><th colspan="9">-. Communication 활동</th></tr>
+                                                <tr data-row-id="qr16"><td class="cell-name"><div class="cell-output">산업안전보건위원회</div></td><td><div class="cell-output">분기별</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">1</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr16][plan]" data-field="plan" aria-label="산업안전보건위원회 계획" value="1">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">1</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr16][m1]" data-field="m1" aria-label="산업안전보건위원회 4월 실적" value="1">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr16][m2]" data-field="m2" aria-label="산업안전보건위원회 5월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr16][m3]" data-field="m3" aria-label="산업안전보건위원회 6월 실적" value="0">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr16][note]" data-field="note" aria-label="산업안전보건위원회 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                                <tr data-row-id="qr17"><td class="cell-name"><div class="cell-output">근로자의견청취 및 피드백 관리 보고</div></td><td><div class="cell-output">상/하반기</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">1</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr17][plan]" data-field="plan" aria-label="근로자의견청취 및 피드백 관리 보고 계획" value="1">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">1</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr17][m1]" data-field="m1" aria-label="근로자의견청취 및 피드백 관리 보고 4월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr17][m2]" data-field="m2" aria-label="근로자의견청취 및 피드백 관리 보고 5월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr17][m3]" data-field="m3" aria-label="근로자의견청취 및 피드백 관리 보고 6월 실적" value="1">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr17][note]" data-field="note" aria-label="근로자의견청취 및 피드백 관리 보고 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                                <tr data-row-id="qr18"><td class="cell-name"><div class="cell-output">아차사고(Near miss) 관리</div></td><td><div class="cell-output">건</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">7</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr18][plan]" data-field="plan" aria-label="아차사고(Near miss) 관리 계획" value="10">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">23</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr18][m1]" data-field="m1" aria-label="아차사고(Near miss) 관리 4월 실적" value="9">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr18][m2]" data-field="m2" aria-label="아차사고(Near miss) 관리 5월 실적" value="7">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr18][m3]" data-field="m3" aria-label="아차사고(Near miss) 관리 6월 실적" value="7">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr18][note]" data-field="note" aria-label="아차사고(Near miss) 관리 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                                <tr data-row-id="qr19"><td class="cell-name"><div class="cell-output">안전제안 활동</div></td><td><div class="cell-output">건</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">4</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr19][plan]" data-field="plan" aria-label="안전제안 활동 계획" value="4">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">3</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr19][m1]" data-field="m1" aria-label="안전제안 활동 4월 실적" value="1">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr19][m2]" data-field="m2" aria-label="안전제안 활동 5월 실적" value="1">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr19][m3]" data-field="m3" aria-label="안전제안 활동 6월 실적" value="1">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr19][note]" data-field="note" aria-label="안전제안 활동 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                <tr class="section "><th colspan="9">-. 위험성 평가</th></tr>
+                                                <tr data-row-id="qr21"><td class="cell-name"><div class="cell-output">위험성평가 리뷰 (정기, 수시)</div></td><td><div class="cell-output">상/하반기</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">29</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr21][plan]" data-field="plan" aria-label="위험성평가 리뷰 (정기, 수시) 계획" value="1">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">1</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr21][m1]" data-field="m1" aria-label="위험성평가 리뷰 (정기, 수시) 4월 실적" value="1">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr21][m2]" data-field="m2" aria-label="위험성평가 리뷰 (정기, 수시) 5월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr21][m3]" data-field="m3" aria-label="위험성평가 리뷰 (정기, 수시) 6월 실적" value="0">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr21][note]" data-field="note" aria-label="위험성평가 리뷰 (정기, 수시) 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                                <tr data-row-id="qr22"><td class="cell-name"><div class="cell-output">안전작업표준서 리뷰</div></td><td><div class="cell-output">상/하반기</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">1</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr22][plan]" data-field="plan" aria-label="안전작업표준서 리뷰 계획" value="1">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">1</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr22][m1]" data-field="m1" aria-label="안전작업표준서 리뷰 4월 실적" value="1">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr22][m2]" data-field="m2" aria-label="안전작업표준서 리뷰 5월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr22][m3]" data-field="m3" aria-label="안전작업표준서 리뷰 6월 실적" value="0">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr22][note]" data-field="note" aria-label="안전작업표준서 리뷰 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                                <tr data-row-id="qr23"><td class="cell-name"><div class="cell-output">추락위험성평가(FHRA) 리뷰</div></td><td><div class="cell-output">상/하반기</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">1</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr23][plan]" data-field="plan" aria-label="추락위험성평가(FHRA) 리뷰 계획" value="1">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">1</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr23][m1]" data-field="m1" aria-label="추락위험성평가(FHRA) 리뷰 4월 실적" value="1">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr23][m2]" data-field="m2" aria-label="추락위험성평가(FHRA) 리뷰 5월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr23][m3]" data-field="m3" aria-label="추락위험성평가(FHRA) 리뷰 6월 실적" value="0">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr23][note]" data-field="note" aria-label="추락위험성평가(FHRA) 리뷰 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                <tr class="section "><th colspan="9">-. 안전·보건·환경점검 및 활동</th></tr>
+                                                <tr data-row-id="qr25"><td class="cell-name"><div class="cell-output">안전관찰(대표)수행(VFL)</div></td><td><div class="cell-output">매월</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">3</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr25][plan]" data-field="plan" aria-label="안전관찰(대표)수행(VFL) 계획" value="3">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">3</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr25][m1]" data-field="m1" aria-label="안전관찰(대표)수행(VFL) 4월 실적" value="1">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr25][m2]" data-field="m2" aria-label="안전관찰(대표)수행(VFL) 5월 실적" value="1">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr25][m3]" data-field="m3" aria-label="안전관찰(대표)수행(VFL) 6월 실적" value="1">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr25][note]" data-field="note" aria-label="안전관찰(대표)수행(VFL) 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                                <tr data-row-id="qr26"><td class="cell-name"><div class="cell-output">안전순찰(관리자)수행</div></td><td><div class="cell-output">1회/주</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">12</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr26][plan]" data-field="plan" aria-label="안전순찰(관리자)수행 계획" value="13">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">16</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr26][m1]" data-field="m1" aria-label="안전순찰(관리자)수행 4월 실적" value="6">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr26][m2]" data-field="m2" aria-label="안전순찰(관리자)수행 5월 실적" value="5">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr26][m3]" data-field="m3" aria-label="안전순찰(관리자)수행 6월 실적" value="5">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr26][note]" data-field="note" aria-label="안전순찰(관리자)수행 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                                <tr data-row-id="qr27"><td class="cell-name"><div class="cell-output">위험기계기구 점검</div></td><td><div class="cell-output">회</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">1</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr27][plan]" data-field="plan" aria-label="위험기계기구 점검 계획" value="1">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">1</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr27][m1]" data-field="m1" aria-label="위험기계기구 점검 4월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr27][m2]" data-field="m2" aria-label="위험기계기구 점검 5월 실적" value="1">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr27][m3]" data-field="m3" aria-label="위험기계기구 점검 6월 실적" value="0">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr27][note]" data-field="note" aria-label="위험기계기구 점검 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                                <tr data-row-id="qr28"><td class="cell-name"><div class="cell-output">휴대용공기구 점검</div></td><td><div class="cell-output">회</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">0</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr28][plan]" data-field="plan" aria-label="휴대용공기구 점검 계획" value="0">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">0</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr28][m1]" data-field="m1" aria-label="휴대용공기구 점검 4월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr28][m2]" data-field="m2" aria-label="휴대용공기구 점검 5월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr28][m3]" data-field="m3" aria-label="휴대용공기구 점검 6월 실적" value="0">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr28][note]" data-field="note" aria-label="휴대용공기구 점검 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                                <tr data-row-id="qr29"><td class="cell-name"><div class="cell-output">운송장비 및 중장비관리</div></td><td><div class="cell-output">회</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">3</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr29][plan]" data-field="plan" aria-label="운송장비 및 중장비관리 계획" value="3">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">3</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr29][m1]" data-field="m1" aria-label="운송장비 및 중장비관리 4월 실적" value="1">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr29][m2]" data-field="m2" aria-label="운송장비 및 중장비관리 5월 실적" value="1">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr29][m3]" data-field="m3" aria-label="운송장비 및 중장비관리 6월 실적" value="1">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr29][note]" data-field="note" aria-label="운송장비 및 중장비관리 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                                <tr data-row-id="qr30"><td class="cell-name"><div class="cell-output">유해위험물질관리(MSDS)</div></td><td><div class="cell-output">상/하반기</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">9</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr30][plan]" data-field="plan" aria-label="유해위험물질관리(MSDS) 계획" value="9">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">9</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr30][m1]" data-field="m1" aria-label="유해위험물질관리(MSDS) 4월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr30][m2]" data-field="m2" aria-label="유해위험물질관리(MSDS) 5월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr30][m3]" data-field="m3" aria-label="유해위험물질관리(MSDS) 6월 실적" value="9">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr30][note]" data-field="note" aria-label="유해위험물질관리(MSDS) 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                                <tr data-row-id="qr31"><td class="cell-name"><div class="cell-output">비상대응훈련 및 매뉴얼 점검 결과 보고</div></td><td><div class="cell-output">상/하반기</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">1</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr31][plan]" data-field="plan" aria-label="비상대응훈련 및 매뉴얼 점검 결과 보고 계획" value="1">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">1</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr31][m1]" data-field="m1" aria-label="비상대응훈련 및 매뉴얼 점검 결과 보고 4월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr31][m2]" data-field="m2" aria-label="비상대응훈련 및 매뉴얼 점검 결과 보고 5월 실적" value="1">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr31][m3]" data-field="m3" aria-label="비상대응훈련 및 매뉴얼 점검 결과 보고 6월 실적" value="0">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr31][note]" data-field="note" aria-label="비상대응훈련 및 매뉴얼 점검 결과 보고 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                                <tr data-row-id="qr32"><td class="cell-name"><div class="cell-output">소방시설 점검</div></td><td><div class="cell-output">회</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">3</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr32][plan]" data-field="plan" aria-label="소방시설 점검 계획" value="3">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">3</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr32][m1]" data-field="m1" aria-label="소방시설 점검 4월 실적" value="1">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr32][m2]" data-field="m2" aria-label="소방시설 점검 5월 실적" value="1">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr32][m3]" data-field="m3" aria-label="소방시설 점검 6월 실적" value="1">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr32][note]" data-field="note" aria-label="소방시설 점검 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                                <tr data-row-id="qr33"><td class="cell-name"><div class="cell-output">환경정리(housekeeping)</div></td><td><div class="cell-output">회</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">3</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr33][plan]" data-field="plan" aria-label="환경정리(housekeeping) 계획" value="3">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">3</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr33][m1]" data-field="m1" aria-label="환경정리(housekeeping) 4월 실적" value="1">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr33][m2]" data-field="m2" aria-label="환경정리(housekeeping) 5월 실적" value="1">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr33][m3]" data-field="m3" aria-label="환경정리(housekeeping) 6월 실적" value="1">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr33][note]" data-field="note" aria-label="환경정리(housekeeping) 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                <tr class="section "><th colspan="9">-. 안전·보건·환경교육</th></tr>
+                                                <tr data-row-id="qr35"><td class="cell-name"><div class="cell-output">정기안전보건교육</div></td><td><div class="cell-output">매월</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">6</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr35][plan]" data-field="plan" aria-label="정기안전보건교육 계획" value="6">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">6</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr35][m1]" data-field="m1" aria-label="정기안전보건교육 4월 실적" value="2">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr35][m2]" data-field="m2" aria-label="정기안전보건교육 5월 실적" value="2">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr35][m3]" data-field="m3" aria-label="정기안전보건교육 6월 실적" value="2">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr35][note]" data-field="note" aria-label="정기안전보건교육 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                                <tr data-row-id="qr36"><td class="cell-name"><div class="cell-output">관리감독자교육</div></td><td><div class="cell-output">Hour</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">1</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr36][plan]" data-field="plan" aria-label="관리감독자교육 계획" value="16">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">16</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr36][m1]" data-field="m1" aria-label="관리감독자교육 4월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr36][m2]" data-field="m2" aria-label="관리감독자교육 5월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr36][m3]" data-field="m3" aria-label="관리감독자교육 6월 실적" value="16">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr36][note]" data-field="note" aria-label="관리감독자교육 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                                <tr data-row-id="qr37"><td class="cell-name"><div class="cell-output">신규채용시 안전교육</div></td><td><div class="cell-output">Hour</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">3</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr37][plan]" data-field="plan" aria-label="신규채용시 안전교육 계획" value="1">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">2</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr37][m1]" data-field="m1" aria-label="신규채용시 안전교육 4월 실적" value="2">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr37][m2]" data-field="m2" aria-label="신규채용시 안전교육 5월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr37][m3]" data-field="m3" aria-label="신규채용시 안전교육 6월 실적" value="0">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr37][note]" data-field="note" aria-label="신규채용시 안전교육 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                                <tr data-row-id="qr38"><td class="cell-name"><div class="cell-output">작업내용변경시교육</div></td><td><div class="cell-output">Hour</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">0</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr38][plan]" data-field="plan" aria-label="작업내용변경시교육 계획" value="0">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">0</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr38][m1]" data-field="m1" aria-label="작업내용변경시교육 4월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr38][m2]" data-field="m2" aria-label="작업내용변경시교육 5월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr38][m3]" data-field="m3" aria-label="작업내용변경시교육 6월 실적" value="0">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr38][note]" data-field="note" aria-label="작업내용변경시교육 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                                <tr data-row-id="qr39"><td class="cell-name"><div class="cell-output">특별안전교육(Matrix 참조)</div></td><td><div class="cell-output">Hour</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">24</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr39][plan]" data-field="plan" aria-label="특별안전교육(Matrix 참조) 계획" value="24">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">24</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr39][m1]" data-field="m1" aria-label="특별안전교육(Matrix 참조) 4월 실적" value="8">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr39][m2]" data-field="m2" aria-label="특별안전교육(Matrix 참조) 5월 실적" value="8">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr39][m3]" data-field="m3" aria-label="특별안전교육(Matrix 참조) 6월 실적" value="8">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr39][note]" data-field="note" aria-label="특별안전교육(Matrix 참조) 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                                <tr data-row-id="qr40"><td class="cell-name"><div class="cell-output">안전체험교육장 교육</div></td><td><div class="cell-output">상/하반기</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">1</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr40][plan]" data-field="plan" aria-label="안전체험교육장 교육 계획" value="1">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">1</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr40][m1]" data-field="m1" aria-label="안전체험교육장 교육 4월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr40][m2]" data-field="m2" aria-label="안전체험교육장 교육 5월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr40][m3]" data-field="m3" aria-label="안전체험교육장 교육 6월 실적" value="1">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr40][note]" data-field="note" aria-label="안전체험교육장 교육 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                                <tr data-row-id="qr41"><td class="cell-name"><div class="cell-output">항만안전교육</div></td><td><div class="cell-output">인</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">0</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr41][plan]" data-field="plan" aria-label="항만안전교육 계획" value="0">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">0</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr41][m1]" data-field="m1" aria-label="항만안전교육 4월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr41][m2]" data-field="m2" aria-label="항만안전교육 5월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr41][m3]" data-field="m3" aria-label="항만안전교육 6월 실적" value="0">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr41][note]" data-field="note" aria-label="항만안전교육 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                <tr class="section "><th colspan="9">-. 법정교육</th></tr>
+                                                <tr data-row-id="qr43"><td class="cell-name"><div class="cell-output">개인정보보호교육</div></td><td><div class="cell-output">Hour</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">0</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr43][plan]" data-field="plan" aria-label="개인정보보호교육 계획" value="0">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">0</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr43][m1]" data-field="m1" aria-label="개인정보보호교육 4월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr43][m2]" data-field="m2" aria-label="개인정보보호교육 5월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr43][m3]" data-field="m3" aria-label="개인정보보호교육 6월 실적" value="0">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr43][note]" data-field="note" aria-label="개인정보보호교육 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                                <tr data-row-id="qr44"><td class="cell-name"><div class="cell-output">직장내성희롱예방교육</div></td><td><div class="cell-output">Hour</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">0</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr44][plan]" data-field="plan" aria-label="직장내성희롱예방교육 계획" value="0">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">0</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr44][m1]" data-field="m1" aria-label="직장내성희롱예방교육 4월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr44][m2]" data-field="m2" aria-label="직장내성희롱예방교육 5월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr44][m3]" data-field="m3" aria-label="직장내성희롱예방교육 6월 실적" value="0">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr44][note]" data-field="note" aria-label="직장내성희롱예방교육 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                                <tr data-row-id="qr45"><td class="cell-name"><div class="cell-output">직장 내 장애인 인식개선</div></td><td><div class="cell-output">Hour</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">0</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr45][plan]" data-field="plan" aria-label="직장 내 장애인 인식개선 계획" value="0">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">0</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr45][m1]" data-field="m1" aria-label="직장 내 장애인 인식개선 4월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr45][m2]" data-field="m2" aria-label="직장 내 장애인 인식개선 5월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr45][m3]" data-field="m3" aria-label="직장 내 장애인 인식개선 6월 실적" value="0">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr45][note]" data-field="note" aria-label="직장 내 장애인 인식개선 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                                <tr data-row-id="qr46"><td class="cell-name"><div class="cell-output">퇴직연금 관련 교육</div></td><td><div class="cell-output">Hour</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">0</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr46][plan]" data-field="plan" aria-label="퇴직연금 관련 교육 계획" value="0">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">0</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr46][m1]" data-field="m1" aria-label="퇴직연금 관련 교육 4월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr46][m2]" data-field="m2" aria-label="퇴직연금 관련 교육 5월 실적" value="0">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr46][m3]" data-field="m3" aria-label="퇴직연금 관련 교육 6월 실적" value="0">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr46][note]" data-field="note" aria-label="퇴직연금 관련 교육 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                <tr class="section "><th colspan="9">-. 기타 안전보건활동</th></tr>
+                                                <tr data-row-id="qr48"><td class="cell-name"><div class="cell-output">근로자 건강관리 계획(건강검진)</div></td><td><div class="cell-output">회</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">1</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr48][plan]" data-field="plan" aria-label="근로자 건강관리 계획(건강검진) 계획" value="">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result"></output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr48][m1]" data-field="m1" aria-label="근로자 건강관리 계획(건강검진) 4월 실적" value="">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr48][m2]" data-field="m2" aria-label="근로자 건강관리 계획(건강검진) 5월 실적" value="">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr48][m3]" data-field="m3" aria-label="근로자 건강관리 계획(건강검진) 6월 실적" value="">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr48][note]" data-field="note" aria-label="근로자 건강관리 계획(건강검진) 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                                                <tr data-row-id="qr49"><td class="cell-name"><div class="cell-output">의약품 및 응급 장비점검</div></td><td><div class="cell-output">건</div></td>
+                <td>
+                    <output data-field="previous" class="quarter-result">3</output>
+                                    </td><td>
+                    <input type="number" step="0.000001" min="0" max="1000000000" name="rows[qr49][plan]" data-field="plan" aria-label="의약품 및 응급 장비점검 계획" value="3">
+                                    </td><td>
+                    <output data-field="result" class="quarter-result">3</output>
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr49][m1]" data-field="m1" aria-label="의약품 및 응급 장비점검 4월 실적" value="1">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr49][m2]" data-field="m2" aria-label="의약품 및 응급 장비점검 5월 실적" value="1">
+                                    </td><td>
+                    <input type="text" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,6})?|\-" name="rows[qr49][m3]" data-field="m3" aria-label="의약품 및 응급 장비점검 6월 실적" value="1">
+                                    </td><td>
+                    <textarea rows="1" name="rows[qr49][note]" data-field="note" aria-label="의약품 및 응급 장비점검 비고" maxlength="1000"></textarea>
+                                    </td></tr>
+                    </tbody></table></div>
+        <div class="actions"><a class="button secondary" href="goal_plan.php">연간 목표 및 세부계획으로 돌아가기</a><button type="submit" id="quarter-plan-save">저장하기</button><button type="button" id="quarter-preview-open">인쇄 미리보기</button></div>
+    </form>
+</main>
+<dialog id="quarter-preview" aria-labelledby="quarter-preview-title"><div class="preview-toolbar"><h2 id="quarter-preview-title">분기 계획·실적 인쇄 미리보기</h2><button type="button" id="quarter-print">인쇄 / PDF 저장</button><button type="button" class="secondary" id="quarter-preview-close">닫기</button><p id="quarter-overflow" hidden>한 장을 초과합니다. 긴 비고 내용을 줄여 주세요.</p></div><div id="quarter-pages"></div></dialog>
+<script id="quarter-template" type="application/json">[{"type":"section","title":"▣ 안전보건관리 목표","major":true},{"type":"item","id":"qr7","annual_id":"r8","name":"안전보건 인력 평가 및 보고","unit":"상\/하반기","mode":"sum","percent_result":false,"previous":"0","plan":"0","result":"0","m1":"0","m2":"0","m3":"0","note":""},{"type":"item","id":"qr8","annual_id":"r9","name":"안전활동평가(CSM) 개선율","unit":"%","mode":"sum","percent_result":true,"previous":"100","plan":"100","result":"1","m1":"1","m2":"0","m3":"0","note":""},{"type":"item","id":"qr9","annual_id":"r10","name":"재해율","unit":"%","mode":"sum","percent_result":false,"previous":"0","plan":"0","result":"0","m1":"0","m2":"0","m3":"0","note":""},{"type":"item","id":"qr10","annual_id":"r11","name":"인원수","unit":"인","mode":"average","percent_result":false,"previous":"20","plan":"20","result":"23","m1":"24","m2":"23","m3":"22","note":""},{"type":"item","id":"qr11","annual_id":null,"name":"재해건수","unit":"n","mode":"sum","percent_result":false,"previous":"0","plan":"0","result":"0","m1":"0","m2":"0","m3":"0","note":""},{"type":"item","id":"qr12","annual_id":"r12","name":"LTI (Lost Time Injury)","unit":"건","mode":"sum","percent_result":false,"previous":"0","plan":"0","result":"0","m1":"0","m2":"0","m3":"0","note":""},{"type":"item","id":"qr13","annual_id":"r13","name":"MTI (Medical Treatment injury)","unit":"건","mode":"sum","percent_result":false,"previous":"0","plan":"0","result":"0","m1":"0","m2":"0","m3":"0","note":""},{"type":"section","title":"▣ 안전보건활동","major":true},{"type":"section","title":"-. Communication 활동","major":false},{"type":"item","id":"qr16","annual_id":"r16","name":"산업안전보건위원회","unit":"분기별","mode":"sum","percent_result":false,"previous":"1","plan":"1","result":"1","m1":"1","m2":"0","m3":"0","note":""},{"type":"item","id":"qr17","annual_id":"r17","name":"근로자의견청취 및 피드백 관리 보고","unit":"상\/하반기","mode":"sum","percent_result":false,"previous":"0","plan":"","result":"0","m1":"0","m2":"0","m3":"0","note":""},{"type":"item","id":"qr18","annual_id":"r18","name":"아차사고(Near miss) 관리","unit":"건","mode":"sum","percent_result":false,"previous":"3","plan":"20","result":"16","m1":"5","m2":"6","m3":"5","note":""},{"type":"item","id":"qr19","annual_id":"r19","name":"안전제안 활동","unit":"건","mode":"sum","percent_result":false,"previous":"2","plan":"20","result":"3","m1":"1","m2":"1","m3":"1","note":""},{"type":"section","title":"-. 위험성 평가","major":false},{"type":"item","id":"qr21","annual_id":"r21","name":"위험성평가 리뷰 (정기, 수시)","unit":"상\/하반기","mode":"sum","percent_result":false,"previous":"0","plan":"0","result":"0","m1":"0","m2":"0","m3":"0","note":""},{"type":"item","id":"qr22","annual_id":"r22","name":"안전작업표준서 리뷰","unit":"상\/하반기","mode":"sum","percent_result":false,"previous":"0","plan":"","result":"0","m1":"0","m2":"0","m3":"0","note":""},{"type":"item","id":"qr23","annual_id":"r23","name":"추락위험성평가(FHRA) 리뷰","unit":"상\/하반기","mode":"sum","percent_result":false,"previous":"0","plan":"","result":"0","m1":"0","m2":"0","m3":"0","note":""},{"type":"section","title":"-. 안전·보건·환경점검 및 활동","major":false},{"type":"item","id":"qr25","annual_id":"r25","name":"안전관찰(대표)수행(VFL)","unit":"매월","mode":"sum","percent_result":false,"previous":"3","plan":"3","result":"3","m1":"1","m2":"1","m3":"1","note":""},{"type":"item","id":"qr26","annual_id":"r26","name":"안전순찰(관리자)수행","unit":"1회\/주","mode":"sum","percent_result":false,"previous":"13","plan":"13","result":"13","m1":"5","m2":"4","m3":"4","note":""},{"type":"item","id":"qr27","annual_id":"r27","name":"위험기계기구 점검","unit":"회","mode":"sum","percent_result":false,"previous":"0","plan":"0","result":"0","m1":"0","m2":"0","m3":"0","note":""},{"type":"item","id":"qr28","annual_id":"r28","name":"휴대용공기구 점검","unit":"회","mode":"sum","percent_result":false,"previous":"0","plan":"0","result":"0","m1":"0","m2":"0","m3":"0","note":""},{"type":"item","id":"qr29","annual_id":"r29","name":"운송장비 및 중장비관리","unit":"회","mode":"sum","percent_result":false,"previous":"3","plan":"3","result":"3","m1":"1","m2":"1","m3":"1","note":""},{"type":"item","id":"qr30","annual_id":"r30","name":"유해위험물질관리(MSDS)","unit":"상\/하반기","mode":"sum","percent_result":false,"previous":"0","plan":"0","result":"0","m1":"0","m2":"0","m3":"0","note":""},{"type":"item","id":"qr31","annual_id":"r31","name":"비상대응훈련 및 매뉴얼 점검 결과 보고","unit":"상\/하반기","mode":"sum","percent_result":false,"previous":"0","plan":"0","result":"0","m1":"0","m2":"0","m3":"0","note":""},{"type":"item","id":"qr32","annual_id":"r32","name":"소방시설 점검","unit":"회","mode":"sum","percent_result":false,"previous":"3","plan":"3","result":"3","m1":"1","m2":"1","m3":"1","note":""},{"type":"item","id":"qr33","annual_id":"r33","name":"환경정리(housekeeping)","unit":"회","mode":"sum","percent_result":false,"previous":"3","plan":"3","result":"3","m1":"1","m2":"1","m3":"1","note":""},{"type":"section","title":"-. 안전·보건·환경교육","major":false},{"type":"item","id":"qr35","annual_id":"r35","name":"정기안전보건교육","unit":"매월","mode":"sum","percent_result":false,"previous":"6","plan":"6","result":"6","m1":"2","m2":"2","m3":"2","note":""},{"type":"item","id":"qr36","annual_id":"r36","name":"관리감독자교육","unit":"Hour","mode":"sum","percent_result":false,"previous":"16","plan":"0","result":"0","m1":"0","m2":"0","m3":"0","note":""},{"type":"item","id":"qr37","annual_id":"r37","name":"신규채용시 안전교육","unit":"Hour","mode":"sum","percent_result":false,"previous":"3","plan":"","result":"4","m1":"4","m2":"0","m3":"0","note":""},{"type":"item","id":"qr38","annual_id":"r38","name":"작업내용변경시교육","unit":"Hour","mode":"sum","percent_result":false,"previous":"0","plan":"2","result":"0","m1":"0","m2":"0","m3":"0","note":""},{"type":"item","id":"qr39","annual_id":"r39","name":"특별안전교육(Matrix 참조)","unit":"Hour","mode":"sum","percent_result":false,"previous":"16","plan":"24","result":"24","m1":"8","m2":"8","m3":"8","note":""},{"type":"item","id":"qr40","annual_id":"r40","name":"안전체험교육장 교육","unit":"상\/하반기","mode":"sum","percent_result":false,"previous":"2","plan":"0","result":"0","m1":"0","m2":"0","m3":"0","note":""},{"type":"item","id":"qr41","annual_id":"r41","name":"항만안전교육","unit":"인","mode":"sum","percent_result":false,"previous":"12","plan":"12","result":"12","m1":"0","m2":"0","m3":"12","note":""},{"type":"section","title":"-. 법정교육","major":false},{"type":"item","id":"qr43","annual_id":"r43","name":"개인정보보호교육","unit":"Hour","mode":"sum","percent_result":false,"previous":"1","plan":"0","result":"0","m1":"","m2":"","m3":"","note":""},{"type":"item","id":"qr44","annual_id":"r44","name":"직장내성희롱예방교육","unit":"Hour","mode":"sum","percent_result":false,"previous":"1","plan":"0","result":"0","m1":"","m2":"","m3":"","note":""},{"type":"item","id":"qr45","annual_id":"r45","name":"직장 내 장애인 인식개선","unit":"Hour","mode":"sum","percent_result":false,"previous":"1","plan":"0","result":"0","m1":"","m2":"","m3":"","note":""},{"type":"item","id":"qr46","annual_id":"r46","name":"퇴직연금 관련 교육","unit":"Hour","mode":"sum","percent_result":false,"previous":"1","plan":"0","result":"0","m1":"","m2":"","m3":"","note":""},{"type":"section","title":"-. 기타 안전보건활동","major":false},{"type":"item","id":"qr48","annual_id":"r48","name":"근로자 건강관리 계획(건강검진)","unit":"회","mode":"sum","percent_result":false,"previous":"1","plan":"1","result":"1","m1":"0","m2":"0","m3":"1","note":""},{"type":"item","id":"qr49","annual_id":"r49","name":"의약품 및 응급 장비점검","unit":"건","mode":"sum","percent_result":false,"previous":"12","plan":"3","result":"3","m1":"1","m2":"1","m3":"1","note":""}]</script><script src="assets/quarter-plan.js"></script>
+<script>window.addEventListener('load',async()=>{await document.fonts.ready;document.getElementById('quarter-preview-open').click();await new Promise(r=>setTimeout(r,200));const page=document.querySelector('.quarter-sheet');document.body.dataset.test=JSON.stringify({items:page.querySelectorAll('.print-item').length,sections:page.querySelectorAll('.print-section').length,fits:!document.getElementById('quarter-print').disabled,height:page.getBoundingClientRect().height});});</script></body></html>
