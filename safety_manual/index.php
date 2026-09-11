@@ -1632,8 +1632,12 @@ $manualCoverData = safety_cover_load_data();
 $manualCoverHtml = safety_manual_build_cover_html($manualCoverData);
 $manualHeaderHtml = safety_manual_apply_cover_to_header_html($manualHeaderHtml, $manualCoverData);
 $renderedContentHtml = $rawContentHtml;
-$chapterOneMarker = '<h2 id="제1장-총-칙-1">';
-$chapterOnePosition = strpos($renderedContentHtml, $chapterOneMarker);
+// 헤더 표(현대기전 로고·문서번호 등)에 class 속성 등이 추가되어도 항상 찾을 수 있도록
+// 정확히 일치하는 문자열이 아니라 id만 일치하는 <h2> 태그를 정규식으로 찾는다.
+$chapterOnePosition = false;
+if (preg_match('/<h2\s+id="제1장-총-칙-1"[^>]*>/u', $renderedContentHtml, $chapterOneMatch, PREG_OFFSET_CAPTURE)) {
+    $chapterOnePosition = $chapterOneMatch[0][1];
+}
 if ($chapterOnePosition !== false) {
     $renderedContentHtml = substr($renderedContentHtml, $chapterOnePosition);
 }
@@ -4937,6 +4941,9 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
             }
 
             var documentRoot = document.querySelector('.document');
+            // 문서 머리말(현대기전 로고·문서번호 표)은 편집 영역(.document)에서 잘려 표시되므로,
+            // 저장 시 사라지지 않도록 원본에서 따로 보관해 두었다가 저장할 때 다시 앞에 붙인다.
+            var MANUAL_PREAMBLE_HTML = <?= json_encode($chapterOnePosition !== false ? substr($rawContentHtml, 0, $chapterOnePosition) : '', JSON_UNESCAPED_UNICODE) ?>;
             var lawLinkStatus = document.getElementById('law-link-status');
             var tocList = document.getElementById('toc-list');
             var tocSearchInput = document.getElementById('toc-keyword-search');
@@ -5299,7 +5306,7 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                     node.removeAttribute('data-bound-law-click');
                 });
 
-                return clone.innerHTML;
+                return (MANUAL_PREAMBLE_HTML || '') + clone.innerHTML;
             }
 
             function persistCurrentDocumentEdits() {
@@ -6705,6 +6712,9 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                 var documentClone = documentRoot.cloneNode(true);
                 documentClone.querySelectorAll('button, .manual-policy-link').forEach(function (button) {
                     button.remove();
+                });
+                documentClone.querySelectorAll('a').forEach(function (anchor) {
+                    anchor.replaceWith(document.createTextNode(anchor.textContent || ''));
                 });
                 var contentNodes = Array.prototype.filter.call(documentClone.children || [], function (node) {
                     return !(sampleHeaderTable && node.classList
