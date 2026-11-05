@@ -126,8 +126,9 @@ $pageTitleText = $category ? $category['name'] : '전체 게시글';
                 <?php if (strtotime($n['created_at']) > time() - 86400): ?><span class="new-tag">N</span><?php endif; ?>
             </td>
             <td data-label="작성자">
-                <?php if ($n['author_dept']): ?><span class="author-dept"><?= h($n['author_dept']) ?></span> <?php endif; ?>
-                <span class="author-name"><?= h($n['author_name']) ?></span>
+                <?php $nDept = boardDisplayAuthorDept($n['author_dept'], $n['cat_code']); ?>
+                <?php if ($nDept): ?><span class="author-dept"><?= h($nDept) ?></span> <?php endif; ?>
+                <span class="author-name"><?= h(boardDisplayAuthorName($n['author_name'], $n['cat_code'])) ?></span>
             </td>
             <td data-label="등록일"><?= dateFormat($n['created_at'], 'Y-m-d') ?></td>
             <td data-label="조회"><?= number_format($n['views']) ?></td>
@@ -151,8 +152,9 @@ $pageTitleText = $category ? $category['name'] : '전체 게시글';
                 <?php if (strtotime($p['created_at']) > time() - 86400): ?><span class="new-tag">N</span><?php endif; ?>
             </td>
             <td data-label="작성자">
-                <?php if ($p['author_dept']): ?><span class="author-dept"><?= h($p['author_dept']) ?></span> <?php endif; ?>
-                <span class="author-name"><?= h($p['author_name']) ?></span>
+                <?php $pDept = boardDisplayAuthorDept($p['author_dept'], $p['cat_code']); ?>
+                <?php if ($pDept): ?><span class="author-dept"><?= h($pDept) ?></span> <?php endif; ?>
+                <span class="author-name"><?= h(boardDisplayAuthorName($p['author_name'], $p['cat_code'])) ?></span>
             </td>
             <td data-label="등록일"><?= dateFormat($p['created_at'], 'Y-m-d') ?></td>
             <td data-label="조회"><?= number_format($p['views']) ?></td>

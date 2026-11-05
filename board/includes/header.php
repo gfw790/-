@@ -4,6 +4,7 @@ require_once __DIR__ . '/functions.php';
 
 ensureNearMissSchema();
 ensureHandoverCategory();
+ensureAnonymousCategory();
 $_currentUser = getCurrentUser();
 
 // 가스팀 여부 판별

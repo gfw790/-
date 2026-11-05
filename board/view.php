@@ -91,8 +91,9 @@ $pageTitle = $post['title'];
         </h1>
         <div class="post-meta">
             <span class="meta-item">
-                <?php if ($post['author_dept']): ?><?= h($post['author_dept']) ?> <?php endif; ?>
-                <strong><?= h($post['author_name']) ?></strong>
+                <?php $postDept = boardDisplayAuthorDept($post['author_dept'], $post['cat_code']); ?>
+                <?php if ($postDept): ?><?= h($postDept) ?> <?php endif; ?>
+                <strong><?= h(boardDisplayAuthorName($post['author_name'], $post['cat_code'])) ?></strong>
             </span>
             <span class="meta-item"><?= dateFormat($post['created_at'], 'Y-m-d H:i') ?></span>
             <?php if ($post['updated_at'] !== $post['created_at']): ?>
@@ -236,8 +237,9 @@ $pageTitle = $post['title'];
             <li class="comment-item">
                 <div class="comment-head">
                     <span class="comment-author">
-                        <?php if ($c['author_dept']): ?><span class="dept"><?= h($c['author_dept']) ?></span><?php endif; ?>
-                        <?= h($c['author_name']) ?>
+                        <?php $cDept = boardDisplayAuthorDept($c['author_dept'], $post['cat_code']); ?>
+                        <?php if ($cDept): ?><span class="dept"><?= h($cDept) ?></span><?php endif; ?>
+                        <?= h(boardDisplayAuthorName($c['author_name'], $post['cat_code'])) ?>
                     </span>
                     <span class="comment-date"><?= timeAgo($c['created_at']) ?></span>
                 </div>
@@ -269,8 +271,9 @@ $pageTitle = $post['title'];
                         <div class="comment-item is-reply" style="border:none;margin-top:8px;">
                             <div class="comment-head">
                                 <span class="comment-author">
-                                    <?php if ($rc['author_dept']): ?><span class="dept"><?= h($rc['author_dept']) ?></span><?php endif; ?>
-                                    <?= h($rc['author_name']) ?>
+                                    <?php $rcDept = boardDisplayAuthorDept($rc['author_dept'], $post['cat_code']); ?>
+                                    <?php if ($rcDept): ?><span class="dept"><?= h($rcDept) ?></span><?php endif; ?>
+                                    <?= h(boardDisplayAuthorName($rc['author_name'], $post['cat_code'])) ?>
                                 </span>
                                 <span class="comment-date"><?= timeAgo($rc['created_at']) ?></span>
                             </div>

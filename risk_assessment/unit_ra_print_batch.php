@@ -327,6 +327,8 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
     --preview-shadow: 0 24px 70px rgba(17, 39, 59, 0.12);
     --preview-shadow-soft: 0 12px 30px rgba(17, 39, 59, 0.08);
     --title-print-page-height: 289mm;
+    --full-print-page-height: 209.5mm;
+    --full-print-page-padding: 6mm 6mm 15mm;
   }
   body {
     padding: 24px 18px 48px;
@@ -401,6 +403,25 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
     font-size: 12px;
     font-weight: 700;
     letter-spacing: -0.01em;
+  }
+  .company-brand {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--preview-ink);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.4;
+  }
+  .company-brand img {
+    display: block;
+    width: 24px;
+    height: 28px;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+  .sheet-head > .company-brand {
+    margin-bottom: 8px;
   }
   .identity-name {
     font-size: 15px;
@@ -894,7 +915,7 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
     position: absolute;
     left: -99999px;
     top: 0;
-    width: 285mm;
+    width: 297mm;
     visibility: hidden;
     pointer-events: none;
     overflow: hidden;
@@ -956,7 +977,8 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
     display: flex;
     flex-direction: column;
     box-sizing: border-box;
-    height: calc(210mm - 12mm);
+    height: var(--full-print-page-height);
+    padding: var(--full-print-page-padding);
     margin: 0;
     border: none;
     border-radius: 0;
@@ -965,6 +987,7 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
     overflow: hidden;
   }
   .print-measure-root .sheet-head {
+    flex-shrink: 0;
     padding: 10mm 0 1.6mm;
     background: none;
     border-bottom: 0.45mm solid #333;
@@ -1004,9 +1027,12 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
     font-size: 10px;
   }
   .print-measure-root .sheet-body {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     padding: 0.8mm 0 0;
     min-height: 0;
+  }
+  .print-measure-root .print-sheet::before {
+    display: none;
   }
   .print-measure-root .sheet-page-footer {
     margin-top: 0;
@@ -1048,7 +1074,7 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
     position: static;
     padding: 5px 5px;
     background: #f1f1f1 !important;
-    font-size: 9px;
+    font-size: 10px;
     line-height: 1.4;
     white-space: normal;
   }
@@ -1126,7 +1152,7 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
   }
   @page {
     size: A4 landscape;
-    margin: 6mm;
+    margin: 0;
   }
   @media print {
     body {
@@ -1242,7 +1268,8 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
       display: flex;
       flex-direction: column;
       box-sizing: border-box;
-      height: calc(210mm - 12mm);
+      height: var(--full-print-page-height);
+      padding: var(--full-print-page-padding);
       margin: 0;
       border: none;
       border-radius: 0;
@@ -1259,6 +1286,7 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
       break-after: auto;
     }
     .sheet-head {
+      flex-shrink: 0;
       padding: 10mm 0 1.6mm;
       background: none;
       border-bottom: 0.45mm solid #333;
@@ -1298,7 +1326,7 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
       font-size: 10px;
     }
     .sheet-body {
-      flex: 1 1 auto;
+      flex: 0 0 auto;
       padding: 0.8mm 0 0;
       min-height: 0;
     }
@@ -1376,42 +1404,46 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
     }
     th:nth-child(3),
     td:nth-child(3) {
-      width: 11%;
+      width: 6%;
     }
     th:nth-child(4),
     td:nth-child(4) {
-      width: 6%;
+      width: 11%;
     }
     th:nth-child(5),
     td:nth-child(5) {
-      width: 7%;
+      width: 6%;
     }
     th:nth-child(6),
     td:nth-child(6) {
-      width: 16%;
+      width: 7%;
     }
     th:nth-child(7),
     td:nth-child(7) {
-      width: 5%;
+      width: 16%;
     }
     th:nth-child(8),
     td:nth-child(8) {
-      width: 12%;
+      width: 5%;
     }
     th:nth-child(9),
     td:nth-child(9) {
-      width: 5%;
+      width: 12%;
     }
     th:nth-child(10),
     td:nth-child(10) {
-      width: 12%;
+      width: 5%;
     }
     th:nth-child(11),
     td:nth-child(11) {
-      width: 5%;
+      width: 12%;
     }
     th:nth-child(12),
     td:nth-child(12) {
+      width: 5%;
+    }
+    th:nth-child(13),
+    td:nth-child(13) {
       width: 7%;
     }
     .source-chip {
@@ -1489,6 +1521,10 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
   <div class="shell">
     <div class="topbar">
       <div class="identity">
+        <div class="company-brand">
+          <img src="../safety_manual/assets/policy-logo.png" alt="" width="24" height="28">
+          <span>주식회사 현대기전</span>
+        </div>
         <span class="role-badge"><?= h($displayRoleLabel) ?></span>
         <span class="identity-name"><?= h($displayName) ?></span>
       </div>
@@ -1580,6 +1616,10 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
           ?>
           <article class="print-sheet" data-footer-label="<?= h($footerLabel) ?>" data-footer-tone="<?= h($footerToneClass) ?>">
             <div class="sheet-head">
+              <div class="company-brand">
+                <img src="../safety_manual/assets/policy-logo.png" alt="" width="24" height="28">
+                <span>주식회사 현대기전</span>
+              </div>
               <div class="sheet-title-row">
                 <div class="sheet-title">
                   <h2><?= h(unit_type_label((string)($headerRow['unit_type'] ?? ''))) ?></h2>
@@ -1772,7 +1812,7 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
 
         styleEl.textContent = mode === 'title-only'
           ? '@page { size: A4 portrait; margin: 0; }'
-          : '@page { size: A4 landscape; margin: 6mm; }';
+          : '@page { size: A4 landscape; margin: 0; }';
       }
 
       setPrintPageStyle('full');
@@ -1805,7 +1845,20 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
         if (!page) {
           return false;
         }
-        return page.scrollHeight > (page.clientHeight + TABLE_OVERFLOW_PX);
+        // A4 landscape: 209.5mm - 6mm top - 15mm bottom = 188.5mm.
+        // Measure natural content height, including the header, table and footer;
+        // flex shrinking must never hide overflow inside the reserved padding.
+        const pageStyle = window.getComputedStyle(page);
+        const pageRect = page.getBoundingClientRect();
+        const paddingTop = parseFloat(pageStyle.paddingTop) || 0;
+        const paddingBottom = parseFloat(pageStyle.paddingBottom) || 0;
+        const availableHeight = pageRect.height - paddingTop - paddingBottom - TABLE_OVERFLOW_PX;
+        const contentTop = pageRect.top + paddingTop;
+        const contentNodes = page.querySelectorAll('.sheet-head, .sheet-body, .table-wrap, .sheet-page-footer');
+        const usedHeight = Math.max(0, ...Array.from(contentNodes, function (node) {
+          return node.getBoundingClientRect().bottom - contentTop;
+        }));
+        return usedHeight > availableHeight || page.scrollHeight > page.clientHeight;
       }
 
       function isTitleColumnOverflowing(column) {

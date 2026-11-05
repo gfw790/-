@@ -1347,13 +1347,15 @@ $isJungYeontakAccount = $currentUserLoginId === '6680';
 $canAccessLegacyListPage = $currentUserName === "\u{AE40}\u{B0A8}\u{ADE0}";
 $canAccessMyGearTest = $currentUserName === "\u{AE40}\u{B0A8}\u{ADE0}";
 $canAccessSafetyGearManagement = $canManage && !$isJungYeontakAccount;
-$canAccessEmploymentRules = in_array($currentUserLoginId, [
+// 취업규칙은 전 직원에게 공개한다 (조문 편집/새 조항 추가/출력은 employment_rules/index.php 내에서
+// auth_can_manage() 권한자에게만 별도로 제한됨).
+$canAccessEmploymentRules = true;
+$canAccessSafetyManual = in_array($currentUserLoginId, [
     '5878',
     '2316',
     '7204',
     '6680',
 ], true);
-$canAccessSafetyManual = $canAccessEmploymentRules;
 $workListDescription = '저장된 작업리스트를 확인하고 필요한 항목을 다시 열어볼 수 있습니다.';
 ?>
 <!DOCTYPE html>

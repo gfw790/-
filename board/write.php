@@ -193,11 +193,11 @@ if (!$selectedCat && !empty($_GET['cat'])) {
     <div class="form-row">
         <div class="form-label">분류<span class="req">*</span></div>
         <div class="form-input">
-            <select name="category_id" required>
+            <select name="category_id" id="category_id_select" required>
                 <option value="">선택</option>
                 <?php foreach (getCategories() as $cat): ?>
                     <?php if ($cat['write_role'] === 'admin' && !$canWriteAdminCat) continue; ?>
-                    <option value="<?= (int)$cat['id'] ?>" <?= $selectedCat == $cat['id'] ? 'selected' : '' ?>>
+                    <option value="<?= (int)$cat['id'] ?>" data-code="<?= h($cat['code']) ?>" <?= $selectedCat == $cat['id'] ? 'selected' : '' ?>>
                         <?= h($cat['name']) ?>
                     </option>
                 <?php endforeach; ?>
@@ -233,9 +233,28 @@ if (!$selectedCat && !empty($_GET['cat'])) {
     <div class="form-row">
         <div class="form-label">작성자</div>
         <div class="form-input">
-            <span><?= h($user['dept']) ?> <strong><?= h($user['name']) ?></strong></span>
+            <span id="author-name-display"><?= h($user['dept']) ?> <strong><?= h($user['name']) ?></strong></span>
+            <span id="anonymous-hint" class="help" style="display:none;color:#b02a2a;">
+                익명 (다른 사용자에게 작성자 정보가 표시되지 않습니다)
+            </span>
         </div>
     </div>
+    <script>
+        (function () {
+            var select = document.getElementById('category_id_select');
+            var hint = document.getElementById('anonymous-hint');
+            var nameDisplay = document.getElementById('author-name-display');
+            if (!select || !hint || !nameDisplay) return;
+            function updateHint() {
+                var opt = select.options[select.selectedIndex];
+                var isAnonymous = !!(opt && opt.getAttribute('data-code') === 'anonymous');
+                hint.style.display = isAnonymous ? '' : 'none';
+                nameDisplay.style.display = isAnonymous ? 'none' : '';
+            }
+            select.addEventListener('change', updateHint);
+            updateHint();
+        })();
+    </script>
 
     <div class="form-row content-form-row">
         <div class="form-label">내용<span class="req">*</span></div>

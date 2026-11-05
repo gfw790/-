@@ -16,6 +16,181 @@ if ($user === null) {
     exit;
 }
 
+require_once __DIR__ . '/db_config.php';
+
+const ORG_CHART_TABS = [
+    'general' => '일반 조직도',
+    'safety_mgmt' => '안전보건관리 조직도',
+    'risk_assessment' => '위험성평가 조직도',
+    'committee' => '산업안전보건위원회 조직도',
+    'emergency' => '비상대응 조직도',
+];
+const ORG_CHART_TREE_TABS = ['general', 'risk_assessment']; // 기존 팀 조직도 화면을 그대로 재사용하는 탭
+const ORG_CHART_BOX_TABS = ['safety_mgmt', 'committee']; // 직급/성명 박스형 조직도로 새로 구성하는 탭
+const ORG_CHART_BOX_DEFAULTS = [
+    'safety_mgmt' => [
+        'chief_role' => '대표', 'chief_name' => '정연탁',
+        'supervisor_role' => '부장', 'supervisor_name' => '진종철',
+        'safety_role' => '과장', 'safety_name' => '김남균',
+    ],
+    'committee' => [
+        'chairman_role' => '위원장', 'chairman_name' => '정연탁',
+        'secretary_role' => '실장', 'secretary_name' => '정주랑',
+        'employer_members' => [
+            ['role' => '대표', 'name' => '정연탁'],
+            ['role' => '부장', 'name' => '진종철'],
+            ['role' => '실장', 'name' => '정주랑'],
+        ],
+        'worker_members' => [
+            ['role' => '공사', 'name' => '윤택천'],
+            ['role' => '가스', 'name' => '김도담'],
+            ['role' => '제조', 'name' => '우홍기'],
+        ],
+    ],
+];
+const ORG_CHART_TABLE_DEFAULTS = [
+    'emergency' => [
+        ['role' => '총괄지휘', 'name' => '', 'department' => '', 'note' => ''],
+        ['role' => '상황전파·비상연락', 'name' => '', 'department' => '', 'note' => ''],
+        ['role' => '초기진압·소화', 'name' => '', 'department' => '', 'note' => ''],
+        ['role' => '피난유도', 'name' => '', 'department' => '', 'note' => ''],
+        ['role' => '응급구조·구호', 'name' => '', 'department' => '', 'note' => ''],
+        ['role' => '방호·안전', 'name' => '', 'department' => '', 'note' => ''],
+    ],
+];
+
+function org_chart_table_init(PDO $db): void
+{
+    $db->exec("CREATE TABLE IF NOT EXISTS safety_org_charts(chart_key VARCHAR(30) PRIMARY KEY, chart_data LONGTEXT NOT NULL, updated_by VARCHAR(100) NOT NULL DEFAULT '', updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+}
+
+function org_chart_table_load(PDO $db, string $chartKey): array
+{
+    $stmt = $db->prepare('SELECT chart_data FROM safety_org_charts WHERE chart_key=?');
+    $stmt->execute([$chartKey]);
+    $saved = $stmt->fetchColumn();
+    if (is_string($saved) && is_array($decoded = json_decode($saved, true)) && $decoded !== []) {
+        return $decoded;
+    }
+    return ORG_CHART_TABLE_DEFAULTS[$chartKey] ?? [];
+}
+
+function org_chart_table_rows_from_post(array $post): array
+{
+    $roles = $post['row_role'] ?? [];
+    $names = $post['row_name'] ?? [];
+    $departments = $post['row_department'] ?? [];
+    $notes = $post['row_note'] ?? [];
+    $count = max(count($roles), count($names), count($departments), count($notes));
+    $rows = [];
+    for ($i = 0; $i < $count; $i++) {
+        $role = trim((string)($roles[$i] ?? ''));
+        $name = trim((string)($names[$i] ?? ''));
+        $department = trim((string)($departments[$i] ?? ''));
+        $note = trim((string)($notes[$i] ?? ''));
+        if ($role === '' && $name === '' && $department === '' && $note === '') {
+            continue;
+        }
+        $rows[] = ['role' => $role, 'name' => $name, 'department' => $department, 'note' => $note];
+    }
+    return $rows;
+}
+
+function org_chart_box_load(PDO $db, string $chartKey): array
+{
+    $defaults = ORG_CHART_BOX_DEFAULTS[$chartKey] ?? [];
+    $stmt = $db->prepare('SELECT chart_data FROM safety_org_charts WHERE chart_key=?');
+    $stmt->execute([$chartKey]);
+    $saved = $stmt->fetchColumn();
+    if (is_string($saved) && is_array($decoded = json_decode($saved, true))) {
+        return array_merge($defaults, $decoded);
+    }
+    return $defaults;
+}
+
+function org_chart_box_members_from_post(array $roles, array $names): array
+{
+    $count = max(count($roles), count($names));
+    $members = [];
+    for ($i = 0; $i < $count; $i++) {
+        $role = trim((string)($roles[$i] ?? ''));
+        $name = trim((string)($names[$i] ?? ''));
+        if ($role === '' && $name === '') {
+            continue;
+        }
+        $members[] = ['role' => $role, 'name' => $name];
+    }
+    return $members;
+}
+
+function org_chart_box_fields_from_post(array $post, string $chartKey): array
+{
+    if ($chartKey === 'committee') {
+        return [
+            'chairman_role' => trim((string)($post['chairman_role'] ?? '')),
+            'chairman_name' => trim((string)($post['chairman_name'] ?? '')),
+            'secretary_role' => trim((string)($post['secretary_role'] ?? '')),
+            'secretary_name' => trim((string)($post['secretary_name'] ?? '')),
+            'employer_members' => org_chart_box_members_from_post($post['employer_role'] ?? [], $post['employer_name'] ?? []),
+            'worker_members' => org_chart_box_members_from_post($post['worker_role'] ?? [], $post['worker_name'] ?? []),
+        ];
+    }
+
+    $defaults = ORG_CHART_BOX_DEFAULTS[$chartKey] ?? [];
+    $fields = [];
+    foreach (array_keys($defaults) as $key) {
+        $fields[$key] = trim((string)($post[$key] ?? ''));
+    }
+    return $fields;
+}
+
+$chartType = (string)($_GET['chart'] ?? 'general');
+if (!array_key_exists($chartType, ORG_CHART_TABS)) {
+    $chartType = 'general';
+}
+$isTableChart = $chartType === 'emergency';
+$isBoxChart = in_array($chartType, ORG_CHART_BOX_TABS, true);
+$tableNotice = '';
+$tableRows = [];
+$boxFields = [];
+
+if ($isTableChart) {
+    try {
+        $db = getDB();
+        org_chart_table_init($db);
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && auth_can_manage($user)) {
+            $tableRows = org_chart_table_rows_from_post($_POST);
+            $stmt = $db->prepare('INSERT INTO safety_org_charts(chart_key, chart_data, updated_by) VALUES(?,?,?) ON DUPLICATE KEY UPDATE chart_data=VALUES(chart_data), updated_by=VALUES(updated_by)');
+            $stmt->execute([$chartType, json_encode($tableRows, JSON_UNESCAPED_UNICODE), trim((string)($user['name'] ?? $user['login_id']))]);
+            $tableNotice = '저장했습니다.';
+        } else {
+            $tableRows = org_chart_table_load($db, $chartType);
+        }
+    } catch (Throwable $exception) {
+        error_log($exception->getMessage());
+        $tableRows = ORG_CHART_TABLE_DEFAULTS[$chartType] ?? [];
+    }
+    if ($tableRows === []) {
+        $tableRows = [['role' => '', 'name' => '', 'department' => '', 'note' => '']];
+    }
+} elseif ($isBoxChart) {
+    try {
+        $db = getDB();
+        org_chart_table_init($db);
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && auth_can_manage($user)) {
+            $boxFields = org_chart_box_fields_from_post($_POST, $chartType);
+            $stmt = $db->prepare('INSERT INTO safety_org_charts(chart_key, chart_data, updated_by) VALUES(?,?,?) ON DUPLICATE KEY UPDATE chart_data=VALUES(chart_data), updated_by=VALUES(updated_by)');
+            $stmt->execute([$chartType, json_encode($boxFields, JSON_UNESCAPED_UNICODE), trim((string)($user['name'] ?? $user['login_id']))]);
+            $tableNotice = '저장했습니다.';
+        } else {
+            $boxFields = org_chart_box_load($db, $chartType);
+        }
+    } catch (Throwable $exception) {
+        error_log($exception->getMessage());
+        $boxFields = ORG_CHART_BOX_DEFAULTS[$chartType] ?? [];
+    }
+}
+
 $stripName = static function(string $name): string {
     return trim((string)preg_replace('/\s*\([^)]*\)/', '', $name));
 };
@@ -168,6 +343,34 @@ $allTeamNames = $orgChart['all_team_names'];
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
+  }
+  .org-chart-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 14px;
+  }
+  .org-chart-tab {
+    border: 1px solid #c9d2e2;
+    background: #fff;
+    color: #1d2b45;
+    border-radius: 999px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+  }
+  .org-chart-tab.is-active {
+    border-color: #d58314;
+    background: var(--accent);
+    color: #fff;
+  }
+  .org-table-form { width: 100%; border-collapse: collapse; }
+  .org-table-form th, .org-table-form td { border: 1px solid var(--line); padding: 8px; text-align: center; }
+  .org-table-form th { background: #f2f4f9; }
+  .org-table-form input { width: 100%; border: 1px solid #d5ddea; border-radius: 6px; padding: 6px 8px; font: inherit; }
+  @media print {
+    .org-chart-tabs { display: none !important; }
   }
   .btn {
     border: 1px solid #c9d2e2;
@@ -446,6 +649,7 @@ $allTeamNames = $orgChart['all_team_names'];
   .org-node-safety .org-node-label { background: linear-gradient(90deg, #4eb67f, #2f9969); }
   .org-safety-junction { align-self: stretch; position: relative; display: flex; flex-direction: column; align-items: center; }
   .org-junction-stem { display: flex; flex-direction: column; align-items: center; }
+  .org-safety-junction-tall .org-vert { height: 50px; }
   .org-junction-branch { position: absolute; left: 50%; top: 50%; transform: translateY(-50%); display: flex; align-items: center; }
   .org-junction-hline { width: 120px; height: 2px; background: #6a7890; flex-shrink: 0; }
   .org-teams-wrap { width: 100%; overflow-x: auto; padding-bottom: 4px; }
@@ -565,6 +769,93 @@ $allTeamNames = $orgChart['all_team_names'];
   .org-node-safety .org-member-name {
     display: inline;
   }
+  .org-box-chart { width: 100%; max-width: 460px; margin: 0 auto; }
+  .org-box-card {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 0;
+    overflow: hidden;
+    background: #fff;
+  }
+  .org-box-committee-link { width: auto; min-width: 200px; }
+  .org-box-head {
+    display: block;
+    text-align: center;
+    font-size: 15px;
+    font-weight: 800;
+    color: #1f2937;
+    background: #f2f4f9;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .org-box-head-full { border-bottom: none; }
+  .org-box-row { display: flex; }
+  .org-box-cell { flex: 1; text-align: center; padding: 6px 4px; }
+  .org-box-cell:first-child { border-right: 1px solid var(--line); }
+  .org-box-cell input {
+    width: 100%;
+    border: none;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 700;
+    color: #1f2937;
+    background: transparent;
+  }
+  .org-box-cell input:focus { outline: 2px solid #4f7ad0; outline-offset: 2px; }
+  .org-box-workers { padding: 10px 12px; }
+  .org-box-workers .org-box-head { border-bottom: none; }
+  .org-committee-cols {
+    --col-width: 200px;
+    display: flex;
+    gap: 40px;
+    justify-content: center;
+    position: relative;
+    width: fit-content;
+    margin: 0 auto;
+  }
+  .org-committee-cols::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: calc(var(--col-width) / 2);
+    right: calc(var(--col-width) / 2);
+    height: 2px;
+    background: #6a7890;
+  }
+  .org-committee-col {
+    width: var(--col-width);
+    flex: 0 0 var(--col-width);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    padding-top: 28px;
+  }
+  .org-committee-col::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2px;
+    height: 28px;
+    background: #6a7890;
+  }
+  .org-committee-col .org-box-card { width: 100%; }
+  .org-box-member-table { width: 100%; border-collapse: collapse; }
+  .org-box-member-table td { border: 1px solid var(--line); padding: 5px 4px; text-align: center; }
+  .org-box-member-table td:first-child { width: 36%; }
+  .org-box-member-table input {
+    width: 100%;
+    border: none;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1f2937;
+    background: transparent;
+  }
+  .org-box-member-table input:focus { outline: 2px solid #4f7ad0; outline-offset: 1px; }
+  .org-box-member-remove-cell { border: none !important; width: 44px; padding: 2px !important; }
   @media (max-width: 720px) {
     body { padding: 14px 10px 18px; }
     .org-chart-surface { --org-team-top-width: 92px; padding: 12px 8px 8px; }
@@ -645,10 +936,17 @@ $allTeamNames = $orgChart['all_team_names'];
       </div>
       <div class="actions">
         <a class="btn" href="work_list.php">목록으로</a>
-        <button type="button" class="btn btn-primary" id="print-preview-btn">미리보기 / 인쇄</button>
+        <?php if (!$isTableChart && !$isBoxChart): ?><button type="button" class="btn btn-primary" id="print-preview-btn">미리보기 / 인쇄</button><?php endif; ?>
       </div>
     </div>
 
+    <nav class="org-chart-tabs" aria-label="조직도 종류 선택">
+      <?php foreach (ORG_CHART_TABS as $tabKey => $tabLabel): ?>
+        <a class="org-chart-tab<?= $tabKey === $chartType ? ' is-active' : '' ?>" href="?chart=<?= h($tabKey) ?>"><?= h($tabLabel) ?></a>
+      <?php endforeach; ?>
+    </nav>
+
+    <?php if (!$isTableChart && !$isBoxChart): ?>
     <section class="team-filter-panel" aria-label="인쇄 팀 선택">
       <div class="team-filter-head">
         <strong>인쇄할 팀 선택 (체크 해제 시 출력 제외)</strong>
@@ -717,9 +1015,167 @@ $allTeamNames = $orgChart['all_team_names'];
         </div>
       </div>
     </div>
+    <?php endif; ?>
 
     <section class="sheet">
-      <h2 class="print-title">(주)현대기전 조직도</h2>
+      <h2 class="print-title"><?= h(ORG_CHART_TABS[$chartType]) ?></h2>
+
+      <?php if ($isTableChart): ?>
+      <?php if ($tableNotice !== ''): ?><p style="color:#1f8c53;font-weight:700;"><?= h($tableNotice) ?></p><?php endif; ?>
+      <form method="post">
+        <table class="org-table-form">
+          <tr><th style="width:22%">구분</th><th style="width:20%">성명</th><th style="width:28%">소속·직책</th><th>비고</th><th style="width:60px"></th></tr>
+          <?php foreach ($tableRows as $row): ?>
+          <tr>
+            <td><input type="text" name="row_role[]" value="<?= h((string)($row['role'] ?? '')) ?>"></td>
+            <td><input type="text" name="row_name[]" value="<?= h((string)($row['name'] ?? '')) ?>"></td>
+            <td><input type="text" name="row_department[]" value="<?= h((string)($row['department'] ?? '')) ?>"></td>
+            <td><input type="text" name="row_note[]" value="<?= h((string)($row['note'] ?? '')) ?>"></td>
+            <td><button type="button" class="btn-ghost org-table-row-remove">삭제</button></td>
+          </tr>
+          <?php endforeach; ?>
+        </table>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button type="button" class="btn-ghost" id="org-table-row-add">+ 행 추가</button>
+          <?php if (auth_can_manage($user)): ?><button type="submit" class="btn btn-primary">저장하기</button><?php endif; ?>
+        </div>
+      </form>
+      <?php elseif ($isBoxChart && $chartType === 'safety_mgmt'): ?>
+      <?php if ($tableNotice !== ''): ?><p style="color:#1f8c53;font-weight:700;"><?= h($tableNotice) ?></p><?php endif; ?>
+      <form method="post">
+        <div class="org-chart-surface">
+          <div class="org-chart org-box-chart">
+            <div class="org-box-card org-box-chief">
+              <div class="org-box-head">안전보건관리책임자</div>
+              <div class="org-box-row">
+                <div class="org-box-cell"><input type="text" name="chief_role" value="<?= h((string)($boxFields['chief_role'] ?? '')) ?>"></div>
+                <div class="org-box-cell"><input type="text" name="chief_name" value="<?= h((string)($boxFields['chief_name'] ?? '')) ?>"></div>
+              </div>
+            </div>
+
+            <div class="org-safety-junction">
+              <div class="org-junction-stem">
+                <div class="org-vert"></div>
+                <div class="org-vert"></div>
+              </div>
+              <div class="org-junction-branch">
+                <div class="org-junction-hline"></div>
+                <div class="org-box-card org-box-committee-link">
+                  <div class="org-box-head">산업안전보건위원회</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="org-box-card org-box-supervisor">
+              <div class="org-box-head">관리감독자</div>
+              <div class="org-box-row">
+                <div class="org-box-cell"><input type="text" name="supervisor_role" value="<?= h((string)($boxFields['supervisor_role'] ?? '')) ?>"></div>
+                <div class="org-box-cell"><input type="text" name="supervisor_name" value="<?= h((string)($boxFields['supervisor_name'] ?? '')) ?>"></div>
+              </div>
+            </div>
+
+            <div class="org-vert"></div>
+
+            <div class="org-box-card org-box-safety-officer">
+              <div class="org-box-head">안전담당자</div>
+              <div class="org-box-row">
+                <div class="org-box-cell"><input type="text" name="safety_role" value="<?= h((string)($boxFields['safety_role'] ?? '')) ?>"></div>
+                <div class="org-box-cell"><input type="text" name="safety_name" value="<?= h((string)($boxFields['safety_name'] ?? '')) ?>"></div>
+              </div>
+            </div>
+
+            <div class="org-vert"></div>
+
+            <div class="org-box-card org-box-workers">
+              <div class="org-box-head org-box-head-full">전 근로자</div>
+            </div>
+          </div>
+          <?php if (auth_can_manage($user)): ?>
+          <div style="display:flex;justify-content:center;margin-top:14px;">
+            <button type="submit" class="btn btn-primary">저장하기</button>
+          </div>
+          <?php endif; ?>
+        </div>
+      </form>
+      <?php elseif ($isBoxChart && $chartType === 'committee'): ?>
+      <?php if ($tableNotice !== ''): ?><p style="color:#1f8c53;font-weight:700;"><?= h($tableNotice) ?></p><?php endif; ?>
+      <?php
+      $employerMembers = $boxFields['employer_members'] ?? [];
+      $workerMembers = $boxFields['worker_members'] ?? [];
+      if ($employerMembers === []) { $employerMembers = [['role' => '', 'name' => '']]; }
+      if ($workerMembers === []) { $workerMembers = [['role' => '', 'name' => '']]; }
+      ?>
+      <form method="post">
+        <div class="org-chart-surface">
+          <div class="org-chart org-box-chart">
+            <div class="org-box-card org-box-chief">
+              <div class="org-box-head">산업안전보건위원회</div>
+              <div class="org-box-row">
+                <div class="org-box-cell"><input type="text" name="chairman_role" value="<?= h((string)($boxFields['chairman_role'] ?? '')) ?>"></div>
+                <div class="org-box-cell"><input type="text" name="chairman_name" value="<?= h((string)($boxFields['chairman_name'] ?? '')) ?>"></div>
+              </div>
+            </div>
+
+            <div class="org-safety-junction org-safety-junction-tall">
+              <div class="org-junction-stem">
+                <div class="org-vert"></div>
+                <div class="org-vert"></div>
+              </div>
+              <div class="org-junction-branch">
+                <div class="org-junction-hline"></div>
+                <div class="org-box-card" style="width:200px;">
+                  <div class="org-box-head">간사</div>
+                  <div class="org-box-row">
+                    <div class="org-box-cell"><input type="text" name="secretary_role" value="<?= h((string)($boxFields['secretary_role'] ?? '')) ?>"></div>
+                    <div class="org-box-cell"><input type="text" name="secretary_name" value="<?= h((string)($boxFields['secretary_name'] ?? '')) ?>"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="org-vert"></div>
+
+            <div class="org-committee-cols">
+              <div class="org-committee-col">
+                <div class="org-box-card">
+                  <div class="org-box-head">사용자측 위원</div>
+                  <table class="org-box-member-table" id="employer-member-table">
+                    <?php foreach ($employerMembers as $member): ?>
+                    <tr>
+                      <td><input type="text" name="employer_role[]" value="<?= h((string)($member['role'] ?? '')) ?>"></td>
+                      <td><input type="text" name="employer_name[]" value="<?= h((string)($member['name'] ?? '')) ?>"></td>
+                      <td class="org-box-member-remove-cell"><button type="button" class="btn-ghost org-member-row-remove">삭제</button></td>
+                    </tr>
+                    <?php endforeach; ?>
+                  </table>
+                </div>
+                <button type="button" class="btn-ghost org-member-row-add" data-target="employer-member-table" data-role-name="employer_role[]" data-name-name="employer_name[]" style="margin-top:8px;">+ 위원 추가</button>
+              </div>
+              <div class="org-committee-col">
+                <div class="org-box-card">
+                  <div class="org-box-head">근로자측 위원</div>
+                  <table class="org-box-member-table" id="worker-member-table">
+                    <?php foreach ($workerMembers as $member): ?>
+                    <tr>
+                      <td><input type="text" name="worker_role[]" value="<?= h((string)($member['role'] ?? '')) ?>"></td>
+                      <td><input type="text" name="worker_name[]" value="<?= h((string)($member['name'] ?? '')) ?>"></td>
+                      <td class="org-box-member-remove-cell"><button type="button" class="btn-ghost org-member-row-remove">삭제</button></td>
+                    </tr>
+                    <?php endforeach; ?>
+                  </table>
+                </div>
+                <button type="button" class="btn-ghost org-member-row-add" data-target="worker-member-table" data-role-name="worker_role[]" data-name-name="worker_name[]" style="margin-top:8px;">+ 위원 추가</button>
+              </div>
+            </div>
+          </div>
+          <?php if (auth_can_manage($user)): ?>
+          <div style="display:flex;justify-content:center;margin-top:14px;">
+            <button type="submit" class="btn btn-primary">저장하기</button>
+          </div>
+          <?php endif; ?>
+        </div>
+      </form>
+      <?php else: ?>
 
       <?php
       $orgNameHtml = static function(array $entry): string {
@@ -883,6 +1339,7 @@ $allTeamNames = $orgChart['all_team_names'];
           <?php endif; ?>
         </div>
       </div>
+      <?php endif; ?>
     </section>
   </div>
   <script>
@@ -1384,6 +1841,57 @@ $allTeamNames = $orgChart['all_team_names'];
       });
 
       applyTeamFilter();
+    })();
+
+    (() => {
+      const table = document.querySelector('.org-table-form');
+      const addBtn = document.getElementById('org-table-row-add');
+      if (!table || !addBtn) {
+        return;
+      }
+      addBtn.addEventListener('click', () => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td><input type="text" name="row_role[]"></td>'
+          + '<td><input type="text" name="row_name[]"></td>'
+          + '<td><input type="text" name="row_department[]"></td>'
+          + '<td><input type="text" name="row_note[]"></td>'
+          + '<td><button type="button" class="btn-ghost org-table-row-remove">삭제</button></td>';
+        table.appendChild(tr);
+      });
+      table.addEventListener('click', (event) => {
+        if (!event.target.classList.contains('org-table-row-remove')) {
+          return;
+        }
+        if (table.rows.length > 2) {
+          event.target.closest('tr').remove();
+        }
+      });
+    })();
+
+    (() => {
+      document.querySelectorAll('.org-member-row-add').forEach((addBtn) => {
+        addBtn.addEventListener('click', () => {
+          const table = document.getElementById(addBtn.dataset.target);
+          if (!table) {
+            return;
+          }
+          const tr = document.createElement('tr');
+          tr.innerHTML = '<td><input type="text" name="' + addBtn.dataset.roleName + '"></td>'
+            + '<td><input type="text" name="' + addBtn.dataset.nameName + '"></td>'
+            + '<td class="org-box-member-remove-cell"><button type="button" class="btn-ghost org-member-row-remove">삭제</button></td>';
+          table.appendChild(tr);
+        });
+      });
+      document.querySelectorAll('.org-box-member-table').forEach((table) => {
+        table.addEventListener('click', (event) => {
+          if (!event.target.classList.contains('org-member-row-remove')) {
+            return;
+          }
+          if (table.rows.length > 1) {
+            event.target.closest('tr').remove();
+          }
+        });
+      });
     })();
   </script>
 </body>

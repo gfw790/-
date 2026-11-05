@@ -88,6 +88,45 @@ function ensureHandoverCategory(): void {
     $done = true;
 }
 
+/**
+ * 익명게시판 카테고리 보정
+ */
+function ensureAnonymousCategory(): void {
+    static $done = false;
+    if ($done) {
+        return;
+    }
+
+    db()->prepare(
+        "INSERT INTO categories (code, name, sort_order, write_role, is_active)
+         VALUES ('anonymous', '익명게시판', 20, 'user', 1)
+         ON DUPLICATE KEY UPDATE name = VALUES(name), is_active = VALUES(is_active)"
+    )->execute();
+
+    $done = true;
+}
+
+/**
+ * 익명게시판 여부 판별
+ */
+function boardIsAnonymousCategoryCode(?string $catCode): bool {
+    return $catCode === 'anonymous';
+}
+
+/**
+ * 익명게시판이면 작성자명을 '익명'으로 표시
+ */
+function boardDisplayAuthorName(string $authorName, ?string $catCode): string {
+    return boardIsAnonymousCategoryCode($catCode) ? '익명' : $authorName;
+}
+
+/**
+ * 익명게시판이면 소속(부서)은 표시하지 않음
+ */
+function boardDisplayAuthorDept(?string $authorDept, ?string $catCode): ?string {
+    return boardIsAnonymousCategoryCode($catCode) ? null : $authorDept;
+}
+
 function nearMissCategoryId(): int {
     ensureNearMissSchema();
     $stmt = db()->prepare("SELECT id FROM categories WHERE code = 'near_miss' LIMIT 1");

@@ -9,32 +9,9 @@ if (!is_array($user)) {
     exit;
 }
 
-if (!auth_can_manage($user)) {
-    http_response_code(403);
-    ?>
-    <!DOCTYPE html>
-    <html lang="ko">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>권한이 없습니다</title>
-        <style>
-            body { margin: 0; padding: 40px 20px; background: #f5f7fb; color: #1f2937; font-family: "Malgun Gothic", sans-serif; }
-            .panel { max-width: 760px; margin: 0 auto; background: #fff; border: 1px solid #dbe2ea; border-radius: 20px; padding: 28px; }
-            a { color: #0b4ea2; }
-        </style>
-    </head>
-    <body>
-        <div class="panel">
-            <h1>권한이 없습니다</h1>
-            <p>이 페이지는 관리자 권한이 필요한 메뉴입니다. 접근 권한이 필요하면 관리자에게 문의해 주세요.</p>
-            <p><a href="/risk_assessment/work_list.php">작업 목록으로 돌아가기</a></p>
-        </div>
-    </body>
-    </html>
-    <?php
-    exit;
-}
+// 취업규칙 본문은 전 직원에게 공개한다. 조문 편집/새 조항 추가/출력 등
+// 문서를 변경하거나 내보내는 기능만 기존 권한자(auth_can_manage)에게 한정한다.
+$canManageEmploymentRules = auth_can_manage($user);
 
 function h(string $value): string
 {
@@ -1359,10 +1336,21 @@ function employment_rules_handle_save_edits(array $user): void
 }
 
 if (($_GET['action'] ?? '') === 'save_edits') {
+    if (!$canManageEmploymentRules) {
+        header('Content-Type: application/json; charset=UTF-8');
+        http_response_code(403);
+        echo json_encode(['success' => false, 'message' => '조문을 편집할 권한이 없습니다.'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
     employment_rules_handle_save_edits($user);
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!$canManageEmploymentRules) {
+        http_response_code(403);
+        exit('취업규칙을 업로드할 권한이 없습니다.');
+    }
+
     try {
         employment_rules_handle_upload($user);
         employment_rules_flash('success', 'HWPX 파일을 업로드하여 취업규칙을 반영했습니다.');
@@ -1462,6 +1450,10 @@ foreach ($toc as $item) {
 }
 
 if (($_GET['action'] ?? '') === 'download_pdf') {
+    if (!$canManageEmploymentRules) {
+        http_response_code(403);
+        exit('출력 권한이 없습니다.');
+    }
     if (!$current || trim((string)($current['content_html'] ?? '')) === '') {
         http_response_code(404);
         echo 'PDF로 다운로드할 취업규칙 문서가 없습니다.';
@@ -1491,10 +1483,10 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
             --law-gold: #b08a3c;
             --header-sticky-offset: 104px;
             --panel-sticky-gap: 8px;
-            --document-print-margin-top: 20mm;
-            --document-print-margin-right: 16mm;
-            --document-print-margin-bottom: 22mm;
-            --document-print-margin-left: 16mm;
+            --document-print-margin-top: 2cm;
+            --document-print-margin-right: 2cm;
+            --document-print-margin-bottom: 2cm;
+            --document-print-margin-left: 2cm;
         }
 
         * { box-sizing: border-box; }
@@ -2326,6 +2318,10 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
             padding: 0;
         }
 
+        .document [id] {
+            scroll-margin-top: var(--header-sticky-offset);
+        }
+
         .document h2,
         .document h3,
         .document p,
@@ -2358,15 +2354,19 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
         @media print {
             @page {
                 size: A4;
-                margin:
-                    var(--document-print-margin-top)
-                    var(--document-print-margin-right)
-                    var(--document-print-margin-bottom)
-                    var(--document-print-margin-left);
+                margin: 0;
             }
 
             body {
                 background: #fff;
+            }
+
+            /* 인쇄 미리보기를 거치지 않고 Ctrl+P로 바로 출력하는 경우를 위한 대비책.
+               (이 경로는 문서 전체가 하나의 긴 블록이라 페이지 중간에서는 padding이
+               반복 적용되지 않는 CSS 조판의 한계가 있지만, 최소한 첫 페이지는 보장한다.) */
+            body:not(.print-preview-open) {
+                padding: 2cm !important;
+                margin: 0 !important;
             }
 
             body.print-preview-open > *:not(.print-preview-modal) {
@@ -2401,6 +2401,15 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                 background: #fff;
             }
 
+            .document a,
+            .document a.law-ref-link,
+            .document a:hover,
+            .document a.law-ref-link:hover {
+                color: inherit;
+                font-weight: inherit;
+                text-decoration: none;
+            }
+
             .print-preview-modal {
                 position: static;
                 display: block !important;
@@ -2410,8 +2419,7 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
 
             .print-preview-dialog,
             .print-preview-body,
-            .print-preview-paper,
-            .print-preview-page {
+            .print-preview-paper {
                 width: auto;
                 max-height: none;
                 overflow: visible;
@@ -2421,6 +2429,25 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                 border-radius: 0;
                 box-shadow: none;
                 background: #fff;
+            }
+
+            /* 인쇄 미리보기는 이제 실제 페이지 높이에 맞춰 JS로 미리 쪼개 놓았으므로,
+               각 .print-preview-page는 정확히 물리적 페이지 한 장에 대응한다.
+               따라서 이 요소 자체에 padding을 줘도 페이지 중간에서 잘리지 않고
+               모든 페이지에 여백이 동일하게 적용된다. */
+            .print-preview-page {
+                width: auto;
+                max-height: none;
+                overflow: visible;
+                margin: 0;
+                border: 0;
+                border-radius: 0;
+                box-shadow: none;
+                padding:
+                    var(--document-print-margin-top)
+                    var(--document-print-margin-right)
+                    var(--document-print-margin-bottom)
+                    var(--document-print-margin-left) !important;
             }
 
             .print-preview-paper {
@@ -2435,6 +2462,12 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
             .document h2:not(:first-of-type) {
                 margin-top: 0;
             }
+        }
+
+        /* buildPrintPreview()의 높이 측정용 영역: 인쇄 시 h2(장 제목) margin-top이
+           0이 되는 것과 동일하게 맞춰서, 측정 높이가 실제 출력 높이와 어긋나지 않게 한다. */
+        .print-measure h2:not(:first-of-type) {
+            margin-top: 0;
         }
 
         .law-link-status {
@@ -2768,8 +2801,10 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                 </div>
             </div>
             <div class="topbar-actions">
+                <?php if ($canManageEmploymentRules): ?>
                 <button type="button" class="content-header-button" id="rule-add-article">새 조항 추가</button>
                 <button type="button" class="content-header-button" id="rule-download-pdf">출력</button>
+                <?php endif; ?>
                 <a class="content-header-button content-header-button-secondary" href="/risk_assessment/work_list.php">메인으로 돌아가기</a>
                 <div class="user-chip"><?= h(trim((string)($user['name'] ?? $user['login_id'] ?? "\u{AD00}\u{B9AC}\u{C790}"))) ?> 님</div>
             </div>
@@ -2951,6 +2986,7 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
         </aside>
     </main>
 
+    <?php if ($canManageEmploymentRules): ?>
     <div class="rule-edit-modal" id="rule-edit-modal" aria-hidden="true">
         <div class="rule-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="rule-edit-title">
             <div class="rule-edit-head">
@@ -2997,6 +3033,7 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
             </div>
         </div>
     </div>
+    <?php endif; ?>
 
     <div class="footer-note">취업규칙 문서는 관리자 권한으로만 수정할 수 있습니다.</div>
     <script>
@@ -4324,26 +4361,15 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
             var printPreviewPrintBtn = document.getElementById('print-preview-print');
             var printPreviewDownloadBtn = document.getElementById('print-preview-download');
 
-            function collectChapterSections(container) {
-                var chapters = [];
-                var currentChapter = [];
-
-                Array.prototype.forEach.call(container.children || [], function (node) {
-                    if (node.tagName === 'H2' && currentChapter.length > 0) {
-                        chapters.push(currentChapter);
-                        currentChapter = [];
-                    }
-
-                    currentChapter.push(node);
-                });
-
-                if (currentChapter.length > 0) {
-                    chapters.push(currentChapter);
-                }
-
-                return chapters;
+            function mmToPx(mm) {
+                return mm * 96 / 25.4;
             }
 
+            // 각 장(H2)은 항상 새 페이지에서 시작하되, 한 장의 내용이 A4 한 장보다 길면
+            // 실제 렌더링 높이를 측정해 페이지 단위로 미리 쪼갠다. 이렇게 각 .print-preview-page를
+            // "물리적 페이지 한 장 = DOM 한 덩어리"로 만들어야, 그 요소 자신의 padding이
+            // (CSS 조판 규칙상 요소가 여러 페이지로 나뉠 때는 첫/마지막 조각에만 padding이
+            // 적용되므로) 페이지 중간에서 사라지지 않고 모든 페이지에 적용된다.
             function buildPrintPreview() {
                 if (!printPreviewPaper || !documentRoot) {
                     return;
@@ -4352,23 +4378,122 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                 printPreviewPaper.innerHTML = '';
                 var sourceHeader = document.querySelector('.content-header');
                 var documentClone = documentRoot.cloneNode(true);
-                var pageSections = collectChapterSections(documentClone);
+                var allNodes = Array.prototype.slice.call(documentClone.children || []);
 
-                if (pageSections.length === 0) {
-                    pageSections.push([]);
+                if (allNodes.length === 0) {
+                    var emptyPage = document.createElement('section');
+                    emptyPage.className = 'print-preview-page';
+                    printPreviewPaper.appendChild(emptyPage);
+                    return;
                 }
 
-                pageSections.forEach(function (sectionNodes, index) {
+                // 실제 페이지와 동일한 폭/여백을 갖는 숨김 측정용 요소를 만든다.
+                // position:absolute로 빼놓으면 폭이 부모(210mm)를 따라가지 않고
+                // shrink-to-fit으로 제멋대로 계산되어 실제 출력과 다른 폭으로 줄바꿈되고,
+                // 그만큼 측정 높이도 실제와 어긋나 페이지 분할이 부정확해진다.
+                // 그래서 실제 용지 폭을 명시적으로 고정해 준다.
+                var referenceWidth = printPreviewPaper.clientWidth
+                    || printPreviewPaper.getBoundingClientRect().width
+                    || mmToPx(210);
+                var measurePage = document.createElement('section');
+                measurePage.className = 'print-preview-page';
+                measurePage.style.visibility = 'hidden';
+                measurePage.style.position = 'absolute';
+                measurePage.style.left = '-99999px';
+                measurePage.style.top = '0';
+                measurePage.style.minHeight = '0';
+                measurePage.style.width = referenceWidth + 'px';
+                measurePage.style.boxSizing = 'border-box';
+                var measureDoc = document.createElement('div');
+                measureDoc.className = 'document';
+                measurePage.appendChild(measureDoc);
+                printPreviewPaper.appendChild(measurePage);
+
+                var pageHeightPx = mmToPx(297);
+                var pageStyle = window.getComputedStyle(measurePage);
+                var paddingTop = parseFloat(pageStyle.paddingTop) || 0;
+                var paddingBottom = parseFloat(pageStyle.paddingBottom) || 0;
+                // 화면(모달)에서 잰 높이와 실제 인쇄 렌더링 높이는 폰트 렌더링/서브픽셀
+                // 반올림 차이로 완전히 똑같지 않을 수 있다. 측정치를 약간만 넘겨도
+                // 인쇄 시 마지막 문단이 다음 페이지로 밀려나 버리므로, 안전 여유를 둔다.
+                var SAFETY_MARGIN_RATIO = 0.94;
+                var baseBudget = Math.max(50, (pageHeightPx - paddingTop - paddingBottom) * SAFETY_MARGIN_RATIO);
+
+                var headerHeight = 0;
+                if (sourceHeader) {
+                    var headerProbe = sourceHeader.cloneNode(true);
+                    measureDoc.appendChild(headerProbe);
+                    headerHeight = measureDoc.scrollHeight;
+                    measureDoc.innerHTML = '';
+                }
+
+                var pages = [];
+                var currentNodes = [];
+                var isFirstPageOverall = true;
+
+                function currentBudget() {
+                    return isFirstPageOverall ? Math.max(50, baseBudget - headerHeight) : baseBudget;
+                }
+
+                function measureHeight(nodes) {
+                    measureDoc.innerHTML = '';
+                    nodes.forEach(function (n) {
+                        measureDoc.appendChild(n.cloneNode(true));
+                    });
+                    return measureDoc.scrollHeight;
+                }
+
+                function finalizePage(nodes) {
+                    if (!nodes.length) {
+                        return;
+                    }
+                    pages.push({ nodes: nodes, isFirst: isFirstPageOverall });
+                    isFirstPageOverall = false;
+                }
+
+                allNodes.forEach(function (node) {
+                    var isChapterStart = node.tagName === 'H2';
+
+                    // 각 장은 항상 새 페이지에서 시작한다.
+                    if (isChapterStart && currentNodes.length > 0) {
+                        finalizePage(currentNodes);
+                        currentNodes = [];
+                    }
+
+                    var trial = currentNodes.concat([node]);
+                    var height = measureHeight(trial);
+
+                    if (height > currentBudget() && currentNodes.length > 0) {
+                        // 페이지 맨 끝에 소제목만 혼자 남지 않도록 다음 페이지로 이월한다.
+                        var carry = [];
+                        while (
+                            currentNodes.length > 1
+                            && (currentNodes[currentNodes.length - 1].tagName === 'H2'
+                                || currentNodes[currentNodes.length - 1].tagName === 'H3')
+                        ) {
+                            carry.unshift(currentNodes.pop());
+                        }
+                        finalizePage(currentNodes);
+                        currentNodes = carry.concat([node]);
+                    } else {
+                        currentNodes = trial;
+                    }
+                });
+                finalizePage(currentNodes);
+
+                printPreviewPaper.removeChild(measurePage);
+
+                pages.forEach(function (pageInfo) {
                     var page = document.createElement('section');
                     page.className = 'print-preview-page';
 
-                    if (index === 0 && sourceHeader) {
+                    if (pageInfo.isFirst && sourceHeader) {
                         page.appendChild(sourceHeader.cloneNode(true));
                     }
 
                     var pageDocument = document.createElement('div');
                     pageDocument.className = 'document';
-                    sectionNodes.forEach(function (node) {
+                    pageInfo.nodes.forEach(function (node) {
                         pageDocument.appendChild(node);
                     });
 
@@ -4382,9 +4507,12 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                     return;
                 }
 
-                buildPrintPreview();
+                // buildPrintPreview()는 실제 렌더링 높이(scrollHeight)를 측정해야 하므로,
+                // display:none 상태에서는 항상 0이 측정되어 페이지 분할이 무력화된다.
+                // 반드시 모달을 먼저 보이게 한 뒤에 측정/생성해야 한다.
                 printPreviewModal.classList.add('is-open');
                 printPreviewModal.setAttribute('aria-hidden', 'false');
+                buildPrintPreview();
                 document.body.classList.add('print-preview-open');
             }
 

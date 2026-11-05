@@ -20,6 +20,9 @@ if (!$isAdmin && $currentDept !== '') {
     $params[] = $currentDept;
 }
 
+// 익명게시판 글은 작성자명 검색으로 신원이 드러나지 않도록 제외한다.
+$notAnonymousSql = "p.category_id <> (SELECT id FROM categories WHERE code = 'anonymous' LIMIT 1)";
+
 if ($q !== '') {
     $like = '%' . $q . '%';
     switch ($field) {
@@ -32,11 +35,11 @@ if ($q !== '') {
             $params[] = $like;
             break;
         case 'author':
-            $where[] = 'p.author_name LIKE ?';
+            $where[] = "(p.author_name LIKE ? AND $notAnonymousSql)";
             $params[] = $like;
             break;
         default:
-            $where[] = '(p.title LIKE ? OR p.content LIKE ? OR p.author_name LIKE ?)';
+            $where[] = "(p.title LIKE ? OR p.content LIKE ? OR (p.author_name LIKE ? AND $notAnonymousSql))";
             $params[] = $like;
             $params[] = $like;
             $params[] = $like;
@@ -155,10 +158,11 @@ $pageTitle = '검색';
                         <div class="post-summary"><?= h(summarize($post['content'], 120)) ?></div>
                     </td>
                     <td>
-                        <?php if ($post['author_dept']): ?>
-                            <span class="author-dept"><?= h($post['author_dept']) ?></span>
+                        <?php $searchDept = boardDisplayAuthorDept($post['author_dept'], $post['cat_code']); ?>
+                        <?php if ($searchDept): ?>
+                            <span class="author-dept"><?= h($searchDept) ?></span>
                         <?php endif; ?>
-                        <span class="author-name"><?= h($post['author_name']) ?></span>
+                        <span class="author-name"><?= h(boardDisplayAuthorName($post['author_name'], $post['cat_code'])) ?></span>
                     </td>
                     <td><?= dateFormat($post['created_at'], 'Y-m-d') ?></td>
                     <td><?= number_format($post['views']) ?></td>
