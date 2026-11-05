@@ -9,6 +9,70 @@ $user = auth_current_user();
 if (!is_array($user)) { header('Location: /risk_assessment/task_select.php'); exit; }
 if (!auth_can_manage($user) || trim((string)($user['login_id'] ?? '')) !== '5878') { http_response_code(403); exit('권한이 없습니다.'); }
 
+function h(string $value): string { return htmlspecialchars($value, ENT_QUOTES, 'UTF-8'); }
+
+// 연도/반기 지정 없이 그냥 링크로 들어온 경우(매뉴얼의 "위험성평가 보고서 보기" 등),
+// 어떤 보고서를 볼지 고를 수 있도록 저장된 보고서 목록을 먼저 보여준다.
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && !isset($_GET['year']) && !isset($_GET['blank'])) {
+    $periods = [];
+    try {
+        $db = getDB();
+        $db->exec("CREATE TABLE IF NOT EXISTS safety_risk_assessment_reports(id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,report_year SMALLINT UNSIGNED NOT NULL,half_year TINYINT UNSIGNED NOT NULL,report_data LONGTEXT NOT NULL,updated_by VARCHAR(100) NOT NULL DEFAULT '',created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,UNIQUE KEY uq_period(report_year,half_year)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $periods = $db->query('SELECT report_year, half_year, updated_by, updated_at FROM safety_risk_assessment_reports ORDER BY report_year DESC, half_year DESC')->fetchAll();
+    } catch (Throwable $exception) { error_log($exception->getMessage()); }
+
+    $currentYear = (int)date('Y');
+    header('Content-Type: text/html; charset=UTF-8');
+    ?>
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>위험성평가 보고서 보기</title>
+<style>
+body{margin:0;background:#eef4fb;color:#17324f;font-family:"Malgun Gothic",sans-serif;}
+main{max-width:640px;margin:40px auto;padding:0 20px;}
+h1{font-size:22px;margin:0 0 20px;}
+.card{background:#fff;border:1px solid #cfdaea;border-radius:8px;padding:20px;margin-bottom:16px;}
+table{width:100%;border-collapse:collapse;}
+th,td{border:1px solid #7b8794;padding:8px;text-align:center;}
+th{background:#e7ebef;}
+a.button{display:inline-block;border:1px solid #174f8d;border-radius:4px;padding:6px 12px;background:#174f8d;color:#fff;text-decoration:none;font-weight:700;}
+form.picker{display:flex;gap:10px;align-items:end;}
+form.picker label{display:grid;gap:6px;font-weight:700;}
+form.picker input,form.picker select{padding:8px;border:1px solid #aebed3;border-radius:4px;}
+form.picker button{border:1px solid #174f8d;border-radius:4px;padding:9px 16px;background:#174f8d;color:#fff;font-weight:700;cursor:pointer;}
+</style>
+</head><body><main>
+<h1>위험성평가 보고서 보기</h1>
+<div class="card">
+    <p>연도와 반기를 직접 선택해서 볼 수 있습니다.</p>
+    <form class="picker" method="get" target="_blank">
+        <label>연도<input type="number" name="year" min="2000" max="2100" value="<?= $currentYear ?>"></label>
+        <label>반기<select name="half"><option>상반기</option><option>하반기</option></select></label>
+        <button type="submit">보기</button>
+    </form>
+</div>
+<?php if ($periods !== []): ?>
+<div class="card">
+    <p>저장되어 있는 보고서 목록</p>
+    <table>
+        <tr><th>연도</th><th>반기</th><th>작성자</th><th>수정일시</th><th></th></tr>
+        <?php foreach ($periods as $period): $half = (int)$period['half_year'] === 1 ? '상반기' : '하반기'; ?>
+        <tr>
+            <td><?= (int)$period['report_year'] ?></td>
+            <td><?= h($half) ?></td>
+            <td><?= h((string)$period['updated_by']) ?></td>
+            <td><?= h((string)$period['updated_at']) ?></td>
+            <td><a class="button" target="_blank" rel="noopener" href="generate_report_pdf.php?year=<?= (int)$period['report_year'] ?>&half=<?= urlencode($half) ?>">보기</a></td>
+        </tr>
+        <?php endforeach; ?>
+    </table>
+</div>
+<?php else: ?>
+<div class="card">저장된 위험성평가 보고서가 아직 없습니다.</div>
+<?php endif; ?>
+</main></body></html>
+    <?php
+    exit;
+}
+
 function value(array $data, string $key): string { return (string)($data[$key] ?? ''); }
 function clean_data(array $source): array { $data = []; foreach ($source as $key => $item) { if (is_string($key) && !is_array($item)) { $data[$key] = mb_substr(trim($item), 0, 1000); } } return $data; }
 function checkbox(bool $selected): string { return $selected ? '■' : '□'; }

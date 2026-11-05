@@ -4173,7 +4173,7 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                                     <button type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제1호" data-scroll-target="safety-goal-management-policy">1. 안전·보건 목표와 경영방침의 설정</button>
                                     <button type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제2호" data-scroll-target="safety-health-department">2. 안전·보건 업무를 총괄·관리하는 전담 조직 설치</button>
                                     <button id="chart-item-3" type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제3호" data-scroll-target="risk-assessment-clause">3. 유해·위험요인 확인 개선 절차 마련, 점검 및 조치</button>
-                                    <button type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제4호">4. 안전·보건에 관한 인력·시설·장비 구비와 유해·위험요인 개선 예산 편성 및 집행</button>
+                                    <button type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제4호" data-scroll-target="safety-budget-clause">4. 안전·보건에 관한 인력·시설·장비 구비와 유해·위험요인 개선 예산 편성 및 집행</button>
                                     <button id="chart-item-5" type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제5호">5. 안전보건관리책임자등의 충실한 업무수행 지원</button>
                                     <button type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제6호">6. 산업안전보건법에 따른 전문인력 배치</button>
                                     <button id="chart-item-7" type="button" class="chart-btn chart-item-btn" data-law-query="중대재해처벌법 시행령 제4조 제7호">7. 종사자 의견 청취 절차마련, 청취 및 개선방안 마련·이행 여부 점검</button>
@@ -4968,6 +4968,25 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                     departmentTitle.id = 'safety-health-department';
                 }
 
+                if (departmentTitle && !document.getElementById('manual-org-chart-link')) {
+                    var orgSectionEnd = departmentTitle;
+                    var orgSectionCursor = departmentTitle.nextElementSibling;
+                    while (orgSectionCursor && !orgSectionCursor.classList.contains('manual-subtitle-box')) {
+                        orgSectionEnd = orgSectionCursor;
+                        orgSectionCursor = orgSectionCursor.nextElementSibling;
+                    }
+                    var orgChartActions = document.createElement('p');
+                    orgChartActions.id = 'manual-org-chart-link';
+                    var orgChartLink = document.createElement('a');
+                    orgChartLink.className = 'manual-policy-link';
+                    orgChartLink.href = '/risk_assessment/org_chart_print_preview.php';
+                    orgChartLink.target = '_blank';
+                    orgChartLink.rel = 'noopener';
+                    orgChartLink.textContent = '현대기전 조직도';
+                    orgChartActions.appendChild(orgChartLink);
+                    orgSectionEnd.parentNode.insertBefore(orgChartActions, orgSectionEnd.nextSibling);
+                }
+
                 var riskAssessmentTitle = Array.prototype.find.call(documentRoot.querySelectorAll('p, h2, h3'), function (node) {
                     return /^7\.\s*위험성\s*평가(?:\s*및\s*조치)?$/.test(String(node.textContent || '').replace(/\s+/g, ' ').trim());
                 });
@@ -4975,14 +4994,52 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                     riskAssessmentTitle.id = 'risk-assessment-clause';
                 }
 
-                if (riskAssessmentTitle && !document.getElementById('manual-risk-report-link')) {
+                var budgetTitle = Array.prototype.find.call(documentRoot.querySelectorAll('p, h2, h3'), function (node) {
+                    return /^8\.\s*안전보건\s*예산\s*등의\s*편성\s*및\s*집행$/.test(String(node.textContent || '').replace(/\s+/g, ' ').trim());
+                });
+                if (budgetTitle && !document.getElementById('safety-budget-clause')) {
+                    budgetTitle.id = 'safety-budget-clause';
+                }
+
+                var budgetActions = document.getElementById('manual-budget-link');
+                if (budgetTitle && !budgetActions) {
+                    var budgetSectionEnd = budgetTitle;
+                    var budgetSectionCursor = budgetTitle.nextElementSibling;
+                    while (budgetSectionCursor && !budgetSectionCursor.classList.contains('manual-subtitle-box')) {
+                        budgetSectionEnd = budgetSectionCursor;
+                        budgetSectionCursor = budgetSectionCursor.nextElementSibling;
+                    }
+                    budgetActions = document.createElement('p');
+                    budgetActions.id = 'manual-budget-link';
+                    var budgetLink = document.createElement('a');
+                    budgetLink.className = 'manual-policy-link';
+                    budgetLink.href = 'safety_budget.php';
+                    budgetLink.target = '_blank';
+                    budgetLink.rel = 'noopener';
+                    budgetLink.textContent = '안전보건관리비 작성하기';
+                    budgetActions.appendChild(budgetLink);
+                    budgetSectionEnd.parentNode.insertBefore(budgetActions, budgetSectionEnd.nextSibling);
+                }
+
+                if (budgetActions && !budgetActions.querySelector('.manual-policy-view')) {
+                    var budgetViewLink = document.createElement('a');
+                    budgetViewLink.className = 'manual-policy-link manual-policy-view';
+                    budgetViewLink.href = 'safety_budget_report.php';
+                    budgetViewLink.target = '_blank';
+                    budgetViewLink.rel = 'noopener';
+                    budgetViewLink.textContent = '안전보건관리비 보고서 보기';
+                    budgetActions.appendChild(budgetViewLink);
+                }
+
+                var riskReportActions = document.getElementById('manual-risk-report-link');
+                if (riskAssessmentTitle && !riskReportActions) {
                     var riskSectionEnd = riskAssessmentTitle;
                     var riskSectionCursor = riskAssessmentTitle.nextElementSibling;
                     while (riskSectionCursor && !riskSectionCursor.classList.contains('manual-subtitle-box')) {
                         riskSectionEnd = riskSectionCursor;
                         riskSectionCursor = riskSectionCursor.nextElementSibling;
                     }
-                    var riskReportActions = document.createElement('p');
+                    riskReportActions = document.createElement('p');
                     riskReportActions.id = 'manual-risk-report-link';
                     var riskReportLink = document.createElement('a');
                     riskReportLink.className = 'manual-policy-link';
@@ -4992,6 +5049,16 @@ if (($_GET['action'] ?? '') === 'download_pdf') {
                     riskReportLink.textContent = '위험성평가 결과보고서 만들기';
                     riskReportActions.appendChild(riskReportLink);
                     riskSectionEnd.parentNode.insertBefore(riskReportActions, riskSectionEnd.nextSibling);
+                }
+
+                if (riskReportActions && !riskReportActions.querySelector('.manual-policy-view')) {
+                    var riskReportViewLink = document.createElement('a');
+                    riskReportViewLink.className = 'manual-policy-link manual-policy-view';
+                    riskReportViewLink.href = 'generate_report_pdf.php';
+                    riskReportViewLink.target = '_blank';
+                    riskReportViewLink.rel = 'noopener';
+                    riskReportViewLink.textContent = '위험성평가 보고서 보기';
+                    riskReportActions.appendChild(riskReportViewLink);
                 }
 
                 if (!targetNode) {
