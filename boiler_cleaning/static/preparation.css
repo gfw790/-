@@ -1,0 +1,41 @@
+.prep-main-nav {display:flex;gap:8px;margin-bottom:22px;flex-wrap:wrap}
+.prep-main-nav button,#preparation-root button {min-height:46px;padding:10px 16px;border:1px solid #b8c7cf;border-radius:8px;background:#fff;color:#17324d;cursor:pointer;font:inherit}
+.prep-main-nav button[aria-pressed="true"],#preparation-root .prep-primary {background:#087f8c;color:white;border-color:#087f8c}
+#preparation-root {max-width:1100px;margin:auto;overflow-wrap:anywhere}
+#preparation-root [hidden],#safety-root[hidden],#preparation-root[hidden] {display:none!important}
+#preparation-root h2 {margin:0 0 10px;font-size:24px}
+#preparation-root h3 {line-height:1.5;margin:12px 0}
+.prep-intro {color:#536574;line-height:1.6}
+.prep-stage-list summary {cursor:pointer;padding:14px;background:#eaf3f6;border-radius:8px;min-height:48px;box-sizing:border-box}
+.prep-stages {display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:20px 0}
+#preparation-root .prep-stages button {text-align:left;font-size:14px}
+#preparation-root .prep-stages button[aria-current="step"] {border:2px solid #087f8c;background:#e8f5f5}
+.prep-stages small {display:block;margin-top:5px;color:#657382}
+.prep-card {background:white;border:1px solid #dce3e8;border-radius:14px;padding:24px;margin:14px 0}
+.prep-card header {display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;color:#536574}
+.prep-card label:not(.prep-choice) {display:block;margin:16px 0 7px;font-weight:bold}
+#preparation-root input:not([type=checkbox]):not([type=radio]),#preparation-root textarea,#preparation-root select {width:100%;min-width:0;box-sizing:border-box;padding:12px;border:1px solid #aabdc7;border-radius:8px;font:inherit;min-height:48px;background:white;color:#263746}
+#preparation-root textarea {min-height:110px;resize:vertical}
+.prep-choice {display:flex;align-items:center;gap:12px;min-height:48px;padding:8px;border:1px solid #dce3e8;border-radius:8px;margin:8px 0}
+.prep-choice input {width:22px;height:22px;flex-shrink:0}
+.prep-actions {display:flex;gap:10px;flex-wrap:wrap;margin-top:20px;align-items:center}
+#preparation-root button:disabled {opacity:.55;cursor:wait}
+.prep-notice {color:#375d6d;line-height:1.6;background:#eaf3f6;padding:12px;border-radius:8px}
+.prep-message {min-height:26px;white-space:pre-wrap;color:#087f8c;padding:8px 0;line-height:1.5}
+.prep-message[data-error="true"] {color:#a61b1b}
+.prep-sessions {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.prep-session {padding:18px;border:1px solid #dce3e8;border-radius:10px;background:white}
+.prep-session p,.prep-attachments li {line-height:1.7}
+.prep-attachments {padding-left:22px}
+#preparation-root progress {width:100%;height:10px;accent-color:#087f8c;margin:12px 0}
+#preparation-root :focus-visible,.prep-main-nav :focus-visible {outline:3px solid #df8b22;outline-offset:3px}
+@media(max-width:700px) {
+ body:has(#preparation-root:not([hidden])) main {padding:14px 12px 30px}
+ body:has(#preparation-root:not([hidden])) .topbar {padding:18px 16px}
+ body:has(#preparation-root:not([hidden])) .topbar h1 {font-size:20px}
+ .prep-stages {grid-template-columns:repeat(2,minmax(0,1fr))}
+ .prep-card {padding:16px}
+ .prep-sessions {grid-template-columns:1fr}
+ .prep-actions button {flex:1 1 130px}
+ #preparation-root input,#preparation-root select,#preparation-root textarea {font-size:16px}
+}

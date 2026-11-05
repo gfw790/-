@@ -1,0 +1,20 @@
+{
+  "backup": "A:\\risk_server\\project\\boiler_cleaning\\data\\backups\\preparation_v1_20260916_121347_cd74e5fb.db",
+  "legacy_rows_unchanged": true,
+  "existing_storage_files_unchanged": 32,
+  "counts": {
+    "projects": 1,
+    "documents": 32,
+    "document_versions": 32,
+    "form_entries": 3,
+    "activity_logs": 82,
+    "prep_questions": 8,
+    "prep_question_options": 2,
+    "prep_question_rules": 1,
+    "prep_sessions": 0,
+    "prep_answers": 0,
+    "prep_issues": 0,
+    "prep_attachments": 0
+  },
+  "integrity": "ok"
+}

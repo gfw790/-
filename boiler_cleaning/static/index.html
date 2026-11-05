@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>강릉시 폐기물 소각시설 폐열보일러 외 부대설비 세정 용역</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/preparation.css">
+  <link rel="stylesheet" href="/static/task-analysis.css">
+  <link rel="stylesheet" href="/static/cost-analysis.css">
+  <link rel="stylesheet" href="/static/billing.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">주식회사 현대기전</p>
+      <h1>강릉시 폐기물 소각시설 폐열보일러 외 부대설비 세정 용역</h1>
+      <p id="project-title" class="project-title"></p>
+    </div>
+    <button id="project-button" class="secondary-button">공통정보 수정</button>
+  </header>
+  <main>
+    <nav class="prep-main-nav" aria-label="주요 메뉴">
+      <button type="button" id="show-safety" aria-pressed="true">안전관리</button>
+      <button type="button" id="show-preparation" aria-pressed="false">착공 준비</button>
+      <button type="button" id="show-billing" aria-pressed="false">공사 금액 관리</button>
+    </nav>
+    <section id="preparation-root" hidden aria-label="착공 준비"></section>
+    <section id="billing-root" hidden aria-label="공사 금액 관리"></section>
+    <div id="safety-root">
+    <section id="summary" class="summary-grid" aria-label="현황 요약"></section>
+    <section class="toolbar">
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-kind="form">실행양식 20개</button>
+        <button class="tab" data-kind="evidence">평가자료 12개</button>
+        <button class="tab" data-kind="logs">변경기록</button>
+      </div>
+      <label class="search-box"><span>검색</span><input id="search" type="search" placeholder="양식명·평가항목 검색"></label>
+    </section>
+    <section class="panel"><div id="table-container" class="table-container"></div></section>
+    </div>
+  </main>
+  <dialog id="project-dialog">
+    <form id="project-form" method="dialog">
+      <div class="dialog-header"><h2>공통정보</h2><button type="button" class="icon-button" data-close aria-label="닫기">×</button></div>
+      <div id="project-fields" class="form-grid"></div>
+      <div class="dialog-actions"><button type="button" class="secondary-button" data-close>취소</button><button type="submit" class="primary-button">저장</button></div>
+    </form>
+  </dialog>
+  <dialog id="entry-dialog" class="entry-dialog">
+    <form id="entry-form">
+      <div class="dialog-header"><div><span id="entry-category" class="dialog-eyebrow"></span><h2 id="entry-heading">양식 입력</h2></div><button type="button" class="icon-button" data-entry-close aria-label="닫기">×</button></div>
+      <div class="entry-layout">
+        <section class="entry-editor">
+          <div class="entry-meta">
+            <label><span>작성일</span><input id="entry-date" name="record_date" type="date" required></label>
+            <label><span>기록 제목</span><input id="entry-title" name="record_title" required></label>
+            <label><span>진행상태</span><select id="entry-status" name="status"><option>작성 중</option><option>서명대기</option><option>완료</option></select></label>
+          </div>
+          <div id="entry-fields" class="entry-fields"></div>
+          <div class="dialog-actions entry-actions"><button type="button" class="secondary-button" data-entry-close>취소</button><button type="submit" class="primary-button">DB에 저장</button></div>
+        </section>
+        <aside class="entry-history"><div class="history-header"><h3>저장된 기록</h3><button id="new-entry" type="button" class="small-button">새 기록</button></div><a id="entry-ledger-export" class="small-button entry-ledger-export" hidden>전체 엑셀 내보내기</a><div id="entry-list"></div></aside>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="part-dialog" class="part-dialog">
+    <form id="part-form">
+      <div class="dialog-header"><div><span class="dialog-eyebrow">부위별 상세점검</span><h2 id="part-title">점검부위</h2></div><button type="button" class="icon-button" data-part-close aria-label="닫기">×</button></div>
+      <div class="part-modal-body">
+        <div id="part-zoom" class="part-zoom"><img id="part-image" alt="점검부위 확대 이미지"><span id="part-zoom-number"></span></div>
+        <div class="part-modal-content"><p id="part-detail"></p><label class="part-complete"><input id="part-checked" type="checkbox"><span>이 부위 점검 완료</span></label><fieldset><legend>점검 판정</legend><div class="part-modal-results"><label><input type="radio" name="part_result" value="양호"><span>양호</span></label><label><input type="radio" name="part_result" value="보완"><span>보완</span></label><label><input type="radio" name="part_result" value="사용금지"><span>사용금지</span></label></div></fieldset><div class="part-photo-section"><img id="part-photo-thumb" alt="첨부 사진" hidden><button type="button" id="part-photo-open" class="small-button">사진 추가</button></div><div class="dialog-actions part-actions"><button type="button" class="secondary-button" data-part-close>취소</button><button type="submit" class="primary-button">점검결과 적용</button></div></div>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="part-photo-dialog" class="photo-dialog">
+    <div class="dialog-header"><div><span class="dialog-eyebrow">사진 첨부</span><h2 id="photo-dialog-part"></h2></div><button type="button" class="icon-button" data-photo-close aria-label="닫기">×</button></div>
+    <div class="photo-dialog-body">
+      <label class="photo-input-label"><input id="photo-file-input" type="file" accept="image/*" capture="environment"><span>사진 선택 · 촬영</span></label>
+      <div id="photo-preview" class="photo-preview" hidden><img id="photo-preview-img" alt="첨부 사진 미리보기"></div>
+    </div>
+    <div class="dialog-actions">
+      <button type="button" class="secondary-button" id="photo-skip">사진 없이 계속</button>
+      <button type="button" class="primary-button" id="photo-save" disabled>사진 저장</button>
+    </div>
+  </dialog>
+  <div id="toast" class="toast" role="status"></div>
+  <script src="/static/app.js" defer></script>
+  <script src="/static/preparation.js" defer></script>
+  <script src="/static/task-analysis.js" defer></script>
+  <script src="/static/cost-analysis.js" defer></script>
+  <script src="/static/billing.js" defer></script>
+</body>
+</html>
