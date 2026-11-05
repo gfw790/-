@@ -68,6 +68,12 @@ $tbmCleanName = static function(string $name): string {
     return trim((string)preg_replace('/\s*\([^)]*\)/', '', $name));
 };
 
+// ── 작업일자 (GET ?date=, 기본값 오늘) ─────────────────────
+$selectedDate = trim((string)($_GET['date'] ?? date('Y-m-d')));
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $selectedDate)) {
+    $selectedDate = date('Y-m-d');
+}
+
 // ── 팀별 인명부 구성 (risk_assessment auth 기반) ─────────────────────────
 $teamMembers = [];
 $allTeams = auth_read_active_teams(); // ['공사팀-전기','공사팀-모터','가스팀','제조팀','안전관리', ...]
@@ -97,7 +103,7 @@ foreach ($allTeams as $raTeam) {
         if (
             $cleanName === ''
             || in_array($cleanName, $tbmExcludeNames, true)
-            || !tbm_is_active_attendee($cleanName, $displayName)
+            || !tbm_is_active_attendee($cleanName, $displayName, $selectedDate)
         ) {
             continue;
         }
@@ -361,7 +367,12 @@ body { font-family: "Malgun Gothic", sans-serif; margin: 0; background: #f5f6f7;
 
     <div class="form-panel">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
-            <h2 style="margin-bottom:0;">📋 TBM 일지 생성</h2>
+            <div style="display:flex;align-items:center;gap:12px;">
+                <h2 style="margin-bottom:0;">📋 TBM 일지 생성</h2>
+                <button type="button" class="btn btn-sm" onclick="openBatchPrintModal()" style="background:#2563eb;color:#fff;font-weight:700;padding:6px 14px;border-radius:6px;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 1px 3px rgba(37,99,235,0.3);font-size:0.85rem;">
+                    🖨️ 기간별 일괄 출력
+                </button>
+            </div>
             <div style="font-size:.85rem;color:#475569;">
                 <strong><?= h($userLabel) ?></strong>
                 <a href="../risk_assessment/<?= h(auth_main_page_path($raUser)) ?>" style="margin-left:10px;">작업목록</a>
@@ -510,7 +521,12 @@ body { font-family: "Malgun Gothic", sans-serif; margin: 0; background: #f5f6f7;
         </div>
 
         <div class="side-box">
-            <h3>📁 최근 생성 일지</h3>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <h3 style="margin:0;">📁 최근 생성 일지</h3>
+                <button type="button" onclick="openBatchPrintModal()" style="background:#0f172a;color:#fff;font-size:0.75rem;font-weight:600;padding:4px 8px;border-radius:4px;border:none;cursor:pointer;">
+                    🖨️ 일괄 출력
+                </button>
+            </div>
             <p style="font-size:.85rem; color:#475569; margin:0 0 10px;">팀별 최근 생성 일지를 구분해서 표시합니다. 현재 선택한 팀은 맨 위에 강조됩니다.</p>
             <div id="recent-list-container"></div>
         </div>
@@ -1196,6 +1212,233 @@ async function aiGenerate(forceNew = false) {
         overlay.classList.remove('active');
         alert('AI 오류: ' + err.message);
     }
+}
+</script>
+<!-- 기간별 일괄 출력 모달 -->
+<div id="tbm-batch-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,23,42,0.65);z-index:99999;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;">
+    <div style="background:#fff;border-radius:12px;width:950px;max-width:100%;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 20px 25px -5px rgba(0,0,0,0.3);overflow:hidden;font-family:'Malgun Gothic',sans-serif;">
+        <!-- 모달 헤더 -->
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 24px;border-bottom:1px solid #e2e8f0;background:#f8fafc;">
+            <div style="font-size:1.15rem;font-weight:700;color:#0f172a;display:flex;align-items:center;gap:8px;">
+                🖨️ TBM 일지 기간별 일괄 출력
+            </div>
+            <button type="button" onclick="closeBatchPrintModal()" style="background:none;border:none;font-size:1.4rem;color:#64748b;cursor:pointer;line-height:1;padding:0 4px;">&times;</button>
+        </div>
+        <!-- 모달 본문 (스크롤) -->
+        <div style="padding:20px 24px;overflow-y:auto;flex:1;">
+            <!-- 검색 필터 바 -->
+            <div style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:14px 18px;display:flex;flex-wrap:wrap;align-items:flex-end;gap:14px;margin-bottom:16px;">
+                <div style="display:flex;flex-direction:column;gap:5px;">
+                    <label style="font-size:0.82rem;font-weight:600;color:#475569;">시작일</label>
+                    <input type="date" id="modal_batch_start_date" value="<?= date('Y-m-d', strtotime('-7 days')) ?>" style="padding:7px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:0.9rem;background:#fff;">
+                </div>
+                <div style="display:flex;flex-direction:column;gap:5px;">
+                    <label style="font-size:0.82rem;font-weight:600;color:#475569;">종료일</label>
+                    <input type="date" id="modal_batch_end_date" value="<?= date('Y-m-d') ?>" style="padding:7px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:0.9rem;background:#fff;">
+                </div>
+                <div style="display:flex;flex-direction:column;gap:5px;">
+                    <label style="font-size:0.82rem;font-weight:600;color:#475569;">대상 팀</label>
+                    <select id="modal_batch_team" style="padding:7px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:0.9rem;background:#fff;">
+                        <?php if ($isOperator): ?>
+                        <option value="__ALL__">전체 팀</option>
+                        <option value="__COMMON__">공통</option>
+                        <?php foreach (array_keys($teamMembers) as $tm): ?>
+                            <option value="<?= h($tm) ?>"><?= h($tm) ?></option>
+                        <?php endforeach; ?>
+                        <?php else: ?>
+                        <?php foreach (array_keys($teamMembers) as $tm): ?>
+                            <option value="<?= h($tm) ?>"><?= h($tm) ?></option>
+                        <?php endforeach; ?>
+                        <option value="__COMMON__">공통</option>
+                        <?php endif; ?>
+                    </select>
+                </div>
+                <button type="button" onclick="modalSearchBatchDocs()" style="background:#2563eb;color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:0.9rem;font-weight:600;cursor:pointer;">
+                    🔍 조회하기
+                </button>
+            </div>
+
+            <!-- 대량 인쇄 경고 -->
+            <div id="modal_batch_large_warning" style="display:none;background:#fffbeb;border:1px solid #fde68a;color:#92400e;padding:10px 14px;border-radius:6px;font-size:0.85rem;margin-bottom:12px;line-height:1.5;">
+                ⚠️ <strong>안내:</strong> 선택한 일지가 30건(60페이지) 이상입니다. 브라우저 성능에 따라 인쇄 창 로딩이 다소 지연될 수 있으므로 20~30건 단위 분할 인쇄를 권장합니다.
+            </div>
+
+            <!-- 선택 요약 및 액션 바 -->
+            <div style="display:flex;justify-content:space-between;align-items:center;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 14px;margin-bottom:12px;">
+                <div style="font-size:0.9rem;color:#334155;">
+                    조회: <strong id="modal_batch_total_count">0</strong>건 | 
+                    선택: <strong id="modal_batch_selected_count" style="color:#2563eb;">0</strong>건 
+                    (예상 인쇄: <strong id="modal_batch_page_count" style="color:#2563eb;">0</strong>페이지)
+                </div>
+                <div style="display:flex;gap:6px;">
+                    <button type="button" onclick="modalToggleSelectAll(true)" style="background:#64748b;color:#fff;border:none;border-radius:4px;padding:5px 10px;font-size:0.8rem;cursor:pointer;">전체 선택</button>
+                    <button type="button" onclick="modalToggleSelectAll(false)" style="background:#64748b;color:#fff;border:none;border-radius:4px;padding:5px 10px;font-size:0.8rem;cursor:pointer;">전체 해제</button>
+                    <button type="button" id="modal_btn_execute_print" onclick="modalExecuteBatchPrint()" disabled style="background:#16a34a;color:#fff;border:none;border-radius:4px;padding:6px 14px;font-size:0.88rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:4px;opacity:0.5;">
+                        🖨️ 선택 일괄 인쇄 / PDF 저장
+                    </button>
+                </div>
+            </div>
+
+            <!-- 결과 테이블 -->
+            <div style="max-height:360px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:6px;">
+                <table style="width:100%;border-collapse:collapse;font-size:0.88rem;text-align:left;">
+                    <thead style="position:sticky;top:0;background:#f8fafc;z-index:2;box-shadow:0 1px 2px rgba(0,0,0,0.05);">
+                        <tr>
+                            <th style="width:40px;text-align:center;padding:10px 8px;border-bottom:2px solid #e2e8f0;">
+                                <input type="checkbox" id="modal_check_all" onchange="modalToggleSelectAll(this.checked)">
+                            </th>
+                            <th style="width:100px;padding:10px 8px;border-bottom:2px solid #e2e8f0;">작업일자</th>
+                            <th style="width:90px;padding:10px 8px;border-bottom:2px solid #e2e8f0;">팀</th>
+                            <th style="padding:10px 8px;border-bottom:2px solid #e2e8f0;">교육 제목 / 작업 내용</th>
+                            <th style="width:90px;text-align:center;padding:10px 8px;border-bottom:2px solid #e2e8f0;">상태</th>
+                            <th style="width:70px;text-align:center;padding:10px 8px;border-bottom:2px solid #e2e8f0;">단건</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modal_batch_result_body">
+                        <tr>
+                            <td colspan="6" style="text-align:center;padding:30px;color:#94a3b8;">조회 버튼을 누르면 해당 기간의 일지가 표시됩니다.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <!-- 모달 푸터 -->
+        <div style="padding:12px 24px;border-top:1px solid #e2e8f0;background:#f8fafc;display:flex;justify-content:flex-end;">
+            <button type="button" onclick="closeBatchPrintModal()" style="background:#475569;color:#fff;border:none;border-radius:6px;padding:7px 16px;font-size:0.88rem;cursor:pointer;">닫기</button>
+        </div>
+    </div>
+</div>
+
+<!-- 일괄 인쇄 전송용 숨김 폼 -->
+<form id="modal_batch_print_form" action="batch_print.php" method="post" target="_blank" style="display:none;">
+    <input type="hidden" name="doc_ids" id="modal_form_doc_ids" value="">
+    <input type="hidden" name="target_team" id="modal_form_target_team" value="">
+</form>
+
+<script>
+function openBatchPrintModal() {
+    const modal = document.getElementById('tbm-batch-modal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    if (!modal.dataset.loaded) {
+        modalSearchBatchDocs();
+        modal.dataset.loaded = 'true';
+    }
+}
+
+function closeBatchPrintModal() {
+    const modal = document.getElementById('tbm-batch-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function modalSearchBatchDocs() {
+    const startDate = document.getElementById('modal_batch_start_date').value;
+    const endDate = document.getElementById('modal_batch_end_date').value;
+    const team = document.getElementById('modal_batch_team').value;
+    const tbody = document.getElementById('modal_batch_result_body');
+
+    if (!startDate || !endDate) {
+        alert('시작일과 종료일을 입력하세요.');
+        return;
+    }
+    if (startDate > endDate) {
+        alert('시작일이 종료일보다 클 수 없습니다.');
+        return;
+    }
+
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:30px;color:#64748b;">일지를 조회하는 중입니다...</td></tr>';
+
+    try {
+        const res = await fetch('batch_print.php?action=search&start_date=' + encodeURIComponent(startDate) + '&end_date=' + encodeURIComponent(endDate) + '&team=' + encodeURIComponent(team));
+        const json = await res.json();
+
+        if (!json.success) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:30px;color:#dc2626;">조회 오류: ' + (json.error || '실패') + '</td></tr>';
+            return;
+        }
+
+        const list = json.data || [];
+        document.getElementById('modal_batch_total_count').textContent = list.length;
+
+        if (list.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:30px;color:#94a3b8;">해당 기간에 생성된 일지가 없습니다.</td></tr>';
+            modalUpdateSelectionCounts();
+            return;
+        }
+
+        let html = '';
+        list.forEach(doc => {
+            const isAvail = doc.is_available;
+            const badgeBg = isAvail ? '#dcfce7' : '#fee2e2';
+            const badgeColor = isAvail ? '#15803d' : '#b91c1c';
+            const badgeText = isAvail ? '출력 가능' : '파일 누락';
+            const checkAttr = isAvail ? 'checked' : 'disabled';
+            const viewLink = doc.output_filename ? '<a href="view_output.php?file=' + encodeURIComponent(doc.output_filename) + '&team=' + encodeURIComponent(doc.display_team || team) + '&date=' + encodeURIComponent(doc.doc_date || '') + '" target="_blank" style="color:#2563eb;text-decoration:none;font-weight:600;">열기</a>' : '-';
+
+            html += '<tr style="border-bottom:1px solid #f1f5f9;">'
+                + '<td style="text-align:center;padding:8px;"><input type="checkbox" class="modal-doc-chk" value="' + doc.id + '" ' + checkAttr + ' onchange="modalUpdateSelectionCounts()"></td>'
+                + '<td style="padding:8px;"><strong>' + (doc.doc_date || '') + '</strong></td>'
+                + '<td style="padding:8px;">' + (doc.display_team || '') + '</td>'
+                + '<td style="padding:8px;">' + (doc.title || '') + '</td>'
+                + '<td style="text-align:center;padding:8px;"><span style="background:' + badgeBg + ';color:' + badgeColor + ';padding:2px 8px;border-radius:999px;font-size:0.75rem;font-weight:600;">' + badgeText + '</span></td>'
+                + '<td style="text-align:center;padding:8px;">' + viewLink + '</td>'
+                + '</tr>';
+        });
+
+        tbody.innerHTML = html;
+        modalUpdateSelectionCounts();
+    } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:30px;color:#dc2626;">네트워크 오류가 발생했습니다.</td></tr>';
+    }
+}
+
+function modalToggleSelectAll(checked) {
+    const checkboxes = document.querySelectorAll('.modal-doc-chk:not(:disabled)');
+    checkboxes.forEach(cb => { cb.checked = checked; });
+    const checkAll = document.getElementById('modal_check_all');
+    if (checkAll) checkAll.checked = checked;
+    modalUpdateSelectionCounts();
+}
+
+function modalUpdateSelectionCounts() {
+    const selected = document.querySelectorAll('.modal-doc-chk:checked');
+    const count = selected.length;
+    const pages = count * 2;
+
+    document.getElementById('modal_batch_selected_count').textContent = count;
+    document.getElementById('modal_batch_page_count').textContent = pages;
+
+    const btn = document.getElementById('modal_btn_execute_print');
+    if (btn) {
+        btn.disabled = (count === 0);
+        btn.style.opacity = (count === 0) ? '0.5' : '1';
+        btn.style.cursor = (count === 0) ? 'not-allowed' : 'pointer';
+    }
+
+    const warnBox = document.getElementById('modal_batch_large_warning');
+    if (warnBox) {
+        warnBox.style.display = (count >= 30) ? 'block' : 'none';
+    }
+}
+
+function modalExecuteBatchPrint() {
+    const selected = document.querySelectorAll('.modal-doc-chk:checked');
+    const ids = Array.from(selected).map(cb => cb.value);
+
+    if (ids.length === 0) {
+        alert('인쇄할 일지를 최소 1건 이상 선택하세요.');
+        return;
+    }
+
+    if (ids.length > 30) {
+        if (!confirm('선택된 일지가 ' + ids.length + '건(' + (ids.length * 2) + '페이지)입니다.\n계속 진행하시겠습니까?')) {
+            return;
+        }
+    }
+
+    document.getElementById('modal_form_doc_ids').value = ids.join(',');
+    document.getElementById('modal_form_target_team').value = document.getElementById('modal_batch_team').value;
+    document.getElementById('modal_batch_print_form').submit();
 }
 </script>
 </body>

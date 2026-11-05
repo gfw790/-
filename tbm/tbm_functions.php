@@ -245,6 +245,8 @@ function tbm_employee_status_map(): array
         $stmt = $pdo->query("
             SELECT name,
                    team,
+                   COALESCE(join_date, '') AS join_date,
+                   COALESCE(retired_at, '') AS retired_at,
                    COALESCE(employment_status, 'active') AS employment_status,
                    COALESCE(is_active, 1) AS is_active
               FROM employees
@@ -260,6 +262,8 @@ function tbm_employee_status_map(): array
             $team = tbm_normalize_display_team_name(auth_normalize_team_name((string)($row['team'] ?? '')));
             $statusMap[$name][] = [
                 'team' => $team,
+                'join_date' => trim((string)($row['join_date'] ?? '')),
+                'retired_at' => trim((string)($row['retired_at'] ?? '')),
                 'is_active' => (int)($row['is_active'] ?? 1) === 1,
                 'employment_status' => trim((string)($row['employment_status'] ?? 'active')),
             ];
@@ -271,7 +275,7 @@ function tbm_employee_status_map(): array
     return $statusMap;
 }
 
-function tbm_is_active_attendee(string $name, string $teamName = ''): bool
+function tbm_is_active_attendee(string $name, string $teamName = '', ?string $targetDate = null): bool
 {
     $name = tbm_clean_attendee_name($name);
     if ($name === '') {
@@ -286,14 +290,38 @@ function tbm_is_active_attendee(string $name, string $teamName = ''): bool
     $normalizedTeamName = tbm_normalize_display_team_name(auth_normalize_team_name($teamName));
     $matchedTeamRecord = false;
 
+    $isRowActiveOnDate = static function (array $row, ?string $targetDate): bool {
+        $joinDate = trim((string)($row['join_date'] ?? ''));
+        $retiredAt = trim((string)($row['retired_at'] ?? ''));
+        $status = trim((string)($row['employment_status'] ?? 'active'));
+        $isActive = (bool)($row['is_active'] ?? true);
+
+        // 기준일자 (지정되지 않으면 오늘 날짜)
+        $date = trim((string)($targetDate ?: date('Y-m-d')));
+
+        // 1. 입사일 체크: 입사일이 지정되어 있고, 기준일자가 입사일 이전이면 아직 미입사자 -> 노출 안 됨
+        if ($joinDate !== '' && $date < $joinDate) {
+            return false;
+        }
+
+        // 2. 퇴사일 체크: 퇴사일이 지정되어 있고, 기준일자가 퇴사일 이후면 이미 퇴사자 -> 노출 안 됨
+        if ($retiredAt !== '' && $date >= $retiredAt) {
+            return false;
+        }
+
+        // 3. 퇴사일은 비어 있으나 상태가 retired이거나 is_active가 0인 경우 영구 비활성
+        if ($retiredAt === '' && ($status === 'retired' || !$isActive)) {
+            return false;
+        }
+
+        return true;
+    };
+
     foreach ($statusMap[$name] as $row) {
         $rowTeam = (string)($row['team'] ?? '');
-        $isRetired = ((string)($row['employment_status'] ?? 'active') === 'retired')
-            || !(bool)($row['is_active'] ?? true);
-
         if ($normalizedTeamName !== '' && $rowTeam !== '' && $rowTeam === $normalizedTeamName) {
             $matchedTeamRecord = true;
-            if (!$isRetired) {
+            if ($isRowActiveOnDate($row, $targetDate)) {
                 return true;
             }
         }
@@ -304,9 +332,7 @@ function tbm_is_active_attendee(string $name, string $teamName = ''): bool
     }
 
     foreach ($statusMap[$name] as $row) {
-        $isRetired = ((string)($row['employment_status'] ?? 'active') === 'retired')
-            || !(bool)($row['is_active'] ?? true);
-        if (!$isRetired) {
+        if ($isRowActiveOnDate($row, $targetDate)) {
             return true;
         }
     }
@@ -314,7 +340,7 @@ function tbm_is_active_attendee(string $name, string $teamName = ''): bool
     return false;
 }
 
-function tbm_attendee_names_for_team(string $teamName, array $excludeNames = ['진준철']): array
+function tbm_attendee_names_for_team(string $teamName, ?string $targetDate = null, array $excludeNames = ['진종철', '진준철']): array
 {
     $teamName = trim($teamName);
     if ($teamName === '') {
@@ -337,7 +363,7 @@ function tbm_attendee_names_for_team(string $teamName, array $excludeNames = ['�
             if (
                 $cleanName === ''
                 || in_array($cleanName, $excludeNames, true)
-                || !tbm_is_active_attendee($cleanName, $displayName)
+                || !tbm_is_active_attendee($cleanName, $displayName, $targetDate)
             ) {
                 continue;
             }
@@ -353,6 +379,7 @@ function tbm_attendee_names_for_team(string $teamName, array $excludeNames = ['�
 
 function tbm_resolve_attendee_names(array $data, string $selectedTeam, ?array $user = null): array
 {
+    $docDate = trim((string)($data['doc_date'] ?? ''));
     $postedNames = array_values(array_map(
         static fn($name) => trim((string)$name),
         is_array($data['names'] ?? null) ? $data['names'] : []
@@ -376,7 +403,7 @@ function tbm_resolve_attendee_names(array $data, string $selectedTeam, ?array $u
         );
     }
 
-    $resolvedNames = tbm_attendee_names_for_team($teamName);
+    $resolvedNames = tbm_attendee_names_for_team($teamName, $docDate);
     while (count($resolvedNames) < 8) {
         $resolvedNames[] = '';
     }
@@ -526,9 +553,35 @@ function e(string $value): string
 
 // ── 앞면 1페이지 통합 동적 테이블 빌더 ─────────────────────────────
 
+function tbm_build_attendee_table_html(array $names): string {
+    $names = array_values($names);
+    while (count($names) < 8) {
+        $names[] = '';
+    }
+    $rowCount = max(2, ceil(count($names) / 4));
+
+    $html = '<table class="tbm-dyn-table tbm-dyn-row" style="z-index: 5;">';
+    $html .= '<tr style="height: 8.01mm;">';
+    for ($i = 0; $i < 4; $i++) {
+        $html .= '<th style="width: 12.5%;">이름</th><th style="width: 12.5%;">서명</th>';
+    }
+    $html .= '</tr>';
+    $nameIdx = 0;
+    for ($r = 0; $r < $rowCount; $r++) {
+        $html .= '<tr style="height: 8.01mm;">';
+        for ($c = 0; $c < 4; $c++) {
+            $name = isset($names[$nameIdx]) ? e($names[$nameIdx]) : '';
+            $html .= '<td>' . $name . '</td><td></td>';
+            $nameIdx++;
+        }
+        $html .= '</tr>';
+    }
+    $html .= '</table>';
+    return $html;
+}
+
 function tbm_build_dynamic_tables(array $data): string {
     $names = $data['names'] ?? [];
-    $rowCount = max(2, ceil(count($names) / 4));
 
     $checks = $data['risk_checks'] ?? [];
     $chk1 = in_array('고소작업', $checks) ? '■' : '□';
@@ -548,23 +601,7 @@ function tbm_build_dynamic_tables(array $data): string {
     $html .= '<div style="width: 183.02mm; margin: 0; padding: 0;">';
 
     // 1. 참석자 명단
-    $html .= '<table class="tbm-dyn-table tbm-dyn-row" style="z-index: 5;">';
-    $html .= '<tr style="height: 8.01mm;">';
-    for($i=0; $i<4; $i++) {
-        $html .= '<th style="width: 12.5%;">이름</th><th style="width: 12.5%;">서명</th>';
-    }
-    $html .= '</tr>';
-    $nameIdx = 0;
-    for ($r = 0; $r < $rowCount; $r++) {
-        $html .= '<tr style="height: 8.01mm;">';
-        for ($c = 0; $c < 4; $c++) {
-            $name = isset($names[$nameIdx]) ? e($names[$nameIdx]) : '';
-            $html .= '<td>' . $name . '</td><td></td>';
-            $nameIdx++;
-        }
-        $html .= '</tr>';
-    }
-    $html .= '</table>';
+    $html .= tbm_build_attendee_table_html($names);
 
     // 2. 금일 예정 작업
     $html .= '<table class="tbm-dyn-table tbm-dyn-row" style="z-index: 4;">';

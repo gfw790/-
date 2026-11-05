@@ -36,6 +36,28 @@ if ($html === false) {
     exit('파일을 읽을 수 없습니다.');
 }
 
+// ── 팀별/날짜별 동적 참석자 명단 반영 ────────────────────────
+$targetTeam = trim((string)($_GET['team'] ?? ''));
+if ($targetTeam !== '' && $targetTeam !== '__ALL__' && $targetTeam !== '__COMMON__' && $targetTeam !== '공통') {
+    $targetTeam = tbm_normalize_display_team_name($targetTeam);
+    $docDate = trim((string)($_GET['date'] ?? ''));
+    if ($docDate === '' && preg_match('~(\d{4})(\d{2})(\d{2})~', basename($file), $m)) {
+        $docDate = "{$m[1]}-{$m[2]}-{$m[3]}";
+    }
+    if ($docDate !== '') {
+        $activeNames = tbm_attendee_names_for_team($targetTeam, $docDate);
+        if (!empty($activeNames)) {
+            $newTable = tbm_build_attendee_table_html($activeNames);
+            $html = preg_replace(
+                '~<table class="tbm-dyn-table tbm-dyn-row" style="z-index: 5;">.*?</table>~is',
+                $newTable,
+                $html,
+                1
+            );
+        }
+    }
+}
+
 if (stripos($html, '<base ') === false) {
     if (preg_match('~<head([^>]*)>~i', $html) === 1) {
         $html = preg_replace('~<head([^>]*)>~i', '<head$1><base href="' . htmlspecialchars($baseHref, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">', $html, 1);
