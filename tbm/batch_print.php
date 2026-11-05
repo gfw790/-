@@ -432,15 +432,6 @@ if ($rawDocIds !== null) {
         exit;
     }
 
-    // 마지막 페이지 표시 (불필요한 빈 페이지 방지용 클래스 추가)
-    $lastIdx = count($allPages) - 1;
-    $allPages[$lastIdx] = preg_replace(
-        '~<div class="hpa"~i',
-        '<div class="hpa hpa-last"',
-        $allPages[$lastIdx],
-        1
-    );
-
     // base href 설정 (상대경로 이미지 및 QR코드 정확 로드)
     [$basePath] = explode('?', $_SERVER['REQUEST_URI'] ?? 'batch_print.php', 2);
     $baseHref = rtrim(dirname($basePath), '/\\');
@@ -449,7 +440,7 @@ if ($rawDocIds !== null) {
     }
     $baseHref .= '/output/';
 
-    // 템플릿의 공통 CSS 가져오기
+    // 템플릿의 공통 CSS 가져오기 (기존 단건 인쇄 view_output.php와 완전히 동일한 스타일 구조 사용)
     $templatePath = __DIR__ . '/template/TBM_template.html';
     $templateCss = '';
     if (is_file($templatePath)) {
@@ -461,192 +452,30 @@ if ($rawDocIds !== null) {
 ?>
 <!DOCTYPE html>
 <html lang="ko">
-<head>
-<meta charset="utf-8"/>
-<meta content="IE=edge,chrome=1" http-equiv="X-UA-Compatible"/>
-<title>TBM 일지 일괄 출력 (<?= count($validDocs) ?>건 / <?= count($allPages) ?>페이지)</title>
-<base href="<?= htmlspecialchars($baseHref, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
-<style>
+ <meta charset="utf-8"/>
+ <meta content="IE=edge,chrome=1" http-equiv="X-UA-Compatible"/>
+ <head><base href="<?= htmlspecialchars($baseHref, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
+  <title>안 전 교 육 일 지 (<?= count($validDocs) ?>건 / <?= count($allPages) ?>페이지)</title>
+  <meta content="text/html; charset=utf-8" http_quiv="content-type"/>
+  <style>
 <?= $templateCss ?>
-
-/* ── 일괄 출력 전용 화면 및 인쇄 스타일 ── */
-@media screen {
-  body {
-    background: #475569;
-    margin: 0;
-    padding-top: 65px;
-    padding-bottom: 50px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    font-family: "Malgun Gothic", "맑은 고딕", sans-serif;
-  }
-  .tbm-batch-toolbar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 52px;
-    background: #0f172a;
-    color: #fff;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 24px;
-    z-index: 99999;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-  }
-  .tbm-batch-toolbar .toolbar-left {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-size: 15px;
-    font-weight: 700;
-  }
-  .tbm-batch-toolbar .toolbar-badge {
-    background: #2563eb;
-    color: #fff;
-    padding: 3px 10px;
-    border-radius: 999px;
-    font-size: 13px;
-    font-weight: 600;
-  }
-  .tbm-batch-toolbar .toolbar-right {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  .tbm-batch-btn-print {
-    background: #2563eb;
-    color: #fff;
-    border: none;
-    padding: 8px 18px;
-    border-radius: 6px;
-    font-size: 14px;
-    font-weight: 700;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    transition: background .15s;
-  }
-  .tbm-batch-btn-print:hover {
-    background: #1d4ed8;
-  }
-  .tbm-batch-btn-close {
-    background: #334155;
-    color: #cbd5e1;
-    border: none;
-    padding: 8px 14px;
-    border-radius: 6px;
-    font-size: 13px;
-    cursor: pointer;
-    transition: background .15s;
-  }
-  .tbm-batch-btn-close:hover {
-    background: #475569;
-    color: #fff;
-  }
-  .tbm-batch-alert-box {
-    width: 210mm;
-    margin-bottom: 14px;
-    padding: 12px 16px;
-    border-radius: 6px;
-    font-size: 13px;
-    line-height: 1.6;
-    box-sizing: border-box;
-  }
-  .tbm-batch-alert-warning {
-    background: #fffbeb;
-    border: 1px solid #fde68a;
-    color: #92400e;
-  }
-  .tbm-batch-alert-danger {
-    background: #fef2f2;
-    border: 1px solid #fecaca;
-    color: #991b1b;
-  }
-  .hpa {
-    margin: 12px auto !important;
-    background-color: #fff !important;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.25) !important;
-  }
-}
-
 @media print {
-  @page {
-    size: 210mm 297mm;
-    margin: 0;
-  }
-  html, body {
-    margin: 0 !important;
-    padding: 0 !important;
-    background: #fff !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-  .tbm-batch-toolbar,
-  .tbm-batch-alert-box {
-    display: none !important;
-  }
-  .hpa {
-    margin: 0 !important;
-    border: 0 black none !important;
-    box-shadow: none !important;
-    page-break-after: always !important;
-    break-after: page !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
-  /* 마지막 페이지 이후 불필요한 빈 페이지 방지 */
-  .hpa.hpa-last,
-  .hpa:last-of-type {
-    page-break-after: auto !important;
-    break-after: auto !important;
-  }
+.hpa {margin:0;border:0 black none;box-shadow:none;page-break-after:always;break-after:page;}
+.hpa:last-of-type {page-break-after:auto;break-after:auto;}
+body {padding:0;}
 }
-</style>
-</head>
-<body>
-
-<div class="tbm-batch-toolbar">
-    <div class="toolbar-left">
-        <span>🖨️ TBM 일지 일괄 출력</span>
-        <span class="toolbar-badge">선택 일지 <?= count($validDocs) ?>건 (총 <?= count($allPages) ?>페이지)</span>
-    </div>
-    <div class="toolbar-right">
-        <button type="button" class="tbm-batch-btn-print" onclick="window.print()">
-            🖨️ 인쇄 / PDF 저장
-        </button>
-        <button type="button" class="tbm-batch-btn-close" onclick="window.close()">
-            ✕ 창 닫기
-        </button>
-    </div>
-</div>
-
-<?php if (count($validDocs) >= 30): ?>
-<div class="tbm-batch-alert-box tbm-batch-alert-warning">
-    💡 <strong>안내:</strong> 선택한 일지가 30건(<?= count($allPages) ?>페이지) 이상입니다. 브라우저 성능에 따라 인쇄 대화상자 호출 시 로딩 지연이 발생할 수 있으니 필요한 경우 20~30건 단위로 분할 인쇄하시는 것을 권장합니다.
-</div>
-<?php endif; ?>
-
-<?php if (!empty($missingList)): ?>
-<div class="tbm-batch-alert-box tbm-batch-alert-danger">
-    ⚠️ <strong>주의:</strong> 다음 일지(<?= count($missingList) ?>건)는 HTML 파일이 누락되어 인쇄 대상에서 제외되었습니다:<br>
-    <?php foreach ($missingList as $m): ?>
-        • <?= htmlspecialchars("{$m['doc_date']} [{$m['team']}] {$m['title']}", ENT_QUOTES, 'UTF-8') ?><br>
-    <?php endforeach; ?>
-</div>
-<?php endif; ?>
-
+  </style>
+  <style>.tbm-floating-print-btn{position:fixed;right:24px;bottom:24px;z-index:9999;display:inline-flex;align-items:center;justify-content:center;min-width:140px;padding:14px 18px;border:none;border-radius:999px;background:#0f172a;color:#fff;font-family:"Malgun Gothic",sans-serif;font-size:.95rem;font-weight:700;cursor:pointer;box-shadow:0 12px 30px rgba(15,23,42,.24);}.tbm-floating-print-btn:hover{background:#1e293b;}.tbm-print-guide{position:fixed;right:24px;bottom:86px;z-index:9998;width:320px;padding:14px 16px;border:1px solid #bfdbfe;border-radius:10px;background:rgba(239,246,255,.97);box-shadow:0 10px 28px rgba(15,23,42,.14);font-family:"Malgun Gothic",sans-serif;font-size:13px;line-height:1.6;color:#1e293b;}.tbm-print-guide strong{display:block;margin-bottom:6px;color:#1d4ed8;font-size:14px;}@media print{.tbm-floating-print-btn{display:none !important;}}@media print{.tbm-print-guide{display:none !important;}}</style>
+ </head>
+ <body>
 <?php
-// 모든 페이지 렌더링
+// 모든 페이지 렌더링 (기존 view_output.php와 동일한 DOM 구조)
 foreach ($allPages as $pageHtml) {
-    echo $pageHtml . PHP_EOL;
+    echo '  ' . $pageHtml . PHP_EOL;
 }
 ?>
-
-</body>
+  <div class="tbm-print-guide"><strong>인쇄 요령 (선택 <?= count($validDocs) ?>건 / 총 <?= count($allPages) ?>페이지)</strong>A4 세로 기준으로 인쇄하시고 배율은 100%로 맞춰 주세요.<br>여백은 없음 또는 최소, 머리글/바닥글은 끔으로 설정하는 것을 권장합니다.<br>사진이나 배경이 보이지 않으면 인쇄 설정에서 배경 그래픽 출력을 켜고 다시 인쇄해 주세요.</div><button type="button" class="tbm-floating-print-btn" onclick="window.print()">🖨 인쇄하기</button>
+ </body>
 </html>
 <?php
     exit;
