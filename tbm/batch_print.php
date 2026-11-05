@@ -105,6 +105,14 @@ function tbm_batch_extract_hpa_blocks(string $html): array
                     $block = substr($html, $start, $i - $start);
                     // 스크립트 실행 방지를 위한 script 태그 제거
                     $block = preg_replace('~<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>~i', '', $block);
+                    // 구형 저장 일지의 비고란 안에 잘못 삽입된 구분선이다.
+                    // 용지 밖(약 x=248mm)으로 돌출되어 Chromium이 중간 페이지의
+                    // 인쇄 폭까지 확장하고 전체 일지를 축소하므로 제외한다.
+                    $block = str_replace(
+                        '<div style="position:absolute;left:88mm;top:0;width:0.3mm;height:184mm;border-left:0.3mm dashed #cccccc;"></div>',
+                        '',
+                        $block
+                    );
                     $blocks[] = $block;
                     $offset = $i;
                     break;
@@ -452,17 +460,32 @@ if ($rawDocIds !== null) {
 ?>
 <!DOCTYPE html>
 <html lang="ko">
+ <head>
  <meta charset="utf-8"/>
  <meta content="IE=edge,chrome=1" http-equiv="X-UA-Compatible"/>
- <head><base href="<?= htmlspecialchars($baseHref, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
+ <base href="<?= htmlspecialchars($baseHref, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
   <title>안 전 교 육 일 지 (<?= count($validDocs) ?>건 / <?= count($allPages) ?>페이지)</title>
-  <meta content="text/html; charset=utf-8" http_quiv="content-type"/>
   <style>
 <?= $templateCss ?>
+/* 원본은 여백을 포함한 A4 좌표계다. 용지 여백을 다시 더하면
+   브라우저가 모든 페이지를 인쇄 가능 영역에 맞춰 축소한다. */
+@page {size:A4 portrait;margin:0;}
 @media print {
-.hpa {margin:0;border:0 black none;box-shadow:none;page-break-after:always;break-after:page;}
-.hpa:last-of-type {page-break-after:auto;break-after:auto;}
-body {padding:0;}
+html, body {width:210mm;margin:0 !important;padding:0 !important;}
+.hpa {
+  width:210mm !important;
+  height:297mm !important;
+  box-sizing:border-box;
+  margin:0 !important;
+  padding:0 !important;
+  border:0 !important;
+  box-shadow:none !important;
+  page-break-after:always;
+  break-after:page;
+}
+/* 안내 div가 뒤에 있으므로 :last-of-type으로는 마지막 일지를 찾을 수 없다. */
+.hpa.tbm-last-page {page-break-after:auto;break-after:auto;}
+.tbm-batch-missing {display:none !important;}
 }
   </style>
   <style>.tbm-floating-print-btn{position:fixed;right:24px;bottom:24px;z-index:9999;display:inline-flex;align-items:center;justify-content:center;min-width:140px;padding:14px 18px;border:none;border-radius:999px;background:#0f172a;color:#fff;font-family:"Malgun Gothic",sans-serif;font-size:.95rem;font-weight:700;cursor:pointer;box-shadow:0 12px 30px rgba(15,23,42,.24);}.tbm-floating-print-btn:hover{background:#1e293b;}.tbm-print-guide{position:fixed;right:24px;bottom:86px;z-index:9998;width:320px;padding:14px 16px;border:1px solid #bfdbfe;border-radius:10px;background:rgba(239,246,255,.97);box-shadow:0 10px 28px rgba(15,23,42,.14);font-family:"Malgun Gothic",sans-serif;font-size:13px;line-height:1.6;color:#1e293b;}.tbm-print-guide strong{display:block;margin-bottom:6px;color:#1d4ed8;font-size:14px;}@media print{.tbm-floating-print-btn{display:none !important;}}@media print{.tbm-print-guide{display:none !important;}}</style>
@@ -470,10 +493,23 @@ body {padding:0;}
  <body>
 <?php
 // 모든 페이지 렌더링 (기존 view_output.php와 동일한 DOM 구조)
-foreach ($allPages as $pageHtml) {
+foreach ($allPages as $pageIndex => $pageHtml) {
+    if ($pageIndex === count($allPages) - 1) {
+        $pageHtml = preg_replace('~<div class="hpa"~i', '<div class="hpa tbm-last-page"', $pageHtml, 1);
+    }
     echo '  ' . $pageHtml . PHP_EOL;
 }
 ?>
+<?php if (!empty($missingList)): ?>
+  <div class="tbm-batch-missing" style="padding:16px;background:#fef2f2;color:#991b1b;">
+    <strong>파일 누락으로 다음 일지는 출력에서 제외되었습니다.</strong>
+    <ul>
+<?php foreach ($missingList as $missing): ?>
+      <li><?= htmlspecialchars("{$missing['doc_date']} [{$missing['team']}] {$missing['title']}", ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></li>
+<?php endforeach; ?>
+    </ul>
+  </div>
+<?php endif; ?>
   <div class="tbm-print-guide"><strong>인쇄 요령 (선택 <?= count($validDocs) ?>건 / 총 <?= count($allPages) ?>페이지)</strong>A4 세로 기준으로 인쇄하시고 배율은 100%로 맞춰 주세요.<br>여백은 없음 또는 최소, 머리글/바닥글은 끔으로 설정하는 것을 권장합니다.<br>사진이나 배경이 보이지 않으면 인쇄 설정에서 배경 그래픽 출력을 켜고 다시 인쇄해 주세요.</div><button type="button" class="tbm-floating-print-btn" onclick="window.print()">🖨 인쇄하기</button>
  </body>
 </html>
