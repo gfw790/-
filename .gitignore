@@ -40,9 +40,20 @@ tbm/output/*
 desktop.ini
 Thumbs.db
 
+# VSCode Local History 확장 자동 백업
+.history/
+
 # 백업 폴더
 tbm/backup_*/
+boiler_cleaning/data/backups/
 
 # TBM 로그/디버그 파일
 tbm/gemini_raw.txt
+tbm/gemini_error.txt
 tbm/tbm_ai_debug.log
+tbm/php_error.log
+
+# Python / Gradle 캐시
+__pycache__/
+*.pyc
+android-site-app/.gradle/
