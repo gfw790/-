@@ -306,9 +306,9 @@ if ($rawDocIds !== null) {
         exit;
     }
 
-    // 최대 100건 제한 (브라우저 메모리 고갈 방지)
-    if (count($docIds) > 100) {
-        $docIds = array_slice($docIds, 0, 100);
+    // 최대 500건(1,000페이지)까지 일괄 출력 허용 (1년치 366건 이상 전체 출력 가능)
+    if (count($docIds) > 500) {
+        $docIds = array_slice($docIds, 0, 500);
     }
 
     $allowedTeams = tbm_batch_allowed_teams($raUser, $isOperator);
