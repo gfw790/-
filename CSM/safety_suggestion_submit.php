@@ -21,7 +21,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $proposer_dept = trim($_POST['proposer_dept'] ?? '');
         $proposer_phone = trim($_POST['proposer_phone'] ?? '');
         $title = trim($_POST['title'] ?? '');
-        $category = trim($_POST['category'] ?? '작업장 안전');
+        $category = trim($_POST['category'] ?? '미분류(접수자 분류)');
+        if ($category === '') {
+            $category = '미분류(접수자 분류)';
+        }
         $location = trim($_POST['location'] ?? '');
         $problem = trim($_POST['problem'] ?? '');
         $solution = trim($_POST['solution'] ?? '');
@@ -509,7 +512,7 @@ $userAccounts = worker_part_get_user_accounts();
       <?php endif; ?>
 
       <form method="post" id="formSuggestion" enctype="multipart/form-data">
-        <input type="hidden" name="category" id="catInput" value="작업장 안전">
+        <input type="hidden" name="category" id="catInput" value="미분류(접수자 분류)">
         <input type="hidden" name="photo_base64" id="photoBase64" value="">
         <input type="hidden" name="signature_data" id="sigDataInput" value="">
         <input type="hidden" name="proposer_login_id" id="propLoginId" value="">
@@ -577,20 +580,6 @@ $userAccounts = worker_part_get_user_accounts();
         <!-- Step 2: 제안 내용 -->
         <div class="m-section-title">
           <span>2️⃣</span> 위험요인 및 제안 내용
-        </div>
-
-        <div class="m-group">
-          <label class="m-label">제안 분야 (선택) <span class="req">*</span></label>
-          <div class="m-cat-grid">
-            <div class="m-cat-btn active" onclick="setCategory(this, '작업장 안전')">작업장 안전</div>
-            <div class="m-cat-btn" onclick="setCategory(this, '통로·보행')">통로·보행</div>
-            <div class="m-cat-btn" onclick="setCategory(this, '설비·기계')">설비·기계</div>
-            <div class="m-cat-btn" onclick="setCategory(this, '전기안전')">전기안전</div>
-            <div class="m-cat-btn" onclick="setCategory(this, '화재·폭발')">화재·폭발</div>
-            <div class="m-cat-btn" onclick="setCategory(this, '보호구·환경')">보호구·환경</div>
-            <div class="m-cat-btn" onclick="setCategory(this, '보건·위생')">보건·위생</div>
-            <div class="m-cat-btn" onclick="setCategory(this, '기타')">기타</div>
-          </div>
         </div>
 
         <div class="m-group">

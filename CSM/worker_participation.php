@@ -153,6 +153,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $db->prepare('DELETE FROM csm_suggestions WHERE id = ?')->execute([$id]);
                 $message = '안전제안 건이 삭제되었습니다.';
             }
+        } elseif ($action === 'quick_category') {
+            $id = filter_var($_POST['id'] ?? 0, FILTER_VALIDATE_INT);
+            $category = trim($_POST['category'] ?? '작업장 안전');
+            if ($id > 0) {
+                $db->prepare('UPDATE csm_suggestions SET category = ?, updated_at = datetime("now","localtime") WHERE id = ?')->execute([$category, $id]);
+                if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) || isset($_POST['ajax'])) {
+                    header('Content-Type: application/json; charset=utf-8');
+                    echo json_encode(['ok' => true, 'id' => $id, 'category' => $category]);
+                    exit;
+                }
+                $message = '제안 건 #' . $id . '의 제안분야가 [' . $category . ']로 분류되었습니다.';
+            }
         } elseif ($action === 'save_meeting') {
             $id = filter_var($_POST['id'] ?? 0, FILTER_VALIDATE_INT);
             $meeting_type = trim($_POST['meeting_type'] ?? '안전보건협의회');
@@ -296,6 +308,7 @@ $sDone = (int)$db->query("SELECT COUNT(*) FROM csm_suggestions WHERE year = $yea
 $sRate = $sTotal > 0 ? (int)round(($sDone / $sTotal) * 100) : 0;
 $mTotal = (int)$db->query("SELECT COUNT(*) FROM csm_safety_meetings WHERE year = $year")->fetchColumn();
 $cTotal = (int)$db->query("SELECT COUNT(*) FROM csm_safety_champions WHERE year = $year")->fetchColumn();
+$sUnclassified = (int)$db->query("SELECT COUNT(*) FROM csm_suggestions WHERE year = $year AND (category LIKE '%미분류%' OR category = '')")->fetchColumn();
 
 // Load Data based on active tab
 $suggestions = [];
@@ -407,7 +420,13 @@ if ($tab === 'suggestions') {
     <div class="wp-metric-card">
       <div class="wp-metric-title">총 안전제안 접수 (1.3.2)</div>
       <div class="wp-metric-value"><?= number_format($sTotal) ?>건</div>
-      <div class="wp-metric-sub">위험요인 발굴 및 개선 제안</div>
+      <div class="wp-metric-sub">
+        <?php if ($sUnclassified > 0): ?>
+          <span style="color:#d97706;font-weight:700;">⚠️ 미분류 <?= $sUnclassified ?>건 (분류 필요)</span>
+        <?php else: ?>
+          위험요인 발굴 및 개선 제안
+        <?php endif; ?>
+      </div>
     </div>
     <div class="wp-metric-card">
       <div class="wp-metric-title">제안 개선조치율</div>
@@ -487,7 +506,28 @@ if ($tab === 'suggestions') {
                   </div>
                 <?php endif; ?>
               </td>
-              <td><span class="wp-badge wp-badge-info"><?= $escape($s['category']) ?></span></td>
+              <td style="white-space:nowrap;">
+                <?php $isUncat = (str_contains($s['category'], '미분류') || $s['category'] === ''); ?>
+                <form method="post" style="margin:0;">
+                  <input type="hidden" name="action" value="quick_category">
+                  <input type="hidden" name="id" value="<?= $s['id'] ?>">
+                  <select name="category" onchange="this.form.submit()" class="wp-select"
+                          style="font-size:12px;padding:3px 6px;border-radius:6px;width:120px;font-weight:700;cursor:pointer;<?= $isUncat ? 'border:1.5px solid #f59e0b;background:#fef3c7;color:#b45309;' : 'border:1px solid #cbd5e1;background:#f8fafc;color:#1e3a8a;' ?>"
+                          title="접수자가 제안분야를 선택/변경할 수 있습니다.">
+                    <?php if ($isUncat): ?>
+                      <option value="미분류(접수자 분류)" selected>⚠️ 미분류 (선택)</option>
+                    <?php endif; ?>
+                    <option value="작업장 안전" <?= $s['category'] === '작업장 안전' ? 'selected' : '' ?>>작업장 안전</option>
+                    <option value="통로·보행" <?= $s['category'] === '통로·보행' ? 'selected' : '' ?>>통로·보행</option>
+                    <option value="설비·기계" <?= $s['category'] === '설비·기계' ? 'selected' : '' ?>>설비·기계</option>
+                    <option value="전기안전" <?= $s['category'] === '전기안전' ? 'selected' : '' ?>>전기안전</option>
+                    <option value="화재·폭발" <?= $s['category'] === '화재·폭발' ? 'selected' : '' ?>>화재·폭발</option>
+                    <option value="보호구·환경" <?= $s['category'] === '보호구·환경' ? 'selected' : '' ?>>보호구·환경</option>
+                    <option value="보건·위생" <?= $s['category'] === '보건·위생' ? 'selected' : '' ?>>보건·위생</option>
+                    <option value="기타" <?= $s['category'] === '기타' ? 'selected' : '' ?>>기타</option>
+                  </select>
+                </form>
+              </td>
               <td>
                 <div style="font-weight:700;font-size:15px;margin-bottom:4px;color:var(--wp-primary);display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
                   <span><?= $escape($s['title']) ?></span>
@@ -771,13 +811,16 @@ if ($tab === 'suggestions') {
             <input type="text" name="title" id="sug_title" placeholder="예: 고소작업 안전발판 교체 제안" required>
           </div>
           <div class="wp-form-group">
-            <label>제안유형 *</label>
+            <label style="color:var(--wp-primary);font-weight:700;">제안분야 분류 (관리자 지정) *</label>
             <select name="category" id="sug_category" class="wp-select">
+              <option value="미분류(접수자 분류)">⚠️ 미분류 (접수자 검토·분류 필요)</option>
               <option value="작업장 안전">작업장 안전</option>
-              <option value="건설 안전">건설 안전</option>
-              <option value="시설물 안전">시설물 안전</option>
-              <option value="작업환경">작업환경</option>
-              <option value="건강관리(보건)">건강관리(보건)</option>
+              <option value="통로·보행">통로·보행</option>
+              <option value="설비·기계">설비·기계</option>
+              <option value="전기안전">전기안전</option>
+              <option value="화재·폭발">화재·폭발</option>
+              <option value="보호구·환경">보호구·환경</option>
+              <option value="보건·위생">보건·위생</option>
               <option value="기타">기타</option>
             </select>
           </div>

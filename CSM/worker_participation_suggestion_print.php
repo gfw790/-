@@ -399,6 +399,17 @@ $categoriesList = [
         </table>
 
         <!-- Proposal Categories (8-Checkboxes) -->
+        <?php
+          $cat = $s['category'] ?? '';
+          $isWorkplace = in_array($cat, ['작업장 안전', '통로·보행'], true);
+          $isMachine = in_array($cat, ['건설 안전', '설비·기계', '전기안전'], true);
+          $isFacility = in_array($cat, ['시설물 안전', '화재·폭발', '시설물·통로'], true);
+          $isEnv = in_array($cat, ['작업환경', '보호구·환경'], true);
+          $isHealth = in_array($cat, ['건강관리(보건)', '보건·위생'], true);
+          $isEmotion = ($cat === '감정/심리');
+          $isRule = ($cat === '제도(규정, 규칙)');
+          $isOther = (!$isWorkplace && !$isMachine && !$isFacility && !$isEnv && !$isHealth && !$isEmotion && !$isRule);
+        ?>
         <table class="sug-table">
           <colgroup>
             <col style="width: 16%;">
@@ -409,16 +420,16 @@ $categoriesList = [
           </colgroup>
           <tr>
             <th rowspan="2" class="header-col">제안유형</th>
-            <td><?= $s['category'] === '작업장 안전' ? '■' : '□' ?> 작업장 안전</td>
-            <td><?= $s['category'] === '건설 안전' ? '■' : '□' ?> 건설 안전</td>
-            <td><?= $s['category'] === '시설물 안전' ? '■' : '□' ?> 시설물 안전</td>
-            <td><?= $s['category'] === '작업환경' ? '■' : '□' ?> 작업환경</td>
+            <td><?= $isWorkplace ? '■' : '□' ?> 작업장 안전</td>
+            <td><?= $isMachine ? '■' : '□' ?> 설비·기계</td>
+            <td><?= $isFacility ? '■' : '□' ?> 시설물·통로</td>
+            <td><?= $isEnv ? '■' : '□' ?> 작업환경</td>
           </tr>
           <tr>
-            <td><?= $s['category'] === '건강관리(보건)' ? '■' : '□' ?> 건강관리(보건)</td>
-            <td><?= $s['category'] === '감정/심리' ? '■' : '□' ?> 감정/심리</td>
-            <td><?= $s['category'] === '제도(규정, 규칙)' ? '■' : '□' ?> 제도(규정, 규칙)</td>
-            <td><?= !in_array($s['category'], ['작업장 안전','건설 안전','시설물 안전','작업환경','건강관리(보건)','감정/심리','제도(규정, 규칙)'], true) ? '■' : '□' ?> 기타</td>
+            <td><?= $isHealth ? '■' : '□' ?> 건강관리(보건)</td>
+            <td><?= $isEmotion ? '■' : '□' ?> 감정/심리</td>
+            <td><?= $isRule ? '■' : '□' ?> 제도(규정, 규칙)</td>
+            <td><?= $isOther ? '■' : '□' ?> 기타 <?= ($isOther && $cat !== '' && !str_contains($cat, '미분류')) ? '(' . $escape($cat) . ')' : '' ?></td>
           </tr>
         </table>
 
