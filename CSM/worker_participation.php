@@ -319,7 +319,13 @@ if ($tab === 'suggestions') {
         </select>
       </form>
       <a href="?tab=<?= $escape($tab) ?>&amp;year=<?= $year ?>&amp;export=csv" class="wp-btn wp-btn-outline">📊 Excel/CSV 내보내기</a>
-      <button type="button" class="wp-btn wp-btn-outline" onclick="window.print()">🖨️ A4 인쇄</button>
+      <?php if ($tab === 'meetings'): ?>
+        <a href="worker_participation_meeting_print.php?year=<?= $year ?>" target="_blank" class="wp-btn wp-btn-outline">🖨️ 회의록 일괄인쇄</a>
+      <?php elseif ($tab === 'suggestions'): ?>
+        <a href="worker_participation_suggestion_print.php?year=<?= $year ?>" target="_blank" class="wp-btn wp-btn-outline">🖨️ 제안서 일괄인쇄</a>
+      <?php else: ?>
+        <button type="button" class="wp-btn wp-btn-outline" onclick="window.print()">🖨️ A4 인쇄</button>
+      <?php endif; ?>
       <?php if ($tab === 'suggestions'): ?>
         <button type="button" class="wp-btn wp-btn-primary" onclick="openSuggestionModal()">+ 새 안전제안 접수</button>
       <?php elseif ($tab === 'meetings'): ?>
@@ -441,6 +447,7 @@ if ($tab === 'suggestions') {
                 <?php endif; ?>
               </td>
               <td class="no-print" style="text-align:center;">
+                <a href="worker_participation_suggestion_print.php?id=<?= $s['id'] ?>" target="_blank" class="wp-btn wp-btn-outline wp-btn-sm">🖨️ 인쇄</a>
                 <button type="button" class="wp-btn wp-btn-outline wp-btn-sm" onclick='editSuggestion(<?= json_encode($s, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>)'>수정</button>
                 <form method="post" style="display:inline;" onsubmit="return confirm('해당 안전제안을 삭제하시겠습니까?');">
                   <input type="hidden" name="action" value="delete_suggestion">
@@ -497,6 +504,7 @@ if ($tab === 'suggestions') {
                 <div style="font-size:12px;color:#334155;"><?= $escape($m['result_sharing'] ?: '게시판 공지') ?></div>
               </td>
               <td class="no-print" style="text-align:center;">
+                <a href="worker_participation_meeting_print.php?id=<?= $m['id'] ?>" target="_blank" class="wp-btn wp-btn-outline wp-btn-sm">🖨️ 인쇄</a>
                 <button type="button" class="wp-btn wp-btn-outline wp-btn-sm" onclick='editMeeting(<?= json_encode($m, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>)'>수정</button>
                 <form method="post" style="display:inline;" onsubmit="return confirm('해당 회의록을 삭제하시겠습니까?');">
                   <input type="hidden" name="action" value="delete_meeting">
