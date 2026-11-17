@@ -65,6 +65,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $reg_date = trim($_POST['reg_date'] ?? $today);
             $proposer_name = trim($_POST['proposer_name'] ?? '');
             $proposer_dept = trim($_POST['proposer_dept'] ?? '');
+            $proposer_login_id = trim($_POST['proposer_login_id'] ?? '') ?: null;
+            $proposer_phone = trim($_POST['proposer_phone'] ?? '') ?: null;
+            $submission_channel = trim($_POST['submission_channel'] ?? '직접등록');
+            $proxy_writer_name = trim($_POST['proxy_writer_name'] ?? '') ?: null;
             $title = trim($_POST['title'] ?? '');
             $category = trim($_POST['category'] ?? '작업장 안전');
             $location = trim($_POST['location'] ?? '');
@@ -72,18 +76,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $solution = trim($_POST['solution'] ?? '');
             $expected_effect = trim($_POST['expected_effect'] ?? '');
             $status = trim($_POST['status'] ?? '접수');
-            $review_date = $_POST['review_date'] ?: null;
-            $reviewer_name = $_POST['reviewer_name'] ?: null;
-            $review_opinion = $_POST['review_opinion'] ?: null;
-            $action_plan = $_POST['action_plan'] ?: null;
-            $action_manager = $_POST['action_manager'] ?: null;
-            $action_deadline = $_POST['action_deadline'] ?: null;
-            $action_date = $_POST['action_date'] ?: null;
-            $action_result = $_POST['action_result'] ?: null;
-            $feedback_date = $_POST['feedback_date'] ?: null;
-            $feedback_method = $_POST['feedback_method'] ?: null;
+            $review_date = !empty($_POST['review_date']) ? $_POST['review_date'] : null;
+            $reviewer_name = !empty($_POST['reviewer_name']) ? $_POST['reviewer_name'] : null;
+            $review_opinion = !empty($_POST['review_opinion']) ? $_POST['review_opinion'] : null;
+            $action_plan = !empty($_POST['action_plan']) ? $_POST['action_plan'] : null;
+            $action_manager = !empty($_POST['action_manager']) ? $_POST['action_manager'] : null;
+            $action_deadline = !empty($_POST['action_deadline']) ? $_POST['action_deadline'] : null;
+            $action_date = !empty($_POST['action_date']) ? $_POST['action_date'] : null;
+            $action_result = !empty($_POST['action_result']) ? $_POST['action_result'] : null;
+            $feedback_date = !empty($_POST['feedback_date']) ? $_POST['feedback_date'] : null;
+            $feedback_method = !empty($_POST['feedback_method']) ? $_POST['feedback_method'] : null;
             $reward_points = (float)($_POST['reward_points'] ?? 0);
-            $reward_note = $_POST['reward_note'] ?: null;
+            $reward_note = !empty($_POST['reward_note']) ? $_POST['reward_note'] : null;
 
             if ($title === '' || $proposer_name === '') {
                 throw new InvalidArgumentException('제안명과 제안자 성명은 필수입니다.');
@@ -91,15 +95,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($id > 0) {
                 $stmt = $db->prepare('UPDATE csm_suggestions SET
-                    reg_no = ?, reg_date = ?, proposer_name = ?, proposer_dept = ?, title = ?,
-                    category = ?, location = ?, problem = ?, solution = ?, expected_effect = ?,
+                    reg_no = ?, reg_date = ?, proposer_name = ?, proposer_dept = ?,
+                    proposer_login_id = ?, proposer_phone = ?, submission_channel = ?, proxy_writer_name = ?,
+                    title = ?, category = ?, location = ?, problem = ?, solution = ?, expected_effect = ?,
                     status = ?, review_date = ?, reviewer_name = ?, review_opinion = ?, action_plan = ?,
                     action_manager = ?, action_deadline = ?, action_date = ?, action_result = ?,
                     feedback_date = ?, feedback_method = ?, reward_points = ?, reward_note = ?, updated_at = datetime("now","localtime")
                     WHERE id = ?');
                 $stmt->execute([
-                    $reg_no, $reg_date, $proposer_name, $proposer_dept, $title,
-                    $category, $location, $problem, $solution, $expected_effect,
+                    $reg_no, $reg_date, $proposer_name, $proposer_dept,
+                    $proposer_login_id, $proposer_phone, $submission_channel, $proxy_writer_name,
+                    $title, $category, $location, $problem, $solution, $expected_effect,
                     $status, $review_date, $reviewer_name, $review_opinion, $action_plan,
                     $action_manager, $action_deadline, $action_date, $action_result,
                     $feedback_date, $feedback_method, $reward_points, $reward_note, $id
@@ -109,24 +115,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($reg_no === '') {
                     $reg_no = sprintf('%d-S%03d', $year, $db->query("SELECT COUNT(*) + 1 FROM csm_suggestions WHERE year = $year")->fetchColumn());
                 }
+                $proposerSign = worker_part_make_signature_svg($proposer_name, '#059669');
+                $now = date('Y-m-d H:i:s');
                 $stmt = $db->prepare('INSERT INTO csm_suggestions (
-                    year, reg_no, reg_date, proposer_name, proposer_dept, title, category, location,
-                    problem, solution, expected_effect, status, review_date, reviewer_name, review_opinion,
+                    year, reg_no, reg_date, proposer_name, proposer_dept,
+                    proposer_login_id, proposer_phone, submission_channel, proxy_writer_name,
+                    title, category, location, problem, solution, expected_effect, status, review_date, reviewer_name, review_opinion,
                     action_plan, action_manager, action_deadline, action_date, action_result,
-                    feedback_date, feedback_method, reward_points, reward_note, created_at, updated_at
+                    feedback_date, feedback_method, reward_points, reward_note, proposer_sign, created_at, updated_at
                 ) VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, datetime("now","localtime"), datetime("now","localtime")
+                    ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?
                 )');
                 $stmt->execute([
-                    $year, $reg_no, $reg_date, $proposer_name, $proposer_dept, $title, $category, $location,
-                    $problem, $solution, $expected_effect, $status, $review_date, $reviewer_name, $review_opinion,
+                    $year, $reg_no, $reg_date, $proposer_name, $proposer_dept,
+                    $proposer_login_id, $proposer_phone, $submission_channel, $proxy_writer_name,
+                    $title, $category, $location, $problem, $solution, $expected_effect, $status, $review_date, $reviewer_name, $review_opinion,
                     $action_plan, $action_manager, $action_deadline, $action_date, $action_result,
-                    $feedback_date, $feedback_method, $reward_points, $reward_note
+                    $feedback_date, $feedback_method, $reward_points, $reward_note, $proposerSign, $now, $now
                 ]);
-                $message = '새로운 안전제안이 접수·등록되었습니다.';
+                $newSugId = (int)$db->lastInsertId();
+                $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+                worker_part_save_signature($db, 'suggestion', $newSugId, 'proposer', $proposer_name, $proposerSign, $ip);
+
+                if ($proxy_writer_name && str_contains($submission_channel, '구두')) {
+                    $message = $proposer_name . ' 님의 구두 안전제안이 정상 접수(대리등록)되어 해당 계정의 실적으로 귀속되었습니다.';
+                } else {
+                    $message = '새로운 안전제안이 접수·등록되었습니다.';
+                }
             }
         } elseif ($action === 'delete_suggestion') {
             $id = filter_var($_POST['id'] ?? 0, FILTER_VALIDATE_INT);
@@ -283,6 +302,7 @@ $suggestions = [];
 $meetings = [];
 $champions = [];
 $reports = [];
+$userAccounts = worker_part_get_user_accounts();
 
 if ($tab === 'suggestions') {
     $stmt = $db->prepare('SELECT * FROM csm_suggestions WHERE year = ? ORDER BY reg_date DESC, id DESC');
@@ -454,9 +474,17 @@ if ($tab === 'suggestions') {
               <td><?= $escape($s['reg_date']) ?></td>
               <td>
                 <strong><?= $escape($s['proposer_name']) ?></strong>
+                <?php if (!empty($s['proposer_login_id'])): ?>
+                  <span style="font-size:11px;color:#64748b;font-weight:normal;">(<?= $escape($s['proposer_login_id']) ?>)</span>
+                <?php endif; ?>
                 <div style="font-size:12px;color:var(--wp-muted);"><?= $escape($s['proposer_dept']) ?></div>
                 <?php if (!empty($s['proposer_phone'])): ?>
                   <div style="font-size:11px;color:#0284c7;margin-top:2px;letter-spacing:-0.2px;">📞 <?= $escape($s['proposer_phone']) ?></div>
+                <?php endif; ?>
+                <?php if (!empty($s['proxy_writer_name']) && str_contains($s['submission_channel'] ?? '', '구두')): ?>
+                  <div style="font-size:10.5px;color:#b45309;background:#fef3c7;border:1px solid #fde68a;border-radius:3px;padding:1px 5px;margin-top:3px;display:inline-block;" title="안전관리자가 구두 제보를 대리 입력하여 해당 근로자의 실적으로 정식 등록함">
+                    🗣️ 구두제보 대리접수 (<?= $escape($s['proxy_writer_name']) ?>)
+                  </div>
                 <?php endif; ?>
               </td>
               <td><span class="wp-badge wp-badge-info"><?= $escape($s['category']) ?></span></td>
@@ -678,6 +706,46 @@ if ($tab === 'suggestions') {
       </div>
       <div class="wp-modal-body">
         <div class="wp-form-grid">
+          <!-- Account Selection & Verbal Proxy Registration Box -->
+          <div class="wp-form-col-full" style="background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:8px;padding:12px 14px;margin-bottom:6px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
+              <strong style="color:#166534;font-size:13.5px;display:flex;align-items:center;gap:6px;">
+                <span>👷</span> 제안자 사내 계정 선택 / 구두 제보 대리접수
+              </strong>
+              <span style="font-size:12px;color:#047857;">안전관리자 대리 접수 시에도 해당 근로자 계정으로 완벽히 귀속됩니다.</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:10px;">
+              <div>
+                <label style="font-size:12px;font-weight:700;color:#334155;display:block;margin-bottom:4px;">사내 등록 근로자/계정 선택</label>
+                <select id="sug_account_select" class="wp-select" onchange="onSelectProposerAccount(this.value)">
+                  <option value="">-- 직접 입력 또는 사내 계정 선택 --</option>
+                  <?php foreach ($userAccounts as $acc): ?>
+                    <option value="<?= $escape($acc['login_id']) ?>"
+                            data-name="<?= $escape($acc['name']) ?>"
+                            data-dept="<?= $escape($acc['dept']) ?>"
+                            data-phone="<?= $escape($acc['phone']) ?>">
+                      <?= $escape($acc['name']) ?> (<?= $escape($acc['dept'] ?: '현장') ?> / ID: <?= $escape($acc['login_id']) ?>)
+                    </option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:12px;font-weight:700;color:#334155;display:block;margin-bottom:4px;">접수 채널 구분</label>
+                <select name="submission_channel" id="sug_channel" class="wp-select" onchange="onChangeChannel(this.value)">
+                  <option value="구두제보(대리등록)">🗣️ 구두 제보 (안전관리자 대리등록)</option>
+                  <option value="모바일접수">📱 모바일 접수창구</option>
+                  <option value="서면접수">📝 서면 제안서 접수</option>
+                  <option value="직접등록" selected>💻 직접 등록</option>
+                </select>
+              </div>
+            </div>
+            <input type="hidden" name="proposer_login_id" id="sug_proposer_login_id" value="">
+            <input type="hidden" name="proxy_writer_name" id="sug_proxy_writer_name" value="<?= $escape($user['name'] ?? '안전관리자') ?>">
+            <div id="proxy_info_bar" style="margin-top:8px;font-size:12px;color:#047857;background:#ffffff;border:1px dashed #86efac;padding:6px 10px;border-radius:6px;">
+              ℹ️ 대리 접수자: <strong><?= $escape($user['name'] ?? '안전관리자') ?></strong> | 제안자 선택 시 본 제안의 모든 실적과 포상은 <strong>해당 근로자</strong>에게 부여됩니다.
+            </div>
+          </div>
+
           <div class="wp-form-group">
             <label>접수번호</label>
             <input type="text" name="reg_no" id="sug_reg_no" placeholder="비워둘 시 자동생성">
@@ -692,7 +760,11 @@ if ($tab === 'suggestions') {
           </div>
           <div class="wp-form-group">
             <label>소속 / 부서</label>
-            <input type="text" name="proposer_dept" id="sug_proposer_dept" placeholder="예: 전기반, 기계정비반">
+            <input type="text" name="proposer_dept" id="sug_proposer_dept" placeholder="예: 가공반, 전기반">
+          </div>
+          <div class="wp-form-group">
+            <label>제안자 연락처</label>
+            <input type="text" name="proposer_phone" id="sug_proposer_phone" placeholder="010-0000-0000">
           </div>
           <div class="wp-form-col-full wp-form-group">
             <label>제안명 (안전 건의 제목) *</label>
@@ -1072,13 +1144,39 @@ function copyMobileUrl() {
   });
 }
 
+function onSelectProposerAccount(loginId) {
+  const sel = document.getElementById('sug_account_select');
+  const opt = sel.options[sel.selectedIndex];
+  if (opt && loginId) {
+    document.getElementById('sug_proposer_login_id').value = loginId;
+    document.getElementById('sug_proposer_name').value = opt.getAttribute('data-name') || '';
+    document.getElementById('sug_proposer_dept').value = opt.getAttribute('data-dept') || '';
+    document.getElementById('sug_proposer_phone').value = opt.getAttribute('data-phone') || '';
+    document.getElementById('sug_channel').value = '구두제보(대리등록)';
+    onChangeChannel('구두제보(대리등록)');
+  }
+}
+
+function onChangeChannel(val) {
+  const bar = document.getElementById('proxy_info_bar');
+  if (bar) {
+    bar.style.display = (val && val.includes('구두')) ? 'block' : 'none';
+  }
+}
+
 function openSuggestionModal() {
   document.getElementById('sug_id').value = '0';
-  document.getElementById('sug_modal_title').innerText = '산업안전보건 안전제안 접수';
+  document.getElementById('sug_modal_title').innerText = '산업안전보건 안전제안 접수 및 구두제보 대리등록';
   document.getElementById('sug_reg_no').value = '';
   document.getElementById('sug_reg_date').value = '<?= $today ?>';
+  document.getElementById('sug_account_select').value = '';
+  document.getElementById('sug_proposer_login_id').value = '';
   document.getElementById('sug_proposer_name').value = '';
   document.getElementById('sug_proposer_dept').value = '';
+  document.getElementById('sug_proposer_phone').value = '';
+  document.getElementById('sug_channel').value = '구두제보(대리등록)';
+  document.getElementById('sug_proxy_writer_name').value = '<?= $escape($user['name'] ?? '안전관리자') ?>';
+  onChangeChannel('구두제보(대리등록)');
   document.getElementById('sug_title').value = '';
   document.getElementById('sug_category').value = '작업장 안전';
   document.getElementById('sug_location').value = '';
@@ -1101,8 +1199,14 @@ function editSuggestion(s) {
   document.getElementById('sug_modal_title').innerText = '안전제안 수정 및 조치 이행 기록';
   document.getElementById('sug_reg_no').value = s.reg_no || '';
   document.getElementById('sug_reg_date').value = s.reg_date || '';
+  document.getElementById('sug_account_select').value = s.proposer_login_id || '';
+  document.getElementById('sug_proposer_login_id').value = s.proposer_login_id || '';
   document.getElementById('sug_proposer_name').value = s.proposer_name || '';
   document.getElementById('sug_proposer_dept').value = s.proposer_dept || '';
+  document.getElementById('sug_proposer_phone').value = s.proposer_phone || '';
+  document.getElementById('sug_channel').value = s.submission_channel || '직접등록';
+  document.getElementById('sug_proxy_writer_name').value = s.proxy_writer_name || '';
+  onChangeChannel(s.submission_channel || '');
   document.getElementById('sug_title').value = s.title || '';
   document.getElementById('sug_category').value = s.category || '작업장 안전';
   document.getElementById('sug_location').value = s.location || '';

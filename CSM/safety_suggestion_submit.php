@@ -78,6 +78,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $nextNum = (int)$countStmt->fetchColumn() + 1;
         $assignedRegNo = sprintf('%d-S%03d', $currentYear, $nextNum);
 
+        $proposer_login_id = trim($_POST['proposer_login_id'] ?? '') ?: null;
+        $submission_channel = trim($_POST['submission_channel'] ?? '모바일접수');
+        $proxy_writer_name = trim($_POST['proxy_writer_name'] ?? '') ?: null;
+
         // Prepare Proposer Signature
         $finalSign = $signature_data;
         if ($finalSign === '') {
@@ -87,15 +91,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $now = date('Y-m-d H:i:s');
         $stmt = $db->prepare('INSERT INTO csm_suggestions (
             year, reg_no, reg_date, proposer_name, proposer_dept, proposer_phone,
+            proposer_login_id, submission_channel, proxy_writer_name,
             title, category, location, problem, solution, expected_effect,
             status, photo_before, proposer_sign, is_mobile_submit, created_at, updated_at
         ) VALUES (
             ?, ?, ?, ?, ?, ?,
+            ?, ?, ?,
             ?, ?, ?, ?, ?, ?,
             "접수", ?, ?, 1, ?, ?
         )');
         $stmt->execute([
             $currentYear, $assignedRegNo, $today, $proposer_name, $proposer_dept, $proposer_phone,
+            $proposer_login_id, $submission_channel, $proxy_writer_name,
             $title, $category, $location, $problem, $solution, $expected_effect,
             $photoPath, $finalSign, $now, $now
         ]);
@@ -114,6 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Prefill values from logged in user if available
 $prefillName = $user['name'] ?? '';
 $prefillDept = $user['team_name'] ?? $user['department'] ?? '';
+$userAccounts = worker_part_get_user_accounts();
 ?>
 <!doctype html>
 <html lang="ko">
@@ -504,6 +512,38 @@ $prefillDept = $user['team_name'] ?? $user['department'] ?? '';
         <input type="hidden" name="category" id="catInput" value="작업장 안전">
         <input type="hidden" name="photo_base64" id="photoBase64" value="">
         <input type="hidden" name="signature_data" id="sigDataInput" value="">
+        <input type="hidden" name="proposer_login_id" id="propLoginId" value="">
+        <input type="hidden" name="submission_channel" id="subChannel" value="모바일접수">
+        <input type="hidden" name="proxy_writer_name" id="proxyWriterName" value="<?= $escape($user['name'] ?? '안전관리자') ?>">
+
+        <!-- Verbal Proxy Mode Toggle (안전관리자 구두 제보 대신 접수) -->
+        <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:12px;padding:12px 14px;margin-bottom:18px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <label style="font-size:13.5px;font-weight:700;color:#166534;display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;">
+              <input type="checkbox" id="chkProxyMode" onchange="toggleProxyMode(this.checked)" style="width:18px;height:18px;accent-color:#16a34a;">
+              <span>🗣️ 현장 근로자 구두 제보 대신 접수</span>
+            </label>
+            <span style="font-size:11px;color:#15803d;background:#dcfce7;padding:2px 8px;border-radius:999px;font-weight:600;">대리등록</span>
+          </div>
+
+          <div id="proxyAccountSection" style="display:none;margin-top:12px;border-top:1px dashed #bbf7d0;padding-top:10px;">
+            <label class="m-label" style="font-size:12.5px;color:#1e3a8a;">사내 등록 근로자/계정 선택</label>
+            <select id="mProposerSelect" class="m-select" onchange="onSelectMobileWorker(this)" style="background:#ffffff;">
+              <option value="">-- 제안한 근로자를 선택하세요 --</option>
+              <?php foreach ($userAccounts as $acc): ?>
+                <option value="<?= $escape($acc['login_id']) ?>"
+                        data-name="<?= $escape($acc['name']) ?>"
+                        data-dept="<?= $escape($acc['dept']) ?>"
+                        data-phone="<?= $escape($acc['phone']) ?>">
+                  <?= $escape($acc['name']) ?> (<?= $escape($acc['dept'] ?: '현장') ?> / ID: <?= $escape($acc['login_id']) ?>)
+                </option>
+              <?php endforeach; ?>
+            </select>
+            <div style="font-size:11.5px;color:#15803d;margin-top:6px;line-height:1.4;">
+              * 안전관리자가 대신 작성하더라도, 접수 완료 시 <strong>선택하신 근로자(해당 계정)의 제안 실적</strong>으로 온전히 귀속됩니다.
+            </div>
+          </div>
+        </div>
 
         <!-- Step 1: 제안자 정보 -->
         <div class="m-section-title">
@@ -531,7 +571,7 @@ $prefillDept = $user['team_name'] ?? $user['department'] ?? '';
 
         <div class="m-group">
           <label class="m-label">휴대폰 번호 (포상 및 조치결과 안내용)</label>
-          <input type="tel" name="proposer_phone" class="m-input" placeholder="010-0000-0000">
+          <input type="tel" name="proposer_phone" id="propPhone" class="m-input" placeholder="010-0000-0000">
         </div>
 
         <!-- Step 2: 제안 내용 -->
@@ -628,6 +668,31 @@ $prefillDept = $user['team_name'] ?? $user['department'] ?? '';
 </div>
 
 <script>
+// Proxy Mode Toggle
+function toggleProxyMode(checked) {
+  const sec = document.getElementById('proxyAccountSection');
+  if (sec) sec.style.display = checked ? 'block' : 'none';
+  const chInput = document.getElementById('subChannel');
+  if (chInput) chInput.value = checked ? '구두제보(대리등록)' : '모바일접수';
+}
+
+function onSelectMobileWorker(sel) {
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt || !sel.value) return;
+  const name = opt.getAttribute('data-name') || '';
+  const dept = opt.getAttribute('data-dept') || '';
+  const phone = opt.getAttribute('data-phone') || '';
+  document.getElementById('propName').value = name;
+  document.getElementById('propDept').value = dept;
+  document.getElementById('propPhone').value = phone;
+  document.getElementById('propLoginId').value = sel.value;
+
+  // Auto stamp with worker's name
+  if (name) {
+    setTimeout(stampAuto, 50);
+  }
+}
+
 // Category Selector
 function setCategory(el, cat) {
   document.querySelectorAll('.m-cat-btn').forEach(b => b.classList.remove('active'));

@@ -133,10 +133,37 @@ function worker_part_db(): PDO
     try { $db->exec("ALTER TABLE csm_suggestions ADD COLUMN evaluator_sign TEXT DEFAULT NULL"); } catch (Throwable $e) {}
     try { $db->exec("ALTER TABLE csm_suggestions ADD COLUMN proposer_phone TEXT DEFAULT NULL"); } catch (Throwable $e) {}
     try { $db->exec("ALTER TABLE csm_suggestions ADD COLUMN is_mobile_submit INTEGER DEFAULT 0"); } catch (Throwable $e) {}
+    try { $db->exec("ALTER TABLE csm_suggestions ADD COLUMN proposer_login_id TEXT DEFAULT NULL"); } catch (Throwable $e) {}
+    try { $db->exec("ALTER TABLE csm_suggestions ADD COLUMN submission_channel TEXT DEFAULT '직접등록'"); } catch (Throwable $e) {}
+    try { $db->exec("ALTER TABLE csm_suggestions ADD COLUMN proxy_writer_name TEXT DEFAULT NULL"); } catch (Throwable $e) {}
     try { $db->exec("ALTER TABLE csm_feedback_reports ADD COLUMN manager_sign TEXT DEFAULT NULL"); } catch (Throwable $e) {}
 
     worker_part_seed_defaults($db);
     return $db;
+}
+
+function worker_part_get_user_accounts(): array
+{
+    if (function_exists('auth_accounts')) {
+        $accounts = auth_accounts();
+        $list = [];
+        foreach ($accounts as $loginId => $acc) {
+            $name = trim((string)($acc['name'] ?? ''));
+            if ($name === '' || !empty($acc['is_retired'])) {
+                continue;
+            }
+            $list[] = [
+                'login_id' => (string)$loginId,
+                'name' => $name,
+                'dept' => (string)($acc['team_name'] ?? $acc['department'] ?? ''),
+                'phone' => (string)($acc['phone'] ?? ''),
+                'role' => (string)($acc['role'] ?? '')
+            ];
+        }
+        usort($list, static fn($a, $b) => strcmp($a['name'], $b['name']));
+        return $list;
+    }
+    return [];
 }
 
 function worker_part_make_signature_svg(string $name, string $color = '#1e3a8a'): string
