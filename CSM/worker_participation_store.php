@@ -219,8 +219,8 @@ function worker_part_seed_defaults(PDO $db): void
     $meetings = [
         [
             'year' => 2026,
-            'meeting_type' => '협력업체 안전보건협의회',
-            'meeting_name' => '2026년 1분기 정기 안전보건협의회',
+            'meeting_type' => '산업안전보건위원회',
+            'meeting_name' => '2026년 1분기 정기 산업안전보건위원회 회의',
             'meeting_date' => '2026-01-22',
             'meeting_place' => '본관 회의실',
             'chairperson' => '정연탁 대표',

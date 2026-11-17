@@ -307,7 +307,7 @@ if ($tab === 'suggestions') {
         근로자 참여 및 안전제안·회의록 관리
         <span class="wp-badge-eval">배점 6점</span>
       </h1>
-      <p class="wp-subtitle">산업안전보건위원회·협의체 회의록(1.3.1), 근로자 안전제안(1.3.2) 및 반기별 의견수렴·환류(1.3.3)를 통합 관리합니다.</p>
+      <p class="wp-subtitle">산업안전보건위원회 회의록(1.3.1), 근로자 안전제안(1.3.2) 및 반기별 의견수렴·환류(1.3.3)를 통합 관리합니다.</p>
     </div>
     <div class="wp-actions no-print">
       <form method="get" style="display:flex;gap:8px;align-items:center;">
@@ -356,7 +356,7 @@ if ($tab === 'suggestions') {
       <div class="wp-metric-sub"><?= $sDone ?>건 완료 / 총 <?= $sTotal ?>건</div>
     </div>
     <div class="wp-metric-card">
-      <div class="wp-metric-title">안전보건협의체 회의 (1.3.1)</div>
+      <div class="wp-metric-title">산업안전보건위원회 회의 (1.3.1)</div>
       <div class="wp-metric-value"><?= number_format($mTotal) ?>회</div>
       <div class="wp-metric-sub">분기별 정기·수시 회의 개최</div>
     </div>
@@ -373,7 +373,7 @@ if ($tab === 'suggestions') {
       📝 1.3.2 산업안전보건 제안 관리대장 (<?= count($suggestions) ?>)
     </a>
     <a href="?tab=meetings&amp;year=<?= $year ?>" class="wp-tab <?= $tab === 'meetings' ? 'active' : '' ?>">
-      👥 1.3.1 안전보건협의회·위원회 회의록 (<?= count($meetings) ?>)
+      👥 1.3.1 산업안전보건위원회 회의록 (<?= count($meetings) ?>)
     </a>
     <a href="?tab=champions&amp;year=<?= $year ?>" class="wp-tab <?= $tab === 'champions' ? 'active' : '' ?>">
       🏆 이달의 안전인 선정·심사 (<?= count($champions) ?>)
@@ -721,7 +721,7 @@ if ($tab === 'suggestions') {
       <input type="hidden" name="action" value="save_meeting">
       <input type="hidden" name="id" id="meet_id" value="0">
       <div class="wp-modal-header">
-        <h3 id="meet_modal_title">안전보건협의체 및 회의록 등록</h3>
+        <h3 id="meet_modal_title">산업안전보건위원회 회의록 등록</h3>
         <button type="button" class="wp-modal-close" onclick="closeMeetingModal()">&times;</button>
       </div>
       <div class="wp-modal-body">
@@ -729,8 +729,8 @@ if ($tab === 'suggestions') {
           <div class="wp-form-group">
             <label>회의구분 *</label>
             <select name="meeting_type" id="meet_meeting_type" class="wp-select">
-              <option value="협력업체 안전보건협의회">협력업체 안전보건협의회</option>
               <option value="산업안전보건위원회">산업안전보건위원회</option>
+              <option value="협력업체 안전보건협의회">협력업체 안전보건협의회</option>
               <option value="노사협의체 회의">노사협의체 회의</option>
               <option value="안전보건회의">안전보건회의</option>
             </select>
@@ -741,7 +741,7 @@ if ($tab === 'suggestions') {
           </div>
           <div class="wp-form-col-full wp-form-group">
             <label>회의명 *</label>
-            <input type="text" name="meeting_name" id="meet_meeting_name" placeholder="예: 2026년 1분기 정기 안전보건협의회" required>
+            <input type="text" name="meeting_name" id="meet_meeting_name" placeholder="예: 2026년 1분기 정기 산업안전보건위원회 회의" required>
           </div>
           <div class="wp-form-group">
             <label>회의장소</label>
@@ -955,8 +955,8 @@ function editSuggestion(s) {
 
 function openMeetingModal() {
   document.getElementById('meet_id').value = '0';
-  document.getElementById('meet_modal_title').innerText = '새 안전보건 회의록 등록';
-  document.getElementById('meet_meeting_type').value = '협력업체 안전보건협의회';
+  document.getElementById('meet_modal_title').innerText = '새 산업안전보건위원회 회의록 등록';
+  document.getElementById('meet_meeting_type').value = '산업안전보건위원회';
   document.getElementById('meet_meeting_date').value = '<?= $today ?>';
   document.getElementById('meet_meeting_name').value = '';
   document.getElementById('meet_meeting_place').value = '본관 회의실';

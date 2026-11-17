@@ -28,7 +28,7 @@ $itemLinks = [
     '1.2.4' => [['개선계획 반영·완료', 'activity_improvement.php?year='.$scoreYear], ['활동계획 대조', '../safety_manual/goal_plan.php?year='.$scoreYear]],
     '1.2.5' => [['안전업무일지', '../safety_log/']],
     '1.2.7' => [['현장점검 업무일지', '../safety_log/']],
-    '1.3.1' => [['안전보건협의체 회의록', 'worker_participation.php?tab=meetings&year='.$scoreYear]],
+    '1.3.1' => [['산업안전보건위원회 회의록', 'worker_participation.php?tab=meetings&year='.$scoreYear]],
     '1.3.2' => [['안전제안 관리대장', 'worker_participation.php?tab=suggestions&year='.$scoreYear], ['TBM 기록', '../tbm/']],
     '1.3.3' => [['반기 환류 보고서', 'worker_participation.php?tab=feedback&year='.$scoreYear], ['정보 공유 게시판', '../board/']],
 ];
