@@ -1,0 +1,6 @@
+<?php
+declare(strict_types=1);
+if (!isset($index, $action, $escape)) return;
+$value = static fn(string $key): string => is_string($action[$key] ?? null) ? $action[$key] : '';
+?>
+<div class="action-row"><label>분류<select name="actions[<?= $index ?>][classification]"><option value="">미분류</option><?php foreach (['SRV' => 'SRV · 안전수칙 위반', 'UA' => 'UA · 불안전한 행동', 'UC' => 'UC · 불안전한 상태'] as $code => $label): ?><option value="<?= $code ?>" <?= $value('classification') === $code ? 'selected' : '' ?>><?= $label ?></option><?php endforeach; ?></select></label><label class="action-finding">발견사항·위험요인<textarea name="actions[<?= $index ?>][finding]" maxlength="2000" rows="2"><?= $escape($value('finding')) ?></textarea></label><label class="action-description">개선조치 내용<textarea name="actions[<?= $index ?>][description]" maxlength="2000" rows="2"><?= $escape($value('description')) ?></textarea></label><label>조치 담당자<input name="actions[<?= $index ?>][owner]" maxlength="150" value="<?= $escape($value('owner')) ?>"></label><label>조치기한<input type="date" name="actions[<?= $index ?>][due]" value="<?= $escape($value('due')) ?>"></label><label>조치완료일<input type="date" name="actions[<?= $index ?>][completed]" value="<?= $escape($value('completed')) ?>"></label><button type="button" class="remove-action">행 빼기</button></div>

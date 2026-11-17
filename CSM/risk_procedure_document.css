@@ -1,0 +1,966 @@
+*{box-sizing:border-box}body{margin:0;background:#f1f5f9;color:#0f172a;font-family:Arial,'Malgun Gothic',sans-serif}a{color:#1d4ed8}
+.app-head{background:#0f172a;color:#fff}.app-head>div{max-width:1120px;margin:auto;padding:18px 20px;display:flex;align-items:center;gap:20px}.app-head a{color:#bfdbfe;text-decoration:none}.app-head span{margin-left:auto;font-size:13px}
+.editor{max-width:1120px;margin:auto;padding:26px 20px 80px}.editor-intro{display:flex;justify-content:space-between;gap:18px;align-items:start}.editor-intro small{color:#2563eb;font-weight:700}.editor-intro h1{margin:7px 0 5px;font-size:28px}.editor-intro p{margin:0 0 20px;color:#475569;line-height:1.6}.editor-actions{display:grid;gap:8px}.editor-actions a{display:block;padding:10px 14px;border-radius:8px;background:#2563eb;color:#fff;text-decoration:none;font-weight:700;white-space:nowrap}.editor-actions a[aria-disabled=true]{opacity:.45;pointer-events:none}
+.alert{padding:12px 16px;border-radius:8px}.alert.error{background:#fee2e2;color:#991b1b}.alert.success{background:#dcfce7;color:#166534}.status-line{display:flex;gap:12px;align-items:center;margin:4px 0 12px}.status-line strong{background:#dbeafe;color:#1d4ed8;border-radius:6px;padding:5px 9px}.status-line span{font-size:13px;color:#64748b}.source-note{border-left:3px solid #60a5fa;background:#eff6ff;padding:10px 14px;font-size:13px;line-height:1.6}
+.document-form{display:grid;gap:14px}.card{background:#fff;border:1px solid #dbe3ee;border-radius:12px;padding:20px}.card h2{margin:0 0 14px;font-size:18px}.metadata-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.metadata-grid label{display:grid;gap:6px;font-weight:700;font-size:13px}.metadata-grid input,.card textarea{width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font:inherit;background:#fff;color:#0f172a}.card textarea{min-height:130px;resize:vertical;line-height:1.7}.save-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#fff;border:1px solid #dbe3ee;border-radius:10px;padding:15px;position:sticky;bottom:8px;box-shadow:0 5px 25px #0f172a18}.save-bar button{border:1px solid #94a3b8;border-radius:8px;background:#fff;padding:10px 17px;font:inherit;font-weight:700;cursor:pointer}.save-bar button.primary{background:#2563eb;border-color:#2563eb;color:#fff}.save-bar span{color:#64748b;font-size:12px}
+.revision-note{grid-column:span 3}.history-view{background:#fff7ed;color:#9a3412}.history-card{margin-top:20px}.table-scroll{overflow-x:auto}.history-card table{border-collapse:collapse;width:100%;font-size:13px}.history-card th,.history-card td{border-bottom:1px solid #e2e8f0;padding:10px;text-align:left;white-space:nowrap}.history-card th{background:#f8fafc}.history-card td:nth-child(6){white-space:normal;min-width:180px}.read-section{white-space:normal;line-height:1.7;border-bottom:1px solid #e2e8f0;padding-bottom:16px}
+.revision-card{scroll-margin-top:20px;border-color:#93c5fd;background:#f8fbff}.revision-card p{margin:0 0 14px;color:#475569;font-size:13px}.revision-card label{display:block;margin-bottom:7px;font-size:13px;font-weight:700}.revision-card input{width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font:inherit;background:#fff;color:#0f172a}
+.manual-workspace{display:grid;grid-template-columns:220px minmax(0,1fr);align-items:start;gap:18px}.manual-toc{position:sticky;top:16px;max-height:calc(100vh - 32px);overflow:auto;display:grid;gap:3px;padding:16px;background:#fff;border:1px solid #dbe3ee;border-radius:12px}.manual-toc strong{font-size:16px;color:#17315c;border-bottom:1px solid #dbe3ee;padding-bottom:10px;margin-bottom:6px}.manual-toc a{display:block;padding:7px 9px;border-radius:6px;color:#334155;text-decoration:none;font-size:13px}.manual-toc a:hover,.manual-toc a:focus{background:#eff6ff;color:#1d4ed8}.manual-content{background:#fff;border:1px solid #dbe3ee;border-radius:12px;padding:30px 34px 42px;min-width:0}.manual-banner{text-align:center;border-bottom:2px solid #1e3a5f;padding:10px 0 22px;margin-bottom:28px}.manual-banner small{color:#64748b}.manual-banner h2{font-size:26px;color:#17315c;margin:10px 0}.manual-banner span{font-size:13px;color:#64748b}.manual-article{scroll-margin-top:20px;margin:0 0 30px}.manual-article h3{background:#dcecff;color:#17315c;padding:11px 16px;margin:0 0 15px;font-size:19px}.manual-paragraphs{font-size:16px;line-height:1.85;color:#1f2937}.manual-line{margin:0 0 10px;overflow-wrap:anywhere}.manual-clause{margin-left:1.25em;padding-left:2.1em;text-indent:-2.1em}.manual-item{margin-left:2.5em;padding-left:1.8em;text-indent:-1.8em}.manual-subheading{font-weight:700;color:#17315c;margin-top:14px}.article-edit{margin:16px 0 0;border-top:1px solid #e2e8f0;padding-top:10px}.article-edit summary{cursor:pointer;color:#1d4ed8;font-size:13px;font-weight:700}.article-edit label{display:block;font-size:13px;font-weight:700;margin:12px 0 7px}.article-edit textarea{min-height:180px}
+.manual-table-wrap{overflow-x:auto;margin:14px 0 20px}.manual-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:14px;line-height:1.55}.manual-table th,.manual-table td{border:1px solid #64748b;padding:9px 11px;vertical-align:top;overflow-wrap:anywhere}.manual-table th{background:#e8f1fc;color:#17315c;text-align:center;font-weight:700}.manual-table td:first-child{width:28%;font-weight:700;background:#f8fafc}.manual-table ul{margin:0;padding-left:18px}.manual-table li{margin:0 0 3px}.manual-table li:last-child{margin-bottom:0}
+.table-help{font-size:12px;color:#64748b;line-height:1.5;margin:7px 0 0}
+.org-chart{max-width:660px;margin:18px auto 22px;padding:4px 8px;text-align:center}.org-level{display:flex;justify-content:center;position:relative}.org-level.org-connected{padding-top:30px}.org-level.org-connected::before{content:"";position:absolute;top:0;left:50%;height:30px;border-left:2px solid #64748b}.org-node{position:relative;min-width:0;width:42%;border:1.5px solid #4777af;background:#f4f8fd;border-radius:7px;padding:11px 15px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;line-height:1.35}.org-role{font-weight:700;color:#17315c}.org-node strong{font-size:18px;color:#0f172a}.org-node small{color:#475569}.org-branch{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:610px;margin:39px auto 0}.org-branch::before{content:"";position:absolute;top:-20px;left:25%;width:50%;border-top:2px solid #64748b}.org-branch::after{content:"";position:absolute;top:-39px;left:50%;height:19px;border-left:2px solid #64748b}.org-branch .org-node{width:100%}.org-branch .org-node::before{content:"";position:absolute;top:-20px;left:50%;height:20px;border-left:2px solid #64748b}.org-workers ul{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 14px;list-style:none;margin:3px 0 0;padding:0}.org-workers li{margin:0}
+.org-branch{grid-template-columns:repeat(var(--branch-count),minmax(0,1fr));gap:9px}.org-branch::before{left:calc(50% / var(--branch-count));width:calc(100% - (100% / var(--branch-count)))}
+/* ==========================================================================
+   Article 3 Organization Chart Table & Connectors (HWP 1:1 Matched)
+   ========================================================================== */
+.org-chart {
+  position: relative !important;
+  width: 100% !important;
+  max-width: 680px !important;
+  height: 450px !important;
+  margin: 16px auto 20px !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+}
+.org-node-table {
+  position: absolute !important;
+  border-collapse: collapse !important;
+  border-spacing: 0 !important;
+  border: 1.5px solid #334155 !important;
+  background: #ffffff !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+  z-index: 2 !important;
+  table-layout: fixed !important;
+}
+.org-node-table th,
+.org-node-table td {
+  border: 1px solid #475569 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+  text-align: center !important;
+  vertical-align: middle !important;
+  line-height: 1.25 !important;
+}
+.org-node-table .org-node-title {
+  background: #cce8f8 !important;
+  color: #0f172a !important;
+  font-weight: 800 !important;
+  font-size: 14.5px !important;
+  padding: 5px 2px !important;
+}
+.org-node-table .org-lbl {
+  background: #e9eff7 !important;
+  color: #334155 !important;
+  font-size: 13px !important;
+  width: 50% !important;
+  font-weight: 600 !important;
+  padding: 4px 2px !important;
+}
+.org-node-table .org-val {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  font-size: 13.5px !important;
+  font-weight: 700 !important;
+  width: 50% !important;
+  padding: 4px 2px !important;
+}
+.org-node-table .org-worker-val {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  padding: 5px 2px !important;
+}
+.org-chart-svg {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  pointer-events: none !important;
+  z-index: 1 !important;
+}
+.print-toolbar{display:flex;align-items:center;gap:18px;justify-content:space-between;padding:12px 20px;background:#0f172a;color:#fff;position:sticky;top:0;z-index:5}.print-toolbar a{color:#bfdbfe}.print-toolbar button{border:0;border-radius:7px;background:#2563eb;color:#fff;padding:9px 14px;font:inherit;font-weight:700;cursor:pointer}
+.paper{width:210mm;min-height:297mm;margin:18px auto;background:#fff;padding:20mm 12mm 12mm;display:flex;flex-direction:column;box-shadow:0 6px 24px #0f172a25;break-after:page}.document-box{border:1px solid #111827;flex:1;padding:8mm 8mm 7mm;display:flex;flex-direction:column;min-height:0}.document-header{display:flex;align-items:start;justify-content:space-between;gap:16px;border-bottom:2px solid #0f172a;padding-bottom:5mm}.document-header small{font-size:10pt;color:#475569}.document-header h1{font-size:19pt;margin:2mm 0 0}.document-header>span{border:1px solid #64748b;padding:2mm 3mm;font-size:10pt}.document-meta{display:grid;grid-template-columns:25mm 1fr 25mm 1fr;margin:0 0 6mm;border-top:1px solid #334155;border-left:1px solid #334155}.document-meta dt,.document-meta dd{margin:0;min-height:9mm;padding:2mm;border-right:1px solid #334155;border-bottom:1px solid #334155;font-size:9pt;overflow-wrap:anywhere}.document-meta dt{background:#f1f5f9;font-weight:700}.document-section{break-inside:avoid;margin:0 0 6mm}.document-section h2{margin:0 0 3mm;font-size:12pt;background:#dcecff;color:#17315c;padding:2mm 3mm;border:0}.document-section .manual-paragraphs{font-size:9pt;line-height:1.5}.document-section .manual-line{font-size:9pt;line-height:1.5;margin:0 0 1.5mm}.document-section .manual-subheading{margin-top:2mm}.document-footer{height:10mm;margin-top:2mm;display:flex;align-items:center;justify-content:space-between;position:relative;font-size:9pt}
+.document-footer .page-number{position:absolute;left:50%;transform:translateX(-50%);text-align:center;font-size:9pt;color:#64748b;font-weight:500;margin:0}
+.document-footer .footer-brand{margin-left:auto;display:inline-flex;align-items:center;gap:2mm;font-size:9pt;font-weight:700;color:#1e293b}
+.document-footer img,.document-footer .footer-brand img{width:7mm;height:7mm;object-fit:contain}
+.document-section .manual-table-wrap{margin:2mm 0 3mm;overflow:visible}.document-section .manual-table{font-size:8.5pt;line-height:1.35}.document-section .manual-table th,.document-section .manual-table td{padding:1.4mm 1.8mm}.document-section .manual-table tr{break-inside:avoid}.document-section .manual-table ul{padding-left:4mm}.document-section .manual-table li{margin-bottom:1mm}
+.document-section .org-chart{max-width:145mm;margin:3mm auto 5mm}.document-section .org-level.org-connected{padding-top:6mm}.document-section .org-level.org-connected::before{height:6mm}.document-section .org-node{border-radius:1mm;padding:2mm 3mm;gap:1mm;font-size:9pt}.document-section .org-node strong{font-size:11pt}.document-section .org-branch{gap:5mm;margin-top:9mm}.document-section .org-branch::before{top:-4mm}.document-section .org-branch::after{top:-9mm;height:5mm}.document-section .org-branch .org-node::before{top:-4mm;height:4mm}
+.document-section .org-branch{gap:2mm}.document-section .org-branch .org-node{padding:2mm 1mm;font-size:8pt}.document-section .org-branch .org-node strong{font-size:10pt}
+.document-section .org-chart {
+  max-width: 160mm !important;
+  height: 95mm !important;
+  margin: 3mm auto 4mm !important;
+}
+.document-section .org-node-table .org-node-title {
+  font-size: 8.5pt !important;
+  padding: 1.2mm 1mm !important;
+}
+.document-section .org-node-table .org-lbl {
+  font-size: 8pt !important;
+  padding: 1mm !important;
+}
+.document-section .org-node-table .org-val,
+.document-section .org-node-table .org-worker-val {
+  font-size: 8.5pt !important;
+  padding: 1mm !important;
+}
+@media(max-width:800px){.metadata-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.revision-note{grid-column:span 2}.manual-workspace{grid-template-columns:1fr}.manual-toc{position:static;max-height:220px}.manual-content{padding:22px 18px}.manual-paragraphs{overflow-x:auto}.org-chart{min-width:520px}.paper{width:100%;min-height:0;padding:25px 16px}.editor-intro{display:block}.editor-actions{margin-bottom:20px}.document-meta{grid-template-columns:70px 1fr 70px 1fr}}
+
+/* ==========================================================================
+   HWP 1:1 Table Enhancements: Risk Matrix, Criteria, Forms, Notice, Policy
+   ========================================================================== */
+
+/* 1. Cover Approval Table */
+.cover-approval-wrap {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 5mm;
+}
+.cover-approval-table {
+  border-collapse: collapse;
+  border: 1.5px solid #1e293b;
+  background: #ffffff;
+  font-size: 8pt;
+  text-align: center;
+}
+.cover-approval-table th, .cover-approval-table td {
+  border: 1px solid #64748b;
+  padding: 3px 5px;
+}
+.cover-approval-side-th {
+  background: #f1f5f9;
+  color: #1e293b;
+  font-weight: 800;
+  width: 20px;
+  line-height: 1.3;
+  vertical-align: middle;
+}
+.cover-approval-title-th {
+  background: #f1f5f9;
+  color: #1e293b;
+  font-weight: 700;
+  width: 60px;
+  height: 20px;
+}
+.cover-approval-name-td {
+  height: 22px;
+  font-weight: 700;
+  color: #0f172a;
+  font-size: 8.5pt;
+  background: #ffffff;
+  vertical-align: middle;
+}
+.cover-approval-sign-td {
+  height: 38px;
+  vertical-align: middle;
+  color: #94a3b8;
+  font-size: 7pt;
+  background: #ffffff;
+}
+
+/* 2. Safety Policy Goals Grid */
+.policy-goals-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 16px 0 10px;
+}
+.policy-goal-card {
+  border: 1.5px solid #60a5fa;
+  background: #eff6ff;
+  border-radius: 6px;
+  padding: 12px 6px;
+  text-align: center;
+  font-weight: 800;
+  color: #1e40af;
+  font-size: 13.5px;
+  box-shadow: 0 1px 3px rgba(37,99,235,0.08);
+}
+
+/* 3. Risk Matrix 5x4 Grid (<표 6>) */
+.risk-matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0 16px;
+  font-size: 12.5px;
+  text-align: center;
+  table-layout: fixed;
+  background: #ffffff;
+}
+.risk-matrix-table th, .risk-matrix-table td {
+  border: 1px solid #64748b;
+  padding: 7px 4px;
+}
+.matrix-top-corner {
+  width: 18%;
+  background: #e2e8f0;
+  font-weight: 800;
+  vertical-align: middle;
+  color: #0f172a;
+}
+.matrix-sev-top {
+  background: #e2e8f0;
+  color: #0f172a;
+  font-weight: 800;
+  font-size: 13px;
+  padding: 6px !important;
+}
+.matrix-sev-sub {
+  width: 20.5%;
+  background: #f8fafc;
+  font-weight: 700;
+  font-size: 12px;
+  color: #1e293b;
+}
+.matrix-freq-side {
+  width: 7%;
+  background: #e2e8f0;
+  font-weight: 800;
+  vertical-align: middle;
+  line-height: 1.35;
+  color: #0f172a;
+}
+.matrix-freq-level {
+  width: 11%;
+  background: #f8fafc;
+  font-weight: 700;
+  vertical-align: middle;
+  font-size: 12px;
+  color: #1e293b;
+}
+.matrix-cell-vhigh {
+  background: #fee2e2 !important;
+  color: #991b1b !important;
+  font-weight: 800 !important;
+  border: 1.5px solid #ef4444 !important;
+  font-size: 12.5px;
+}
+.matrix-cell-high {
+  background: #ffedd5 !important;
+  color: #9a3412 !important;
+  font-weight: 800 !important;
+  border: 1.5px solid #f97316 !important;
+  font-size: 12.5px;
+}
+.matrix-cell-med {
+  background: #fef9c3 !important;
+  color: #854d0e !important;
+  font-weight: 800 !important;
+  border: 1.5px solid #eab308 !important;
+  font-size: 12.5px;
+}
+.matrix-cell-low {
+  background: #dcfce7 !important;
+  color: #166534 !important;
+  font-weight: 800 !important;
+  border: 1.5px solid #22c55e !important;
+  font-size: 12.5px;
+}
+.matrix-cell-vlow {
+  background: #f1f5f9 !important;
+  color: #475569 !important;
+  font-weight: 700 !important;
+  border: 1px solid #94a3b8 !important;
+  font-size: 12.5px;
+}
+
+/* 4. Action Criteria Table (<표 7>) */
+.risk-criteria-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0 16px;
+  font-size: 12.5px;
+  background: #ffffff;
+}
+.risk-criteria-table th, .risk-criteria-table td {
+  border: 1px solid #64748b;
+  padding: 8px 10px;
+}
+.risk-criteria-table thead th {
+  background: #e2e8f0;
+  color: #0f172a;
+  font-weight: 700;
+  text-align: center;
+}
+.criteria-unacceptable {
+  background: #fff1f2 !important;
+  vertical-align: middle !important;
+  text-align: center !important;
+  border-left: 2.5px solid #ef4444 !important;
+  border-right: 2.5px solid #ef4444 !important;
+}
+.criteria-acceptable {
+  background: #f0fdf4 !important;
+  vertical-align: middle !important;
+  text-align: center !important;
+  border-left: 2.5px solid #22c55e !important;
+  border-right: 2.5px solid #22c55e !important;
+}
+.badge-unacceptable {
+  display: inline-block;
+  padding: 6px 14px;
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1.5px solid #ef4444;
+  border-radius: 4px;
+  font-weight: 800;
+  font-size: 12.5px;
+}
+.badge-acceptable {
+  display: inline-block;
+  padding: 6px 14px;
+  background: #dcfce7;
+  color: #15803d;
+  border: 1.5px solid #22c55e;
+  border-radius: 4px;
+  font-weight: 800;
+  font-size: 12.5px;
+}
+.method-safety-call {
+  color: #b91c1c;
+  font-weight: 800;
+  font-size: 13px;
+}
+.method-sub {
+  color: #dc2626;
+  font-size: 11.5px;
+  font-weight: 700;
+  margin-left: 3px;
+}
+
+/* 5. Warning Callout Box */
+.ra-warning-box {
+  border: 1.5px solid #cbd5e1;
+  background: #f8fafc;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin: 12px 0 16px;
+}
+.ra-warning-title {
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 6px;
+  font-size: 13.5px;
+}
+.ra-warning-box ol {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: #334155;
+}
+.ra-warning-box li {
+  margin-bottom: 3px;
+}
+
+/* 6. Form Styles (<서식 1, 2, 3>) */
+.doc-form-card {
+  border: 1.5px solid #64748b;
+  background: #ffffff;
+  padding: 14px;
+  margin: 12px 0 18px;
+}
+.form-meta-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+.form-meta-table th {
+  border: 1px solid #64748b;
+  background: #f1f5f9;
+  color: #0f172a;
+  font-weight: 700;
+  width: 18%;
+  text-align: center;
+  padding: 6px 8px;
+}
+.form-meta-table td {
+  border: 1px solid #64748b;
+  background: #ffffff;
+  width: 32%;
+  padding: 6px 10px;
+  font-weight: 500;
+}
+.form-content-block {
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  border-radius: 4px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+.form-content-block h4 {
+  margin: 0 0 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #0f172a;
+}
+.form-content-block ul {
+  margin: 0;
+  padding-left: 18px;
+  color: #334155;
+  line-height: 1.55;
+}
+.form-content-block li {
+  margin-bottom: 2px;
+}
+.form-photo-frame {
+  border: 2px dashed #94a3b8;
+  background: #fafafa;
+  border-radius: 4px;
+  height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+.form-roster-title {
+  font-weight: 700;
+  font-size: 12.5px;
+  color: #0f172a;
+  margin: 0 0 6px;
+}
+.form-roster-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+  text-align: center;
+}
+.form-roster-table th {
+  border: 1px solid #64748b;
+  background: #f1f5f9;
+  color: #0f172a;
+  font-weight: 700;
+  padding: 5px 3px;
+}
+.form-roster-table td {
+  border: 1px solid #64748b;
+  height: 28px;
+  padding: 3px;
+}
+
+/* 7. Column Width Specifics for Standard Tables */
+.table-likelihood th:nth-child(1), .table-likelihood td:nth-child(1) {
+  width: 12% !important; text-align: center; font-weight: 700; background: #f8fafc;
+}
+.table-likelihood th:nth-child(2), .table-likelihood td:nth-child(2) {
+  width: 18% !important; text-align: center; font-weight: 700; background: #f8fafc;
+}
+.table-likelihood th:nth-child(3), .table-likelihood td:nth-child(3) {
+  width: 70% !important; text-align: left; background: #ffffff;
+}
+
+.table-severity th:nth-child(1), .table-severity td:nth-child(1) {
+  width: 10% !important; text-align: center; font-weight: 700; background: #f8fafc;
+}
+.table-severity th:nth-child(2), .table-severity td:nth-child(2) {
+  width: 21% !important; text-align: center; font-weight: 700; background: #f8fafc;
+}
+.table-severity th:nth-child(3), .table-severity td:nth-child(3) {
+  width: 7% !important; text-align: center; font-weight: 800; background: #f8fafc;
+}
+.table-severity th:nth-child(4), .table-severity td:nth-child(4) {
+  width: 62% !important; text-align: left; background: #ffffff;
+}
+
+.table-4m th:nth-child(1), .table-4m td:nth-child(1) {
+  width: 18% !important; text-align: center; font-weight: 700; background: #f8fafc;
+}
+.table-4m th:nth-child(2), .table-4m td:nth-child(2) {
+  width: 82% !important; text-align: left; background: #ffffff;
+}
+
+.table-roles th:nth-child(1), .table-roles td:nth-child(1) {
+  width: 28% !important; text-align: center; vertical-align: middle; font-weight: 700; background: #f8fafc;
+}
+.table-roles th:nth-child(2), .table-roles td:nth-child(2) {
+  width: 72% !important; text-align: left; background: #ffffff;
+}
+
+.roles-subheading {
+  font-weight: 800;
+  color: #1e3a8a;
+  margin-bottom: 5px;
+  font-size: 13.5px;
+}
+
+
+/* ==========================================================================
+   Dedicated Cover Page Styles (Matching HWP 1:1)
+   ========================================================================== */
+.cover-paper {
+  background: #ffffff;
+  padding: 14mm 12mm 12mm !important;
+}
+.cover-container {
+  border: 2.5px solid #1e3a5f;
+  outline: 1px solid #1e3a5f;
+  outline-offset: -5px;
+  min-height: 262mm;
+  padding: 12mm 12mm 8mm;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: #ffffff;
+}
+.cover-header-section {
+  text-align: center;
+  margin-top: 3mm;
+}
+.cover-main-title {
+  font-size: 32pt;
+  font-weight: 900;
+  letter-spacing: 5px;
+  color: #0f172a;
+  margin: 0 0 6mm;
+  text-align: center;
+}
+.cover-business-info-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 7mm;
+}
+.cover-business-info {
+  background: #f8fafc;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 4mm 12mm;
+  font-size: 12.5pt;
+  line-height: 1.9;
+  text-align: left;
+  display: inline-block;
+  min-width: 90mm;
+}
+.cover-business-info .info-bullet {
+  color: #2563eb;
+  font-weight: 800;
+  margin-right: 6px;
+}
+.cover-business-info strong {
+  color: #0f172a;
+  margin-left: 6px;
+}
+
+.cover-approval-wrapper {
+  margin: 0 0 6mm;
+}
+.cover-hwp-approval-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1.5px solid #334155;
+  background: #ffffff;
+  text-align: center;
+}
+.cover-hwp-approval-table th, .cover-hwp-approval-table td {
+  border: 1px solid #64748b;
+}
+.approval-col-date-th {
+  background: #f1f5f9;
+  color: #1e293b;
+  font-weight: 800;
+  font-size: 10pt;
+  height: 8.5mm;
+  width: 28%;
+}
+.approval-col-title-th {
+  background: #f1f5f9;
+  color: #1e293b;
+  font-weight: 800;
+  font-size: 10pt;
+  height: 8.5mm;
+  width: 24%;
+}
+.approval-col-date-td {
+  height: 10mm;
+  font-weight: 800;
+  font-size: 10.5pt;
+  color: #0f172a;
+  background: #ffffff;
+}
+.approval-col-name-td {
+  height: 10mm;
+  font-weight: 800;
+  font-size: 11pt;
+  color: #0f172a;
+  background: #ffffff;
+  letter-spacing: 2px;
+}
+.approval-col-date-sub {
+  height: 14mm;
+  background: #ffffff;
+}
+.approval-col-stamp-td {
+  height: 14mm;
+  vertical-align: middle;
+  color: #94a3b8;
+  font-size: 9pt;
+  font-weight: 600;
+  background: #ffffff;
+}
+
+.cover-policy-banner {
+  background: #1e3a5f;
+  color: #ffffff;
+  font-size: 14pt;
+  font-weight: 800;
+  text-align: center;
+  padding: 3.5mm 0;
+  border-radius: 4px;
+  letter-spacing: 3px;
+  margin-bottom: 5mm;
+}
+.cover-policy-box {
+  border: 1.5px solid #94a3b8;
+  background: #ffffff;
+  padding: 5mm 8mm;
+  border-radius: 6px;
+  margin-bottom: 6mm;
+  font-size: 11pt;
+  line-height: 1.9;
+  color: #1e293b;
+  font-weight: 600;
+  text-align: center;
+}
+.cover-policy-item {
+  margin-bottom: 1.5mm;
+}
+.cover-policy-item:last-child {
+  margin-bottom: 0;
+}
+
+.cover-goals-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5mm;
+  margin-bottom: 6mm;
+}
+.cover-goal-card {
+  border: 2px solid #3b82f6;
+  background: #eff6ff;
+  border-radius: 8px;
+  padding: 5mm 3mm;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 36mm;
+  box-shadow: 0 2px 6px rgba(59,130,246,0.12);
+}
+.goal-tag {
+  font-size: 9pt;
+  font-weight: 800;
+  color: #2563eb;
+  background: #dbeafe;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-bottom: 2.5mm;
+  letter-spacing: 0.5px;
+}
+.goal-main-text {
+  font-size: 12.5pt;
+  font-weight: 800;
+  line-height: 1.45;
+  color: #0f172a;
+}
+.goal-highlight {
+  color: #1d4ed8;
+  font-weight: 900;
+}
+
+.cover-footer-brand {
+  border-top: 2px solid #1e3a5f;
+  padding-top: 4mm;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #475569;
+  font-size: 10pt;
+  font-weight: 700;
+}
+
+@media print{@page{size:A4 portrait;margin:0}html,body{margin:0;padding:0;background:#fff}.print-toolbar{display:none}.paper{width:210mm;min-height:297mm;margin:0;padding:20mm 12mm 12mm;box-shadow:none;break-after:page}.paper:last-child{break-after:auto}.document-section{break-inside:avoid}.manual-paragraphs{overflow:visible}.org-chart{min-width:0}}
+
+/* Preview and printed sheets use the same fixed A4 canvas. */
+.paper{height:297mm;min-height:297mm}
+@media print{html,body{print-color-adjust:exact;-webkit-print-color-adjust:exact}.paper{width:210mm;height:297mm;min-height:297mm}.document-meta{grid-template-columns:25mm 1fr 25mm 1fr}.document-section:has(.org-chart){break-inside:auto;page-break-inside:auto}}
+
+/* Keep articles 6–8 together on their A4 page. */
+.procedure-overview-page .document-box{padding:5mm 6mm 4mm}
+.procedure-overview-page .document-section{margin-bottom:3mm}
+.procedure-overview-page .document-section h2{margin-bottom:2mm;padding:1.4mm 2mm}
+.procedure-overview-page .document-section .manual-paragraphs,.procedure-overview-page .document-section .manual-line{font-size:8.5pt;line-height:1.4}
+.procedure-overview-page .document-section .manual-line{margin-bottom:1mm}
+.procedure-overview-page .document-section .manual-table{font-size:8pt;line-height:1.25}
+.procedure-overview-page .document-section .manual-table th,.procedure-overview-page .document-section .manual-table td{padding:1mm 1.4mm}
+
+/* The frequency and severity criteria share one sheet without touching the footer. */
+.step-tables-page .document-box{padding:5mm 5mm 4mm}
+.step-tables-page .document-section{margin-bottom:2mm}
+.step-tables-page .document-section h2{margin-bottom:2mm;padding:1.4mm 2mm}
+.step-tables-page .document-section .manual-paragraphs,.step-tables-page .document-section .manual-line{font-size:8.5pt;line-height:1.35}
+.step-tables-page .document-section .manual-line{margin-bottom:0.9mm}
+.step-tables-page .document-section .manual-table-wrap{margin:1.2mm 0 2mm}
+.step-tables-page .document-section .manual-table-wrap + .manual-subheading{margin-top:5mm}
+.step-tables-page .document-section .manual-table{font-size:9.4pt;line-height:1.28}
+.step-tables-page .document-section .manual-table th,.step-tables-page .document-section .manual-table td{padding:0.95mm 1.2mm}
+.step-tables-page .document-section .manual-table li{margin-bottom:0.3mm}
+
+/* ==========================================================================
+   Page 2: Articles 1-3 with HWP Procedure Header (Title, Approval, Date)
+   ========================================================================== */
+.procedure-page-articles-1-3 .document-box {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  padding: 6mm 7mm 4mm !important;
+  box-sizing: border-box !important;
+}
+
+.procedure-page-articles-1-3 .procedure-p2-header {
+  flex-shrink: 0;
+  margin-bottom: 2mm;
+}
+
+.procedure-p2-title {
+  text-align: center;
+  font-size: 19pt;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.5px;
+  margin: 2mm 0 7mm;
+  padding: 0;
+  line-height: 1.25;
+}
+
+.procedure-p2-approval-wrap {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 3mm;
+}
+
+.procedure-p2-approval-table {
+  border-collapse: collapse !important;
+  border: 1.5px solid #1e293b !important;
+  width: 65mm;
+  table-layout: fixed;
+  background: #ffffff;
+}
+
+.procedure-p2-approval-table th,
+.procedure-p2-approval-table td {
+  border: 1px solid #1e293b !important;
+  padding: 1.6mm 2mm !important;
+  font-size: 9pt !important;
+  line-height: 1.3 !important;
+  vertical-align: middle !important;
+}
+
+.procedure-p2-approval-table th {
+  width: 22mm;
+  background: #f8fafc !important;
+  color: #1e293b !important;
+  text-align: center !important;
+  font-weight: 700 !important;
+  letter-spacing: 2px;
+}
+
+.procedure-p2-approval-table td {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  text-align: center !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.5px;
+}
+
+.procedure-p2-date-wrap {
+  margin-bottom: 2mm;
+}
+
+.procedure-p2-date-table {
+  width: 100%;
+  border-collapse: collapse !important;
+  border: 1.5px solid #1e293b !important;
+  table-layout: fixed;
+  background: #ffffff;
+}
+
+.procedure-p2-date-table td {
+  border: 1px solid #1e293b !important;
+  padding: 1.8mm 3mm !important;
+  font-size: 9.5pt !important;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+  text-align: center !important;
+  background: #ffffff !important;
+  letter-spacing: 0.5px;
+}
+
+.procedure-page-articles-1-3 .procedure-p2-articles {
+  margin-top: auto !important;
+  display: flex;
+  flex-direction: column;
+}
+
+.procedure-page-articles-1-3 .document-section {
+  margin-bottom: 2mm !important;
+}
+
+.procedure-page-articles-1-3 .document-section:last-child {
+  margin-bottom: 0 !important;
+}
+
+.procedure-page-articles-1-3 .document-section h2 {
+  margin-bottom: 1.2mm !important;
+  padding: 1.2mm 2mm !important;
+  font-size: 10pt !important;
+}
+
+.procedure-page-articles-1-3 .document-section .manual-paragraphs,
+.procedure-page-articles-1-3 .document-section .manual-line {
+  font-size: 8.5pt !important;
+  line-height: 1.4 !important;
+  margin-bottom: 0.8mm !important;
+}
+
+.procedure-page-articles-1-3 .org-chart {
+  max-width: 160mm !important;
+  height: 85mm !important;
+  margin: 1.5mm auto 0 !important;
+}
+
+/* ==========================================================================
+   Page 2: Articles 1-3 with HWP Procedure Header (Title, Approval, Date)
+   ========================================================================== */
+.procedure-page-articles-1-3 .document-box {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  padding: 6mm 7mm 4mm !important;
+  box-sizing: border-box !important;
+}
+
+.procedure-page-articles-1-3 .procedure-p2-header {
+  flex-shrink: 0;
+  margin-bottom: 2mm;
+}
+
+.procedure-p2-title {
+  text-align: center;
+  font-size: 19pt;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.5px;
+  margin: 2mm 0 7mm;
+  padding: 0;
+  line-height: 1.25;
+}
+
+.procedure-p2-approval-wrap {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 3mm;
+}
+
+.procedure-p2-approval-table {
+  border-collapse: collapse !important;
+  border: 1.5px solid #1e293b !important;
+  width: 65mm;
+  table-layout: fixed;
+  background: #ffffff;
+}
+
+.procedure-p2-approval-table th,
+.procedure-p2-approval-table td {
+  border: 1px solid #1e293b !important;
+  padding: 1.6mm 2mm !important;
+  font-size: 9pt !important;
+  line-height: 1.3 !important;
+  vertical-align: middle !important;
+}
+
+.procedure-p2-approval-table th {
+  width: 22mm;
+  background: #f8fafc !important;
+  color: #1e293b !important;
+  text-align: center !important;
+  font-weight: 700 !important;
+  letter-spacing: 2px;
+}
+
+.procedure-p2-approval-table td {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  text-align: center !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.5px;
+}
+
+.procedure-p2-date-wrap {
+  margin-bottom: 2mm;
+}
+
+.procedure-p2-date-table {
+  width: 100%;
+  border-collapse: collapse !important;
+  border: 1.5px solid #1e293b !important;
+  table-layout: fixed;
+  background: #ffffff;
+}
+
+.procedure-p2-date-table td {
+  border: 1px solid #1e293b !important;
+  padding: 1.8mm 3mm !important;
+  font-size: 9.5pt !important;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+  text-align: center !important;
+  background: #ffffff !important;
+  letter-spacing: 0.5px;
+}
+
+.procedure-page-articles-1-3 .procedure-p2-articles {
+  margin-top: auto !important;
+  display: flex;
+  flex-direction: column;
+}
+
+.procedure-page-articles-1-3 .document-section {
+  margin-bottom: 2mm !important;
+}
+
+.procedure-page-articles-1-3 .document-section:last-child {
+  margin-bottom: 0 !important;
+}
+
+.procedure-page-articles-1-3 .document-section h2 {
+  margin-bottom: 1.2mm !important;
+  padding: 1.2mm 2mm !important;
+  font-size: 10pt !important;
+}
+
+.procedure-page-articles-1-3 .document-section .manual-paragraphs,
+.procedure-page-articles-1-3 .document-section .manual-line {
+  font-size: 8.5pt !important;
+  line-height: 1.4 !important;
+  margin-bottom: 0.8mm !important;
+}
+
+.procedure-page-articles-1-3 .org-chart {
+  max-width: 160mm !important;
+  height: 85mm !important;
+  margin: 1.5mm auto 0 !important;
+}
+
+/* Give the criteria table a little breathing room below the risk matrix. */
+.document-section .manual-table-wrap:has(> .risk-matrix-table) + .manual-subheading{padding-top:2mm}

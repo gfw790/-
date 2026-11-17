@@ -1,0 +1,328 @@
+<?php
+declare(strict_types=1);
+require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/risk_procedure_document_store.php';
+
+$user = csm_require_auth();
+header('Cache-Control: no-store');
+$h = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+function csm_ra_org_chart_html(array $rows): string
+{
+    $manager = null; $assessor = null; $supervisor = null; $workers = [];
+    foreach ($rows as $row) {
+        $role = trim((string)($row[0] ?? ''));
+        if ($role === '') continue;
+        if (str_contains($role, '안전보건관리책임자')) $manager = $row;
+        elseif (str_contains($role, '위험성평가 담당자')) $assessor = $row;
+        elseif (str_contains($role, '관리감독자')) $supervisor = $row;
+        else $workers[] = $row;
+    }
+    $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+    $node = static function (?array $row, string $kind) use ($escape): string {
+        if (!$row) return '';
+        $position = trim((string)($row[1] ?? ''));
+        $html = '<div class="org-node org-node-' . $kind . '"><div class="org-node-title">' . $escape($row[0] ?? '') . '</div>';
+        if ($position !== '' && $position !== '—') {
+            $html .= '<div class="org-node-fields"><span>직위</span><strong>' . $escape($position) . '</strong></div>';
+        }
+        if ($kind === 'worker') $html .= '<div class="org-node-worker-name">' . $escape($row[2] ?? '') . '</div>';
+        else $html .= '<div class="org-node-fields"><span>성명</span><strong>' . $escape($row[2] ?? '') . '</strong></div>';
+        return $html . '</div>';
+    };
+    $html = '<div class="org-chart" role="group" aria-label="위험성평가 실시 담당 조직도">';
+    if ($manager) $html .= $node($manager, 'manager');
+    if ($assessor) $html .= $node($assessor, 'assessor');
+    if ($supervisor) $html .= $node($supervisor, 'supervisor');
+    if ($manager && $supervisor) $html .= '<span class="org-line org-line-main" aria-hidden="true"></span>';
+    if ($assessor) $html .= '<span class="org-line org-line-side" aria-hidden="true"></span>';
+    if ($workers) {
+        $html .= '<div class="org-worker-row" style="--worker-count:' . count($workers) . '">';
+        foreach ($workers as $worker) $html .= $node($worker, 'worker');
+        $html .= '</div><span class="org-line org-line-worker-stem" aria-hidden="true"></span>';
+    }
+    return $html . '</div>';
+}
+function csm_ra_body_html(string $text): string
+{
+    $parts = [];
+    $lines = preg_split('/\R/u', $text) ?: [];
+    for ($index = 0; $index < count($lines); $index++) {
+        $line = trim($lines[$index]);
+        if (str_starts_with($line, '|') && str_ends_with($line, '|')) {
+            $rows = [];
+            while ($index < count($lines)) {
+                $candidate = trim($lines[$index]);
+                if (!str_starts_with($candidate, '|') || !str_ends_with($candidate, '|')) break;
+                $rows[] = array_map('trim', explode('|', trim($candidate, '|')));
+                $index++;
+            }
+            $index--;
+            if ($rows) {
+                $head = array_shift($rows);
+                if (($head[0] ?? '') === '조직' && ($head[1] ?? '') === '직위' && ($head[2] ?? '') === '성명') {
+                    $parts[] = csm_ra_org_chart_html($rows);
+                    continue;
+                }
+                $table = '<div class="manual-table-wrap"><table class="manual-table"><thead><tr>';
+                foreach ($head as $cell) $table .= '<th scope="col">' . htmlspecialchars($cell, ENT_QUOTES, 'UTF-8') . '</th>';
+                $table .= '</tr></thead><tbody>';
+                foreach ($rows as $row) {
+                    $table .= '<tr>';
+                    foreach ($row as $cell) {
+                        $items = array_filter(array_map('trim', explode(';', $cell)), static fn($item) => $item !== '');
+                        $content = count($items) > 1
+                            ? '<ul><li>' . implode('</li><li>', array_map(static fn($item) => htmlspecialchars($item, ENT_QUOTES, 'UTF-8'), $items)) . '</li></ul>'
+                            : htmlspecialchars($cell, ENT_QUOTES, 'UTF-8');
+                        $table .= '<td>' . $content . '</td>';
+                    }
+                    $table .= '</tr>';
+                }
+                $parts[] = $table . '</tbody></table></div>';
+            }
+            continue;
+        }
+        if ($line === '') continue;
+        $class = 'manual-line';
+        if (preg_match('/^[①-⑳]/u', $line)) $class .= ' manual-clause';
+        elseif (preg_match('/^(?:[0-9]+[.)]|[가-하][.]|[-◦●⦁])/u', $line)) $class .= ' manual-item';
+        elseif (preg_match('/^(?:<[^>]+>|\[[^]]+\]|《[^》]+》)/u', $line)) $class .= ' manual-subheading';
+        $parts[] = '<p class="' . $class . '">' . htmlspecialchars($line, ENT_QUOTES, 'UTF-8') . '</p>';
+    }
+    return implode("\n", $parts);
+}
+$today = new DateTimeImmutable('now', new DateTimeZone('Asia/Seoul'));
+$year = filter_var($_POST['year'] ?? $_GET['year'] ?? $today->format('Y'), FILTER_VALIDATE_INT);
+if (!$year || $year < 2000 || $year > 2100) { http_response_code(400); exit('연도를 확인해 주세요.'); }
+$canManage = auth_can_manage($user);
+$db = csm_ra_procedure_db();
+csm_ra_document_schema($db);
+$_SESSION['csm_ra_document_csrf'] ??= bin2hex(random_bytes(32));
+$error = '';
+$notice = $_SESSION['csm_ra_document_notice'] ?? '';
+unset($_SESSION['csm_ra_document_notice']);
+
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+    try {
+        if (!$canManage) throw new InvalidArgumentException('절차서를 수정할 권한이 없습니다.');
+        if (!is_string($_POST['csrf'] ?? null) || !hash_equals($_SESSION['csm_ra_document_csrf'], $_POST['csrf'])) {
+            throw new InvalidArgumentException('요청을 확인할 수 없습니다. 새로고침해 주세요.');
+        }
+        $revision = filter_var($_POST['revision'] ?? null, FILTER_VALIDATE_INT);
+        if ($revision === false || $revision === null || $revision < 0) throw new InvalidArgumentException('문서 버전을 확인해 주세요.');
+        $status = ($_POST['action'] ?? '') === 'issue' ? 'issued' : 'draft';
+        csm_ra_document_save($db, $year, $_POST, $revision, $status, (string)$user['login_id']);
+        $_SESSION['csm_ra_document_notice'] = $status === 'issued' ? '위험성평가 절차서를 발행했습니다.' : '위험성평가 절차서 초안을 저장했습니다.';
+        header('Location: /CSM/risk_procedure_document.php?year=' . $year, true, 303);
+        exit;
+    } catch (Throwable $exception) {
+        $error = $exception instanceof InvalidArgumentException ? $exception->getMessage() : '문서를 저장하지 못했습니다.';
+        if (!($exception instanceof InvalidArgumentException)) error_log('CSM RA procedure document: ' . $exception->getMessage());
+    }
+}
+
+$record = csm_ra_document($db, $year);
+$issuedRecord = csm_ra_document_issued($db, $year);
+$history = csm_ra_document_history($db, $year);
+$sections = csm_ra_document_sections();
+$isPrint = ($_GET['print'] ?? '') === '1';
+$requestedRevision = filter_var($_GET['revision'] ?? null, FILTER_VALIDATE_INT);
+$historicalRecord = $requestedRevision !== null && $requestedRevision !== false && $requestedRevision > 0
+    ? csm_ra_document_revision($db, $year, $requestedRevision) : null;
+if (isset($_GET['revision']) && !$historicalRecord) { http_response_code(404); exit('해당 개정본을 찾을 수 없습니다.'); }
+$displayRecord = $historicalRecord ?: ($isPrint && ($_GET['issued'] ?? '') === '1' ? $issuedRecord : $record);
+$data = $displayRecord ? array_replace(csm_ra_document_defaults($year), $displayRecord['data']) : csm_ra_document_defaults($year);
+if ($error && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+    foreach ($data as $key => $value) if (is_string($_POST[$key] ?? null)) $data[$key] = (string)$_POST[$key];
+}
+if ($isPrint && !$displayRecord) { http_response_code(404); exit('먼저 절차서를 저장해 주세요.'); }
+?>
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title><?= $h($year) ?>년 위험성평가 절차서 · CSM</title><link rel="stylesheet" href="risk_procedure_document.css?v=<?= (int)filemtime(__DIR__ . '/risk_procedure_document.css') ?>"></head><body>
+<?php if (!$isPrint): ?>
+<header class="app-head"><div><a href="/CSM/risk_procedure.php?year=<?= $year ?>">← 2.1.2 증빙관리</a><strong>위험성평가 절차서 작성</strong><span><?= $h($user['name'] ?? '') ?></span></div></header>
+<main class="editor"><div class="editor-intro"><div><small>CSM · 2.1.2 · <?= $year ?>년</small><h1>위험성평가 실시규정</h1><p>회사 규정의 제1조~제15조를 바탕으로 조문별 내용을 수정하고 인쇄할 수 있습니다. 초안은 평가 근거로 집계되지 않으며 발행본만 반영됩니다.</p></div><div class="editor-actions"><a href="?year=<?= $year ?>&amp;print=1<?= $historicalRecord ? '&amp;revision=' . (int)$historicalRecord['revision'] : '' ?>" <?= !$displayRecord ? 'aria-disabled="true"' : '' ?> target="_blank" rel="noopener">인쇄 미리보기 ↗</a><?php if ($issuedRecord): ?><a href="?year=<?= $year ?>&amp;print=1&amp;issued=1" target="_blank" rel="noopener">최근 발행본 보기 ↗</a><?php endif; ?></div></div>
+<?php if ($error): ?><p class="alert error" role="alert"><?= $h($error) ?></p><?php endif; ?>
+<?php if ($notice): ?><p class="alert success" role="status"><?= $h($notice) ?></p><?php endif; ?>
+<div class="status-line"><strong><?= $displayRecord && $displayRecord['status'] === 'issued' ? '발행본' : '초안' ?></strong><span><?= $displayRecord ? '저장 ' . $h($displayRecord['saved_at'] ?? $displayRecord['updated_at'] ?? '') . ' · 이력 ' . (int)$displayRecord['revision'] : '아직 저장되지 않음' ?></span></div>
+<p class="source-note">기본 문안 출처: 회사 「위험성평가 실시규정_2024.08.27.hwp」(2015.07.01 제정, 2024.08.27 8차 개정). 담당자 이름은 당시 기록이므로 현재 발행 전 확인하세요. <a href="https://moel.go.kr/info/lawinfo/instruction/view.do?bbs_seq=20261100126" target="_blank" rel="noopener">2026년 위험성평가 지침 ↗</a> 변경사항도 검토해 반영할 수 있습니다.</p>
+<?php if ($historicalRecord): ?><p class="alert history-view">개정 이력 <?= (int)$historicalRecord['revision'] ?>번을 읽는 중입니다. <a href="?year=<?= $year ?>">최신 편집본으로 돌아가기 →</a></p><?php endif; ?>
+<?php if ($canManage && !$historicalRecord): ?><form method="post" class="document-form"><input type="hidden" name="csrf" value="<?= $h($_SESSION['csm_ra_document_csrf']) ?>"><input type="hidden" name="year" value="<?= $year ?>"><input type="hidden" name="revision" value="<?= (int)($record['revision'] ?? 0) ?>">
+<section class="card"><h2>문서 정보</h2><div class="metadata-grid"><label>회사명 <input name="company" value="<?= $h($data['company']) ?>" required></label><label>적용 사업장 <input name="site" value="<?= $h($data['site']) ?>"></label><label>문서명 <input name="document_name" value="<?= $h($data['document_name']) ?>" required></label><label>개정번호 <input name="version" value="<?= $h($data['version']) ?>" required></label><label>제정일 <input type="date" name="enacted_date" value="<?= $h($data['enacted_date']) ?>"></label><label>시행일 <input type="date" name="effective_date" value="<?= $h($data['effective_date']) ?>"></label><label>작성자 <input name="writer" value="<?= $h($data['writer']) ?>"></label><label>검토자 <input name="reviewer" value="<?= $h($data['reviewer']) ?>"></label><label>승인자 <input name="approver" value="<?= $h($data['approver']) ?>"></label><label class="revision-note">이번 개정 사유 <input name="revision_note" value="<?= $h($data['revision_note']) ?>" placeholder="예: 정기평가 운영 방식 변경"></label></div></section>
+<div class="manual-workspace"><nav class="manual-toc" aria-label="실시규정 목차"><strong>목차</strong><?php foreach ($sections as $key => $section): ?><a href="#section-<?= $h($key) ?>"><?= $h($section['title']) ?></a><?php endforeach; ?><a href="#revision-history">개정 이력</a></nav><div class="manual-content"><div class="manual-banner"><small><?= $h($data['company']) ?> · <?= $h($data['site']) ?></small><h2><?= $h($data['document_name']) ?></h2><span>제정 <?= $h($data['enacted_date']) ?>　|　개정 <?= $h($data['version']) ?>　|　시행 <?= $h($data['effective_date']) ?></span></div><?php foreach ($sections as $key => $section): ?><section class="manual-article" id="section-<?= $h($key) ?>"><h3><?= $h($section['title']) ?></h3><div class="manual-paragraphs" id="preview-<?= $h($key) ?>"><?= csm_ra_body_html($data[$key]) ?></div><details class="article-edit"><summary>이 부분 수정</summary><label for="edit-<?= $h($key) ?>"><?= $h($section['title']) ?> 내용</label><textarea id="edit-<?= $h($key) ?>" name="<?= $h($key) ?>" rows="9" data-preview="preview-<?= $h($key) ?>"><?= $h($data[$key]) ?></textarea><?php if (in_array($key, ['article_3', 'article_4', 'article_8', 'article_9'], true)): ?><p class="table-help">표는 한 행을 한 줄로 쓰고, 셀은 | 기호로 구분합니다. 한 셀 안의 항목은 ; 기호로 나눕니다.</p><?php endif; ?></details></section><?php endforeach; ?></div></div>
+<div class="save-bar"><button name="action" value="draft">초안 저장</button><button name="action" value="issue" class="primary" onclick="return confirm('현재 내용을 절차서 발행본으로 저장할까요?')">발행본 저장</button><span>저장할 때마다 개정 이력이 남습니다. 발행에는 시행일·승인자·방침·본문 15개 조문과 서식 3종이 필요합니다.</span></div></form><?php else: ?><div class="manual-workspace"><nav class="manual-toc" aria-label="실시규정 목차"><strong>목차</strong><?php foreach ($sections as $key => $section): ?><a href="#section-<?= $h($key) ?>"><?= $h($section['title']) ?></a><?php endforeach; ?><a href="#revision-history">개정 이력</a></nav><div class="manual-content"><div class="manual-banner"><small><?= $h($data['company']) ?> · <?= $h($data['site']) ?></small><h2><?= $h($data['document_name']) ?></h2><span>제정 <?= $h($data['enacted_date']) ?>　|　개정 <?= $h($data['version']) ?>　|　시행 <?= $h($data['effective_date']) ?></span></div><?php foreach ($sections as $key => $section): ?><section class="manual-article" id="section-<?= $h($key) ?>"><h3><?= $h($section['title']) ?></h3><div class="manual-paragraphs"><?= csm_ra_body_html($data[$key]) ?></div></section><?php endforeach; ?></div></div><?php endif; ?>
+<section class="card history-card" id="revision-history"><h2>개정 이력</h2><?php if (!$history): ?><p>아직 저장된 개정 이력이 없습니다.</p><?php else: ?><div class="table-scroll"><table><thead><tr><th>저장 순서</th><th>개정번호</th><th>상태</th><th>저장일시</th><th>저장자</th><th>개정 사유</th><th>판본</th></tr></thead><tbody><?php foreach ($history as $entry): ?><tr><td><?= (int)$entry['revision'] ?></td><td><?= $h($entry['data']['version'] ?? '') ?></td><td><?= $entry['status'] === 'issued' ? '발행본' : '초안' ?></td><td><?= $h($entry['saved_at']) ?></td><td><?= $h($entry['saved_by']) ?></td><td><?= $h($entry['data']['revision_note'] ?? '') ?></td><td><a href="?year=<?= $year ?>&amp;revision=<?= (int)$entry['revision'] ?>">보기</a> · <a href="?year=<?= $year ?>&amp;print=1&amp;revision=<?= (int)$entry['revision'] ?>" target="_blank" rel="noopener">인쇄</a></td></tr><?php endforeach; ?></tbody></table></div><?php endif; ?></section>
+</main>
+<?php else: ?>
+<div class="print-toolbar"><a href="?year=<?= $year ?><?= $historicalRecord ? '&amp;revision=' . (int)$historicalRecord['revision'] : '' ?>">← 작성 화면</a><strong><?= $h($data['document_name']) ?> · <?= $displayRecord['status'] === 'issued' ? '발행본' : '초안' ?></strong><button type="button" onclick="window.print()">인쇄 / PDF 저장</button></div>
+<?php
+$blocks = [];
+foreach ($sections as $key => $section) {
+    if ($key === 'article_4' && str_contains($data[$key], "\n|")) {
+        $all = explode("\n", $data[$key]);
+        $headerAt = null;
+        foreach ($all as $offset => $line) if (str_starts_with(trim($line), '|')) { $headerAt = $offset; break; }
+        if ($headerAt !== null) {
+            $prefix = array_slice($all, 0, $headerAt);
+            $tableHeader = $all[$headerAt];
+            $tableRows = array_values(array_filter(array_slice($all, $headerAt + 1), static fn($line) => str_starts_with(trim($line), '|')));
+            foreach (array_chunk($tableRows, 2) as $partIndex => $rows) {
+                $caption = $partIndex === 0 ? $prefix : [($prefix[1] ?? $section['title']) . ' (계속)'];
+                $blocks[] = ['title' => $section['title'] . ($partIndex ? ' (계속)' : ''),
+                    'text' => implode("\n", array_merge($caption, [$tableHeader], $rows)), 'table' => true];
+            }
+            continue;
+        }
+    }
+    if (in_array($key, ['article_8', 'article_9'], true) && str_contains($data[$key], "\n|")) {
+        $all = explode("\n", $data[$key]); $normal = []; $partIndex = 0;
+        for ($offset = 0; $offset < count($all); $offset++) {
+            $line = trim($all[$offset]);
+            if (!str_starts_with($line, '<표') || !isset($all[$offset + 1]) || !str_starts_with(trim($all[$offset + 1]), '|')) {
+                $normal[] = $all[$offset];
+                continue;
+            }
+            $caption = $line; $header = $all[++$offset]; $rows = [];
+            while (isset($all[$offset + 1]) && str_starts_with(trim($all[$offset + 1]), '|')) $rows[] = $all[++$offset];
+            if ($normal && $key !== 'article_8') {
+                $blocks[] = ['title' => $section['title'] . ($partIndex ? ' (계속)' : ''), 'text' => implode("\n", $normal)];
+                $normal = []; $partIndex++;
+            }
+            $rowsPerPage = match (true) {
+                str_contains($caption, '표 3') => 4,
+                str_contains($caption, '표 4') => 3,
+                str_contains($caption, '표 5') => 2,
+                str_contains($caption, '표 6'), str_contains($caption, '표 7') => 5,
+                default => 2,
+            };
+            foreach (array_chunk($rows, $rowsPerPage) as $chunkIndex => $chunk) {
+                $prefix = $chunkIndex === 0 ? $normal : [];
+                $normal = [];
+                $blocks[] = ['title' => $section['title'] . ($partIndex ? ' (계속)' : ''),
+                    'text' => implode("\n", array_merge($prefix, [$caption . ($chunkIndex ? ' (계속)' : ''), $header], $chunk)), 'table' => true];
+                $partIndex++;
+            }
+        }
+        if ($normal) $blocks[] = ['title' => $section['title'] . ($partIndex ? ' (계속)' : ''), 'text' => implode("\n", $normal)];
+        continue;
+    }
+    $lines = explode("\n", $data[$key]); $part = []; $partSize = 0; $partIndex = 0;
+    foreach ($lines as $line) {
+        $length = mb_strlen($line, 'UTF-8');
+        if ($part && ($partSize + $length > 460 || count($part) >= 18)) {
+            $blocks[] = ['title' => $section['title'] . ($partIndex ? ' (계속)' : ''), 'text' => implode("\n", $part)];
+            $part = []; $partSize = 0; $partIndex++;
+        }
+        $part[] = $line; $partSize += $length;
+    }
+    if ($part) $blocks[] = ['title' => $section['title'] . ($partIndex ? ' (계속)' : ''), 'text' => implode("\n", $part)];
+}
+$pages = []; $page = []; $size = 0;
+foreach ($blocks as $block) {
+    $length = mb_strlen($block['text'], 'UTF-8');
+    $isTable = (bool)($block['table'] ?? false);
+    $previousTable = $page && (bool)($page[0]['table'] ?? false);
+    $pairSmallTables = $isTable && $previousTable && $size < 230 && $length < 230
+        && !str_starts_with($block['title'], $sections['article_4']['title']);
+    $isForm = str_starts_with($block['title'], '<서식');
+    $previousForm = $page && str_starts_with($page[0]['title'], '<서식');
+    $isOrgChart = str_starts_with($block['title'], $sections['article_3']['title']);
+    $previousOrgChart = $page && str_starts_with($page[0]['title'], $sections['article_3']['title']);
+    if ($page && ($size + $length > 650 || count($page) >= 2 || (($isTable || $previousTable) && !$pairSmallTables)
+        || $isForm || $previousForm || $isOrgChart || $previousOrgChart)) {
+        $pages[] = $page; $page = []; $size = 0;
+    }
+    $page[] = $block; $size += $length;
+}
+if ($page) $pages[] = $page;
+foreach ($pages as $pageIndex => $pageSections): ?><div class="paper"><div class="document-box"><div class="document-header"><div><small><?= $h($data['site']) ?> · <?= $year ?>년</small><h1><?= $h($data['document_name']) ?></h1></div><span><?= $displayRecord['status'] === 'issued' ? '발행본' : '초안' ?></span></div>
+<dl class="document-meta"><dt>회사</dt><dd><?= $h($data['company']) ?></dd><dt>개정번호</dt><dd><?= $h($data['version']) ?></dd><dt>제정일</dt><dd><?= $h($data['enacted_date'] ?: '—') ?></dd><dt>시행일</dt><dd><?= $h($data['effective_date'] ?: '미정') ?></dd><dt>작성 / 검토 / 승인</dt><dd><?= $h(($data['writer'] ?: '—') . ' / ' . ($data['reviewer'] ?: '—') . ' / ' . ($data['approver'] ?: '—')) ?></dd></dl>
+<?php foreach ($pageSections as $section): ?><section class="document-section"><h2><?= $h($section['title']) ?></h2><div class="manual-paragraphs"><?= csm_ra_body_html($section['text']) ?></div></section><?php endforeach; ?><div class="page-number"><?= $pageIndex + 1 ?> / <?= count($pages) ?></div></div><div class="document-footer"><img src="assets/policy-logo.png" alt=""><span><?= $h($data['company']) ?></span></div></div><?php endforeach; ?>
+<?php endif; ?>
+<script>
+function buildOrgChart(rows) {
+    var manager = null, assessor = null, supervisor = null, workers = [];
+    rows.forEach(function (row) {
+        var role = row[0] || '';
+        if (role.includes('안전보건관리책임자')) manager = row;
+        else if (role.includes('위험성평가 담당자')) assessor = row;
+        else if (role.includes('관리감독자')) supervisor = row;
+        else workers.push(row);
+    });
+    function node(row, kind) {
+        var card = document.createElement('div'); card.className = 'org-node org-node-' + kind;
+        var title = document.createElement('div'); title.className = 'org-node-title'; title.textContent = row[0] || '';
+        card.append(title);
+        function fields(label, value) {
+            var group = document.createElement('div'); group.className = 'org-node-fields';
+            var caption = document.createElement('span'); caption.textContent = label;
+            var content = document.createElement('strong'); content.textContent = value || '';
+            group.append(caption, content); card.append(group);
+        }
+        if (row[1] && row[1] !== '—') fields('직위', row[1]);
+        if (kind === 'worker') { var name = document.createElement('div'); name.className = 'org-node-worker-name'; name.textContent = row[2] || ''; card.append(name); }
+        else fields('성명', row[2]);
+        return card;
+    }
+    var chart = document.createElement('div'); chart.className = 'org-chart'; chart.setAttribute('role', 'group'); chart.setAttribute('aria-label', '위험성평가 실시 담당 조직도');
+    if (manager) chart.append(node(manager, 'manager'));
+    if (assessor) chart.append(node(assessor, 'assessor'));
+    if (supervisor) chart.append(node(supervisor, 'supervisor'));
+    function line(className) { var element = document.createElement('span'); element.className = 'org-line ' + className; element.setAttribute('aria-hidden', 'true'); chart.append(element); }
+    if (manager && supervisor) line('org-line-main');
+    if (assessor) line('org-line-side');
+    if (workers.length) {
+        var group = document.createElement('div'); group.className = 'org-worker-row'; group.style.setProperty('--worker-count', String(workers.length));
+        workers.forEach(function (worker) { group.append(node(worker, 'worker')); });
+        chart.append(group); line('org-line-worker-stem');
+    }
+    return chart;
+}
+document.querySelectorAll('textarea[data-preview]').forEach(function (field) {
+    field.addEventListener('input', function () {
+        var preview = document.getElementById(field.dataset.preview);
+        if (!preview) return;
+        var lines = field.value.split(/\r?\n/).map(function (line) { return line.trim(); });
+        var nodes = [];
+        for (var index = 0; index < lines.length; index++) {
+            var line = lines[index];
+            if (!line) continue;
+            if (line.startsWith('|') && line.endsWith('|')) {
+                var rows = [];
+                while (index < lines.length && lines[index].startsWith('|') && lines[index].endsWith('|')) {
+                    rows.push(lines[index].slice(1, -1).split('|').map(function (cell) { return cell.trim(); }));
+                    index++;
+                }
+                index--;
+                if (rows[0] && rows[0][0] === '조직' && rows[0][1] === '직위' && rows[0][2] === '성명') {
+                    nodes.push(buildOrgChart(rows.slice(1))); continue;
+                }
+                var wrap = document.createElement('div'); wrap.className = 'manual-table-wrap';
+                var table = document.createElement('table'); table.className = 'manual-table';
+                var head = document.createElement('thead'); var headRow = document.createElement('tr');
+                rows.shift().forEach(function (cell) { var th = document.createElement('th'); th.scope = 'col'; th.textContent = cell; headRow.append(th); });
+                head.append(headRow); table.append(head);
+                var body = document.createElement('tbody');
+                rows.forEach(function (row) {
+                    var tr = document.createElement('tr');
+                    row.forEach(function (cell) {
+                        var td = document.createElement('td'); var items = cell.split(';').map(function (item) { return item.trim(); }).filter(Boolean);
+                        if (items.length > 1) { var list = document.createElement('ul'); items.forEach(function (item) { var li = document.createElement('li'); li.textContent = item; list.append(li); }); td.append(list); }
+                        else td.textContent = cell;
+                        tr.append(td);
+                    });
+                    body.append(tr);
+                });
+                table.append(body); wrap.append(table); nodes.push(wrap); continue;
+            }
+            var paragraph = document.createElement('p');
+            paragraph.className = 'manual-line';
+            if (/^[①-⑳]/u.test(line)) paragraph.classList.add('manual-clause');
+            else if (/^(?:[0-9]+[.)]|[가-하][.]|[-◦●⦁])/u.test(line)) paragraph.classList.add('manual-item');
+            else if (/^(?:<[^>]+>|\[[^]]+\]|《[^》]+》)/u.test(line)) paragraph.classList.add('manual-subheading');
+            paragraph.textContent = line;
+            nodes.push(paragraph);
+        }
+        preview.replaceChildren(...nodes);
+    });
+});
+</script>
+</body></html>

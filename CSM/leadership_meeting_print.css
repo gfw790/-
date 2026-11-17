@@ -1,0 +1,27 @@
+.meeting-print-documents{display:none}
+@page csmMeeting{size:A4 portrait;margin:0}
+@media print{
+ body.meeting-print-mode{margin:0;background:#fff;color:#17253b;font:12pt/1.8 "Malgun Gothic",sans-serif}
+ .meeting-print-mode>header,.meeting-print-mode>main,.meeting-print-mode>dialog{display:none!important}
+ .meeting-print-documents{display:block;page:csmMeeting}
+ .meeting-print-report{box-sizing:border-box;width:100%;min-height:296mm;padding:20mm 15mm 12mm;box-decoration-break:clone;-webkit-box-decoration-break:clone;break-before:page;break-inside:auto}
+ .meeting-print-report:first-child{break-before:auto}
+ .meeting-print-heading{display:block;background:#fff;color:#17253b;text-align:center;border-bottom:1.5pt solid #17253b;padding:0 0 5mm;margin:0 0 5mm;break-inside:avoid}
+ .meeting-print-heading p{font-size:11pt;line-height:1.4;margin:0 0 2mm;color:#4e6075}
+ .meeting-print-heading h1{font-size:23pt;line-height:1.35;letter-spacing:-.5pt;margin:0}
+ .meeting-print-heading .meeting-print-subtitle{font-size:11pt;margin:2mm 0 0}
+ .meeting-print-meta{width:100%;border-collapse:collapse;table-layout:fixed;font-size:10.5pt;line-height:1.6;margin-bottom:6mm;break-inside:avoid}
+ .meeting-print-meta th,.meeting-print-meta td{border:1pt solid #b7c1ce;padding:2.5mm 3mm;overflow-wrap:anywhere;vertical-align:middle}
+ .meeting-print-meta th{font-weight:700;text-align:center}
+ .meeting-print-content{margin:0 0 4mm}
+ .meeting-print-report h2{font-size:12pt;line-height:1.5;margin:0 0 4mm;padding-bottom:2mm;border-bottom:1pt solid #b7c1ce;break-after:avoid}
+ .meeting-print-notes{min-height:137mm;padding:0 3mm;font-size:12pt;line-height:1.8}
+ .meeting-print-notes p{margin:0 0 2.2mm;white-space:pre-wrap;overflow-wrap:anywhere;orphans:2;widows:2}
+ .meeting-print-notes .meeting-print-subitem{padding-left:6mm;font-size:11.5pt}
+ .meeting-print-paragraph-gap{height:2mm}
+ .meeting-print-evidence{break-inside:avoid;margin:0 0 4mm}
+ .meeting-print-evidence h2{font-size:10pt;margin-bottom:2mm;padding-bottom:1mm}
+ .meeting-print-evidence ul{font-size:9pt;line-height:1.6;margin:0;padding-left:5mm;overflow-wrap:anywhere}
+ .meeting-print-footer{display:flex;align-items:center;justify-content:flex-end;gap:2mm;border-top:1pt solid #b7c1ce;padding-top:3mm;margin-top:3mm;font-size:9pt;break-inside:avoid}
+ .meeting-print-footer img{display:block;width:5mm;height:5mm;object-fit:contain}
+}

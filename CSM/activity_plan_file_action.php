@@ -1,0 +1,4 @@
+<?php
+if (!isset($row,$file,$action,$base,$year,$escape)) return;
+?>
+<form method="post" action="<?= $escape($base) ?>" class="attachment-action" data-action="<?= $action ?>"><input type="hidden" name="csrf" value="<?= $escape($_SESSION['activity_plan_csrf']) ?>"><input type="hidden" name="year" value="<?= $year ?>"><input type="hidden" name="id" value="<?= (int)$row['id'] ?>"><input type="hidden" name="revision" value="<?= (int)$row['revision'] ?>"><input type="hidden" name="file_id" value="<?= (int)$file['id'] ?>"><input type="hidden" name="file_action" value="<?= $action ?>"><button class="<?= $action==='delete_file' ? 'delete-attachment' : '' ?>" aria-label="<?= $escape($file['original_name'].($action==='delete_file' ? ' 삭제' : ' 복원')) ?>"><?= $action==='delete_file' ? '삭제' : '복원' ?></button></form>

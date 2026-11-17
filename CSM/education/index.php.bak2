@@ -1,0 +1,589 @@
+<?php
+declare(strict_types=1);
+
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/csm_functions.php';
+
+$user = csm_require_auth();
+?>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CSM 안전보건교육 관리 시스템 (A:\CSM\dev)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800&display=swap');
+    body { font-family: 'Pretendard', system-ui, sans-serif; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+  <!-- Top Portal Notice Banner -->
+  <div class="bg-slate-900 text-white px-4 py-2 text-xs font-semibold flex items-center justify-between shadow-sm">
+    <div class="flex items-center space-x-3 max-w-7xl mx-auto w-full">
+      <a href="../" class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-2.5 py-1 rounded-lg font-bold flex items-center space-x-1 shrink-0 transition">
+        <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
+        <span>CSM 통합 포털</span>
+      </a>
+      <span class="text-slate-300"><strong>[CSM 안전보건교육]</strong> 사내 운영규칙 적용: 정기(4주차 금 13:00, 2h) &bull; 특별(3·4주차 금 4h씩 총 8h) &bull; 2단 서식(좌·우) &bull; 수기서명용 공란 &bull; A4 양면(긴 쪽 넘김) 출력</span>
+    </div>
+    <div class="flex items-center space-x-3 shrink-0">
+      <span class="bg-slate-800 text-slate-300 text-[11px] px-2.5 py-0.5 rounded border border-slate-700 font-mono">A:\risk_server\project\CSM\education</span>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <div class="flex items-center space-x-3">
+          <div class="bg-blue-600 text-white p-2 rounded-xl shadow-md shadow-blue-500/20">
+            <i data-lucide="graduation-cap" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <h1 class="text-lg font-bold text-slate-900 tracking-tight">현대기전 CSM 안전보건교육 관리</h1>
+              <span class="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">사내 운영규칙 표준</span>
+            </div>
+            <p class="text-xs text-slate-500">교육일정 지정 &bull; 8개 교육구분 &bull; 증빙사진대지 &bull; A4 양면(긴 쪽 넘김) 일체형 출력</p>
+          </div>
+        </div>
+
+        <!-- User Profile & Mode Switch -->
+        <div class="flex items-center space-x-3">
+          <a href="/CSM/education_activity.php" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1 transition">
+            <i data-lucide="clipboard-list" class="w-3.5 h-3.5"></i>
+            <span>활동기록 관리 (CSM 5영역)</span>
+          </a>
+          <?php if (auth_can_manage($user)): ?><a href="/CSM/headcount.php" class="text-xs font-semibold text-blue-700 hover:underline">기준일별 인원 조회</a><?php endif; ?>
+          <!-- Demo vs Live Toggle -->
+          <div class="flex items-center bg-slate-100 p-1 rounded-xl text-xs font-medium border border-slate-200">
+            <button onclick="setMode(0)" id="mode-live-btn" class="px-3 py-1.5 rounded-lg bg-white text-blue-700 shadow-sm font-semibold transition">
+              실제 업무 모드
+            </button>
+            <button onclick="setMode(1)" id="mode-demo-btn" class="px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition">
+              시연/가명 모드
+            </button>
+          </div>
+
+          <!-- User Badge -->
+          <div class="flex items-center space-x-2 text-xs bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+            <i data-lucide="user-check" class="w-4 h-4 text-blue-600"></i>
+            <span class="font-semibold text-slate-800"><?= htmlspecialchars($user['name']) ?></span>
+            <span class="text-slate-400">(<?= htmlspecialchars($user['role']) ?>)</span>
+          </div>
+
+          <!-- Backup Button -->
+          <button onclick="triggerBackup()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold flex items-center space-x-1 transition border border-slate-300">
+            <i data-lucide="archive" class="w-3.5 h-3.5"></i>
+            <span>통합 백업 ZIP</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="flex space-x-6 border-t border-slate-100 pt-1 text-sm font-medium">
+        <a href="../" class="tab-btn pb-3 border-b-2 border-transparent text-slate-500 hover:text-blue-600 flex items-center space-x-1.5 transition">
+          <i data-lucide="layout-dashboard" class="w-4 h-4 text-slate-400"></i>
+          <span>CSM 통합 포털</span>
+        </a>
+        <button onclick="switchTab('list')" id="nav-list" class="tab-btn pb-3 border-b-2 border-blue-600 text-blue-600 font-semibold flex items-center space-x-2">
+          <i data-lucide="list" class="w-4 h-4"></i>
+          <span>교육일지 목록 및 출력</span>
+        </button>
+        <a href="plan.php" class="tab-btn pb-3 border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center space-x-2 font-medium">
+          <i data-lucide="calendar-range" class="w-4 h-4 text-indigo-600"></i>
+          <span>연간 교육계획 관리 (1.2.1 연동)</span>
+        </a>
+        <button onclick="switchTab('stats')" id="nav-stats" class="tab-btn pb-3 border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center space-x-2">
+          <i data-lucide="bar-chart-2" class="w-4 h-4"></i>
+          <span>개인별 이수시간 & 회사 운영실적 현황판</span>
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full space-y-6">
+
+    <!-- Duplex Printing Standard Banner -->
+    <div class="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 text-xs text-indigo-950 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-sm">
+      <div class="flex items-center space-x-3">
+        <div class="bg-indigo-600 text-white p-2 rounded-xl shrink-0">
+          <i data-lucide="printer" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <strong class="font-bold text-sm text-indigo-900">🖨️ 회사 운영 표준 출력 가이드: A4 / 양면 인쇄 / 긴 쪽 넘김 (Long-edge duplex)</strong>
+          <p class="text-xs text-indigo-800 mt-0.5">
+            기본 2페이지 구성: <strong>앞면: 교육일지 (수기 서명용 공란)</strong> &bull; <strong>뒷면: 증빙 사진대지 (2장 배치)</strong>.
+            여러 건 일괄 출력 시 각 교육이 새 용지 앞면에서 시작하도록 짝수 페이지로 자동 정렬됩니다.
+          </p>
+        </div>
+      </div>
+      <div class="flex items-center space-x-2 shrink-0">
+        <button onclick="batchExportSelected()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-500/20 flex items-center space-x-1.5">
+          <i data-lucide="layers" class="w-4 h-4"></i>
+          <span>선택 항목 일괄 양면출력 (PDF)</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- TAB 1: TRAINING LIST -->
+    <section id="sec-list" class="space-y-4">
+      
+      <!-- Top Action & Search Filters -->
+      <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex flex-col lg:flex-row items-center justify-between gap-4">
+        <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+          <!-- CSM Chapter 5 Criteria Filter -->
+          <select id="filter-csm" onchange="loadTrainings()" class="bg-indigo-50 border border-indigo-200 rounded-xl px-3 py-2 text-xs font-bold text-indigo-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            <option value="ALL">CSM 제5장 전체 (10.0점)</option>
+            <option value="5.1.1">5.1.1 직무교육 (2.0점)</option>
+            <option value="5.1.2">5.1.2 정기교육 (2.0점)</option>
+            <option value="5.1.3">5.1.3 신규채용 (2.0점)</option>
+            <option value="5.1.4">5.1.4 특별교육 (1.0점)</option>
+            <option value="5.1.5">5.1.5 MSDS교육 (1.0점)</option>
+            <option value="5.2.2">5.2.2 안전체험 (2.0점)</option>
+            <option value="기타">기타 법정의무교육</option>
+          </select>
+
+          <!-- 8 Official Categories Filter -->
+          <select id="filter-type" onchange="loadTrainings()" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none">
+            <option value="ALL">전체 교육구분 (1~8번)</option>
+            <option value="REGULAR">2. 정기안전 보건교육 (2h)</option>
+            <option value="SPECIAL">5. 특별안전교육 (8h / 2회)</option>
+            <option value="NEW_HIRE">1. 신규채용시 교육 (8h)</option>
+            <option value="JOB_CHANGE">3. 작업내용변경시 교육 (2h)</option>
+            <option value="SUPERVISOR">4. 관리감독자교육 (16h)</option>
+            <option value="EXTERNAL">6. 외부강사초빙 교육</option>
+            <option value="OTHER">7. 기타</option>
+            <option value="MSDS">8. MSDS 교육 (2h)</option>
+          </select>
+
+          <select id="filter-status" onchange="loadTrainings()" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none">
+            <option value="ALL">전체 상태</option>
+            <option value="DRAFT">작성중 (DRAFT)</option>
+            <option value="FINALIZED">확정완료 (FINALIZED)</option>
+          </select>
+
+          <input type="date" id="filter-date-from" onchange="loadTrainings()" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          <span class="text-slate-400 text-xs">~</span>
+          <input type="date" id="filter-date-to" onchange="loadTrainings()" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none">
+
+          <input type="text" id="filter-attendee" onkeyup="if(event.key==='Enter')loadTrainings()" placeholder="참석자 성명/사번..." 
+            class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none w-36">
+          <button onclick="loadTrainings()" class="px-3 py-2 bg-slate-800 text-white rounded-xl text-xs font-semibold hover:bg-slate-700">검색</button>
+        </div>
+
+        <div class="flex items-center space-x-2 w-full lg:w-auto justify-end">
+          <!-- Sync New Hires Button -->
+          <button onclick="syncNewHires()" class="px-3.5 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition" title="새로 등록된 신규 입사자 계정에 한해 8시간 교육 예정기록 자동 생성">
+            <i data-lucide="user-plus" class="w-4 h-4 text-emerald-600"></i>
+            <span>신규입사자 교육 자동생성</span>
+          </button>
+
+          <a href="write.php" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 flex items-center space-x-1.5 transition">
+            <i data-lucide="plus-circle" class="w-4 h-4"></i>
+            <span>신규 교육일지 작성</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Training Records Table -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
+                <th class="py-3 px-3 text-center w-10">
+                  <input type="checkbox" id="check-all-trainings" onchange="toggleAllCheckboxes(this.checked)" class="rounded border-slate-300">
+                </th>
+                <th class="py-3 px-3 text-center w-24">교육일지번호</th>
+                <th class="py-3 px-3 text-center w-24">실시일자</th>
+                <th class="py-3 px-3 w-40 text-center">교육구분 / CSM</th>
+                <th class="py-3 px-4">교육과목 및 내용 요약</th>
+                <th class="py-3 px-2 text-center w-16">시간</th>
+                <th class="py-3 px-3 w-20 text-center">강사</th>
+                <th class="py-3 px-3 text-center w-20">이수인원</th>
+                <th class="py-3 px-2 text-center w-14">증빙사진</th>
+                <th class="py-3 px-2 text-center w-14" title="출력 후 자필 서명/결재된 교육일지 스캔 원본">서명본</th>
+                <th class="py-3 px-2 text-center w-14" title="공단/협회 등 공식 교육이수증(수료증)">이수증</th>
+                <th class="py-3 px-3 text-center w-24">상태</th>
+                <th class="py-3 px-4 text-center w-52">양면 서식 출력 및 관리</th>
+              </tr>
+            </thead>
+            <tbody id="training-tbody" class="divide-y divide-slate-100">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- TAB 2: PERSONAL STATS -->
+        <section id="sec-stats" class="space-y-5 hidden">
+      <!-- CSM Chapter 5 Scoreboard -->
+      <div id="csm-part5-board" class="bg-gradient-to-br from-indigo-950 via-slate-900 to-blue-950 rounded-2xl p-6 text-white shadow-xl space-y-5 border border-indigo-800/40">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-4">
+          <div>
+            <div class="flex items-center space-x-2">
+              <span class="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-blue-500 text-white tracking-wide shadow-sm">CSM 제5장 현황판</span>
+              <h2 class="text-base sm:text-lg font-bold text-white tracking-tight">CSM 협력업체 안전보건평가 제5장 (10.0점 만점) 이행 실적 종합 집계</h2>
+            </div>
+            <p class="text-xs text-blue-200 mt-1">한라시멘트 협력업체 정기/종합평가 제5장 안전보건교육 6개 필수 항목 실적 실시간 집계</p>
+          </div>
+          <div class="flex items-center space-x-4">
+            <div class="text-right">
+              <div class="text-[11px] text-blue-300 font-semibold">예상 획득 배점</div>
+              <div id="csm-total-score-badge" class="text-2xl font-black text-emerald-400">10.0 / 10.0점</div>
+            </div>
+            <a href="http://127.0.0.1:8085/" target="_blank" class="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow transition flex items-center space-x-1.5 shrink-0">
+              <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+              <span>CSM 종합평가 사이트 (8085)</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- 6 Item Cards Grid -->
+        <div id="csm-items-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 text-xs">
+          <!-- Rendered via loadPart5Summary() -->
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
+          <div>
+            <h2 class="text-base font-bold text-slate-900">개인별 사내 안전보건교육 이수시간 현황판</h2>
+            <p class="text-xs text-slate-500 mt-0.5">정기교육(월 2h), 특별교육(총 8h 충족여부), 8번 MSDS, 기타 법정의무과목(각 1h) 실적 집계</p>
+          </div>
+          <div class="flex items-center space-x-2">
+            <select id="stats-year" onchange="loadStats()" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold">
+              <option value="2026">2026년도</option>
+              <option value="2025">2025년도</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Mandatory Disclaimer Notice -->
+        <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-[11px] text-amber-900 font-medium flex items-center space-x-2">
+          <i data-lucide="info" class="w-4 h-4 text-amber-600 shrink-0"></i>
+          <span>※ 본 통계는 회사 운영규칙에 따른 집계이며, 법령에 따른 법정 의무시간·대상·인정 여부를 최종 검증한 것이 아니므로 별도 행정 확인이 필요합니다.</span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border border-slate-200 rounded-xl overflow-hidden">
+            <thead class="bg-slate-100 text-slate-700 font-semibold">
+              <tr>
+                <th class="py-2.5 px-3">사번</th>
+                <th class="py-2.5 px-3">성명</th>
+                <th class="py-2.5 px-3">부서</th>
+                <th class="py-2.5 px-3">직위</th>
+                <th class="py-2.5 px-2 text-center">재직상태</th>
+                <th class="py-2.5 px-3 text-center">정기(상반기)</th>
+                <th class="py-2.5 px-3 text-center">정기(하반기)</th>
+                <th class="py-2.5 px-3 text-center">특별교육 (8h 기준)</th>
+                <th class="py-2.5 px-3 text-center">8. MSDS</th>
+                <th class="py-2.5 px-3 text-center">기타교육 (각 1h)</th>
+                <th class="py-2.5 px-3 text-center">연간 총 이수</th>
+              </tr>
+            </thead>
+            <tbody id="stats-tbody" class="divide-y divide-slate-100">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-400">
+    현대기전 CSM 안전보건교육 시스템 &bull; 개발환경 (A:\CSM\dev) &bull; 사내 운영규칙 준수
+  </footer>
+
+  <script>
+    let currentMode = 0; // 0: Live, 1: Demo
+
+    function setMode(mode) {
+      currentMode = mode;
+      if (mode === 0) {
+        document.getElementById('mode-live-btn').className = 'px-3 py-1.5 rounded-lg bg-white text-blue-700 shadow-sm font-semibold transition';
+        document.getElementById('mode-demo-btn').className = 'px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition';
+      } else {
+        document.getElementById('mode-demo-btn').className = 'px-3 py-1.5 rounded-lg bg-white text-blue-700 shadow-sm font-semibold transition';
+        document.getElementById('mode-live-btn').className = 'px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition';
+      }
+      loadTrainings();
+      loadStats();
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('border-blue-600', 'text-blue-600', 'font-semibold');
+        btn.classList.add('border-transparent', 'text-slate-500');
+      });
+      document.getElementById('nav-' + tabId).classList.add('border-blue-600', 'text-blue-600', 'font-semibold');
+      document.getElementById('nav-' + tabId).classList.remove('border-transparent', 'text-slate-500');
+
+      document.getElementById('sec-list').classList.toggle('hidden', tabId !== 'list');
+      document.getElementById('sec-stats').classList.toggle('hidden', tabId !== 'stats');
+      if (tabId === 'stats') { loadPart5Summary(); loadStats(); }
+      lucide.createIcons();
+    }
+
+    function toggleAllCheckboxes(checked) {
+      document.querySelectorAll('.training-row-check').forEach(cb => cb.checked = checked);
+    }
+
+    function batchExportSelected() {
+      const selected = [];
+      document.querySelectorAll('.training-row-check:checked').forEach(cb => selected.push(cb.value));
+      if (selected.length === 0) {
+        alert('일괄 출력할 교육일지를 1건 이상 체크해 주십시오.');
+        return;
+      }
+      window.location.href = `export.php?batch=${selected.join(',')}`;
+    }
+
+    async function syncNewHires() {
+      if (!confirm('새로 등록된 신규 입사자 계정을 확인하여 신규채용 교육일지(8시간) 예정기록을 자동 생성하시겠습니까?\n(※ 기존 재직자는 제외되며, 향후 새로 추가되는 신규 입사자에 한해 생성됩니다)')) return;
+      const res = await fetch('api.php?action=sync_new_hires');
+      const data = await res.json();
+      if (data.ok) {
+        alert(data.message);
+        loadTrainings();
+      } else {
+        alert('동기화 실패: ' + data.error);
+      }
+    }
+
+    async function loadTrainings() {
+      const csmCode = document.getElementById('filter-csm') ? document.getElementById('filter-csm').value : 'ALL';
+      const type = document.getElementById('filter-type').value;
+      const status = document.getElementById('filter-status').value;
+      const dateFrom = document.getElementById('filter-date-from').value;
+      const dateTo = document.getElementById('filter-date-to').value;
+      const attendee = document.getElementById('filter-attendee').value;
+
+      const params = new URLSearchParams({
+        action: 'list',
+        is_demo: currentMode,
+        csm_code: csmCode,
+        type: type,
+        status: status,
+        date_from: dateFrom,
+        date_to: dateTo,
+        attendee: attendee
+      });
+
+      const res = await fetch('api.php?' + params.toString());
+      const data = await res.json();
+      const tbody = document.getElementById('training-tbody');
+
+      if (!data.ok || !data.list || data.list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="12" class="py-8 text-center text-slate-400">등록된 교육일지가 없습니다.</td></tr>';
+        return;
+      }
+
+      let html = '';
+      data.list.forEach(t => {
+        const csmBadges = {
+          '5.1.1': '<span class="bg-purple-100 text-purple-900 border border-purple-200 px-1.5 py-0.5 rounded text-[10px] font-bold">CSM 5.1.1 (2점)</span>',
+          '5.1.2': '<span class="bg-blue-100 text-blue-900 border border-blue-200 px-1.5 py-0.5 rounded text-[10px] font-bold">CSM 5.1.2 (2점)</span>',
+          '5.1.3': '<span class="bg-emerald-100 text-emerald-900 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px] font-bold">CSM 5.1.3 (2점)</span>',
+          '5.1.4': '<span class="bg-amber-100 text-amber-900 border border-amber-200 px-1.5 py-0.5 rounded text-[10px] font-bold">CSM 5.1.4 (1점)</span>',
+          '5.1.5': '<span class="bg-pink-100 text-pink-900 border border-pink-200 px-1.5 py-0.5 rounded text-[10px] font-bold">CSM 5.1.5 (1점)</span>',
+          '5.2.2': '<span class="bg-cyan-100 text-cyan-900 border border-cyan-200 px-1.5 py-0.5 rounded text-[10px] font-bold">CSM 5.2.2 (2점)</span>',
+          '기타': '<span class="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded text-[10px]">기타</span>'
+        };
+
+        const typeLabels = {
+          'REGULAR': '<span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-[10px] font-semibold">2. 정기안전보건</span>',
+          'SPECIAL': `<span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[10px] font-semibold">5. 특별(${t.session_round || 1}회)</span>`,
+          'NEW_HIRE': '<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-semibold">1. 신규채용시</span>',
+          'JOB_CHANGE': '<span class="bg-slate-100 text-slate-800 px-2 py-0.5 rounded text-[10px] font-semibold">3. 작업변경</span>',
+          'SUPERVISOR': '<span class="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded text-[10px] font-semibold">4. 관리감독자</span>',
+          'EXTERNAL': '<span class="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[10px]">6. 외부강사</span>',
+          'OTHER': '<span class="bg-amber-50 text-amber-900 border border-amber-200 px-2 py-0.5 rounded text-[10px]">7. 기타</span>',
+          'MSDS': '<span class="bg-purple-100 text-purple-800 px-2 py-0.5 rounded text-[10px] font-semibold">8. MSDS교육</span>',
+        };
+
+        const statusBadge = t.status === 'FINALIZED'
+          ? '<span class="bg-emerald-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">확정완료 (R' + t.revision_num + ')</span>'
+          : '<span class="bg-amber-500 text-white px-2 py-0.5 rounded text-[10px] font-bold">작성중 (DRAFT)</span>';
+
+        const signedBadge = t.scanned_doc_filename 
+          ? `<a href="secure_file.php?type=scan&file=${encodeURIComponent(t.scanned_doc_filename)}" target="_blank" class="text-emerald-600 font-bold hover:underline" title="교육일지 자필 서명본 열람">등록됨</a>`
+          : '<span class="text-slate-300">-</span>';
+
+        const certBadge = t.cert_doc_filename 
+          ? `<a href="secure_file.php?type=scan&file=${encodeURIComponent(t.cert_doc_filename)}" target="_blank" class="text-blue-600 font-bold hover:underline" title="공식 교육이수증(수료증) 열람">이수증</a>`
+          : '<span class="text-slate-300">-</span>';
+
+        html += `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="py-3 px-3 text-center">
+              <input type="checkbox" value="${t.id}" class="training-row-check rounded border-slate-300">
+            </td>
+            <td class="py-3 px-3 text-center font-mono font-bold text-slate-700">${t.training_no}</td>
+            <td class="py-3 px-3 text-center font-medium">${t.training_date}</td>
+            <td class="py-3 px-3 text-center space-y-1">
+              <div>${typeLabels[t.training_type] || t.training_type}</div>
+              ${csmBadges[t.csm_item_code] ? '<div>' + csmBadges[t.csm_item_code] + '</div>' : ''}
+            </td>
+            <td class="py-3 px-4">
+              <a href="view.php?id=${t.id}" class="font-bold text-slate-900 hover:text-blue-600 block line-clamp-1">${t.subject}</a>
+              <div class="text-[11px] text-slate-500 line-clamp-1 mt-0.5">${t.content_summary}</div>
+            </td>
+            <td class="py-3 px-2 text-center font-bold text-blue-600">${t.planned_hours}h</td>
+            <td class="py-3 px-3 text-center">${t.instructor_name}</td>
+            <td class="py-3 px-3 text-center font-mono font-semibold">${t.completed_attendees}/${t.total_attendees}</td>
+            <td class="py-3 px-2 text-center">${t.photo_count > 0 ? '<span class="text-purple-600 font-bold">' + t.photo_count + '</span>' : '<span class="text-slate-300">미등록</span>'}</td>
+            <td class="py-3 px-2 text-center">${signedBadge}</td>
+            <td class="py-3 px-2 text-center">${certBadge}</td>
+            <td class="py-3 px-3 text-center">${statusBadge}</td>
+            <td class="py-3 px-4 text-center">
+              <div class="flex items-center justify-center space-x-1.5">
+                <a href="view.php?id=${t.id}" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[11px] font-semibold">보기</a>
+                <a href="print.php?id=${t.id}&print=1" target="_blank" class="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded text-[11px] font-semibold flex items-center space-x-0.5" title="회사 양식 바로 인쇄">
+                  <i data-lucide="printer" class="w-3 h-3"></i><span>인쇄</span>
+                </a>
+                <a href="write.php?id=${t.id}" class="px-2 py-1 bg-slate-100 hover:bg-blue-50 text-blue-700 rounded text-[11px] font-semibold">수정</a>
+                <a href="export.php?id=${t.id}&format=xlsx" class="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded text-[11px] font-semibold flex items-center space-x-0.5">
+                  <i data-lucide="file-spreadsheet" class="w-3 h-3"></i><span>엑셀</span>
+                </a>
+                <a href="export.php?id=${t.id}&format=pdf" class="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-800 rounded text-[11px] font-semibold flex items-center space-x-0.5" title="A4 양면 2페이지 (일지+사진대지)">
+                  <i data-lucide="file-down" class="w-3 h-3"></i><span>PDF</span>
+                </a>
+              </div>
+            </td>
+          </tr>
+        `;
+      });
+
+      tbody.innerHTML = html;
+      lucide.createIcons();
+    }
+
+    
+    async function loadPart5Summary() {
+      const year = document.getElementById('stats-year') ? document.getElementById('stats-year').value : 2026;
+      try {
+        const res = await fetch(`api.php?action=csm_part5_summary&year=${year}&is_demo=${currentMode}`);
+        const data = await res.json();
+        if (!data.ok) return;
+
+        const scoreBadge = document.getElementById('csm-total-score-badge');
+        if (scoreBadge) {
+          scoreBadge.innerHTML = `<span class="${data.is_perfect ? 'text-emerald-400' : 'text-amber-400'} font-black">${data.total_score.toFixed(1)} / ${data.max_score.toFixed(1)}점</span>`;
+        }
+
+        const grid = document.getElementById('csm-items-grid');
+        if (!grid) return;
+
+        let html = '';
+        Object.values(data.items).forEach(item => {
+          const isFull = item.score >= item.points;
+          const badgeColor = isFull ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border-amber-500/40';
+          const statusText = isFull ? '충족 (만점)' : '보완필요';
+          
+          html += `
+            <div class="bg-white/10 hover:bg-white/15 transition border border-white/15 rounded-xl p-4 flex flex-col justify-between space-y-3">
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="px-2 py-0.5 rounded text-[10px] font-extrabold border ${badgeColor}">
+                    CSM ${item.code} &bull; ${statusText}
+                  </span>
+                  <span class="text-sm font-black ${isFull ? 'text-emerald-400' : 'text-amber-400'}">${item.score.toFixed(1)} / ${item.points.toFixed(1)}점</span>
+                </div>
+                <h3 class="text-xs font-bold text-white mt-2">${item.name}</h3>
+                <p class="text-[11px] text-blue-200 mt-1 leading-relaxed">${item.details}</p>
+              </div>
+              <div class="pt-2 border-t border-white/10 flex items-center justify-between text-[11px]">
+                <span class="text-slate-400 truncate max-w-[160px]" title="${item.files.join(', ')}">증빙: ${item.files[0]}</span>
+                <button onclick="filterByCsmItem('${item.code}')" class="px-2 py-1 bg-blue-600/80 hover:bg-blue-600 text-white rounded text-[10px] font-bold">목록 보기 &rarr;</button>
+              </div>
+            </div>
+          `;
+        });
+        grid.innerHTML = html;
+        lucide.createIcons();
+      } catch (e) {
+        console.error('Error loading CSM Part 5 summary:', e);
+      }
+    }
+
+    function filterByCsmItem(code) {
+      switchTab('list');
+      const sel = document.getElementById('filter-csm');
+      if (sel) {
+        sel.value = code;
+        loadTrainings();
+      }
+    }
+
+    async function loadStats() {
+      const year = document.getElementById('stats-year').value;
+      const res = await fetch(`api.php?action=stats&year=${year}&is_demo=${currentMode}`);
+      const data = await res.json();
+      const tbody = document.getElementById('stats-tbody');
+
+      if (!data.ok || !data.stats) return;
+
+      let html = '';
+      data.stats.forEach(s => {
+        const isRetired = s.status === 'retired';
+        const retBadge = isRetired ? '<span class="bg-slate-200 text-slate-600 text-[10px] px-1 rounded">퇴사</span>' : '<span class="bg-emerald-100 text-emerald-700 text-[10px] px-1 rounded">재직</span>';
+
+        const spBadge = s.special_satisfied 
+          ? '<span class="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-1.5 py-0.5 rounded">8h 충족</span>'
+          : `<span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-1.5 py-0.5 rounded">${s.special_total}h / 8h</span>`;
+
+        // Format other courses (1h each)
+        let otherStr = '-';
+        if (s.other_courses && Object.keys(s.other_courses).length > 0) {
+          otherStr = Object.entries(s.other_courses).map(([k, v]) => `${k}:${v}h`).join(', ');
+        }
+
+        html += `
+          <tr class="hover:bg-slate-50">
+            <td class="py-2.5 px-3 font-mono text-slate-500">${s.employee_no}</td>
+            <td class="py-2.5 px-3 font-bold text-slate-900">${s.name}</td>
+            <td class="py-2.5 px-3 text-slate-600">${s.team || '-'}</td>
+            <td class="py-2.5 px-3 text-slate-600">${s.position || '-'}</td>
+            <td class="py-2.5 px-2 text-center">${retBadge}</td>
+            <td class="py-2.5 px-3 text-center font-mono font-bold ${s.regular_h1 > 0 ? 'text-blue-600' : 'text-slate-400'}">${s.regular_h1.toFixed(1)}h</td>
+            <td class="py-2.5 px-3 text-center font-mono font-bold ${s.regular_h2 > 0 ? 'text-blue-600' : 'text-slate-400'}">${s.regular_h2.toFixed(1)}h</td>
+            <td class="py-2.5 px-3 text-center">${spBadge}</td>
+            <td class="py-2.5 px-3 text-center font-mono font-bold ${s.msds_total > 0 ? 'text-purple-600' : 'text-slate-400'}">${s.msds_total.toFixed(1)}h</td>
+            <td class="py-2.5 px-3 text-center text-[10px] text-slate-600">${otherStr}</td>
+            <td class="py-2.5 px-3 text-center font-mono font-extrabold text-slate-900">${s.total_hours.toFixed(1)}h</td>
+          </tr>
+        `;
+      });
+      tbody.innerHTML = html;
+    }
+
+    async function triggerBackup() {
+      if (!confirm('현재 교육 DB와 첨부된 모든 사진/서명/스캔 파일을 단일 ZIP으로 백업하시겠습니까?')) return;
+      const res = await fetch('api.php?action=backup');
+      const data = await res.json();
+      if (data.ok) {
+        alert('백업이 생성되었습니다: ' + data.filename + ' (' + (data.size/1024).toFixed(1) + ' KB)');
+        window.location.href = data.download_url;
+      } else {
+        alert('백업 실패: ' + data.error);
+      }
+    }
+
+    // Init
+    loadTrainings();
+    loadStats();
+    loadPart5Summary();
+    lucide.createIcons();
+  </script>
+</body>
+</html>

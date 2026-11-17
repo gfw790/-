@@ -1,0 +1,148 @@
+<?php
+declare(strict_types=1);
+
+function csm_scoring_db(): ?PDO
+{
+    $path = __DIR__ . '/storage/leadership.sqlite';
+    if (!is_file($path)) return null;
+    return new PDO('sqlite:file:' . str_replace('\\', '/', $path) . '?mode=ro', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
+}
+
+function csm_scoring_evidence(?PDO $db, int $year, ?int $month = null, bool $signedOnly = false): array
+{
+    if ($db === null || !$db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='leadership_files'")->fetch()) return [];
+    $columns = array_column($db->query('PRAGMA table_info(leadership_files)')->fetchAll(), 'name');
+    if ($signedOnly && !in_array('file_kind', $columns, true)) return [];
+    $active = in_array('deleted_at', $columns, true) ? ' AND f.deleted_at IS NULL' : '';
+    if ($signedOnly) $active .= " AND f.file_kind='signed_scan'";
+    $query = $db->prepare('SELECT r.item,f.stored_name FROM leadership_files f JOIN leadership_records r ON r.id=f.record_id WHERE r.year=?' . $active . ($month !== null ? ' AND substr(r.activity_date,6,2)=?' : ''));
+    $query->execute($month !== null ? [$year, sprintf('%02d', $month)] : [$year]);
+    $counts = [];
+    foreach ($query->fetchAll() as $file) {
+        if (!preg_match('/^[a-f0-9]{40}\.(pdf|jpg|png)$/D', $file['stored_name'])) continue;
+        if (is_file(__DIR__ . '/storage/leadership_evidence/' . $file['stored_name'])) $counts[$file['item']] = ($counts[$file['item']] ?? 0) + 1;
+    }
+    return $counts;
+}
+
+function csm_vfl_monthly_summary(?PDO $db, int $year, float $points = 2.0, ?DateTimeImmutable $asOf = null): array
+{
+    $asOf ??= new DateTimeImmutable('now', new DateTimeZone('Asia/Seoul'));
+    $currentYear = (int)$asOf->format('Y');
+    $cutoff = $year < $currentYear ? 12 : ($year === $currentYear ? (int)$asOf->format('n') : 0);
+    $saved = [];
+    if ($db !== null && $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='leadership_monthly_assessments'")->fetch()) {
+        $query = $db->prepare("SELECT * FROM leadership_monthly_assessments WHERE year=? AND item='1.1.3'");
+        $query->execute([$year]);
+        foreach ($query->fetchAll() as $row) $saved[(int)$row['month']] = $row;
+    }
+    $months = [];
+    $total = 0.0;
+    $evidenceCount = $assessedCount = 0;
+    for ($month = 1; $month <= 12; $month++) {
+        $count = csm_scoring_evidence($db, $year, $month, true)['1.1.3'] ?? 0;
+        $assessment = $saved[$month] ?? null;
+        $multiplier = $assessment === null ? null : (float)$assessment['multiplier'];
+        $earned = $count > 0 && $multiplier !== null && $month <= $cutoff ? round($points * $multiplier, 4) : 0.0;
+        $months[$month] = ['earned' => $earned, 'evidence_count' => $count, 'multiplier' => $multiplier,
+            'revision' => $assessment === null ? 0 : (int)$assessment['revision'],
+            'state' => $month > $cutoff ? 'future' : ($count === 0 ? 'no_evidence' : ($assessment === null ? 'pending' : 'assessed'))];
+        if ($month <= $cutoff) {
+            $total += $earned;
+            $evidenceCount += $count;
+            if ($assessment !== null && $count > 0) $assessedCount++;
+        }
+    }
+    return ['months' => $months, 'cutoff' => $cutoff, 'total' => round($total, 4),
+        'earned' => $cutoff > 0 ? round($total / $cutoff, 4) : 0.0, 'evidence_count' => $evidenceCount,
+        'assessed_months' => $assessedCount,
+        'state' => $evidenceCount === 0 ? 'no_evidence' : ($assessedCount === 0 ? 'pending' : 'assessed')];
+}
+
+function csm_meeting_summary(?PDO $db, int $year, array $criterion, ?DateTimeImmutable $asOf = null): array
+{
+    $asOf ??= new DateTimeImmutable('now', new DateTimeZone('Asia/Seoul'));
+    $currentYear = (int)$asOf->format('Y');
+    $cutoff = $year < $currentYear ? 12 : ($year === $currentYear ? (int)$asOf->format('n') : 0);
+    $held = $evidenceCount = 0;
+    $credits = 0.0;
+    if ($db !== null && $cutoff > 0 && $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='leadership_records'")->fetch()) {
+        $query = $db->prepare("SELECT r.id,r.payload,f.stored_name FROM leadership_records r
+            LEFT JOIN leadership_files f ON f.record_id=r.id AND f.deleted_at IS NULL
+            WHERE r.item='1.1.4' AND r.year=? AND r.activity_date >= ? AND r.activity_date <= ? ORDER BY r.id");
+        $lastDay = (new DateTimeImmutable(sprintf('%04d-%02d-01', $year, $cutoff)))->format('Y-m-t');
+        $query->execute([$year, sprintf('%04d-01-01', $year), $lastDay]);
+        $records = [];
+        foreach ($query->fetchAll(PDO::FETCH_ASSOC) as $file) {
+            $id = (int)$file['id'];
+            $records[$id] ??= ['attendance' => json_decode($file['payload'], true, 512, JSON_THROW_ON_ERROR)['attendance'] ?? '', 'evidence' => 0];
+            if (is_string($file['stored_name']) && preg_match('/^[a-f0-9]{40}\.(pdf|jpg|png)$/D', $file['stored_name'])
+                && is_file(__DIR__.'/storage/leadership_evidence/'.$file['stored_name'])) $records[$id]['evidence']++;
+        }
+        foreach ($records as $record) {
+            if (!in_array($record['attendance'], ['representative', 'delegate', 'absent'], true)) continue;
+            $held++;
+            $evidenceCount += $record['evidence'];
+            if ($record['evidence'] > 0) $credits += $record['attendance'] === 'representative' ? 1 : ($record['attendance'] === 'delegate' ? 0.5 : 0);
+        }
+    }
+    // Unrecorded/unsupported months remain in the elapsed-month denominator, like VFL.
+    $rate = $cutoff > 0 ? $credits / $cutoff : 0.0;
+    $multiplier = 0.0;
+    foreach ($criterion['criteria'] as $level => $label) {
+        if (is_numeric($level) && $label !== '' && $label !== '-' && $rate + 1e-9 >= (float)$level) $multiplier = max($multiplier, (float)$level);
+    }
+    return ['earned' => $evidenceCount > 0 ? round((float)$criterion['points'] * $multiplier, 4) : 0.0,
+        'evidence_count' => $evidenceCount, 'state' => $evidenceCount > 0 ? 'assessed' : 'no_evidence',
+        'multiplier' => $multiplier, 'revision' => 0, 'automatic' => true,
+        'attendance_rate' => round($rate * 100, 2), 'held_months' => $held, 'credits' => $credits, 'cutoff' => $cutoff];
+}
+
+function csm_score_summary(?PDO $db, array $catalog, int $year): array
+{
+    $counts = csm_scoring_evidence($db, $year);
+    $assessments = [];
+    if ($db !== null && $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='leadership_assessments'")->fetch()) {
+        $query = $db->prepare('SELECT * FROM leadership_assessments WHERE year=?');
+        $query->execute([$year]);
+        foreach ($query->fetchAll() as $row) $assessments[$row['item']] = $row;
+    }
+    $items = [];
+    $groups = [];
+    foreach ($catalog['groups'] as $group) $groups[$group['id']] = ['earned' => 0.0, 'normalized' => 0.0, 'evidence_items' => 0, 'assessed_items' => 0];
+    foreach ($catalog['modules'] as $module) {
+        foreach ($module['items'] as $criterion) {
+            $code = $criterion['id'];
+            $assessment = $assessments[$code] ?? null;
+            $hasEvidence = ($counts[$code] ?? 0) > 0;
+            $multiplier = $assessment === null ? null : (float)$assessment['multiplier'];
+            // Recheck evidence at read time, including after deletion or a missing file.
+            $earned = $hasEvidence && $multiplier !== null && $criterion['points'] !== null ? round($criterion['points'] * $multiplier, 4) : 0.0;
+            $items[$code] = ['earned' => $earned, 'evidence_count' => $counts[$code] ?? 0,
+                'state' => !$hasEvidence ? 'no_evidence' : ($assessment === null ? 'pending' : 'assessed'),
+                'multiplier' => $multiplier, 'revision' => $assessment === null ? 0 : (int)$assessment['revision']];
+            if ($code === '1.1.3') {
+                $monthly = csm_vfl_monthly_summary($db, $year, (float)$criterion['points']);
+                $monthly['legacy_multiplier'] = isset($assessments[$code]) ? (float)$assessments[$code]['multiplier'] : null;
+                $earned = $monthly['earned'];
+                $hasEvidence = $monthly['evidence_count'] > 0;
+                $assessment = $monthly['assessed_months'] > 0 ? $monthly : null;
+                $items[$code] = ['earned' => $earned, 'evidence_count' => $monthly['evidence_count'], 'state' => $monthly['state'],
+                    'multiplier' => null, 'revision' => 0, 'monthly' => $monthly];
+            }
+            if ($code === '1.1.4') {
+                $items[$code] = csm_meeting_summary($db, $year, $criterion);
+                $earned = $items[$code]['earned'];
+                $hasEvidence = $items[$code]['evidence_count'] > 0;
+                $assessment = $hasEvidence ? $items[$code] : null;
+            }
+            $groups[$module['group']]['earned'] += $earned;
+            if ($hasEvidence) $groups[$module['group']]['evidence_items']++;
+            if ($hasEvidence && $assessment !== null) $groups[$module['group']]['assessed_items']++;
+        }
+    }
+    foreach ($catalog['groups'] as $group) {
+        if ($group['points'] !== null && $group['points'] > 0) $groups[$group['id']]['normalized'] = round($groups[$group['id']]['earned'] / $group['points'] * 100, 1);
+    }
+    return ['items' => $items, 'groups' => $groups];
+}

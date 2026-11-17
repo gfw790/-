@@ -21,6 +21,14 @@ uploads/*
 !uploads/.gitkeep
 upload/*
 !upload/.gitkeep
+CSM/storage/*
+!CSM/storage/.htaccess
+!CSM/storage/**/.htaccess
+!CSM/storage/**/.gitkeep
+CSM/education/storage/uploads/*
+!CSM/education/storage/uploads/.gitkeep
+CSM/education/storage/exports/*
+!CSM/education/storage/exports/.gitkeep
 
 # 날씨 캐시
 calendar/weather_cache.json
