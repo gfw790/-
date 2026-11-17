@@ -853,6 +853,7 @@ function formatWorkLabel(array $work): string
 ?>
 <?php
 $pageTitle = '안전관리자 업무일지 등록';
+$isMobileLog = defined('SAFETY_LOG_MOBILE') && SAFETY_LOG_MOBILE;
 $extraHead = '<style>
     .detail-table th, .detail-table td { vertical-align: middle; }
     .site-visit-table th, .site-visit-table td { vertical-align: middle; }
@@ -1124,11 +1125,31 @@ $extraHead = '<style>
         }
     }
 </style>';
+if ($isMobileLog) {
+    $pageTitle = '현장 업무일지 · 모바일';
+    $extraHead .= '<link rel="stylesheet" href="assets/mobile.css">';
+    $bodyClass = 'sl-mobile';
+}
 include __DIR__ . '/includes/header.php';
 ?>
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <?php if ($isMobileLog): ?>
+    <header class="mobile-intro">
+        <div class="mobile-eyebrow">현장에서 바로 기록</div>
+        <h1>안전관리자 업무일지</h1>
+        <p>현장을 선택하고 활동과 사진을 남겨 주세요.</p>
+        <a href="create.php">PC 화면으로 작성</a>
+    </header>
+    <nav class="mobile-steps" aria-label="업무일지 작성 단계" hidden>
+        <button type="button" data-step="0">1 <span>기본·현장</span></button>
+        <button type="button" data-step="1">2 <span>활동·사진</span></button>
+        <button type="button" data-step="2">3 <span>확인·등록</span></button>
+    </nav>
+    <?php else: ?>
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
         <h1 class="h4">안전관리자 업무일지 등록</h1>
+        <a class="btn btn-outline-primary" href="mobile.php">휴대폰 전용 작성</a>
     </div>
+    <?php endif; ?>
 
     <?php if ($message): ?>
         <div class="alert alert-success"><?= h($message) ?></div>
@@ -3059,4 +3080,7 @@ include __DIR__ . '/includes/header.php';
 
     syncWeatherByDate();
 </script>
+<?php if ($isMobileLog): ?>
+<script src="assets/mobile.js"></script>
+<?php endif; ?>
 <?php include __DIR__ . '/includes/footer.php'; ?>

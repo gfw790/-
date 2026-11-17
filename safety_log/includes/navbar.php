@@ -3,6 +3,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 $navItems = [
     'dashboard.php'      => '대시보드',
     'create.php'         => '업무일지 등록',
+    'mobile.php'         => '휴대폰 작성',
     'index.php'          => '업무일지 목록',
     'monthly_report.php' => '월별 집계',
     'monthly_print.php'  => '월간 출력',

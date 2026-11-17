@@ -26,6 +26,6 @@ if (!isset($extraHead)) {
     <link rel="stylesheet" href="assets/theme.css">
     <?= $extraHead ?>
 </head>
-<body>
+<body class="<?= h($bodyClass ?? '') ?>">
 <?php include __DIR__ . '/navbar.php'; ?>
 <div class="container py-4">
