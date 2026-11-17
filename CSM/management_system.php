@@ -28,16 +28,14 @@ $itemLinks = [
     '1.2.4' => [['개선계획 반영·완료', 'activity_improvement.php?year='.$scoreYear], ['활동계획 대조', '../safety_manual/goal_plan.php?year='.$scoreYear]],
     '1.2.5' => [['안전업무일지', '../safety_log/']],
     '1.2.7' => [['현장점검 업무일지', '../safety_log/']],
-    '1.3.2' => [['TBM 기록', '../tbm/'], ['정보 공유 게시판', '../board/']],
-    '1.3.3' => [['정보 공유 게시판', '../board/']],
+    '1.3.1' => [['안전보건협의체 회의록', 'worker_participation.php?tab=meetings&year='.$scoreYear]],
+    '1.3.2' => [['안전제안 관리대장', 'worker_participation.php?tab=suggestions&year='.$scoreYear], ['TBM 기록', '../tbm/']],
+    '1.3.3' => [['반기 환류 보고서', 'worker_participation.php?tab=feedback&year='.$scoreYear], ['정보 공유 게시판', '../board/']],
 ];
 $pending = [
     '1.2.5' => '선임서류, 책임·전결 권한과 업무수행 이력 관리',
     '1.2.6' => '업무수행 평가 기준과 반기 평가·지원조치 관리',
     '1.2.7' => '관리감독자 지정서와 현장점검 이력 연결',
-    '1.3.1' => '위원회·협의체 회의록, 의견 수렴·개선·공유 및 반기 보고 관리',
-    '1.3.2' => '안전제안·신고 접수, 조치 결과와 근로자 환류 관리',
-    '1.3.3' => '공유한 자료, 전달 대상과 공유 일자·방법 확인 기록',
 ];
 ?>
 <!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>안전보건관리체계 · CSM</title><link rel="stylesheet" href="leadership.css"><link rel="stylesheet" href="management_system.css"></head><body>
