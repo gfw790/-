@@ -57,3 +57,10 @@ tbm/php_error.log
 __pycache__/
 *.pyc
 android-site-app/.gradle/
+
+# 임시 파일 및 DB 저널
+tmp/
+.tmp-*/
+*.db-wal
+*.db-shm
+
