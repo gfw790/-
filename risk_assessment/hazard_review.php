@@ -130,6 +130,7 @@ function hazard_review_allowed_periods(): array
     return [
         'current_month' => '현재월',
         'last_3_months' => '지난 3개월',
+        'month' => '선택월',
         'all' => '전체',
     ];
 }
@@ -156,9 +157,10 @@ function hazard_review_period_bounds(string $period, DateTimeImmutable $today): 
     };
 }
 
-function hazard_review_build_list_url(string $period, int $reportId, bool $submitted): string
+function hazard_review_build_list_url(string $period, int $reportId, bool $submitted, string $month = ''): string
 {
     $params = ['period' => $period];
+    if ($period === 'month' && $month !== '') $params['month'] = $month;
     if ($reportId > 0) {
         $params['report_id'] = $reportId;
     }
@@ -181,14 +183,23 @@ $reportId = isset($_GET['report_id']) ? (int)$_GET['report_id'] : 0;
 $submitted = isset($_GET['submitted']) && $_GET['submitted'] === '1';
 $today = new DateTimeImmutable('now', new DateTimeZone('Asia/Seoul'));
 $selectedPeriod = hazard_review_normalize_period($_GET['period'] ?? 'current_month');
+$selectedMonth = trim((string)($_GET['month'] ?? $today->format('Y-m')));
+if (!preg_match('/^\d{4}-(0[1-9]|1[0-2])$/D', $selectedMonth)) {
+    $selectedMonth = $today->format('Y-m');
+}
 $periodLabels = hazard_review_allowed_periods();
 $selectedPeriodLabel = $periodLabels[$selectedPeriod] ?? $periodLabels['current_month'];
 $periodBounds = hazard_review_period_bounds($selectedPeriod, $today);
+if ($selectedPeriod === 'month') {
+    $monthStart = DateTimeImmutable::createFromFormat('!Y-m-d', $selectedMonth . '-01', new DateTimeZone('Asia/Seoul'));
+    $periodBounds = ['start'=>$monthStart, 'end'=>$monthStart->modify('first day of next month')];
+}
 $periodDescription = match ($selectedPeriod) {
     'current_month' => $today->format('Y년 n월') . ' 자료만 표시',
     'last_3_months' => $periodBounds !== null
         ? $periodBounds['start']->format('Y-m-d') . ' ~ ' . $periodBounds['end']->modify('-1 day')->format('Y-m-d')
         : '',
+    'month' => $selectedMonth . ' 자료만 표시',
     default => '전체 기간 자료 표시',
 };
 $error = '';
@@ -309,6 +320,9 @@ foreach ($reportList as $listReport) {
 
 arsort($teamCounts);
 $topTeams = array_slice($teamCounts, 0, 5, true);
+$selectedTeamKey = trim((string)($_GET['team'] ?? ''));
+$availableTeamKeys = array_map('auth_team_key', array_keys($teamCounts));
+if (!in_array($selectedTeamKey, $availableTeamKeys, true)) $selectedTeamKey = '';
 $topTeamName = '-';
 $topTeamCount = 0;
 if (!empty($teamCounts)) {
@@ -544,6 +558,8 @@ foreach ($participantRows as $participantRow) {
     gap: 8px;
     align-items: center;
   }
+  .period-filter-list input[type="month"] { min-height: 32px; padding: 4px 9px; border: 1px solid var(--border2); border-radius: 7px; background: var(--bg2); color: var(--text); font: inherit; color-scheme: dark; }
+  .print-participant-btn { border-color: rgba(245,166,35,.65); background: rgba(245,166,35,.18); color: var(--text-hi); }
   .period-filter-label {
     color: var(--text-dim);
     font-size: 12px;
@@ -833,15 +849,22 @@ foreach ($participantRows as $participantRow) {
               <?php foreach ($periodLabels as $periodKey => $periodLabel): ?>
                 <a
                   class="team-mini-item period-filter-link <?= $selectedPeriod === $periodKey ? 'is-active' : '' ?>"
-                  href="<?= h(hazard_review_build_list_url($periodKey, $reportId, $submitted)) ?>"
+                   href="<?= h(hazard_review_build_list_url($periodKey, $reportId, $submitted, $selectedMonth)) ?>"
                 ><?= h($periodLabel) ?></a>
               <?php endforeach; ?>
             </div>
+            <form class="period-filter-list" method="get" action="hazard_review.php">
+              <input type="hidden" name="period" value="month">
+              <input type="hidden" name="team" id="hazard-review-team" value="<?= h($selectedTeamKey) ?>">
+              <label for="hazard-review-month">월 선택</label>
+              <input id="hazard-review-month" type="month" name="month" value="<?= h($selectedMonth) ?>" required>
+              <button type="submit" class="team-mini-item">조회</button>
+            </form>
 
-            <?php if (!empty($topTeams)): ?>
+            <?php if (!empty($teamCounts)): ?>
               <div class="team-mini-list">
                 <button type="button" class="team-mini-item is-active" data-team-filter="all">전체 <em><?= number_format($reportCount) ?>건</em></button>
-                <?php foreach ($topTeams as $teamName => $teamCount): ?>
+                <?php foreach ($teamCounts as $teamName => $teamCount): ?>
                   <button
                     type="button"
                     class="team-mini-item"
@@ -852,6 +875,12 @@ foreach ($participantRows as $participantRow) {
               </div>
               <div class="team-filter-empty" id="team-filter-empty">선택한 팀의 수시위험성평가 목록이 없습니다.</div>
             <?php endif; ?>
+
+            <form id="participant-print-form" class="period-filter-list" method="post" action="hazard_review_participant_print.php" target="_blank">
+              <input type="hidden" name="report_ids" id="participant-print-report-ids">
+              <button type="submit" class="team-mini-item print-participant-btn">조회된 참여자 평가서 출력</button>
+              <span>현재 기간·팀에 표시된 평가서 중 참여자가 있는 건만 새 페이지에서 확인합니다.</span>
+            </form>
 
             <?php if (empty($reportList)): ?>
               <div class="empty">표시할 수시위험성평가 목록이 없습니다.</div>
@@ -864,7 +893,7 @@ foreach ($participantRows as $participantRow) {
                         $listTeamName = '미지정';
                     }
                   ?>
-                  <div class="report-row" data-team-key="<?= h(auth_team_key($listTeamName)) ?>" data-team-name="<?= h($listTeamName) ?>">
+                  <div class="report-row" data-report-id="<?= (int)$listReport['report_id'] ?>" data-participant-count="<?= (int)($listReport['participant_count'] ?? 0) ?>" data-team-key="<?= h(auth_team_key($listTeamName)) ?>" data-team-name="<?= h($listTeamName) ?>">
                     <div>
                       <div class="report-head">날짜</div>
                       <div class="report-value"><?= h($listReport['work_date']) ?></div>
@@ -949,6 +978,13 @@ foreach ($participantRows as $participantRow) {
       const triggers = document.querySelectorAll('.participant-text[data-participants]');
       const teamFilterButtons = document.querySelectorAll('.team-mini-item[data-team-filter]');
       const reportRows = document.querySelectorAll('.report-row[data-team-key]');
+      const selectedTeamInput = document.getElementById('hazard-review-team');
+      const participantPrintForm = document.getElementById('participant-print-form');
+      if (participantPrintForm) participantPrintForm.addEventListener('submit', (event) => {
+        const ids = Array.from(reportRows).filter((row) => row.style.display !== 'none' && Number(row.dataset.participantCount || 0) > 0).map((row) => row.dataset.reportId).filter(Boolean);
+        if (!ids.length) { event.preventDefault(); window.alert('현재 조회 조건에 참여자가 있는 평가서가 없습니다.'); return; }
+        document.getElementById('participant-print-report-ids').value = ids.join(',');
+      });
       const teamFilterEmpty = document.getElementById('team-filter-empty');
 
       if (teamFilterButtons.length && reportRows.length) {
@@ -972,6 +1008,13 @@ foreach ($participantRows as $participantRow) {
           if (teamFilterEmpty) {
             teamFilterEmpty.style.display = visibleCount > 0 ? 'none' : 'block';
           }
+          if (selectedTeamInput) selectedTeamInput.value = teamKey === 'all' ? '' : teamKey;
+          document.querySelectorAll('.period-filter-link').forEach((link) => {
+            const url = new URL(link.href);
+            if (teamKey === 'all') url.searchParams.delete('team');
+            else url.searchParams.set('team', teamKey);
+            link.href = url.pathname + url.search;
+          });
         };
 
         teamFilterButtons.forEach((button) => {
@@ -981,6 +1024,11 @@ foreach ($participantRows as $participantRow) {
             applyTeamFilter(teamKey);
           });
         });
+        const initialTeam = <?= json_encode($selectedTeamKey, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        if (initialTeam) {
+          const initialButton = Array.from(teamFilterButtons).find((button) => button.getAttribute('data-team-filter') === initialTeam);
+          if (initialButton) { setActiveButton(initialButton); applyTeamFilter(initialTeam); }
+        }
       }
 
       if (modal && closeButton && list && title && roleMeta && triggers.length) {

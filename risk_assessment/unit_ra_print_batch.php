@@ -123,6 +123,14 @@ function parse_request_id_list(string $rawValue): array
     return array_values($ids);
 }
 
+function unit_print_report_team(array $report): string
+{
+    $team = auth_normalize_team_name((string)($report['team_name'] ?? ''));
+    if ($team !== '') return $team;
+    $owner = auth_find_user((string)($report['user_login_id'] ?? ''));
+    return auth_normalize_team_name((string)($owner['team'] ?? '')) ?: '미지정';
+}
+
 function build_title_print_pages(array $headerRows, int $itemsPerColumn = 14, int $columnsPerPage = 3): array
 {
     if ($itemsPerColumn < 1) {
@@ -158,6 +166,25 @@ $requestedUnitIds = parse_request_id_list((string)($_POST['unit_ra_ids'] ?? $_GE
 $requestedReportIds = parse_request_id_list((string)($_POST['report_ids'] ?? $_GET['report_ids'] ?? ''));
 $requestSource = (string)($_POST['source'] ?? $_GET['source'] ?? '');
 $isDirectUnitRequest = !empty($requestedUnitIds);
+$groupByDate = !$isDirectUnitRequest && (string)($_POST['group_by'] ?? $_GET['group_by'] ?? '') === 'date';
+$selectedTeamKey = $isDirectUnitRequest ? '' : trim((string)($_POST['team'] ?? $_GET['team'] ?? ''));
+$todayForFilter = new DateTimeImmutable('now', new DateTimeZone('Asia/Seoul'));
+$defaultDateFrom = $requestedReportIds ? '' : $todayForFilter->format('Y-m-01');
+$defaultDateTo = $requestedReportIds ? '' : $todayForFilter->format('Y-m-d');
+$dateFrom = trim((string)($_POST['date_from'] ?? $_GET['date_from'] ?? $defaultDateFrom));
+$dateTo = trim((string)($_POST['date_to'] ?? $_GET['date_to'] ?? $defaultDateTo));
+foreach ([$dateFrom, $dateTo] as $filterDate) {
+    if ($filterDate === '') continue;
+    $parsedDate = DateTimeImmutable::createFromFormat('!Y-m-d', $filterDate);
+    if (!$parsedDate || $parsedDate->format('Y-m-d') !== $filterDate) {
+        http_response_code(400);
+        exit('올바른 작업일자를 선택해 주세요.');
+    }
+}
+if ($groupByDate && $dateFrom !== '' && $dateTo !== '' && $dateFrom > $dateTo) {
+    http_response_code(400);
+    exit('시작일은 종료일보다 늦을 수 없습니다.');
+}
 
 $user = auth_current_user();
 if ($user === null && !$isDirectUnitRequest) {
@@ -166,6 +193,19 @@ if ($user === null && !$isDirectUnitRequest) {
 }
 
 $pdo = getDB();
+$teamOptions = [];
+if (!$isDirectUnitRequest) {
+    $teamRows = $pdo->query('SELECT DISTINCT team_name, user_login_id FROM work_report')->fetchAll() ?: [];
+    foreach ($teamRows as $teamRow) {
+        $teamName = unit_print_report_team($teamRow);
+        $teamOptions[auth_team_key($teamName)] = $teamName;
+    }
+    asort($teamOptions, SORT_NATURAL);
+    if ($selectedTeamKey !== '' && !isset($teamOptions[$selectedTeamKey])) {
+        http_response_code(400);
+        exit('올바른 팀을 선택해 주세요.');
+    }
+}
 
 $unitIds = [];
 $unitSourceMap = [];
@@ -173,22 +213,44 @@ $unitSourceMap = [];
 if ($isDirectUnitRequest) {
     $unitIds = $requestedUnitIds;
 } else {
-    $reportRows = $pdo->query("
+    $reportSql = "
         SELECT
             report_id,
             unit_ra_id,
+            user_login_id,
+            team_name,
             work_title,
             work_date,
             work_place
         FROM work_report
-        ORDER BY work_date DESC, report_id DESC
-    ")->fetchAll() ?: [];
+    ";
+    $reportParams = [];
+    $dateConditions = [];
+    if ($groupByDate && $dateFrom !== '') {
+        $dateConditions[] = 'work_date >= ?';
+        $reportParams[] = $dateFrom;
+    }
+    if ($groupByDate && $dateTo !== '') {
+        $dateConditions[] = 'work_date < ?';
+        $reportParams[] = (new DateTimeImmutable($dateTo))->modify('+1 day')->format('Y-m-d');
+    }
+    if ($dateConditions) $reportSql .= ' WHERE '.implode(' AND ', $dateConditions);
+    $reportSql .= ' ORDER BY work_date DESC, report_id DESC';
+    $reportStmt = $pdo->prepare($reportSql);
+    $reportStmt->execute($reportParams);
+    $reportRows = $reportStmt->fetchAll() ?: [];
 
     if (!empty($requestedReportIds)) {
         $reportIdMap = array_fill_keys($requestedReportIds, true);
         $reportRows = array_values(array_filter(
             $reportRows,
             static fn(array $row): bool => isset($reportIdMap[(int)($row['report_id'] ?? 0)])
+        ));
+    }
+    if ($selectedTeamKey !== '') {
+        $reportRows = array_values(array_filter(
+            $reportRows,
+            static fn(array $row): bool => auth_team_key(unit_print_report_team($row)) === $selectedTeamKey
         ));
     }
 
@@ -282,6 +344,13 @@ $pageTitle = $isDirectUnitRequest
 $introText = $isDirectUnitRequest
     ? '목록 화면에서 선택한 단위 위험성평가를 한 번에 인쇄할 수 있도록 정리한 화면입니다. 인쇄 시에는 평가서마다 페이지가 자동으로 나뉩니다.'
     : '현재 작업들에 연결된 단위 위험성평가 원본을 중복 없이 모아서 보여주는 화면입니다. 같은 평가서는 한 번만 출력되며, 인쇄 시에는 평가서마다 페이지가 나뉩니다.';
+if ($groupByDate) {
+    $periodLabel = ($dateFrom !== '' ? $dateFrom : '전체') . ' ~ ' . ($dateTo !== '' ? $dateTo : '전체');
+    $introText = $periodLabel . ' 작업일자별로 평가서를 묶었습니다. 같은 평가서가 여러 날짜의 작업에 연결되었다면 각 날짜에 다시 표시됩니다.';
+}
+if ($selectedTeamKey !== '') {
+    $introText = $teamOptions[$selectedTeamKey] . ' 팀 · ' . $introText;
+}
 $backHref = $requestSource === 'list' ? 'list.html' : 'hazard_review.php';
 $displayRoleLabel = (string)($user['role_label'] ?? '선택 출력');
 $displayName = $user ? auth_display_name($user) : '단위 위험성평가 인쇄';
@@ -294,16 +363,46 @@ if ($user === null) {
     ];
 }
 
-$totalAssessments = count($headerRows);
+$printRows = [];
+if ($groupByDate) {
+    $sourcesByDate = [];
+    foreach ($headerRows as $headerRow) {
+        $unitRaId = (int)$headerRow['unit_ra_id'];
+        foreach ($unitSourceMap[$unitRaId] ?? [] as $sourceRow) {
+            $workDate = substr(trim((string)$sourceRow['work_date']), 0, 10);
+            $dateKey = preg_match('/^\d{4}-\d{2}-\d{2}$/D', $workDate) ? $workDate : '날짜 미입력';
+            $sourcesByDate[$dateKey][$unitRaId][] = $sourceRow;
+        }
+    }
+    uksort($sourcesByDate, static function (string $left, string $right): int {
+        if ($left === '날짜 미입력') return 1;
+        if ($right === '날짜 미입력') return -1;
+        return strcmp($right, $left);
+    });
+    foreach ($sourcesByDate as $workDate => $unitsOnDate) {
+        foreach ($headerRows as $headerRow) {
+            $unitRaId = (int)$headerRow['unit_ra_id'];
+            if (!isset($unitsOnDate[$unitRaId])) continue;
+            $printRows[] = ['header'=>$headerRow, 'work_date'=>$workDate, 'sources'=>$unitsOnDate[$unitRaId]];
+        }
+    }
+} else {
+    foreach ($headerRows as $headerRow) {
+        $unitRaId = (int)$headerRow['unit_ra_id'];
+        $printRows[] = ['header'=>$headerRow, 'work_date'=>'', 'sources'=>array_values($unitSourceMap[$unitRaId] ?? [])];
+    }
+}
+$totalAssessments = count($printRows);
 $totalRiskItems = 0;
-foreach ($itemsByUnit as $unitItemRows) {
-    $totalRiskItems += count($unitItemRows);
+foreach ($printRows as $printRow) {
+    $totalRiskItems += count($itemsByUnit[(int)$printRow['header']['unit_ra_id']] ?? []);
 }
 $totalLinkedSources = 0;
 foreach ($unitSourceMap as $sourceRows) {
     $totalLinkedSources += count($sourceRows);
 }
-$titlePrintPages = build_title_print_pages($headerRows, 14, 3);
+$titleHeaderRows = array_map(static fn(array $row): array => $row['header'] + ['print_work_date'=>$row['work_date']], $printRows);
+$titlePrintPages = build_title_print_pages($titleHeaderRows, 14, 3);
 $printEvaluationDate = (new DateTimeImmutable('now', new DateTimeZone('Asia/Seoul')))->format('Y-m-d');
 $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
 ?>
@@ -676,6 +775,13 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
     border-bottom: 1px solid #dfe8f1;
     background: linear-gradient(180deg, rgba(250, 252, 255, 0.96) 0%, rgba(244, 248, 252, 0.82) 100%);
   }
+  .date-group-option { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 16px 0; padding: 12px 16px; border: 1px solid var(--preview-line); border-radius: 10px; background: #fff; color: var(--preview-ink); font-size: 14px; }
+  .date-group-option label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 700; }
+  .date-group-option input { width: 18px; height: 18px; margin: 0; }
+  .date-group-option input[type="date"] { width: 150px; height: 36px; padding: 4px 7px; border: 1px solid var(--preview-line-strong); border-radius: 6px; font: inherit; }
+  .date-group-option select { min-width: 150px; height: 36px; padding: 4px 7px; border: 1px solid var(--preview-line-strong); border-radius: 6px; background: #fff; font: inherit; }
+  .date-group-option small { color: var(--preview-muted); }
+  .sheet-work-date { display: inline-block; margin: 0 0 10px; padding: 4px 9px; border: 1px solid #b8cce0; border-radius: 5px; color: #17477f; font-size: 13px; font-weight: 700; }
   .sheet-evaluator-row {
     display: flex;
     justify-content: flex-end;
@@ -1165,6 +1271,7 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
       display: none;
     }
     .topbar,
+    .date-group-option,
     .intro {
       display: none !important;
     }
@@ -1535,6 +1642,19 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
       </div>
     </div>
 
+    <?php if (!$isDirectUnitRequest): ?>
+      <form class="date-group-option" method="get" action="unit_ra_print_batch.php">
+        <?php if ($requestedReportIds): ?><input type="hidden" name="report_ids" value="<?= h(implode(',', $requestedReportIds)) ?>"><?php endif; ?>
+        <?php if ($requestSource !== ''): ?><input type="hidden" name="source" value="<?= h($requestSource) ?>"><?php endif; ?>
+        <label>팀 <select name="team"><option value="">전체 팀</option><?php foreach ($teamOptions as $teamKey=>$teamName): ?><option value="<?= h($teamKey) ?>" <?= $selectedTeamKey===$teamKey ? 'selected' : '' ?>><?= h($teamName) ?></option><?php endforeach; ?></select></label>
+        <label><input type="checkbox" name="group_by" value="date" <?= $groupByDate ? 'checked' : '' ?>>작업일자별로 묶기</label>
+        <label>시작일 <input type="date" name="date_from" value="<?= h($dateFrom) ?>"></label>
+        <label>종료일 <input type="date" name="date_to" value="<?= h($dateTo) ?>"></label>
+        <small>선택하면 같은 평가서도 작업일이 다를 때 각각 출력됩니다.</small>
+        <button type="submit" class="btn-secondary">적용</button>
+      </form>
+    <?php endif; ?>
+
     <section class="intro">
       <div class="intro-copy">
         <span class="intro-kicker"><?= h($previewModeLabel) ?></span>
@@ -1579,7 +1699,7 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
       <?php if (empty($headerRows)): ?>
         <div class="empty-box">출력할 단위 위험성평가가 없습니다.</div>
       <?php else: ?>
-        <?php foreach ($headerRows as $sheetIndex => $headerRow): ?>
+        <?php foreach ($printRows as $sheetIndex => $printRow): $headerRow=$printRow['header']; ?>
           <?php $unitRaId = (int)($headerRow['unit_ra_id'] ?? 0); ?>
           <?php $unitItems = $itemsByUnit[$unitRaId] ?? []; ?>
           <?php
@@ -1616,6 +1736,7 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
           ?>
           <article class="print-sheet" data-footer-label="<?= h($footerLabel) ?>" data-footer-tone="<?= h($footerToneClass) ?>">
             <div class="sheet-head">
+              <?php if ($printRow['work_date'] !== ''): ?><div class="sheet-work-date">작업일자 <?= h($printRow['work_date']) ?></div><?php endif; ?>
               <div class="company-brand">
                 <img src="../safety_manual/assets/policy-logo.png" alt="" width="24" height="28">
                 <span>주식회사 현대기전</span>
@@ -1626,9 +1747,9 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
                   <p><?= h($headerRow['unit_title']) ?><?php if (!empty($headerRow['unit_code'])): ?> (<?= h($headerRow['unit_code']) ?>)<?php endif; ?></p>
                 </div>
               </div>
-              <?php if (!empty($unitSourceMap[$unitRaId])): ?>
+              <?php if ($printRow['sources']): ?>
                 <div class="source-row">
-                  <?php foreach (array_slice(array_values($unitSourceMap[$unitRaId]), 0, 6) as $sourceRow): ?>
+                  <?php foreach (array_slice($printRow['sources'], 0, 6) as $sourceRow): ?>
                     <span class="source-chip"><?= h($sourceRow['work_date']) ?> / <?= h($sourceRow['work_title']) ?></span>
                   <?php endforeach; ?>
                 </div>
@@ -1734,7 +1855,7 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
         <div class="empty-box">출력할 단위 위험성평가가 없습니다.</div>
       <?php else: ?>
         <div class="title-print-columns">
-          <?php foreach ($headerRows as $index => $headerRow): ?>
+           <?php foreach ($titleHeaderRows as $index => $headerRow): ?>
             <?php
               $titleText = trim((string)($headerRow['unit_title'] ?? ''));
               $codeText = trim((string)($headerRow['unit_code'] ?? ''));
@@ -1745,6 +1866,7 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
                 <div class="title-print-no"><?= (int)($index + 1) ?>.</div>
                 <div class="title-print-body">
                   <div class="title-print-title"><?= h($titleText !== '' ? $titleText : '제목 없음') ?><?php if ($codeText !== ''): ?> (<?= h($codeText) ?>)<?php endif; ?></div>
+                  <?php if ($groupByDate): ?><div class="title-print-detail">작업일자: <?= h($headerRow['print_work_date']) ?></div><?php endif; ?>
                   <?php if ($processText !== ''): ?>
                     <div class="title-print-detail">공정명: <?= h($processText) ?></div>
                   <?php endif; ?>
@@ -1778,6 +1900,7 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
                             <div class="title-print-no"><?= (int)$entry['display_index'] ?>.</div>
                             <div class="title-print-body">
                               <div class="title-print-title"><?= h($titleText !== '' ? $titleText : '제목 없음') ?><?php if ($codeText !== ''): ?> (<?= h($codeText) ?>)<?php endif; ?></div>
+                               <?php if ($groupByDate): ?><div class="title-print-detail">작업일자: <?= h($titleHeader['print_work_date']) ?></div><?php endif; ?>
                               <?php if ($processText !== ''): ?>
                                 <div class="title-print-detail">공정명: <?= h($processText) ?></div>
                               <?php endif; ?>
@@ -1823,6 +1946,7 @@ $previewModeLabel = $isDirectUnitRequest ? '선택 출력' : '전체 출력';
         setPrintPageStyle(mode);
 
         if (mode === 'title-only') {
+          paginateTitleListForPrint();
           window.requestAnimationFrame(function () {
             window.print();
           });

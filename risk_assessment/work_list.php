@@ -1343,6 +1343,7 @@ unset($report);
 
 $currentUserName = trim((string)($user['name'] ?? ''));
 $currentUserLoginId = trim((string)($user['login_id'] ?? ''));
+$canAccessCsm = $currentUserLoginId === '5878';
 $isJungYeontakAccount = $currentUserLoginId === '6680';
 $canAccessLegacyListPage = $currentUserName === "\u{AE40}\u{B0A8}\u{ADE0}";
 $canAccessMyGearTest = $currentUserName === "\u{AE40}\u{B0A8}\u{ADE0}";
@@ -3210,6 +3211,9 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
             <a class="btn-secondary" href="/material_management/index.php">물질관리</a>
           <?php endif; ?>
         <?php endif; ?>
+        <?php if ($canAccessCsm): ?>
+          <a class="btn-secondary" href="/CSM/">CSM 통합시스템</a>
+        <?php endif; ?>
         <a class="btn-secondary" href="../near_miss/">아차사고</a>
         <a class="btn-secondary btn-header-cta" href="../board/index.php">게시판</a>
         <a class="btn-secondary" href="../calendar/index.html">달력</a>
@@ -3223,6 +3227,9 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
           <div class="mobile-quick-grid">
             <?php if (!$isWorker && !$isLeaderOnly && $userRole !== 'safety_manager' && $userRole !== 'administrator' && !$isJungYeontakAccount): ?>
               <a class="btn-secondary mobile-quick-primary" href="<?= h($entryPage) ?>">작업 등록</a>
+            <?php endif; ?>
+            <?php if ($canAccessCsm): ?>
+              <a class="btn-secondary" href="/CSM/">CSM 통합시스템</a>
             <?php endif; ?>
             <a class="btn-secondary btn-header-cta" href="../board/index.php">게시판</a>
             <a class="btn-secondary" href="../tbm/index.php">TBM일지</a>
@@ -3651,6 +3658,9 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
       <?php endif; ?>
       <?php if (trim((string)auth_display_name($user)) === '김남균' && $canAccessSafetyGearManagement): ?>
         <a class="btn-secondary" href="/material_management/index.php">물질관리</a>
+      <?php endif; ?>
+      <?php if ($canAccessCsm): ?>
+        <a class="btn-secondary" href="/CSM/">CSM 통합시스템</a>
       <?php endif; ?>
       <a class="btn-secondary" href="../calendar/index.html">달력</a>
       <a class="btn-secondary" href="<?= h($entryPage) ?>?logout=1">로그아웃</a>
