@@ -5,7 +5,7 @@ require_once __DIR__ . '/../risk_assessment/auth.php';
 
 $user = auth_current_user();
 if (!is_array($user)) {
-    header('Location: /risk_assessment/task_select.php');
+    header('Location: /CSM/login.php?next=policy');
     exit;
 }
 
@@ -268,6 +268,7 @@ try {
     </div>
     <div class="actions">
         <a class="button secondary" href="index.php">매뉴얼로 돌아가기</a>
+        <a class="button secondary" href="/CSM/management_system.php?section=1.1">CSM 안전보건관리체계</a>
         <a class="button secondary" href="policy_review.php">안전보건방침 및 목표 검토 보고서</a>
         <button class="button" type="submit" id="policy-save">저장하기</button>
         <button class="button" type="button" id="policy-preview-open">인쇄하기</button>

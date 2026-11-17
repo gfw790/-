@@ -2,8 +2,19 @@
 declare(strict_types=1);
 require_once __DIR__ . '/goal_plan_storage.php';
 require_once __DIR__ . '/near_miss_counts.php';
+require_once __DIR__ . '/vfl_counts.php';
 function quarter_plan_template(): array { return json_decode((string)file_get_contents(__DIR__.'/quarter_plan_template.json'), true, 512, JSON_THROW_ON_ERROR); }
 function quarter_plan_number(float $value): string { return rtrim(rtrim(number_format($value, 6, '.', ''), '0'), '.'); }
+function quarter_plan_percent_display(string $value, bool $plan = false): string
+{
+    if ($value === '' || $value === '-' || !is_numeric($value)) return $value;
+    return $plan && (float)$value > 1 ? $value : quarter_plan_number((float)$value * 100);
+}
+function quarter_plan_percent_store(string $value): string
+{
+    if ($value === '' || $value === '-' || !is_numeric($value)) return $value;
+    return quarter_plan_number((float)$value / 100);
+}
 function quarter_plan_result(array $row, string $mode): string
 {
     $numbers = [];
@@ -17,6 +28,7 @@ function quarter_plan_defaults(int $year, int $quarter): array
     foreach ($template['rows'] as $row) {
         if ($row['type']!=='item') continue;
         foreach (['previous','plan','result','m1','m2','m3','note'] as $key) $rows[$row['id']][$key] = $year===$template['source_year'] && $quarter===$template['source_quarter'] ? $row[$key] : '';
+        foreach (['p1','p2','p3'] as $key) $rows[$row['id']][$key] = '';
     }
     return $rows;
 }
@@ -40,7 +52,11 @@ function quarter_plan_seed(PDO $db): void
 function quarter_plan_load(PDO $db,int $year,int $quarter): ?array
 {
     $stmt=$db->prepare('SELECT rows_json,revision FROM safety_quarter_plans WHERE plan_year=? AND quarter_no=?');$stmt->execute([$year,$quarter]);$row=$stmt->fetch(PDO::FETCH_ASSOC);
-    return $row ? ['rows'=>json_decode($row['rows_json'],true,512,JSON_THROW_ON_ERROR),'revision'=>(int)$row['revision']] : null;
+    if (!$row) return null;
+    $rows=json_decode($row['rows_json'],true,512,JSON_THROW_ON_ERROR);
+    foreach ($rows as &$values) foreach (['p1','p2','p3'] as $key) $values[$key]??='';
+    unset($values);
+    return ['rows'=>$rows,'revision'=>(int)$row['revision']];
 }
 function quarter_plan_previous(array $rows,?array $previous): array
 {
@@ -59,8 +75,8 @@ function quarter_plan_validate(mixed $input): array
     foreach(quarter_plan_template()['rows'] as $item) {
         if($item['type']!=='item')continue;$id=$item['id'];
         if(!is_array($input[$id]??null))throw new InvalidArgumentException('누락된 입력 항목이 있습니다.');
-        foreach(['previous','plan','m1','m2','m3'] as $key) {
-            $value=$input[$id][$key]??null;
+        foreach(['previous','plan','p1','p2','p3','m1','m2','m3'] as $key) {
+            $value=$input[$id][$key]??(in_array($key,['p1','p2','p3'],true)?'':null);
             $numericValue=$key==='previous'&&is_string($value)?rtrim($value,'%'):$value;
             $dash=in_array($key,['m1','m2','m3'],true)&&$value==='-';
             if(!is_string($value) || ($value!=='' && !$dash && (!preg_match('/^\d+(?:\.\d{1,6})?$/D',$numericValue) || (float)$numericValue>1000000000)))throw new InvalidArgumentException($item['name'].': 실적과 계획은 0 이상의 숫자(소수점 6자리 이내)로 입력해 주세요.');
@@ -81,7 +97,7 @@ function quarter_plan_annual_value(array $item,string $result): string
     foreach(goal_plan_template()['rows'] as $annual) {
         if(($annual['id']??null)!==$id)continue;
         $sample=$annual['q1'];
-        if(preg_match('/^[\d.]+(\s*(?:회|건|인|HR|hr|%))$/u',$sample,$match))return $result.$match[1];
+        if(preg_match('/^[\d.]+(\s*(?:회|건|인|시간|HR|hr|%))$/u',$sample,$match))return $result.$match[1];
         break;
     }
     return $result;
@@ -93,14 +109,14 @@ function quarter_plan_update_annual_rates(array $rows): array
         $numbers=[];$valid=true;
         foreach(['q1','q2','q3','q4'] as $key) {
             if($row[$key]==='')continue;
-            if(!preg_match('/^(\d+(?:\.\d+)?)\s*(?:회|건|인|HR|hr|%)?$/u',$row[$key],$m)){$valid=false;break;}
+            if(!preg_match('/^(\d+(?:\.\d+)?)\s*(?:회|건|인|시간|HR|hr|%)?$/u',$row[$key],$m)){$valid=false;break;}
             $numbers[]=(float)$m[1];
         }
         if(!$valid||$numbers===[])continue;$sum=array_sum($numbers);
         if(in_array($id,['r10','r12','r13'],true))$row['rate']=$sum==0?'100%':'0%';
         elseif($id==='r9')$row['rate']=quarter_plan_number($sum/2).'%';
         elseif($id==='r37')$row['rate']=quarter_plan_number($sum*8).'hr';
-        elseif(preg_match('/^(\d+(?:\.\d+)?)\s*(?:회|건|인|HR|hr|%)?$/u',$row['plan'],$m) && (float)$m[1]>0)$row['rate']=quarter_plan_number(round($sum/(float)$m[1]*100,2)).'%';
+        elseif(preg_match('/^(\d+(?:\.\d+)?)\s*(?:회|건|인|시간|HR|hr|%)?$/u',$row['plan'],$m) && (float)$m[1]>0)$row['rate']=quarter_plan_number(round($sum/(float)$m[1]*100,2)).'%';
     }
     unset($row);return $rows;
 }
@@ -108,6 +124,7 @@ function quarter_plan_save(PDO $db,int $year,int $quarter,array $rows,int $revis
 {
     if($year<1000||$year>9999||$quarter<1||$quarter>4)throw new InvalidArgumentException('연도와 분기를 확인해 주세요.');
     $rows['qr18']=array_replace($rows['qr18'],safety_near_miss_quarter($db,$year,$quarter));
+    $rows['qr25']=array_replace($rows['qr25'],safety_vfl_quarter($year,$quarter));
     $now=(new DateTimeImmutable('now',new DateTimeZone('Asia/Seoul')))->format('Y-m-d H:i:s');
     $db->beginTransaction();
     try {

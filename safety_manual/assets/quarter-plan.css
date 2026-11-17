@@ -5,15 +5,27 @@
 .quarter-table textarea { resize: vertical; line-height: 1.5; }
 .quarter-table input:focus, .quarter-table textarea:focus { outline: 2px solid #17477f66; border-color: #17477f; }
 .quarter-table input[readonly] { background: #edf2f7; }
+.quarter-table .month-plan-pair{display:grid;gap:5px}
+.quarter-table .month-plan-pair label{display:block;font-size:11px;font-weight:700;color:#53647d}
+.quarter-table .month-plan-pair input{min-height:30px;padding:4px 6px;margin-top:2px}
+.quarter-table .month-plan-pair output{min-height:30px;padding:4px 6px;background:#edf2f7;border-radius:5px}
+.quarter-table .month-plan-pair.is-inactive{opacity:.72}
+.quarter-table .month-plan-pair.is-inactive input[data-field^="p"]{background:#f2f5f9;border-style:dashed}
+.quarter-table .month-plan-pair.is-inactive input[readonly]{background:#e8edf3;color:#68798e;cursor:not-allowed}
+.quarter-table .month-plan-pair.is-active{opacity:1}
 .quarter-result { display: block; padding: 8px; text-align: center; font-weight: 700; }
 .percent-help { display: block; font-size: 11px; color: #63738a; padding-left: 5px; }
 #quarter-pages { padding: 24px; overflow: auto; }
 #quarter-overflow { color: #9b2626; }
-.quarter-sheet { padding: 16mm 13mm 8mm; }
+.quarter-sheet { padding: 20mm 10mm 8mm; display:flex; flex-direction:column; }
+.quarter-document-box{border:1px solid #17253b;padding:2mm;min-height:245mm}
+.quarter-print-footer{margin-top:auto;display:flex;align-items:center;justify-content:flex-end;gap:2mm;font-size:8pt;min-height:8mm}
+.quarter-print-footer img{width:5mm;height:5mm;object-fit:contain}
 .quarter-sheet .plan-caption { margin-bottom: 3mm; }
 .quarter-sheet .plan-print-table { font-size: 7.5pt; }
 .quarter-sheet .print-item { height: 5mm; }
 .quarter-sheet .quarter-title { font-size: 13pt; padding: 1.5mm 0; background: white; }
+.quarter-sheet .print-month-pair{font-size:7pt;line-height:1.1;white-space:normal}
 @media print {
     body.quarter-page > :not(#quarter-preview) { display: none !important; }
     body.quarter-page > #quarter-preview { display: block !important; position: static !important; width: auto !important; max-width: none !important; height: auto !important; max-height: none !important; margin: 0; padding: 0; border: 0; overflow: visible; background: white; }

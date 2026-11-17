@@ -3,12 +3,29 @@ body { margin: 0; color: #1f2937; background: #f2f6fb; font-family: "Malgun Goth
 header { background: #17477f; color: white; padding: 24px; }
 header > div, main { max-width: 1700px; margin: auto; }
 header small { color: #d7e1ef; }
+.plan-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 18px; }
+.plan-return { display: flex; flex-wrap: wrap; gap: 10px; }
+.plan-return a { color: white; text-decoration: none; border: 1px solid #93aed0; border-radius: 8px; padding: 9px 13px; font-size: 13px; }
+.plan-return a:hover { background: #ffffff18; }
+.plan-return a:focus-visible { outline: 3px solid #c5dcff; outline-offset: 3px; }
 h1 { margin: 8px 0 0; font-size: 26px; }
 main { padding: 24px 20px 48px; }
 .page-heading h2 { margin: 0 0 8px; color: #103563; font-size: 22px; }
 .page-heading p { margin: 0 0 20px; color: #63738a; }
 .notice { padding: 14px; border-radius: 8px; margin-bottom: 18px; background: #e7f4ed; color: #185a37; }
 .notice.error, #plan-overflow { color: #9b2626; }
+.risk-workflow-guide { margin: 0 0 20px; padding: 20px 22px; border: 1px solid #b9c9de; border-radius: 12px; background: white; line-height: 1.6; }
+.risk-workflow-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+.risk-workflow-heading small { color: #456b9a; font-weight: 700; }
+.risk-workflow-heading h3 { margin: 3px 0 0; color: #103563; font-size: 18px; }
+.risk-workflow-heading a { color: #17477f; font-size: 13px; font-weight: 700; }
+.risk-workflow-guide > p { margin: 12px 0; font-size: 14px; }
+.risk-workflow-steps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.risk-workflow-steps > div { padding: 14px 16px; border-radius: 9px; background: #f0f5fb; }
+.risk-workflow-steps strong { color: #103563; }
+.risk-workflow-steps p { margin: 7px 0; font-size: 13px; }
+.risk-workflow-steps small { display: block; color: #245b89; font-size: 12px; font-weight: 700; }
+.risk-workflow-guide .risk-workflow-note { margin-bottom: 0; color: #63738a; font-size: 12px; }
 .table-scroll { overflow: auto; border: 1px solid #b9c9de; border-radius: 12px; background: white; max-height: 72vh; }
 .editor-table { width: 100%; min-width: 1320px; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 14px; }
 .editor-table th, .editor-table td { border-right: 1px solid #c6d4e3; border-bottom: 1px solid #c6d4e3; }
@@ -57,7 +74,7 @@ body[data-preview-only="1"] #goal-plan-preview { width:100%; max-width:100%; max
 .plan-print-table .print-section td { border: 0; }
 .plan-print-table .print-item { height: 4.9mm; }
 .plan-footer { text-align: right; font-size: 8pt; font-weight: bold; margin-top: 2mm; }
-@media(max-width:600px) { h1 { font-size: 22px; } .actions > * { width: 100%; } }
+@media(max-width:600px) { h1 { font-size: 22px; } .actions > * { width: 100%; } .risk-workflow-steps { grid-template-columns: 1fr; } .risk-workflow-guide { padding: 16px; } }
 @media print {
     @page { size: A4 portrait; margin: 0; }
     html, body { margin: 0 !important; padding: 0 !important; background: white !important; }

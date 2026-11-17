@@ -56,6 +56,7 @@ function goal_plan_apply_previous(array $rows, ?array $previous): array
 function goal_plan_year_state(PDO $db, int $year): array
 {
     require_once __DIR__.'/near_miss_counts.php';
+    require_once __DIR__.'/vfl_counts.php';
     $saved = goal_plan_load($db, $year);
     $previous = goal_plan_load($db, $year - 1);
     $rows = $saved['rows'] ?? goal_plan_defaults($year);
@@ -69,9 +70,15 @@ function goal_plan_year_state(PDO $db, int $year): array
     }
     if($previous!==null)$previous['rows']['r18']=safety_near_miss_annual($previous['rows']['r18'],safety_near_miss_months($db,$year-1));
     $rows=goal_plan_apply_previous($rows,$previous);
+    $previousVfl = $previous['rows']['r25'] ?? goal_plan_defaults($year - 1)['r25'];
+    $previousPlans = goal_plan_quarter_plans($db, $year - 1);
+    $previousVfl['plan'] = $previousPlans['r25']['total'];
+    // Agreed opening baseline for 2025; later years carry the actual preceding year's rate.
+    $rows['r25']['previous'] = $year === 2026 ? '100%' : safety_vfl_annual($previousVfl, safety_vfl_months($year - 1))['rate'];
     $planBreakdown=goal_plan_quarter_plans($db,$year);
     foreach($planBreakdown as $id=>$detail)$rows[$id]['plan']=$detail['total'];
     $rows['r18']=safety_near_miss_annual($rows['r18'],safety_near_miss_months($db,$year));
+    $rows['r25']=safety_vfl_annual($rows['r25'],safety_vfl_months($year));
     return ['rows' => $rows, 'revision' => $saved['revision'] ?? 0, 'previous' => $previous, 'plan_breakdown'=>$planBreakdown];
 }
 function goal_plan_quarter_plans(PDO $db,int $year): array
@@ -100,7 +107,17 @@ function goal_plan_load(PDO $db, int $year): ?array
     $stmt = $db->prepare('SELECT rows_json, revision, updated_at FROM safety_goal_plans WHERE plan_year = ?');
     $stmt->execute([$year]); $row = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$row) return null;
-    return ['rows' => json_decode($row['rows_json'], true, 512, JSON_THROW_ON_ERROR), 'revision' => (int)$row['revision'], 'updated_at' => $row['updated_at']];
+    $rows = json_decode($row['rows_json'], true, 512, JSON_THROW_ON_ERROR);
+    if (isset($rows['r35'])) {
+        $rows['r35']['unit'] = '시간';
+        if (($rows['r35']['frequency'] ?? '') === '2hr/매월') $rows['r35']['frequency'] = '2시간/매월';
+        foreach (['plan','q1','q2','q3','q4'] as $field) {
+            $value = trim((string)($rows['r35'][$field] ?? ''));
+            if (preg_match('/^(\d+(?:\.\d+)?)\s*HR$/i', $value, $matches)) $rows['r35'][$field] = $matches[1] . '시간';
+        }
+    }
+    if (isset($rows['r49'])) $rows['r49']['unit'] = '회';
+    return ['rows' => $rows, 'revision' => (int)$row['revision'], 'updated_at' => $row['updated_at']];
 }
 function goal_plan_validate(mixed $input): array
 {
