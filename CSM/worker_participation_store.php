@@ -46,6 +46,8 @@ function worker_part_db(): PDO
         reward_note TEXT DEFAULT NULL,
         photo_before TEXT DEFAULT NULL,
         photo_after TEXT DEFAULT NULL,
+        proposer_sign TEXT DEFAULT NULL,
+        evaluator_sign TEXT DEFAULT NULL,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
     )');
@@ -66,6 +68,9 @@ function worker_part_db(): PDO
         action_items_json TEXT DEFAULT "[]",
         result_sharing TEXT DEFAULT NULL,
         attachment_path TEXT DEFAULT NULL,
+        drafter_sign TEXT DEFAULT NULL,
+        approver_sign TEXT DEFAULT NULL,
+        signatures_json TEXT DEFAULT "[]",
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
     )');
@@ -82,6 +87,7 @@ function worker_part_db(): PDO
         feedback_notice_summary TEXT NOT NULL,
         future_improvements TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT "작성",
+        manager_sign TEXT DEFAULT NULL,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         UNIQUE(year, half)
@@ -106,18 +112,122 @@ function worker_part_db(): PDO
         UNIQUE(year, month)
     )');
 
+    // Dedicated Digital Signatures Log Table
+    $db->exec('CREATE TABLE IF NOT EXISTS csm_signatures (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        doc_type TEXT NOT NULL,
+        doc_id INTEGER NOT NULL,
+        signer_role TEXT NOT NULL,
+        signer_name TEXT NOT NULL,
+        signature_data TEXT NOT NULL,
+        signed_at TEXT NOT NULL,
+        ip_address TEXT DEFAULT "",
+        created_at TEXT NOT NULL
+    )');
+
+    // Schema migration for existing databases
+    try { $db->exec("ALTER TABLE csm_safety_meetings ADD COLUMN drafter_sign TEXT DEFAULT NULL"); } catch (Throwable $e) {}
+    try { $db->exec("ALTER TABLE csm_safety_meetings ADD COLUMN approver_sign TEXT DEFAULT NULL"); } catch (Throwable $e) {}
+    try { $db->exec("ALTER TABLE csm_safety_meetings ADD COLUMN signatures_json TEXT DEFAULT '[]'"); } catch (Throwable $e) {}
+    try { $db->exec("ALTER TABLE csm_suggestions ADD COLUMN proposer_sign TEXT DEFAULT NULL"); } catch (Throwable $e) {}
+    try { $db->exec("ALTER TABLE csm_suggestions ADD COLUMN evaluator_sign TEXT DEFAULT NULL"); } catch (Throwable $e) {}
+    try { $db->exec("ALTER TABLE csm_feedback_reports ADD COLUMN manager_sign TEXT DEFAULT NULL"); } catch (Throwable $e) {}
+
     worker_part_seed_defaults($db);
     return $db;
+}
+
+function worker_part_make_signature_svg(string $name, string $color = '#1e3a8a'): string
+{
+    $cleanName = trim($name);
+    $svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 110 44" width="110" height="44">
+        <text x="55" y="28" font-family="Batang, Gungsuh, Malgun Gothic, serif" font-size="20" font-weight="bold" font-style="italic" fill="' . $color . '" text-anchor="middle" letter-spacing="4">' . htmlspecialchars($cleanName, ENT_QUOTES, 'UTF-8') . '</text>
+        <circle cx="55" cy="22" r="18" fill="none" stroke="' . $color . '" stroke-width="1.2" stroke-dasharray="3 2" opacity="0.65"/>
+    </svg>';
+    return 'data:image/svg+xml;utf8,' . rawurlencode($svg);
+}
+
+function worker_part_save_signature(PDO $db, string $docType, int $docId, string $role, string $name, string $sigData, string $ip = ''): void
+{
+    $now = date('Y-m-d H:i:s');
+    $db->prepare('INSERT INTO csm_signatures (
+        doc_type, doc_id, signer_role, signer_name, signature_data, signed_at, ip_address, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')->execute([
+        $docType, $docId, $role, $name, $sigData, $now, $ip, $now
+    ]);
+
+    if ($docType === 'meeting') {
+        if ($role === 'drafter') {
+            $db->prepare('UPDATE csm_safety_meetings SET drafter_sign = ?, updated_at = ? WHERE id = ?')->execute([$sigData, $now, $docId]);
+        } elseif ($role === 'approver') {
+            $db->prepare('UPDATE csm_safety_meetings SET approver_sign = ?, updated_at = ? WHERE id = ?')->execute([$sigData, $now, $docId]);
+        } elseif ($role === 'attendee' || $role === 'opinion') {
+            $currJson = $db->query("SELECT signatures_json FROM csm_safety_meetings WHERE id = $docId")->fetchColumn() ?: '[]';
+            $signs = json_decode($currJson, true) ?: [];
+            $found = false;
+            foreach ($signs as &$s) {
+                if ($s['name'] === $name) {
+                    $s['sign'] = $sigData;
+                    $s['signed_at'] = $now;
+                    $found = true;
+                    break;
+                }
+            }
+            unset($s);
+            if (!$found) {
+                $signs[] = ['name' => $name, 'role' => $role, 'sign' => $sigData, 'signed_at' => $now];
+            }
+            $db->prepare('UPDATE csm_safety_meetings SET signatures_json = ?, updated_at = ? WHERE id = ?')
+               ->execute([json_encode($signs, JSON_UNESCAPED_UNICODE), $now, $docId]);
+        }
+    } elseif ($docType === 'suggestion') {
+        if ($role === 'proposer') {
+            $db->prepare('UPDATE csm_suggestions SET proposer_sign = ?, updated_at = ? WHERE id = ?')->execute([$sigData, $now, $docId]);
+        } elseif ($role === 'evaluator') {
+            $db->prepare('UPDATE csm_suggestions SET evaluator_sign = ?, updated_at = ? WHERE id = ?')->execute([$sigData, $now, $docId]);
+        }
+    }
 }
 
 function worker_part_seed_defaults(PDO $db): void
 {
     $count = (int)$db->query('SELECT COUNT(*) FROM csm_suggestions')->fetchColumn();
     if ($count > 0) {
+        // Ensure signatures are populated for seeded rows if currently null
+        $mSign = $db->query('SELECT drafter_sign FROM csm_safety_meetings LIMIT 1')->fetchColumn();
+        if (!$mSign) {
+            $now = date('Y-m-d H:i:s');
+            $drafterSign = worker_part_make_signature_svg('진종철', '#b91c1c');
+            $approverSign = worker_part_make_signature_svg('정연탁', '#1e3a8a');
+            $attendeeSigns = [
+                ['name' => '진종철', 'role' => 'attendee', 'sign' => $drafterSign, 'signed_at' => '2026-01-22 14:00'],
+                ['name' => '정주랑', 'role' => 'attendee', 'sign' => worker_part_make_signature_svg('정주랑', '#0284c7'), 'signed_at' => '2026-01-22 14:05'],
+                ['name' => '윤택천', 'role' => 'attendee', 'sign' => worker_part_make_signature_svg('윤택천', '#059669'), 'signed_at' => '2026-01-22 14:10'],
+                ['name' => '김도담', 'role' => 'attendee', 'sign' => worker_part_make_signature_svg('김도담', '#1e3a8a'), 'signed_at' => '2026-01-22 14:12'],
+                ['name' => '우홍기', 'role' => 'attendee', 'sign' => worker_part_make_signature_svg('우홍기', '#0284c7'), 'signed_at' => '2026-01-22 14:15'],
+                ['name' => '김남균', 'role' => 'attendee', 'sign' => worker_part_make_signature_svg('김남균', '#475569'), 'signed_at' => '2026-01-22 14:18'],
+            ];
+            $db->prepare('UPDATE csm_safety_meetings SET
+                drafter_sign = ?, approver_sign = ?, signatures_json = ?, updated_at = ?
+                WHERE id = 1')->execute([
+                $drafterSign, $approverSign, json_encode($attendeeSigns, JSON_UNESCAPED_UNICODE), $now
+            ]);
+
+            // Seed signatures for suggestions
+            $stmt = $db->query('SELECT id, proposer_name FROM csm_suggestions');
+            while ($row = $stmt->fetch()) {
+                $pSign = worker_part_make_signature_svg($row['proposer_name'], '#059669');
+                $eSign = worker_part_make_signature_svg('정연탁', '#1e3a8a');
+                $db->prepare('UPDATE csm_suggestions SET proposer_sign = ?, evaluator_sign = ?, updated_at = ? WHERE id = ?')
+                   ->execute([$pSign, $eSign, $now, $row['id']]);
+            }
+        }
         return;
     }
 
     $now = date('Y-m-d H:i:s');
+    $evalSign = worker_part_make_signature_svg('정연탁', '#1e3a8a');
+
     $suggestions = [
         [
             'year' => 2026,
@@ -144,6 +254,8 @@ function worker_part_seed_defaults(PDO $db): void
             'feedback_method' => 'TBM 미팅 전파 및 안전게시판 공지',
             'reward_points' => 30.0,
             'reward_note' => '안전포상 상품권(5만원) 지급 및 이달의 안전인 가점 30점',
+            'proposer_sign' => worker_part_make_signature_svg('윤택천', '#059669'),
+            'evaluator_sign' => $evalSign,
         ],
         [
             'year' => 2026,
@@ -170,6 +282,8 @@ function worker_part_seed_defaults(PDO $db): void
             'feedback_method' => '주간 안전회의 공지 및 사진 공유',
             'reward_points' => 25.0,
             'reward_note' => '안전제안 우수상품권(3만원)',
+            'proposer_sign' => worker_part_make_signature_svg('김도담', '#1e3a8a'),
+            'evaluator_sign' => $evalSign,
         ],
         [
             'year' => 2026,
@@ -196,6 +310,8 @@ function worker_part_seed_defaults(PDO $db): void
             'feedback_method' => 'TBM 실물 시연 및 환류 공지',
             'reward_points' => 30.0,
             'reward_note' => '최우수 안전제안상(10만원)',
+            'proposer_sign' => worker_part_make_signature_svg('우홍기', '#0284c7'),
+            'evaluator_sign' => $evalSign,
         ],
     ];
 
@@ -203,55 +319,63 @@ function worker_part_seed_defaults(PDO $db): void
         year, reg_no, reg_date, proposer_name, proposer_dept, title, category, location,
         problem, solution, expected_effect, status, review_date, reviewer_name, review_opinion,
         action_plan, action_manager, action_deadline, action_date, action_result, feedback_date, feedback_method,
-        reward_points, reward_note, created_at, updated_at
+        reward_points, reward_note, proposer_sign, evaluator_sign, created_at, updated_at
     ) VALUES (
         :year, :reg_no, :reg_date, :proposer_name, :proposer_dept, :title, :category, :location,
         :problem, :solution, :expected_effect, :status, :review_date, :reviewer_name, :review_opinion,
         :action_plan, :action_manager, :action_deadline, :action_date, :action_result, :feedback_date, :feedback_method,
-        :reward_points, :reward_note, :created_at, :updated_at
+        :reward_points, :reward_note, :proposer_sign, :evaluator_sign, :created_at, :updated_at
     )');
 
     foreach ($suggestions as $s) {
         $stmt->execute(array_merge($s, ['created_at' => $now, 'updated_at' => $now]));
     }
 
-    // Seed Meeting
-    $meetings = [
-        [
-            'year' => 2026,
-            'meeting_type' => '산업안전보건위원회',
-            'meeting_name' => '2026년 1분기 정기 산업안전보건위원회 회의',
-            'meeting_date' => '2026-01-22',
-            'meeting_place' => '본관 회의실',
-            'chairperson' => '정연탁 대표',
-            'attendees_text' => '정연탁(대표), 진종철(부장), 정주랑(대리), 윤택천(근로자대표), 김도담(정비반), 우홍기(전기반)',
-            'attendees_count' => 6,
-            'agenda' => '1. 2026년 안전보건경영방침 및 연간 활동계획 공유\n2. 동절기/해빙기 전기설비 및 고소작업 안전점검 계획\n3. 근로자 안전제안 및 아차사고 발굴 활성화 방안',
-            'deliberation_content' => '- 원청 및 협력사 합동 순회점검 주기 준수 철저\n- 근로자 의견청취 결과: 이동식 작업대 노후품 교체 건의 및 활선경보기 지급 요청 접수\n- TBM 시간 준수 및 10대 안전수칙 서명 이행 상태 점검',
-            'decisions' => '1. 제안된 규격 말비계 및 활선경보기 1분기 안전예산 즉시 집행\n2. 근로자 제안 포상금 제도 분기별 정례화\n3. 회의 결과 전 근로자 TBM 및 게시판 공유',
-            'action_items_json' => json_encode([
-                ['task' => '규격 말비계 2조 구매', 'manager' => '정주랑', 'deadline' => '2026-01-25', 'done' => true],
-                ['task' => '활선경보기 견적 및 구매', 'manager' => '정주랑', 'deadline' => '2026-03-15', 'done' => true],
-            ], JSON_UNESCAPED_UNICODE),
-            'result_sharing' => '사무실 및 휴게실 게시판 공지, 1/26 TBM 교육 전파',
-            'attachment_path' => null,
-            'created_at' => $now,
-            'updated_at' => $now,
-        ]
+    // Seed Meeting with Signatures
+    $drafterSign = worker_part_make_signature_svg('진종철', '#b91c1c');
+    $approverSign = worker_part_make_signature_svg('정연탁', '#1e3a8a');
+    $attendeeSigns = [
+        ['name' => '진종철', 'role' => 'attendee', 'sign' => $drafterSign, 'signed_at' => '2026-01-22 14:00'],
+        ['name' => '정주랑', 'role' => 'attendee', 'sign' => worker_part_make_signature_svg('정주랑', '#0284c7'), 'signed_at' => '2026-01-22 14:05'],
+        ['name' => '윤택천', 'role' => 'attendee', 'sign' => worker_part_make_signature_svg('윤택천', '#059669'), 'signed_at' => '2026-01-22 14:10'],
+        ['name' => '김도담', 'role' => 'attendee', 'sign' => worker_part_make_signature_svg('김도담', '#1e3a8a'), 'signed_at' => '2026-01-22 14:12'],
+        ['name' => '우홍기', 'role' => 'attendee', 'sign' => worker_part_make_signature_svg('우홍기', '#0284c7'), 'signed_at' => '2026-01-22 14:15'],
+        ['name' => '김남균', 'role' => 'attendee', 'sign' => worker_part_make_signature_svg('김남균', '#475569'), 'signed_at' => '2026-01-22 14:18'],
     ];
 
     $mStmt = $db->prepare('INSERT INTO csm_safety_meetings (
         year, meeting_type, meeting_name, meeting_date, meeting_place, chairperson,
         attendees_text, attendees_count, agenda, deliberation_content, decisions, action_items_json,
-        result_sharing, attachment_path, created_at, updated_at
+        result_sharing, attachment_path, drafter_sign, approver_sign, signatures_json, created_at, updated_at
     ) VALUES (
         :year, :meeting_type, :meeting_name, :meeting_date, :meeting_place, :chairperson,
         :attendees_text, :attendees_count, :agenda, :deliberation_content, :decisions, :action_items_json,
-        :result_sharing, :attachment_path, :created_at, :updated_at
+        :result_sharing, :attachment_path, :drafter_sign, :approver_sign, :signatures_json, :created_at, :updated_at
     )');
-    foreach ($meetings as $m) {
-        $mStmt->execute($m);
-    }
+    $mStmt->execute([
+        'year' => 2026,
+        'meeting_type' => '산업안전보건위원회',
+        'meeting_name' => '2026년 1분기 정기 산업안전보건위원회 회의',
+        'meeting_date' => '2026-01-22',
+        'meeting_place' => '본관 회의실',
+        'chairperson' => '정연탁 대표',
+        'attendees_text' => '정연탁(대표), 진종철(부장), 정주랑(대리), 윤택천(근로자대표), 김도담(정비반), 우홍기(전기반)',
+        'attendees_count' => 6,
+        'agenda' => "1. 2026년 안전보건경영방침 및 연간 활동계획 공유\n2. 동절기/해빙기 전기설비 및 고소작업 안전점검 계획\n3. 근로자 안전제안 및 아차사고 발굴 활성화 방안",
+        'deliberation_content' => "- 원청 및 협력사 합동 순회점검 주기 준수 철저\n- 근로자 의견청취 결과: 이동식 작업대 노후품 교체 건의 및 활선경보기 지급 요청 접수\n- TBM 시간 준수 및 10대 안전수칙 서명 이행 상태 점검",
+        'decisions' => "1. 제안된 규격 말비계 및 활선경보기 1분기 안전예산 즉시 집행\n2. 근로자 제안 포상금 제도 분기별 정례화\n3. 회의 결과 전 근로자 TBM 및 게시판 공유",
+        'action_items_json' => json_encode([
+            ['task' => '규격 말비계 2조 구매', 'manager' => '정주랑', 'deadline' => '2026-01-25', 'done' => true],
+            ['task' => '활선경보기 견적 및 구매', 'manager' => '정주랑', 'deadline' => '2026-03-15', 'done' => true],
+        ], JSON_UNESCAPED_UNICODE),
+        'result_sharing' => '사무실 및 휴게실 게시판 공지, 1/26 TBM 교육 전파',
+        'attachment_path' => null,
+        'drafter_sign' => $drafterSign,
+        'approver_sign' => $approverSign,
+        'signatures_json' => json_encode($attendeeSigns, JSON_UNESCAPED_UNICODE),
+        'created_at' => $now,
+        'updated_at' => $now,
+    ]);
 
     // Seed Champions
     $cStmt = $db->prepare('INSERT INTO csm_safety_champions (
@@ -284,11 +408,11 @@ function worker_part_seed_defaults(PDO $db): void
     $rStmt = $db->prepare('INSERT INTO csm_feedback_reports (
         year, half, report_title, report_date, manager_name,
         summary_opinions, action_status_summary, feedback_notice_summary, future_improvements,
-        status, created_at, updated_at
+        status, manager_sign, created_at, updated_at
     ) VALUES (
         :year, :half, :report_title, :report_date, :manager_name,
         :summary_opinions, :action_status_summary, :feedback_notice_summary, :future_improvements,
-        :status, :created_at, :updated_at
+        :status, :manager_sign, :created_at, :updated_at
     )');
     $rStmt->execute([
         'year' => 2026,
@@ -296,11 +420,12 @@ function worker_part_seed_defaults(PDO $db): void
         'report_title' => '2026년 상반기 근로자 의견청취 및 안전제안 조치결과 환류 보고서',
         'report_date' => '2026-06-30',
         'manager_name' => '안전보건관리책임자 정연탁',
-        'summary_opinions' => '1. 상반기 안전제안 총 3건 접수 (작업장안전 1건, 작업환경 1건, 시설물안전 1건)\n2. 정기 안전보건협의회 분기별 2회 실시 및 근로자대표 건의사항 청취',
-        'action_status_summary' => '1. 고소작업 규격 안전사다리 2조 구매 비치 완료 (100% 조치)\n2. 자재보관소 안전통로 도색 및 구획 분리 완료 (100% 조치)\n3. 전기작업자 활선경보기 5세트 지급 및 작동점검 완료 (100% 조치)',
+        'summary_opinions' => "1. 상반기 안전제안 총 3건 접수 (작업장안전 1건, 작업환경 1건, 시설물안전 1건)\n2. 정기 산업안전보건위원회 분기별 2회 실시 및 근로자대표 건의사항 청취",
+        'action_status_summary' => "1. 고소작업 규격 안전사다리 2조 구매 비치 완료 (100% 조치)\n2. 자재보관소 안전통로 도색 및 구획 분리 완료 (100% 조치)\n3. 전기작업자 활선경보기 5세트 지급 및 작동점검 완료 (100% 조치)",
         'feedback_notice_summary' => '수렴된 의견 및 조치 완료 내역을 매월 TBM 미팅 및 사내 휴게실 안전게시판에 공지하였으며, 제안자 전원 포상금 지급 완료',
         'future_improvements' => '하반기 혹서기 온열질환 예방 제안 및 화학물질 취급 개선 제안 집중 발굴 추진',
         'status' => '승인·공지',
+        'manager_sign' => $evalSign,
         'created_at' => $now,
         'updated_at' => $now,
     ]);

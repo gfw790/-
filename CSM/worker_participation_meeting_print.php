@@ -370,9 +370,16 @@ $koreanDays = ['일', '월', '화', '수', '목', '금', '토'];
       $dayOfWeek = $koreanDays[(int)$mDate->format('w')];
       $dateStr = sprintf('%04d 년   %02d월  %02d 일        %s요일', (int)$mDate->format('Y'), (int)$mDate->format('m'), (int)$mDate->format('d'), $dayOfWeek);
       
-      // Parse attendees
+      // Parse attendees and digital signatures
       $attendees = array_map('trim', explode(',', $m['attendees_text']));
       $attChunk = array_chunk($attendees, 3);
+      $signatures = json_decode($m['signatures_json'] ?? '[]', true) ?: [];
+      $signMap = [];
+      foreach ($signatures as $sItem) {
+          if (!empty($sItem['name']) && !empty($sItem['sign'])) {
+              $signMap[$sItem['name']] = $sItem['sign'];
+          }
+      }
     ?>
     <div class="a4-page">
       <div class="page-content">
@@ -387,8 +394,16 @@ $koreanDays = ['일', '월', '화', '수', '목', '금', '토'];
               <th style="width:70px;">관리책임자</th>
             </tr>
             <tr>
-              <td></td>
-              <td></td>
+              <td style="text-align:center;padding:2px;">
+                <?php if (!empty($m['drafter_sign'])): ?>
+                  <img src="<?= $m['drafter_sign'] ?>" alt="담당 서명" style="max-height:42px;max-width:62px;object-fit:contain;display:block;margin:0 auto;">
+                <?php endif; ?>
+              </td>
+              <td style="text-align:center;padding:2px;">
+                <?php if (!empty($m['approver_sign'])): ?>
+                  <img src="<?= $m['approver_sign'] ?>" alt="책임자 서명" style="max-height:42px;max-width:62px;object-fit:contain;display:block;margin:0 auto;">
+                <?php endif; ?>
+              </td>
             </tr>
           </table>
         </div>
@@ -438,12 +453,20 @@ $koreanDays = ['일', '월', '화', '수', '목', '금', '토'];
             <tr><td></td><td>(인)</td><td></td><td>(인)</td><td></td><td>(인)</td></tr>
           <?php else: foreach ($attChunk as $row): ?>
             <tr>
-              <td class="cell-center"><strong><?= $escape($row[0] ?? '') ?></strong></td>
-              <td class="cell-center" style="color:#64748b;"><?= !empty($row[0]) ? '(서 명)' : '' ?></td>
-              <td class="cell-center"><strong><?= $escape($row[1] ?? '') ?></strong></td>
-              <td class="cell-center" style="color:#64748b;"><?= !empty($row[1]) ? '(서 명)' : '' ?></td>
-              <td class="cell-center"><strong><?= $escape($row[2] ?? '') ?></strong></td>
-              <td class="cell-center" style="color:#64748b;"><?= !empty($row[2]) ? '(서 명)' : '' ?></td>
+              <?php for ($ci = 0; $ci < 3; $ci++): 
+                $pName = trim((string)($row[$ci] ?? ''));
+                $cleanName = preg_replace('/\s*\(.*?\)/u', '', $pName);
+                $pSign = $signMap[$cleanName] ?? ($signMap[$pName] ?? '');
+              ?>
+                <td class="cell-center"><strong><?= $escape($pName) ?></strong></td>
+                <td class="cell-center" style="padding:2px;">
+                  <?php if (!empty($pSign)): ?>
+                    <img src="<?= $pSign ?>" alt="서명" style="max-height:26px;max-width:48px;object-fit:contain;display:block;margin:0 auto;">
+                  <?php elseif (!empty($pName)): ?>
+                    <span style="color:#64748b;font-size:8.5pt;">(서 명)</span>
+                  <?php endif; ?>
+                </td>
+              <?php endfor; ?>
             </tr>
           <?php endforeach; endif; ?>
         </table>
@@ -474,17 +497,35 @@ $koreanDays = ['일', '월', '화', '수', '목', '금', '토'];
           <tr>
             <td class="cell-center"><strong>윤택천</strong><br><small>(근로자대표)</small></td>
             <td style="padding:6px 10px;font-size:9pt;line-height:1.4;">고소작업 시 안전발판 규격품 교체 및 전기실 작업 시 활선접근경보기 지급 요청</td>
-            <td class="cell-center" style="color:#64748b;">(서 명)</td>
+            <td class="cell-center" style="padding:2px;">
+              <?php if (!empty($signMap['윤택천'])): ?>
+                <img src="<?= $signMap['윤택천'] ?>" alt="서명" style="max-height:24px;max-width:44px;object-fit:contain;display:block;margin:0 auto;">
+              <?php else: ?>
+                <span style="color:#64748b;font-size:8.5pt;">(서 명)</span>
+              <?php endif; ?>
+            </td>
           </tr>
           <tr>
             <td class="cell-center"><strong>김도담</strong><br><small>(정비반)</small></td>
             <td style="padding:6px 10px;font-size:9pt;line-height:1.4;">자재창고 앞 안전통로 구획 도색 및 보행자/지게차 동선 분리 요청</td>
-            <td class="cell-center" style="color:#64748b;">(서 명)</td>
+            <td class="cell-center" style="padding:2px;">
+              <?php if (!empty($signMap['김도담'])): ?>
+                <img src="<?= $signMap['김도담'] ?>" alt="서명" style="max-height:24px;max-width:44px;object-fit:contain;display:block;margin:0 auto;">
+              <?php else: ?>
+                <span style="color:#64748b;font-size:8.5pt;">(서 명)</span>
+              <?php endif; ?>
+            </td>
           </tr>
           <tr>
             <td class="cell-center"><strong>우홍기</strong><br><small>(전기반)</small></td>
             <td style="padding:6px 10px;font-size:9pt;line-height:1.4;">변전실 정전 점검 시 조명 확보를 위한 휴대용 충전식 투광등 추가 비치 요청</td>
-            <td class="cell-center" style="color:#64748b;">(서 명)</td>
+            <td class="cell-center" style="padding:2px;">
+              <?php if (!empty($signMap['우홍기'])): ?>
+                <img src="<?= $signMap['우홍기'] ?>" alt="서명" style="max-height:24px;max-width:44px;object-fit:contain;display:block;margin:0 auto;">
+              <?php else: ?>
+                <span style="color:#64748b;font-size:8.5pt;">(서 명)</span>
+              <?php endif; ?>
+            </td>
           </tr>
         </table>
 

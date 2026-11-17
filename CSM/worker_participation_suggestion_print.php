@@ -466,7 +466,12 @@ $categoriesList = [
           <tr>
             <th rowspan="2" class="header-col">제안자<br>정  보</th>
             <th style="background:#f8fafc;">성  명</th>
-            <td style="font-weight:700;text-align:center;"><?= $escape($s['proposer_name']) ?></td>
+            <td style="font-weight:700;text-align:center;">
+              <?= $escape($s['proposer_name']) ?>
+              <?php if (!empty($s['proposer_sign'])): ?>
+                <img src="<?= $s['proposer_sign'] ?>" alt="서명" style="max-height:24px;vertical-align:middle;margin-left:4px;">
+              <?php endif; ?>
+            </td>
             <th style="background:#f8fafc;">접수일</th>
             <td style="text-align:center;"><?= $escape($s['reg_date']) ?></td>
             <th style="background:#f8fafc;">채택여부</th>
@@ -525,7 +530,12 @@ $categoriesList = [
             <?php endif; ?>
           </div>
           <div>
-            평가자 : <span style="font-weight:700;">안전보건관리책임자 정연탁</span> &nbsp; (서 명)
+            평가자 : <span style="font-weight:700;">안전보건관리책임자 정연탁</span>
+            <?php if (!empty($s['evaluator_sign'])): ?>
+              <img src="<?= $s['evaluator_sign'] ?>" alt="서명" style="max-height:30px;vertical-align:middle;margin-left:6px;">
+            <?php else: ?>
+              &nbsp; (서 명)
+            <?php endif; ?>
           </div>
         </div>
 

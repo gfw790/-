@@ -251,6 +251,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $score_near_miss, $score_suggestion, $score_attendance, $score_other, $total_score, $reward_content
             ]);
             $message = $month . '월 이달의 안전인이 선정·저장되었습니다.';
+        } elseif ($action === 'save_signature') {
+            $doc_type = trim($_POST['doc_type'] ?? 'meeting');
+            $doc_id = filter_var($_POST['doc_id'] ?? 0, FILTER_VALIDATE_INT);
+            $signer_role = trim($_POST['signer_role'] ?? 'attendee');
+            $signer_name = trim($_POST['signer_name'] ?? '');
+            $sig_data = trim($_POST['signature_data'] ?? '');
+            $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+
+            if ($doc_id <= 0 || $signer_name === '' || $sig_data === '') {
+                throw new InvalidArgumentException('서명 대상 및 서명 데이터가 누락되었습니다.');
+            }
+
+            worker_part_save_signature($db, $doc_type, $doc_id, $signer_role, $signer_name, $sig_data, $ip);
+            $message = $signer_name . ' 님의 전자서명이 안전하게 저장·DB 등록되었습니다.';
         }
     } catch (Throwable $e) {
         $error = $e->getMessage();
@@ -446,8 +460,9 @@ if ($tab === 'suggestions') {
                   <div style="font-size:11px;color:var(--wp-muted);"><?= $escape($s['reward_note']) ?></div>
                 <?php endif; ?>
               </td>
-              <td class="no-print" style="text-align:center;">
+              <td class="no-print" style="text-align:center;white-space:nowrap;">
                 <a href="worker_participation_suggestion_print.php?id=<?= $s['id'] ?>" target="_blank" class="wp-btn wp-btn-outline wp-btn-sm">🖨️ 인쇄</a>
+                <button type="button" class="wp-btn wp-btn-outline wp-btn-sm" onclick="openSignModal('suggestion', <?= $s['id'] ?>, '<?= $escape($s['proposer_name']) ?>', '<?= $escape($s['title']) ?>')">✍️ 서명</button>
                 <button type="button" class="wp-btn wp-btn-outline wp-btn-sm" onclick='editSuggestion(<?= json_encode($s, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>)'>수정</button>
                 <form method="post" style="display:inline;" onsubmit="return confirm('해당 안전제안을 삭제하시겠습니까?');">
                   <input type="hidden" name="action" value="delete_suggestion">
@@ -503,8 +518,9 @@ if ($tab === 'suggestions') {
               <td>
                 <div style="font-size:12px;color:#334155;"><?= $escape($m['result_sharing'] ?: '게시판 공지') ?></div>
               </td>
-              <td class="no-print" style="text-align:center;">
+              <td class="no-print" style="text-align:center;white-space:nowrap;">
                 <a href="worker_participation_meeting_print.php?id=<?= $m['id'] ?>" target="_blank" class="wp-btn wp-btn-outline wp-btn-sm">🖨️ 인쇄</a>
+                <button type="button" class="wp-btn wp-btn-outline wp-btn-sm" onclick="openSignModal('meeting', <?= $m['id'] ?>, '', '<?= $escape($m['meeting_name']) ?>')">✍️ 서명</button>
                 <button type="button" class="wp-btn wp-btn-outline wp-btn-sm" onclick='editMeeting(<?= json_encode($m, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>)'>수정</button>
                 <form method="post" style="display:inline;" onsubmit="return confirm('해당 회의록을 삭제하시겠습니까?');">
                   <input type="hidden" name="action" value="delete_meeting">
@@ -914,6 +930,53 @@ if ($tab === 'suggestions') {
   </div>
 </div>
 
+<!-- MODAL: SIGNATURE PAD -->
+<div id="modalSign" class="wp-modal-backdrop" style="display:none;">
+  <div class="wp-modal" style="max-width:560px;">
+    <form method="post" id="formSignature">
+      <input type="hidden" name="action" value="save_signature">
+      <input type="hidden" name="doc_type" id="sign_doc_type" value="meeting">
+      <input type="hidden" name="doc_id" id="sign_doc_id" value="0">
+      <input type="hidden" name="signature_data" id="sign_data" value="">
+      <div class="wp-modal-header">
+        <h3 id="sign_modal_title">✍️ 전자서명 등록</h3>
+        <button type="button" class="wp-modal-close" onclick="closeSignModal()">&times;</button>
+      </div>
+      <div class="wp-modal-body">
+        <div class="wp-form-grid" style="grid-template-columns:1fr 1fr;">
+          <div class="wp-form-group">
+            <label>서명 구분 / 역할 *</label>
+            <select name="signer_role" id="sign_role" class="wp-input" required>
+              <!-- Dynamic -->
+            </select>
+          </div>
+          <div class="wp-form-group">
+            <label>서명자 성명 *</label>
+            <input type="text" name="signer_name" id="sign_name" class="wp-input" placeholder="성명 입력" required>
+          </div>
+          <div class="wp-form-col-full wp-form-group">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+              <label style="margin:0;font-weight:600;">서명 / 인감 날인 (마우스/터치 가능) *</label>
+              <div style="display:flex;gap:6px;">
+                <button type="button" class="wp-btn wp-btn-outline wp-btn-sm" onclick="generateAutoStamp()">인감도장 자동생성</button>
+                <button type="button" class="wp-btn wp-btn-outline wp-btn-sm" onclick="clearSignatureCanvas()">지우기</button>
+              </div>
+            </div>
+            <div style="border:2px dashed #94a3b8;background:#ffffff;border-radius:8px;padding:4px;display:flex;justify-content:center;align-items:center;position:relative;">
+              <canvas id="sigCanvas" width="480" height="170" style="touch-action:none;cursor:crosshair;background:#ffffff;max-width:100%;display:block;"></canvas>
+            </div>
+            <small style="color:var(--wp-muted);margin-top:6px;display:block;">* 마우스 드래그 또는 터치로 직접 서명하거나, 성명 입력 후 <strong>[인감도장 자동생성]</strong>을 클릭하여 공인 직인을 날인할 수 있습니다.</small>
+          </div>
+        </div>
+      </div>
+      <div class="wp-modal-footer">
+        <button type="button" class="wp-btn wp-btn-outline" onclick="closeSignModal()">취소</button>
+        <button type="button" class="wp-btn wp-btn-primary" onclick="submitSignature()">서명 확정 및 DB 저장</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
 function openSuggestionModal() {
   document.getElementById('sug_id').value = '0';
@@ -1040,6 +1103,173 @@ function editFeedback(r) {
   document.getElementById('fb_notice').value = r.feedback_notice_summary;
   document.getElementById('fb_future').value = r.future_improvements;
   document.getElementById('modalFeedback').style.display = 'flex';
+}
+
+// DIGITAL SIGNATURE CANVAS LOGIC
+let sigCanvas = null;
+let sigCtx = null;
+let isDrawing = false;
+let hasDrawn = false;
+
+function initSignatureCanvas() {
+  sigCanvas = document.getElementById('sigCanvas');
+  if (!sigCanvas) return;
+  sigCtx = sigCanvas.getContext('2d');
+  sigCtx.lineWidth = 2.8;
+  sigCtx.lineCap = 'round';
+  sigCtx.lineJoin = 'round';
+  sigCtx.strokeStyle = '#0f172a';
+
+  function getPos(e) {
+    const rect = sigCanvas.getBoundingClientRect();
+    const scaleX = sigCanvas.width / rect.width;
+    const scaleY = sigCanvas.height / rect.height;
+    if (e.touches && e.touches[0]) {
+      return {
+        x: (e.touches[0].clientX - rect.left) * scaleX,
+        y: (e.touches[0].clientY - rect.top) * scaleY
+      };
+    }
+    return {
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top) * scaleY
+    };
+  }
+
+  function startDraw(e) {
+    if (e.target !== sigCanvas) return;
+    e.preventDefault();
+    isDrawing = true;
+    hasDrawn = true;
+    const p = getPos(e);
+    sigCtx.beginPath();
+    sigCtx.moveTo(p.x, p.y);
+  }
+
+  function drawMove(e) {
+    if (!isDrawing) return;
+    e.preventDefault();
+    const p = getPos(e);
+    sigCtx.lineTo(p.x, p.y);
+    sigCtx.stroke();
+  }
+
+  function endDraw(e) {
+    if (!isDrawing) return;
+    isDrawing = false;
+  }
+
+  sigCanvas.addEventListener('mousedown', startDraw);
+  sigCanvas.addEventListener('mousemove', drawMove);
+  window.addEventListener('mouseup', endDraw);
+
+  sigCanvas.addEventListener('touchstart', startDraw, { passive: false });
+  sigCanvas.addEventListener('touchmove', drawMove, { passive: false });
+  window.addEventListener('touchend', endDraw, { passive: false });
+}
+
+function clearSignatureCanvas() {
+  if (!sigCanvas || !sigCtx) {
+    initSignatureCanvas();
+  }
+  if (sigCanvas && sigCtx) {
+    sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
+    hasDrawn = false;
+  }
+}
+
+function generateAutoStamp() {
+  const nameInput = document.getElementById('sign_name');
+  const name = nameInput ? nameInput.value.trim() : '';
+  if (!name) {
+    alert('도장에 각인할 서명자 성명을 먼저 입력해주세요.');
+    if (nameInput) nameInput.focus();
+    return;
+  }
+  if (!sigCanvas || !sigCtx) {
+    initSignatureCanvas();
+  }
+  clearSignatureCanvas();
+
+  const cx = sigCanvas.width / 2;
+  const cy = sigCanvas.height / 2;
+  const r = 44;
+
+  sigCtx.save();
+  sigCtx.strokeStyle = '#dc2626';
+  sigCtx.lineWidth = 3.5;
+  sigCtx.beginPath();
+  sigCtx.arc(cx, cy, r, 0, Math.PI * 2);
+  sigCtx.stroke();
+
+  sigCtx.lineWidth = 1.2;
+  sigCtx.beginPath();
+  sigCtx.arc(cx, cy, r - 5, 0, Math.PI * 2);
+  sigCtx.stroke();
+
+  sigCtx.fillStyle = '#dc2626';
+  sigCtx.font = 'bold 22px Batang, Gungsuh, "Malgun Gothic", serif';
+  sigCtx.textAlign = 'center';
+  sigCtx.textBaseline = 'middle';
+  sigCtx.fillText(name, cx, cy + 1);
+  sigCtx.restore();
+
+  hasDrawn = true;
+}
+
+function openSignModal(docType, docId, defaultName, titleInfo) {
+  document.getElementById('sign_doc_type').value = docType;
+  document.getElementById('sign_doc_id').value = docId;
+  const roleSelect = document.getElementById('sign_role');
+  roleSelect.innerHTML = '';
+
+  if (docType === 'meeting') {
+    document.getElementById('sign_modal_title').innerText = '✍️ 산업안전보건위원회 회의록 전자서명 날인 (' + (titleInfo || '회의록') + ')';
+    const optAttendee = document.createElement('option');
+    optAttendee.value = 'attendee'; optAttendee.text = '참석자 (근로자/위원 서명)'; optAttendee.selected = true;
+    const optDrafter = document.createElement('option');
+    optDrafter.value = 'drafter'; optDrafter.text = '기안자 (작성/담당)';
+    const optApprover = document.createElement('option');
+    optApprover.value = 'approver'; optApprover.text = '승인자 (안전보건관리책임자)';
+    roleSelect.appendChild(optAttendee);
+    roleSelect.appendChild(optDrafter);
+    roleSelect.appendChild(optApprover);
+  } else {
+    document.getElementById('sign_modal_title').innerText = '✍️ 안전제안 전자서명 날인 (' + (titleInfo || '제안서') + ')';
+    const optProposer = document.createElement('option');
+    optProposer.value = 'proposer'; optProposer.text = '제안자 (근로자)'; optProposer.selected = true;
+    const optEvaluator = document.createElement('option');
+    optEvaluator.value = 'evaluator'; optEvaluator.text = '평가자 (안전보건관리책임자)';
+    roleSelect.appendChild(optProposer);
+    roleSelect.appendChild(optEvaluator);
+  }
+
+  document.getElementById('sign_name').value = defaultName || '';
+  document.getElementById('modalSign').style.display = 'flex';
+  setTimeout(function() {
+    initSignatureCanvas();
+    clearSignatureCanvas();
+  }, 50);
+}
+
+function closeSignModal() {
+  document.getElementById('modalSign').style.display = 'none';
+}
+
+function submitSignature() {
+  const name = document.getElementById('sign_name').value.trim();
+  if (!name) {
+    alert('서명자 성명을 입력해주세요.');
+    document.getElementById('sign_name').focus();
+    return;
+  }
+  if (!hasDrawn) {
+    alert('서명란에 직접 서명하시거나 [인감도장 자동생성] 버튼을 눌러 직인을 생성해주세요.');
+    return;
+  }
+  const data = sigCanvas.toDataURL('image/png');
+  document.getElementById('sign_data').value = data;
+  document.getElementById('formSignature').submit();
 }
 </script>
 
