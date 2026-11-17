@@ -301,6 +301,23 @@ if ($tab === 'suggestions') {
     $stmt->execute([$year]);
     $reports = $stmt->fetchAll();
 }
+
+// Generate Mobile Suggestion QR Code
+$qrBase64 = '';
+$submitUrl = '';
+if ($tab === 'suggestions') {
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $host = $_SERVER['HTTP_HOST'] ?? '127.0.0.1';
+    $baseDir = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/CSM/'), '/\\');
+    $submitUrl = $scheme . '://' . $host . $baseDir . '/safety_suggestion_submit.php';
+
+    if (file_exists(__DIR__ . '/../tbm/phpqrcode/qrlib.php')) {
+        require_once __DIR__ . '/../tbm/phpqrcode/qrlib.php';
+        ob_start();
+        QRcode::png($submitUrl, null, QR_ECLEVEL_M, 6, 2);
+        $qrBase64 = 'data:image/png;base64,' . base64_encode(ob_get_clean());
+    }
+}
 ?>
 <!doctype html>
 <html lang="ko">
@@ -336,12 +353,14 @@ if ($tab === 'suggestions') {
       <?php if ($tab === 'meetings'): ?>
         <a href="worker_participation_meeting_print.php?year=<?= $year ?>" target="_blank" class="wp-btn wp-btn-outline">🖨️ 회의록 일괄인쇄</a>
       <?php elseif ($tab === 'suggestions'): ?>
+        <button type="button" class="wp-btn wp-btn-outline" onclick="openQrModal()">📱 모바일 접수 QR/URL</button>
+        <a href="safety_suggestion_poster.php" target="_blank" class="wp-btn wp-btn-outline">📢 현장부착 QR포스터</a>
         <a href="worker_participation_suggestion_print.php?year=<?= $year ?>" target="_blank" class="wp-btn wp-btn-outline">🖨️ 제안서 일괄인쇄</a>
       <?php else: ?>
         <button type="button" class="wp-btn wp-btn-outline" onclick="window.print()">🖨️ A4 인쇄</button>
       <?php endif; ?>
       <?php if ($tab === 'suggestions'): ?>
-        <button type="button" class="wp-btn wp-btn-primary" onclick="openSuggestionModal()">+ 새 안전제안 접수</button>
+        <button type="button" class="wp-btn wp-btn-primary" onclick="openSuggestionModal()">+ 새 제안 직접등록</button>
       <?php elseif ($tab === 'meetings'): ?>
         <button type="button" class="wp-btn wp-btn-primary" onclick="openMeetingModal()">+ 새 회의록 작성</button>
       <?php elseif ($tab === 'champions'): ?>
@@ -426,15 +445,28 @@ if ($tab === 'suggestions') {
             <tr><td colspan="10" style="text-align:center;padding:40px;color:var(--wp-muted);">등록된 안전제안이 없습니다. 상단 '새 안전제안 접수' 버튼으로 등록해주세요.</td></tr>
           <?php else: foreach ($suggestions as $s): ?>
             <tr>
-              <td><strong><?= $escape($s['reg_no']) ?></strong></td>
+              <td>
+                <strong><?= $escape($s['reg_no']) ?></strong>
+                <?php if (!empty($s['is_mobile_submit'])): ?>
+                  <div style="margin-top:4px;"><span class="wp-badge" style="background:#e0f2fe;color:#0284c7;font-size:10.5px;padding:2px 6px;border:1px solid #bae6fd;white-space:nowrap;">📱 모바일</span></div>
+                <?php endif; ?>
+              </td>
               <td><?= $escape($s['reg_date']) ?></td>
               <td>
                 <strong><?= $escape($s['proposer_name']) ?></strong>
                 <div style="font-size:12px;color:var(--wp-muted);"><?= $escape($s['proposer_dept']) ?></div>
+                <?php if (!empty($s['proposer_phone'])): ?>
+                  <div style="font-size:11px;color:#0284c7;margin-top:2px;letter-spacing:-0.2px;">📞 <?= $escape($s['proposer_phone']) ?></div>
+                <?php endif; ?>
               </td>
               <td><span class="wp-badge wp-badge-info"><?= $escape($s['category']) ?></span></td>
               <td>
-                <div style="font-weight:700;font-size:15px;margin-bottom:4px;color:var(--wp-primary);"><?= $escape($s['title']) ?></div>
+                <div style="font-weight:700;font-size:15px;margin-bottom:4px;color:var(--wp-primary);display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                  <span><?= $escape($s['title']) ?></span>
+                  <?php if (!empty($s['photo_before'])): ?>
+                    <span style="font-size:11px;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;padding:1px 6px;border-radius:4px;font-weight:600;">📷 사진첨부</span>
+                  <?php endif; ?>
+                </div>
                 <div style="font-size:13px;color:#475569;margin-bottom:3px;"><strong>위치:</strong> <?= $escape($s['location'] ?: '현장 전 구역') ?></div>
                 <div style="font-size:13px;color:#334155;background:#f8fafc;padding:6px 10px;border-radius:4px;border-left:3px solid var(--wp-accent);margin-top:4px;">
                   <div><strong>현황:</strong> <?= $escape($s['problem']) ?></div>
@@ -977,7 +1009,69 @@ if ($tab === 'suggestions') {
   </div>
 </div>
 
+<!-- MODAL: MOBILE SUGGESTION QR & URL GUIDE -->
+<div id="modalQrGuide" class="wp-modal-backdrop" style="display:none;">
+  <div class="wp-modal" style="max-width:520px;text-align:center;">
+    <div class="wp-modal-header">
+      <h3 style="margin:0;">📱 현장 안전제안 모바일 접수창구</h3>
+      <button type="button" class="wp-modal-close" onclick="closeQrModal()">&times;</button>
+    </div>
+    <div class="wp-modal-body" style="padding:22px 20px;">
+      <p style="font-size:14px;color:#475569;margin:0 0 16px 0;line-height:1.5;">
+        현장 근로자 및 임직원이 스마트폰 카메라로 QR을 스캔하여<br>
+        <strong style="color:var(--wp-primary);">별도 로그인 없이 즉시 사진과 함께 안전제안을 등록</strong>할 수 있습니다.
+      </p>
+
+      <div style="background:#f8fafc;padding:16px;border-radius:12px;border:2px solid #e2e8f0;display:inline-block;margin-bottom:16px;box-shadow:0 4px 10px rgba(0,0,0,0.05);">
+        <?php if (!empty($qrBase64)): ?>
+          <img src="<?= $qrBase64 ?>" alt="안전제안 모바일 QR" style="width:190px;height:190px;display:block;margin:0 auto;">
+        <?php else: ?>
+          <div style="width:190px;height:190px;display:flex;align-items:center;justify-content:center;color:#64748b;">QR 생성 대기</div>
+        <?php endif; ?>
+      </div>
+
+      <div style="margin-bottom:18px;text-align:left;">
+        <label style="font-size:12.5px;font-weight:700;color:#334155;display:block;margin-bottom:4px;">모바일 전용 접수 URL</label>
+        <div style="display:flex;gap:6px;">
+          <input type="text" id="mobileUrlInput" value="<?= $escape($submitUrl ?? '') ?>" class="wp-input" readonly style="font-size:13px;background:#ffffff;">
+          <button type="button" class="wp-btn wp-btn-outline" onclick="copyMobileUrl()">복사</button>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+        <a href="safety_suggestion_poster.php" target="_blank" class="wp-btn wp-btn-primary" style="text-decoration:none;">
+          📢 현장 부착용 A4 포스터 인쇄
+        </a>
+        <a href="safety_suggestion_submit.php" target="_blank" class="wp-btn wp-btn-outline" style="text-decoration:none;">
+          📱 새 창에서 열기
+        </a>
+      </div>
+    </div>
+    <div class="wp-modal-footer" style="justify-content:center;">
+      <button type="button" class="wp-btn wp-btn-outline" onclick="closeQrModal()">닫기</button>
+    </div>
+  </div>
+</div>
+
 <script>
+function openQrModal() {
+  document.getElementById('modalQrGuide').style.display = 'flex';
+}
+function closeQrModal() {
+  document.getElementById('modalQrGuide').style.display = 'none';
+}
+function copyMobileUrl() {
+  const inp = document.getElementById('mobileUrlInput');
+  if (!inp) return;
+  inp.select();
+  navigator.clipboard.writeText(inp.value).then(() => {
+    alert('모바일 접수 URL이 클립보드에 복사되었습니다.');
+  }).catch(() => {
+    document.execCommand('copy');
+    alert('모바일 접수 URL이 복사되었습니다.');
+  });
+}
+
 function openSuggestionModal() {
   document.getElementById('sug_id').value = '0';
   document.getElementById('sug_modal_title').innerText = '산업안전보건 안전제안 접수';

@@ -495,8 +495,12 @@ $categoriesList = [
           <div class="photo-card">
             <div class="photo-card-head">&lt; 개  선  전 &gt;</div>
             <div class="photo-card-body">
-              <?php if (!empty($s['photo_before']) && file_exists(__DIR__ . '/' . $s['photo_before'])): ?>
-                <img src="<?= $escape($s['photo_before']) ?>" alt="개선 전">
+              <?php 
+                $pBefore = $s['photo_before'] ?? '';
+                $hasBefore = ($pBefore !== '' && (str_starts_with($pBefore, 'data:') || file_exists(__DIR__ . '/' . $pBefore)));
+              ?>
+              <?php if ($hasBefore): ?>
+                <img src="<?= $escape($pBefore) ?>" alt="개선 전">
               <?php else: ?>
                 <div>
                   <div style="font-weight:700;color:#334155;margin-bottom:4px;">[ 현황 사진 대지 ]</div>
@@ -508,8 +512,12 @@ $categoriesList = [
           <div class="photo-card">
             <div class="photo-card-head">&lt; 개  선  후 &gt;</div>
             <div class="photo-card-body">
-              <?php if (!empty($s['photo_after']) && file_exists(__DIR__ . '/' . $s['photo_after'])): ?>
-                <img src="<?= $escape($s['photo_after']) ?>" alt="개선 후">
+              <?php 
+                $pAfter = $s['photo_after'] ?? '';
+                $hasAfter = ($pAfter !== '' && (str_starts_with($pAfter, 'data:') || file_exists(__DIR__ . '/' . $pAfter)));
+              ?>
+              <?php if ($hasAfter): ?>
+                <img src="<?= $escape($pAfter) ?>" alt="개선 후">
               <?php else: ?>
                 <div>
                   <div style="font-weight:700;color:#1e3a8a;margin-bottom:4px;">[ 조치 완료 사진 대지 ]</div>

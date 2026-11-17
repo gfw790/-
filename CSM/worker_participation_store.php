@@ -131,6 +131,8 @@ function worker_part_db(): PDO
     try { $db->exec("ALTER TABLE csm_safety_meetings ADD COLUMN signatures_json TEXT DEFAULT '[]'"); } catch (Throwable $e) {}
     try { $db->exec("ALTER TABLE csm_suggestions ADD COLUMN proposer_sign TEXT DEFAULT NULL"); } catch (Throwable $e) {}
     try { $db->exec("ALTER TABLE csm_suggestions ADD COLUMN evaluator_sign TEXT DEFAULT NULL"); } catch (Throwable $e) {}
+    try { $db->exec("ALTER TABLE csm_suggestions ADD COLUMN proposer_phone TEXT DEFAULT NULL"); } catch (Throwable $e) {}
+    try { $db->exec("ALTER TABLE csm_suggestions ADD COLUMN is_mobile_submit INTEGER DEFAULT 0"); } catch (Throwable $e) {}
     try { $db->exec("ALTER TABLE csm_feedback_reports ADD COLUMN manager_sign TEXT DEFAULT NULL"); } catch (Throwable $e) {}
 
     worker_part_seed_defaults($db);
