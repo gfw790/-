@@ -16,6 +16,7 @@ $_mainPageHref = function_exists('auth_main_page_path') ? '../risk_assessment/' 
 <meta name="csrf-token" content="<?= h(csrfToken()) ?>">
 <title><?= h($_pageTitle) ?> - <?= h(BOARD_TITLE) ?></title>
 <link rel="stylesheet" href="assets/css/style.css<?= $_boardCssVersion !== '' ? '?v=' . h($_boardCssVersion) : '' ?>">
+<?php foreach ($_extraStylesheets ?? [] as $_extraStylesheet): ?><link rel="stylesheet" href="<?= h($_extraStylesheet) ?>?v=<?= (int)@filemtime(__DIR__.'/../'.$_extraStylesheet) ?>"><?php endforeach; ?>
 </head>
 <body>
 <div class="board-wrap">
@@ -49,7 +50,8 @@ $_mainPageHref = function_exists('auth_main_page_path') ? '../risk_assessment/' 
   <nav class="board-nav">
     <div class="nav-inner">
       <ul class="cat-tabs">
-        <li class="active"><a href="index.php">아차사고 목록</a></li>
+        <li<?= ($_nearMissPage ?? '')!=='statistics'?' class="active"':'' ?>><a href="index.php">아차사고 목록</a></li>
+        <li<?= ($_nearMissPage ?? '')==='statistics'?' class="active"':'' ?>><a href="statistics.php">통계</a></li>
       </ul>
     </div>
   </nav>

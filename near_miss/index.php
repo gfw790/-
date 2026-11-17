@@ -187,6 +187,7 @@ function statusLabel(string $status): string {
 <h2 class="page-title">
     <span>아차사고 목록</span>
     <span class="page-title-right">
+        <a href="statistics.php" class="btn">통계 보기</a>
         <span class="sub">목록 <?= number_format($filteredTotal) ?>건 / <?= $page ?>페이지</span>
         <?php if ($_currentUser && $_currentUser['role'] === 'admin'): ?>
             <a href="import_excel.php" class="btn">엑셀 가져오기</a>
