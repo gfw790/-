@@ -598,7 +598,7 @@ if ($tab === 'suggestions') {
                     <textarea id="photoData_after_<?= $s['id'] ?>" style="display:none;"><?= $photoAfterSrc ?></textarea>
                   <?php endif; ?>
                 </div>
-                <div style="font-size:13px;color:#475569;margin-bottom:3px;"><strong>위치:</strong> <?= $escape($s['location'] ?: '현장 전 구역') ?></div>
+                <div style="font-size:13px;color:#475569;margin-bottom:3px;"><strong>대상구역:</strong> <?= $escape($s['location'] ?: '현장 전 구역') ?></div>
                 <div style="font-size:13px;color:#334155;background:#f8fafc;padding:6px 10px;border-radius:4px;border-left:3px solid var(--wp-accent);margin-top:4px;">
                   <div><strong>현황:</strong> <?= $escape($s['problem']) ?></div>
                   <div style="margin-top:2px;"><strong>개선:</strong> <?= $escape($s['solution']) ?></div>
@@ -893,8 +893,8 @@ if ($tab === 'suggestions') {
             </select>
           </div>
           <div class="wp-form-group">
-            <label>대상 위치 / 구역</label>
-            <input type="text" name="location" id="sug_location" placeholder="예: 옥외 자재보관소">
+            <label>대상구역 (위치)</label>
+            <input type="text" name="location" id="sug_location" placeholder="예: 광산현대화 터널 내 원료이송 CON'OR 또는 옥외 자재보관소">
           </div>
           <div class="wp-form-col-full wp-form-group">
             <label>현황 및 문제점 (위험요인) *</label>

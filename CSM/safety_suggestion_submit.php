@@ -711,8 +711,8 @@ $activeTeams = worker_part_get_teams();
         </div>
 
         <div class="m-group">
-          <label class="m-label">위험 발생 위치</label>
-          <input type="text" name="location" class="m-input" placeholder="예: 2공장 메인 배전반 앞 또는 가공 1라인" value="<?= $escape($prefillLocation) ?>">
+          <label class="m-label">대상구역 (위험 발생 위치)</label>
+          <input type="text" name="location" class="m-input" placeholder="예: 광산현대화 터널 내 원료이송 CON'OR 또는 가공 1라인" value="<?= $escape($prefillLocation) ?>">
         </div>
 
         <div class="m-group">

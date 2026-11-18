@@ -67,7 +67,7 @@ function renderCircularSeal(string $name): string {
         $top = mb_substr($clean, 0, 2);
         $bottom = mb_substr($clean, 2, 2);
     }
-    $svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60" width="34" height="34" style="vertical-align:middle;margin-left:4px;">
+    $svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60" width="36" height="36" style="vertical-align:middle;margin-left:4px;">
         <circle cx="30" cy="30" r="28" fill="#fff" stroke="#b91c1c" stroke-width="2.5"/>
         <circle cx="30" cy="30" r="24.5" fill="none" stroke="#b91c1c" stroke-width="0.8" opacity="0.8"/>
         <text x="30" y="24" font-family="Batang, Gungsuh, \'Malgun Gothic\', serif" font-size="13" font-weight="900" fill="#b91c1c" text-anchor="middle" letter-spacing="2">' . htmlspecialchars($top, ENT_QUOTES, 'UTF-8') . '</text>
@@ -213,6 +213,7 @@ function renderCircularSeal(string $name): string {
       flex: 1;
       display: flex;
       flex-direction: column;
+      justify-content: space-between;
     }
 
     /* Header */
@@ -221,34 +222,34 @@ function renderCircularSeal(string $name): string {
       justify-content: space-between;
       align-items: flex-end;
       margin-bottom: 2mm;
-      padding-bottom: 1mm;
+      padding-bottom: 1.5mm;
     }
     .sug-title {
-      font-size: 21pt;
+      font-size: 22pt;
       font-weight: 900;
-      letter-spacing: 4px;
+      letter-spacing: 5px;
       color: #000;
       margin: 0;
       line-height: 1.1;
     }
     .sug-slogan {
-      font-size: 11pt;
+      font-size: 11.5pt;
       font-weight: 700;
       letter-spacing: 0.5px;
       white-space: nowrap;
     }
 
-    /* Tables */
+    /* Form Tables */
     .sug-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 9pt;
+      font-size: 9.6pt;
       table-layout: fixed;
       margin-bottom: 0;
     }
     .sug-table th, .sug-table td {
       border: 1.2px solid #000;
-      padding: 3.5px 6px;
+      padding: 5px 7px;
       vertical-align: middle;
       color: #000;
     }
@@ -263,19 +264,32 @@ function renderCircularSeal(string $name): string {
       text-align: center;
     }
 
-    /* Photo Slot */
-    .photo-area {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
+    /* Section Title */
+    .photo-section-title {
+      text-align: center;
+      font-weight: 900;
+      font-size: 15.5pt;
+      letter-spacing: 4px;
+      margin: 3.5mm 0 2.5mm 0;
+      color: #000;
     }
-    .photo-col {
-      display: flex;
-      flex-direction: column;
+
+    /* Photo Table - Table guarantees identical height for both description cells */
+    .photo-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 8px 0;
+      table-layout: fixed;
+      margin-bottom: 0;
+    }
+    .photo-table td, .photo-table th {
+      padding: 0;
+      vertical-align: top;
+      border: none;
     }
     .photo-img-frame {
       border: 1.2px solid #000;
-      height: 58mm;
+      height: 64mm;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -297,48 +311,50 @@ function renderCircularSeal(string $name): string {
     .photo-caption-head {
       text-align: center;
       font-weight: 700;
-      font-size: 10pt;
-      padding: 3px 0;
+      font-size: 10.5pt;
+      padding: 4px 0;
       letter-spacing: 2px;
       border-left: 1.2px solid #000;
       border-right: 1.2px solid #000;
       background: #fff;
+      color: #000;
     }
-    .photo-desc-box {
-      border: 1.2px solid #000;
-      border-top: none;
-      padding: 5px 8px;
-      font-size: 8.8pt;
-      line-height: 1.4;
-      min-height: 18mm;
-      max-height: 22mm;
-      overflow: hidden;
+    .photo-desc-td {
+      border: 1.2px solid #000 !important;
+      border-top: none !important;
+      padding: 7px 10px;
+      font-size: 9.3pt;
+      line-height: 1.5;
       background: #fff;
+      color: #000;
+      vertical-align: top;
+      height: 24mm;
+      box-sizing: border-box;
     }
 
     /* Evaluation Box */
     .eval-box {
       border: 1.2px solid #000;
-      margin-top: 2.5mm;
-      padding: 4px 8px;
+      margin-top: 3mm;
+      padding: 5px 10px;
       background: #fff;
     }
     .eval-top-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-size: 9.5pt;
+      font-size: 10pt;
       font-weight: 700;
-      margin-bottom: 2px;
+      margin-bottom: 3px;
     }
     .eval-summary-title {
-      font-size: 9pt;
+      font-size: 9.6pt;
       font-weight: 700;
       margin-bottom: 2px;
     }
     .eval-summary-content {
-      font-size: 9pt;
-      line-height: 1.45;
+      font-size: 9.5pt;
+      line-height: 1.5;
       padding-left: 2px;
     }
 
@@ -346,7 +362,7 @@ function renderCircularSeal(string $name): string {
     .doc-footer {
       text-align: right;
       padding-top: 1.5mm;
-      font-size: 9.5pt;
+      font-size: 10pt;
       font-weight: 900;
       letter-spacing: 1px;
       color: #000;
@@ -412,7 +428,7 @@ function renderCircularSeal(string $name): string {
         <span class="pad-label">상단 여백:</span>
         <button type="button" class="pad-btn" onclick="setTopPad('8mm', this)">8mm (타이트)</button>
         <button type="button" class="pad-btn active" onclick="setTopPad('12mm', this)">12mm (표준)</button>
-        <button type="button" class="pad-btn" onclick="setTopPad('18mm', this)">18mm (타공)</button>
+        <button type="button" class="pad-btn" onclick="setTopPad('16mm', this)">16mm (타공)</button>
       </div>
     </div>
     <div class="toolbar-tip">
@@ -426,245 +442,248 @@ function renderCircularSeal(string $name): string {
     <div class="a4-page">
       <div class="page-content">
 
-        <!-- Top Header: Title & Slogan -->
-        <div class="sug-header-box">
-          <div class="sug-title">산업안전보건 제안 접수</div>
-          <div class="sug-slogan">
-            <span style="color:#000;">안전은</span> <strong style="color:#dc2626;">행동입니다.</strong>
+        <div>
+          <!-- Top Header: Title & Slogan -->
+          <div class="sug-header-box">
+            <div class="sug-title">산업안전보건 제안 접수</div>
+            <div class="sug-slogan">
+              <span style="color:#000;">안전은</span> <strong style="color:#dc2626;">행동입니다.</strong>
+            </div>
           </div>
-        </div>
 
-        <!-- Table 1: 제안명 & 접수번호 -->
-        <table class="sug-table" style="border-bottom:none;">
-          <colgroup>
-            <col style="width: 15%;">
-            <col style="width: 55%;">
-            <col style="width: 15%;">
-            <col style="width: 15%;">
-          </colgroup>
-          <tr>
-            <th class="header-col" style="letter-spacing:4px;">제 안 명</th>
-            <td style="font-weight:700;font-size:10pt;padding-left:10px;">
-              <?= $escape($s['title']) ?>
-            </td>
-            <th class="header-col" style="letter-spacing:2px;">접수번호</th>
-            <td style="text-align:center;font-weight:700;font-size:10pt;">
-              <?= $escape($s['reg_no']) ?>
-            </td>
-          </tr>
-        </table>
+          <!-- Table 1: 제안명 & 접수번호 -->
+          <table class="sug-table" style="border-bottom:none;">
+            <colgroup>
+              <col style="width: 15%;">
+              <col style="width: 55%;">
+              <col style="width: 15%;">
+              <col style="width: 15%;">
+            </colgroup>
+            <tr>
+              <th class="header-col" style="letter-spacing:4px;">제 안 명</th>
+              <td style="font-weight:700;font-size:10.5pt;padding-left:10px;">
+                <?= $escape($s['title']) ?>
+              </td>
+              <th class="header-col" style="letter-spacing:2px;">접수번호</th>
+              <td style="text-align:center;font-weight:700;font-size:10.5pt;">
+                <?= $escape($s['reg_no']) ?>
+              </td>
+            </tr>
+          </table>
 
-        <!-- Table 2: 제안유형 (8 Checkboxes) -->
-        <?php
-          $cat = $s['category'] ?? '';
-          $isWorkplace = in_array($cat, ['작업장 안전', '통로·보행'], true);
-          $isConst = in_array($cat, ['건설 안전', '설비·기계', '전기안전'], true);
-          $isFacility = in_array($cat, ['시설물 안전', '화재·폭발', '시설물·통로'], true);
-          $isEnv = in_array($cat, ['작업환경', '보호구·환경'], true);
-          $isHealth = in_array($cat, ['건강관리(보건)', '보건·위생'], true);
-          $isEmotion = ($cat === '감정/심리');
-          $isRule = ($cat === '제도(규정, 규칙)');
-          $isOther = (!$isWorkplace && !$isConst && !$isFacility && !$isEnv && !$isHealth && !$isEmotion && !$isRule);
-        ?>
-        <table class="sug-table" style="border-top:none;border-bottom:none;">
-          <colgroup>
-            <col style="width: 15%;">
-            <col style="width: 21.25%;">
-            <col style="width: 21.25%;">
-            <col style="width: 21.25%;">
-            <col style="width: 21.25%;">
-          </colgroup>
-          <tr>
-            <th rowspan="2" class="header-col" style="letter-spacing:2px;">제안유형</th>
-            <td><?= $isWorkplace ? '■' : '□' ?> 작업장 안전</td>
-            <td><?= $isConst ? '■' : '□' ?> 건설 안전</td>
-            <td><?= $isFacility ? '■' : '□' ?> 시설물 안전</td>
-            <td><?= $isEnv ? '■' : '□' ?> 작업환경</td>
-          </tr>
-          <tr>
-            <td><?= $isHealth ? '■' : '□' ?> 건강관리(보건)</td>
-            <td><?= $isEmotion ? '■' : '□' ?> 감정/심리</td>
-            <td><?= $isRule ? '■' : '□' ?> 제도(규정, 규칙)</td>
-            <td><?= $isOther ? '■' : '□' ?> 기타 <?= ($isOther && $cat !== '' && !str_contains($cat, '미분류')) ? '(' . $escape($cat) . ')' : '' ?></td>
-          </tr>
-        </table>
+          <!-- Table 2: 제안유형 (8 Checkboxes) -->
+          <?php
+            $cat = $s['category'] ?? '';
+            $isWorkplace = in_array($cat, ['작업장 안전', '통로·보행'], true);
+            $isConst = in_array($cat, ['건설 안전', '설비·기계', '전기안전'], true);
+            $isFacility = in_array($cat, ['시설물 안전', '화재·폭발', '시설물·통로'], true);
+            $isEnv = in_array($cat, ['작업환경', '보호구·환경'], true);
+            $isHealth = in_array($cat, ['건강관리(보건)', '보건·위생'], true);
+            $isEmotion = ($cat === '감정/심리');
+            $isRule = ($cat === '제도(규정, 규칙)');
+            $isOther = (!$isWorkplace && !$isConst && !$isFacility && !$isEnv && !$isHealth && !$isEmotion && !$isRule);
+          ?>
+          <table class="sug-table" style="border-top:none;border-bottom:none;">
+            <colgroup>
+              <col style="width: 15%;">
+              <col style="width: 21.25%;">
+              <col style="width: 21.25%;">
+              <col style="width: 21.25%;">
+              <col style="width: 21.25%;">
+            </colgroup>
+            <tr>
+              <th rowspan="2" class="header-col" style="letter-spacing:2px;">제안유형</th>
+              <td><?= $isWorkplace ? '■' : '□' ?> 작업장 안전</td>
+              <td><?= $isConst ? '■' : '□' ?> 건설 안전</td>
+              <td><?= $isFacility ? '■' : '□' ?> 시설물 안전</td>
+              <td><?= $isEnv ? '■' : '□' ?> 작업환경</td>
+            </tr>
+            <tr>
+              <td><?= $isHealth ? '■' : '□' ?> 건강관리(보건)</td>
+              <td><?= $isEmotion ? '■' : '□' ?> 감정/심리</td>
+              <td><?= $isRule ? '■' : '□' ?> 제도(규정, 규칙)</td>
+              <td><?= $isOther ? '■' : '□' ?> 기타 <?= ($isOther && $cat !== '' && !str_contains($cat, '미분류')) ? '(' . $escape($cat) . ')' : '' ?></td>
+            </tr>
+          </table>
 
-        <!-- Table 3: 제안내용 (목적, 현황 및 문제점, 개선방안, 기대효과, 기타) -->
-        <table class="sug-table" style="border-top:none;border-bottom:none;">
-          <colgroup>
-            <col style="width: 15%;">
-            <col style="width: 13%;">
-            <col style="width: 72%;">
-          </colgroup>
-          <tr>
-            <th rowspan="4" class="header-col" style="letter-spacing:4px;line-height:1.6;">제<br>안<br>내<br>용</th>
-            <th style="letter-spacing:4px;">목    적</th>
-            <td style="font-weight:600;"><?= $escape($s['purpose'] ?? ($s['expected_effect'] ?: '컨베이어 상부 작업용 안전 발판')) ?></td>
-          </tr>
-          <tr>
-            <th style="line-height:1.3;">현황 및<br>문제점</th>
-            <td style="line-height:1.45;"><?= nl2br($escape($s['problem'])) ?></td>
-          </tr>
-          <tr>
-            <th style="letter-spacing:2px;">개선방안</th>
-            <td style="line-height:1.45;font-weight:600;"><?= nl2br($escape($s['solution'])) ?></td>
-          </tr>
-          <tr>
-            <th style="letter-spacing:2px;">기대효과</th>
-            <td style="line-height:1.45;"><?= nl2br($escape($s['expected_effect'])) ?></td>
-          </tr>
-          <tr>
-            <th colspan="2" class="header-col" style="letter-spacing:4px;">기    타</th>
-            <td><?= $escape($s['location'] ? '대상구역: ' . $s['location'] : '') ?></td>
-          </tr>
-        </table>
+          <!-- Table 3: 제안내용 (목적, 현황 및 문제점, 개선방안, 기대효과, 대상구역) -->
+          <table class="sug-table" style="border-top:none;border-bottom:none;">
+            <colgroup>
+              <col style="width: 15%;">
+              <col style="width: 13%;">
+              <col style="width: 72%;">
+            </colgroup>
+            <tr>
+              <th rowspan="4" class="header-col" style="letter-spacing:4px;line-height:1.6;">제<br>안<br>내<br>용</th>
+              <th style="letter-spacing:4px;">목    적</th>
+              <td style="font-weight:600;"><?= $escape($s['purpose'] ?? ($s['expected_effect'] ?: '컨베이어 상부 작업용 안전 발판')) ?></td>
+            </tr>
+            <tr>
+              <th style="line-height:1.35;">현황 및<br>문제점</th>
+              <td style="line-height:1.5;min-height:18mm;"><?= nl2br($escape($s['problem'])) ?></td>
+            </tr>
+            <tr>
+              <th style="letter-spacing:2px;">개선방안</th>
+              <td style="line-height:1.5;font-weight:600;min-height:18mm;"><?= nl2br($escape($s['solution'])) ?></td>
+            </tr>
+            <tr>
+              <th style="letter-spacing:2px;">기대효과</th>
+              <td style="line-height:1.5;"><?= nl2br($escape($s['expected_effect'])) ?></td>
+            </tr>
+            <tr>
+              <th colspan="2" class="header-col" style="letter-spacing:3px;">대 상 구 역</th>
+              <td style="font-weight:600;"><?= $escape($s['location'] ?: '현장 전 구역') ?></td>
+            </tr>
+          </table>
 
-        <!-- Table 4: 제안자정보 (Grid layout matching Excel 1:1) -->
-        <?php
-          $regDateStr = $formatDotDate($s['reg_date']);
-          $doneDateStr = $formatDotDate($s['action_date'] ?: $s['reg_date']);
-          $phoneStr = $formatKoreanPhone($s['proposer_phone'] ?? '');
-          $isDone = ($s['status'] === '완료');
-        ?>
-        <table class="sug-table" style="border-top:none;">
-          <colgroup>
-            <col style="width: 15%;">
-            <col style="width: 11%;">
-            <col style="width: 22%;">
-            <col style="width: 13%;">
-            <col style="width: 13%;">
-            <col style="width: 13%;">
-            <col style="width: 13%;">
-          </colgroup>
-          <tr>
-            <th rowspan="2" class="header-col" style="letter-spacing:2px;line-height:1.5;">제안자정보</th>
-            <th>성명</th>
-            <td style="text-align:center;font-weight:700;letter-spacing:3px;">
-              <?= $escape($s['proposer_name']) ?>
-            </td>
-            <th>접수일</th>
-            <th>채택여부</th>
-            <th>개선여부</th>
-            <th>완료일자</th>
-          </tr>
-          <tr>
-            <th>연락처</th>
-            <td style="text-align:center;font-size:8.8pt;letter-spacing:0.5px;">
-              <?= $escape($phoneStr) ?>
-            </td>
-            <td style="text-align:center;font-size:8.8pt;">
-              <?= $escape($regDateStr) ?>
-            </td>
-            <td style="text-align:center;font-weight:700;">
-              <?= $s['status'] === '불채택' ? '불채택' : '채택' ?>
-            </td>
-            <td style="text-align:center;font-weight:700;">
-              <?= $isDone ? '완료' : '진행중' ?>
-            </td>
-            <td style="text-align:center;font-size:8.8pt;">
-              <?= $escape($isDone ? $doneDateStr : '진행중') ?>
-            </td>
-          </tr>
-        </table>
+          <!-- Table 4: 제안자정보 (Grid layout matching Excel 1:1) -->
+          <?php
+            $regDateStr = $formatDotDate($s['reg_date']);
+            $doneDateStr = $formatDotDate($s['action_date'] ?: $s['reg_date']);
+            $phoneStr = $formatKoreanPhone($s['proposer_phone'] ?? '');
+            $isDone = ($s['status'] === '완료');
+          ?>
+          <table class="sug-table" style="border-top:none;">
+            <colgroup>
+              <col style="width: 15%;">
+              <col style="width: 11%;">
+              <col style="width: 22%;">
+              <col style="width: 13%;">
+              <col style="width: 13%;">
+              <col style="width: 13%;">
+              <col style="width: 13%;">
+            </colgroup>
+            <tr>
+              <th rowspan="2" class="header-col" style="letter-spacing:2px;line-height:1.5;">제안자정보</th>
+              <th>성명</th>
+              <td style="text-align:center;font-weight:700;letter-spacing:3px;">
+                <?= $escape($s['proposer_name']) ?>
+              </td>
+              <th>접수일</th>
+              <th>채택여부</th>
+              <th>개선여부</th>
+              <th>완료일자</th>
+            </tr>
+            <tr>
+              <th>연락처</th>
+              <td style="text-align:center;font-size:9pt;letter-spacing:0.5px;">
+                <?= $escape($phoneStr) ?>
+              </td>
+              <td style="text-align:center;font-size:9pt;">
+                <?= $escape($regDateStr) ?>
+              </td>
+              <td style="text-align:center;font-weight:700;">
+                <?= $s['status'] === '불채택' ? '불채택' : '채택' ?>
+              </td>
+              <td style="text-align:center;font-weight:700;">
+                <?= $isDone ? '완료' : '진행중' ?>
+              </td>
+              <td style="text-align:center;font-size:9pt;">
+                <?= $escape($isDone ? $doneDateStr : '진행중') ?>
+              </td>
+            </tr>
+          </table>
 
-        <!-- Section Header: 개선 사진 대지 -->
-        <div style="text-align:center;font-weight:900;font-size:15pt;letter-spacing:4px;margin:3.5mm 0 2mm 0;color:#000;">
-          개선 사진 대지
-        </div>
+          <!-- Section Header: 개선 사진 대지 -->
+          <div class="photo-section-title">
+            개선 사진 대지
+          </div>
 
-        <!-- Before & After Photo Columns -->
-        <div class="photo-area">
-          <!-- 좌측: 개선 전 -->
-          <div class="photo-col">
-            <div class="photo-img-frame">
-              <?php 
-                $pBefore = worker_part_resolve_photo_data($s['photo_before'] ?? '');
-              ?>
-              <?php if (!empty($pBefore)): ?>
-                <img src="<?= $pBefore ?>" alt="개선 전">
-              <?php else: ?>
-                <div class="photo-img-placeholder">
-                  <strong>[ 개선 전 사진 ]</strong><br>
-                  <span style="font-size:8pt;color:#94a3b8;">관리 화면에서 사진을 등록하세요</span>
+          <!-- Before & After Photo Table (HTML Table guarantees both cells have the exact same height based on the taller side) -->
+          <?php
+            $beforeDesc = trim($s['photo_before_desc'] ?? '');
+            if ($beforeDesc === '') {
+              $beforeDesc = "1. " . ($s['problem'] ?: '개선 전 문제 상황 확인');
+            }
+            $afterDesc = trim($s['photo_after_desc'] ?? '');
+            if ($afterDesc === '') {
+              $afterDesc = "1. " . ($s['action_result'] ?: ($s['solution'] ?: '개선 조치 완료'));
+            }
+            $pBefore = worker_part_resolve_photo_data($s['photo_before'] ?? '');
+            $pAfter = worker_part_resolve_photo_data($s['photo_after'] ?? '');
+          ?>
+          <table class="photo-table">
+            <colgroup>
+              <col style="width: 50%;">
+              <col style="width: 50%;">
+            </colgroup>
+            <tr>
+              <td>
+                <div class="photo-img-frame">
+                  <?php if (!empty($pBefore)): ?>
+                    <img src="<?= $pBefore ?>" alt="개선 전">
+                  <?php else: ?>
+                    <div class="photo-img-placeholder">
+                      <strong>[ 개선 전 사진 ]</strong><br>
+                      <span style="font-size:8pt;color:#94a3b8;">관리 화면에서 사진을 등록하세요</span>
+                    </div>
+                  <?php endif; ?>
                 </div>
-              <?php endif; ?>
-            </div>
-            <div class="photo-caption-head">&lt; 개 선 전 &gt;</div>
-            <div class="photo-desc-box">
-              <?php
-                $beforeDesc = trim($s['photo_before_desc'] ?? '');
-                if ($beforeDesc === '') {
-                  $beforeDesc = "1. " . ($s['problem'] ?: '개선 전 문제 상황 확인');
-                }
-              ?>
-              <?= nl2br($escape($beforeDesc)) ?>
-            </div>
-          </div>
-
-          <!-- 우측: 개선 후 -->
-          <div class="photo-col">
-            <div class="photo-img-frame">
-              <?php 
-                $pAfter = worker_part_resolve_photo_data($s['photo_after'] ?? '');
-              ?>
-              <?php if (!empty($pAfter)): ?>
-                <img src="<?= $pAfter ?>" alt="개선 후">
-              <?php else: ?>
-                <div class="photo-img-placeholder">
-                  <strong>[ 개선 후 사진 ]</strong><br>
-                  <span style="font-size:8pt;color:#94a3b8;">조치 완료 사진을 등록하세요</span>
+              </td>
+              <td>
+                <div class="photo-img-frame">
+                  <?php if (!empty($pAfter)): ?>
+                    <img src="<?= $pAfter ?>" alt="개선 후">
+                  <?php else: ?>
+                    <div class="photo-img-placeholder">
+                      <strong>[ 개선 후 사진 ]</strong><br>
+                      <span style="font-size:8pt;color:#94a3b8;">조치 완료 사진을 등록하세요</span>
+                    </div>
+                  <?php endif; ?>
                 </div>
-              <?php endif; ?>
+              </td>
+            </tr>
+            <tr>
+              <th class="photo-caption-head">&lt; 개  선  전 &gt;</th>
+              <th class="photo-caption-head">&lt; 개  선  후 &gt;</th>
+            </tr>
+            <tr>
+              <td class="photo-desc-td">
+                <?= nl2br($escape($beforeDesc)) ?>
+              </td>
+              <td class="photo-desc-td">
+                <?= nl2br($escape($afterDesc)) ?>
+              </td>
+            </tr>
+          </table>
+
+          <!-- Evaluation Box -->
+          <?php
+            $evalScore = (int)($s['reward_points'] ?: ($s['eval_score'] ?: 90));
+            $rawReviewer = trim($s['reviewer_name'] ?? '');
+            $evaluatorName = $rawReviewer !== '' ? $rawReviewer : '진종철';
+            $spacedName = mb_strlen($evaluatorName) === 3 
+              ? mb_substr($evaluatorName, 0, 1) . ' ' . mb_substr($evaluatorName, 1, 1) . ' ' . mb_substr($evaluatorName, 2, 1) 
+              : $evaluatorName;
+            $evaluatorSeal = renderCircularSeal($evaluatorName);
+            $evalSummary = trim($s['review_opinion'] ?? ($s['eval_summary'] ?? ''));
+            if ($evalSummary === '') {
+              $evalSummary = '현장의 작업 여건의 한계를 극복하고 안전에 기여한 바를 높게 평가함';
+            }
+          ?>
+          <div class="eval-box">
+            <div class="eval-top-row">
+              <div>
+                제안 유형에 따른 안전기여도 평가 : &nbsp; <span style="font-size:11pt;font-weight:700;"><?= $evalScore ?> 점</span>
+              </div>
+              <div style="display:flex;align-items:center;">
+                평가자: &nbsp;<span style="letter-spacing:1px;"><?= $escape($spacedName) ?></span>
+                <img src="<?= $evaluatorSeal ?>" alt="직인" style="height:34px;width:34px;margin-left:4px;">
+              </div>
             </div>
-            <div class="photo-caption-head">&lt; 개 선 후 &gt;</div>
-            <div class="photo-desc-box">
-              <?php
-                $afterDesc = trim($s['photo_after_desc'] ?? '');
-                if ($afterDesc === '') {
-                  $afterDesc = "1. " . ($s['action_result'] ?: ($s['solution'] ?: '개선 조치 완료'));
-                }
-              ?>
-              <?= nl2br($escape($afterDesc)) ?>
+            <div class="eval-summary-title">평가요약:</div>
+            <div class="eval-summary-content">
+              <?= nl2br($escape($evalSummary)) ?>
             </div>
           </div>
         </div>
 
-        <!-- Evaluation Box -->
-        <?php
-          $evalScore = (int)($s['reward_points'] ?: ($s['eval_score'] ?: 90));
-          $rawReviewer = trim($s['reviewer_name'] ?? '');
-          $evaluatorName = $rawReviewer !== '' ? $rawReviewer : '진종철';
-          $spacedName = mb_strlen($evaluatorName) === 3 
-            ? mb_substr($evaluatorName, 0, 1) . ' ' . mb_substr($evaluatorName, 1, 1) . ' ' . mb_substr($evaluatorName, 2, 1) 
-            : $evaluatorName;
-          $evaluatorSeal = renderCircularSeal($evaluatorName);
-          $evalSummary = trim($s['review_opinion'] ?? ($s['eval_summary'] ?? ''));
-          if ($evalSummary === '') {
-            $evalSummary = '현장의 작업 여건의 한계를 극복하고 안전에 기여한 바를 높게 평가함';
-          }
-        ?>
-        <div class="eval-box">
-          <div class="eval-top-row">
-            <div>
-              제안 유형에 따른 안전기여도 평가 : &nbsp; <span style="font-size:10.5pt;font-weight:700;"><?= $evalScore ?> 점</span>
-            </div>
-            <div style="display:flex;align-items:center;">
-              평가자: &nbsp;<span style="letter-spacing:1px;"><?= $escape($spacedName) ?></span>
-              <img src="<?= $evaluatorSeal ?>" alt="직인" style="height:32px;width:32px;margin-left:4px;">
-            </div>
-          </div>
-          <div class="eval-summary-title">평가요약:</div>
-          <div class="eval-summary-content">
-            <?= nl2br($escape($evalSummary)) ?>
-          </div>
-        </div>
+        <!-- Footer Outside Document Box -->
+        <footer class="doc-footer">
+          주식회사 현대기전
+        </footer>
 
       </div>
-
-      <!-- Footer Outside Document Box -->
-      <footer class="doc-footer">
-        주식회사 현대기전
-      </footer>
     </div>
     <?php endforeach; ?>
   </div>
