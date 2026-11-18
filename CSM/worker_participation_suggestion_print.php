@@ -274,11 +274,10 @@ function renderCircularSeal(string $name): string {
       color: #000;
     }
 
-    /* Photo Table - Table guarantees identical height for both description cells */
+    /* Photo Table - Table guarantees identical height for both description cells and aligns 100% with form width */
     .photo-table {
       width: 100%;
-      border-collapse: separate;
-      border-spacing: 8px 0;
+      border-collapse: collapse;
       table-layout: fixed;
       margin-bottom: 0;
     }
@@ -310,8 +309,7 @@ function renderCircularSeal(string $name): string {
     }
     .photo-desc-cell {
       border: 1.2px solid #000;
-      border-top: none;
-      padding: 5px 8px 7px 8px;
+      padding: 6px 10px 8px 10px;
       background: #fff;
       color: #000;
       vertical-align: top;
