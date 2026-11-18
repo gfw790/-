@@ -1719,7 +1719,14 @@ function openSuggestionDetailModal(id) {
   // Extra action result / feedback / reward
   const extraWrap = document.getElementById('det_extra_wrap');
   const extras = [];
-  if (s.action_result) extras.push('<div><strong>조치 결과:</strong> ' + escapeHtmlDetail(s.action_result) + '</div>');
+  if (s.action_result) {
+    extras.push(
+      '<div><div style="font-size:12px;font-weight:700;color:#64748b;margin-bottom:3px;">조치 결과 요약</div>' +
+      '<div class="wp-detail-text" style="background:#ffffff;padding:8px 10px;border-radius:6px;border:1px solid #e2e8f0;">' +
+      escapeHtmlDetail(s.action_result) +
+      '</div></div>'
+    );
+  }
   if (s.feedback_date) extras.push('<div><strong>환류(공지) 일자:</strong> ' + escapeHtmlDetail(s.feedback_date) + '</div>');
   if (s.reward_note) extras.push('<div><strong>포상 내역:</strong> ' + escapeHtmlDetail(s.reward_note) + '</div>');
   if (extras.length > 0) {
