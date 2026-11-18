@@ -409,6 +409,128 @@ if ($tab === 'suggestions') {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>근로자 참여 및 안전제안·회의록 관리 · CSM 1.3</title>
   <link rel="stylesheet" href="worker_participation.css">
+  <style>
+    .wp-sug-row {
+      cursor: pointer;
+      transition: background-color 0.14s ease;
+    }
+    .wp-sug-row:hover {
+      background-color: #f0f7ff !important;
+    }
+    .wp-detail-meta-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 720px) {
+      .wp-detail-meta-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    .wp-detail-meta-item {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+    .wp-detail-meta-label {
+      font-size: 11.5px;
+      color: #64748b;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .wp-detail-meta-val {
+      font-size: 13.5px;
+      color: #0f172a;
+      font-weight: 700;
+      word-break: keep-all;
+    }
+    .wp-detail-box {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+    }
+    .wp-detail-box-title {
+      font-size: 13px;
+      font-weight: 800;
+      color: #1e3a8a;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .wp-detail-text {
+      font-size: 13.5px;
+      line-height: 1.6;
+      color: #1e293b;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .wp-detail-photo-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+    @media (max-width: 680px) {
+      .wp-detail-photo-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .wp-detail-photo-card {
+      border: 1.5px solid #cbd5e1;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #fff;
+      display: flex;
+      flex-direction: column;
+    }
+    .wp-detail-photo-head {
+      padding: 8px 12px;
+      font-size: 13px;
+      font-weight: 800;
+      text-align: center;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .wp-detail-photo-imgwrap {
+      height: 210px;
+      background: #f8fafc;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+    .wp-detail-photo-imgwrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      cursor: zoom-in;
+      transition: transform 0.2s ease;
+    }
+    .wp-detail-photo-imgwrap img:hover {
+      transform: scale(1.02);
+    }
+    .wp-detail-photo-desc {
+      padding: 10px 12px;
+      font-size: 13px;
+      line-height: 1.55;
+      color: #334155;
+      background: #ffffff;
+      border-top: 1px solid #e2e8f0;
+      white-space: pre-wrap;
+      flex: 1;
+    }
+    .wp-detail-eval-card {
+      background: #f8fafc;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+  </style>
 </head>
 <body>
 
@@ -533,7 +655,7 @@ if ($tab === 'suggestions') {
           <?php if (empty($suggestions)): ?>
             <tr><td colspan="10" style="text-align:center;padding:40px;color:var(--wp-muted);">등록된 안전제안이 없습니다. 상단 '새 안전제안 접수' 버튼으로 등록해주세요.</td></tr>
           <?php else: foreach ($suggestions as $s): ?>
-            <tr>
+            <tr class="wp-sug-row" onclick="onSuggestionRowClick(event, <?= (int)$s['id'] ?>)" title="클릭하여 안전제안 상세 내용을 확인합니다">
               <td>
                 <strong><?= $escape($s['reg_no']) ?></strong>
                 <?php if (!empty($s['is_mobile_submit'])): ?>
@@ -638,6 +760,18 @@ if ($tab === 'suggestions') {
         </tbody>
       </table>
     </div>
+    <?php
+      $sugDetailMap = [];
+      foreach ($suggestions as $item) {
+          $itemCopy = $item;
+          $itemCopy['photo_before'] = worker_part_resolve_photo_data($item['photo_before'] ?? '');
+          $itemCopy['photo_after'] = worker_part_resolve_photo_data($item['photo_after'] ?? '');
+          $sugDetailMap[(int)$item['id']] = $itemCopy;
+      }
+    ?>
+    <script>
+      window._sugDetailMap = <?= json_encode($sugDetailMap, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>;
+    </script>
   <?php endif; ?>
 
   <!-- TAB 2: MEETINGS -->
@@ -1349,8 +1483,112 @@ if ($tab === 'suggestions') {
   </div>
 </div>
 
+<!-- MODAL: SUGGESTION DETAIL VIEWER -->
+<div id="modalSuggestionDetail" class="wp-modal-backdrop" style="display:none;z-index:1100;" onclick="closeSuggestionDetailModal()">
+  <div class="wp-modal" style="max-width:860px;width:94%;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;border-radius:14px;" onclick="event.stopPropagation()">
+    <div class="wp-modal-header" style="background:linear-gradient(135deg,#1e3a8a,#1e40af);color:#fff;padding:16px 22px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
+          <span id="det_reg_no" style="background:rgba(255,255,255,0.18);color:#fff;font-size:12px;font-weight:800;padding:2px 9px;border-radius:999px;border:1px solid rgba(255,255,255,0.3);">26-001</span>
+          <span id="det_status_badge" class="wp-badge wp-badge-done">조치완료</span>
+          <span id="det_category" style="background:rgba(255,255,255,0.14);color:#e0f2fe;font-size:12px;font-weight:700;padding:2px 9px;border-radius:999px;">건설 안전</span>
+        </div>
+        <h3 id="det_title" style="margin:0;font-size:19px;font-weight:800;color:#fff;line-height:1.3;">안전제안 상세보기</h3>
+      </div>
+      <button type="button" class="wp-modal-close" style="color:#cbd5e1;font-size:28px;line-height:1;background:none;border:none;cursor:pointer;padding:0;" onclick="closeSuggestionDetailModal()">&times;</button>
+    </div>
+
+    <div class="wp-modal-body" style="padding:20px 22px;overflow-y:auto;background:#f1f5f9;flex:1;">
+      <!-- Meta Grid -->
+      <div class="wp-detail-meta-grid">
+        <div class="wp-detail-meta-item">
+          <div class="wp-detail-meta-label">👤 제안자 (소속)</div>
+          <div id="det_proposer" class="wp-detail-meta-val">—</div>
+          <div id="det_proposer_sub" style="font-size:11.5px;color:#64748b;margin-top:2px;"></div>
+        </div>
+        <div class="wp-detail-meta-item">
+          <div class="wp-detail-meta-label">📅 접수일자 / 경로</div>
+          <div id="det_reg_date" class="wp-detail-meta-val">—</div>
+          <div id="det_channel" style="font-size:11.5px;color:#0284c7;margin-top:2px;"></div>
+        </div>
+        <div class="wp-detail-meta-item">
+          <div class="wp-detail-meta-label">📍 대상구역 (위치)</div>
+          <div id="det_location" class="wp-detail-meta-val">—</div>
+        </div>
+        <div class="wp-detail-meta-item">
+          <div class="wp-detail-meta-label">🛠️ 조치담당 / 완료일</div>
+          <div id="det_action_mgr" class="wp-detail-meta-val">—</div>
+          <div id="det_action_date" style="font-size:11.5px;color:#059669;margin-top:2px;"></div>
+        </div>
+      </div>
+
+      <!-- Proposal Content -->
+      <div class="wp-detail-box">
+        <div class="wp-detail-box-title">📋 제안 내용</div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <div>
+            <div style="font-size:12px;font-weight:700;color:#64748b;margin-bottom:3px;">현황 및 문제점</div>
+            <div id="det_problem" class="wp-detail-text" style="background:#f8fafc;padding:10px 12px;border-radius:6px;border-left:3px solid #ef4444;">—</div>
+          </div>
+          <div>
+            <div style="font-size:12px;font-weight:700;color:#64748b;margin-bottom:3px;">개선방안</div>
+            <div id="det_solution" class="wp-detail-text" style="background:#f8fafc;padding:10px 12px;border-radius:6px;border-left:3px solid #2563eb;font-weight:600;">—</div>
+          </div>
+          <div id="det_effect_wrap">
+            <div style="font-size:12px;font-weight:700;color:#64748b;margin-bottom:3px;">기대효과</div>
+            <div id="det_expected_effect" class="wp-detail-text" style="background:#f8fafc;padding:10px 12px;border-radius:6px;border-left:3px solid #10b981;">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Before / After Photos -->
+      <div class="wp-detail-photo-grid">
+        <div class="wp-detail-photo-card">
+          <div class="wp-detail-photo-head" style="background:#eff6ff;color:#1e3a8a;">&lt; 개 선 전 &gt;</div>
+          <div id="det_before_imgwrap" class="wp-detail-photo-imgwrap">
+            <span style="font-size:12.5px;color:#94a3b8;">등록된 개선 전 사진이 없습니다</span>
+          </div>
+          <div id="det_before_desc" class="wp-detail-photo-desc">—</div>
+        </div>
+        <div class="wp-detail-photo-card">
+          <div class="wp-detail-photo-head" style="background:#ecfdf5;color:#047857;">&lt; 개 선 후 &gt;</div>
+          <div id="det_after_imgwrap" class="wp-detail-photo-imgwrap">
+            <span style="font-size:12.5px;color:#94a3b8;">등록된 개선 후 사진이 없습니다</span>
+          </div>
+          <div id="det_after_desc" class="wp-detail-photo-desc">—</div>
+        </div>
+      </div>
+
+      <!-- Evaluation & Action Summary -->
+      <div class="wp-detail-eval-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;padding-bottom:10px;border-bottom:1px dashed #cbd5e1;margin-bottom:10px;">
+          <div style="font-size:14px;font-weight:800;color:#0f172a;">
+            🏅 안전기여도 평가 : <span id="det_score" style="color:#1e3a8a;font-size:16px;">90 점</span>
+          </div>
+          <div style="font-size:13.5px;font-weight:700;color:#334155;">
+            평가자 : <span id="det_reviewer" style="color:#0f172a;">진종철</span>
+          </div>
+        </div>
+        <div style="margin-bottom:8px;">
+          <div style="font-size:12px;font-weight:700;color:#64748b;margin-bottom:3px;">평가요약</div>
+          <div id="det_eval_summary" class="wp-detail-text">—</div>
+        </div>
+        <div id="det_extra_wrap" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid #e2e8f0;font-size:13px;color:#334155;display:flex;flex-direction:column;gap:4px;"></div>
+      </div>
+    </div>
+
+    <div class="wp-modal-footer" style="padding:14px 22px;background:#ffffff;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;gap:10px;">
+      <a id="det_print_btn" href="#" target="_blank" class="wp-btn wp-btn-outline" style="text-decoration:none;">🖨️ A4 인쇄하기</a>
+      <div style="display:flex;gap:8px;">
+        <button type="button" class="wp-btn wp-btn-primary" onclick="openEditFromDetail()">✏️ 수정하기</button>
+        <button type="button" class="wp-btn wp-btn-outline" onclick="closeSuggestionDetailModal()">닫기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: PHOTO VIEWER LIGHTBOX -->
-<div id="modalPhotoViewer" class="wp-modal-backdrop" style="display:none;" onclick="closePhotoViewModal()">
+<div id="modalPhotoViewer" class="wp-modal-backdrop" style="display:none;z-index:1200;" onclick="closePhotoViewModal()">
   <div class="wp-modal" style="max-width:820px;padding:0;overflow:hidden;background:#0f172a;border-radius:12px;" onclick="event.stopPropagation()">
     <div style="padding:14px 20px;background:#1e293b;color:#fff;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #334155;">
       <h3 id="photoViewerTitle" style="margin:0;font-size:16px;color:#f8fafc;font-weight:700;">📷 현장 개선 전 사진</h3>
@@ -1366,20 +1604,161 @@ if ($tab === 'suggestions') {
 </div>
 
 <script>
-function openPhotoViewModal(id, title) {
-  const el = document.getElementById('photoData_' + id);
-  if (!el) return;
-  const src = el.value || el.innerText.trim();
+let _currentDetailSug = null;
+
+function openPhotoViewerDirect(src, title) {
   if (!src) return;
   document.getElementById('photoViewerTitle').innerText = '📷 ' + (title || '현장 사진');
   document.getElementById('photoViewerImg').src = src;
   document.getElementById('photoDownloadBtn').href = src;
   document.getElementById('modalPhotoViewer').style.display = 'flex';
 }
+
+function openPhotoViewModal(id, title) {
+  const el = document.getElementById('photoData_' + id);
+  if (!el) return;
+  const src = el.value || el.innerText.trim();
+  if (!src) return;
+  openPhotoViewerDirect(src, title);
+}
 function closePhotoViewModal() {
   document.getElementById('modalPhotoViewer').style.display = 'none';
   document.getElementById('photoViewerImg').src = '';
 }
+
+function onSuggestionRowClick(e, id) {
+  if (e && e.target && e.target.closest('button, a, select, input, textarea, form')) {
+    return;
+  }
+  openSuggestionDetailModal(id);
+}
+
+function openSuggestionDetailModal(id) {
+  const map = window._sugDetailMap || {};
+  const s = map[id];
+  if (!s) return;
+  _currentDetailSug = s;
+
+  document.getElementById('det_reg_no').innerText = s.reg_no || ('#' + s.id);
+  document.getElementById('det_category').innerText = s.category || '미분류';
+  document.getElementById('det_title').innerText = s.title || '(제목 없음)';
+
+  const badge = document.getElementById('det_status_badge');
+  if (s.status === '완료') {
+    badge.className = 'wp-badge wp-badge-done';
+    badge.innerText = '조치완료';
+  } else if (s.status === '채택·진행') {
+    badge.className = 'wp-badge wp-badge-progress';
+    badge.innerText = '진행중';
+  } else {
+    badge.className = 'wp-badge wp-badge-pending';
+    badge.innerText = s.status || '접수';
+  }
+
+  document.getElementById('det_proposer').innerText = (s.proposer_name || '—') + (s.proposer_dept ? ' (' + s.proposer_dept + ')' : '');
+  document.getElementById('det_proposer_sub').innerText = s.proposer_phone ? '📞 ' + s.proposer_phone : '';
+  document.getElementById('det_reg_date').innerText = s.reg_date || '—';
+  let chText = s.submission_channel || '직접등록';
+  if (s.proxy_writer_name && chText.includes('구두')) {
+    chText += ' (' + s.proxy_writer_name + ')';
+  }
+  document.getElementById('det_channel').innerText = chText;
+  document.getElementById('det_location').innerText = s.location || '현장 전 구역';
+  document.getElementById('det_action_mgr').innerText = s.action_manager || '미지정';
+  document.getElementById('det_action_date').innerText = s.action_date ? ('완료: ' + s.action_date) : (s.action_deadline ? ('기한: ' + s.action_deadline) : '');
+
+  document.getElementById('det_problem').innerText = s.problem || '—';
+  document.getElementById('det_solution').innerText = s.solution || '—';
+  document.getElementById('det_expected_effect').innerText = s.expected_effect || '—';
+
+  // Before photo
+  const beforeWrap = document.getElementById('det_before_imgwrap');
+  beforeWrap.innerHTML = '';
+  if (s.photo_before) {
+    const img = document.createElement('img');
+    img.src = s.photo_before;
+    img.alt = '개선 전 사진';
+    img.title = '클릭하여 크게 보기';
+    img.onclick = function() { openPhotoViewerDirect(s.photo_before, (s.title || '안전제안') + ' (개선 전)'); };
+    beforeWrap.appendChild(img);
+  } else {
+    beforeWrap.innerHTML = '<span style="font-size:12.5px;color:#94a3b8;">등록된 개선 전 사진이 없습니다</span>';
+  }
+  document.getElementById('det_before_desc').innerText = s.photo_before_desc || '요약 설명 미등록';
+
+  // After photo
+  const afterWrap = document.getElementById('det_after_imgwrap');
+  afterWrap.innerHTML = '';
+  if (s.photo_after) {
+    const img = document.createElement('img');
+    img.src = s.photo_after;
+    img.alt = '개선 후 사진';
+    img.title = '클릭하여 크게 보기';
+    img.onclick = function() { openPhotoViewerDirect(s.photo_after, (s.title || '안전제안') + ' (개선 후)'); };
+    afterWrap.appendChild(img);
+  } else {
+    afterWrap.innerHTML = '<span style="font-size:12.5px;color:#94a3b8;">등록된 개선 후 사진이 없습니다</span>';
+  }
+  document.getElementById('det_after_desc').innerText = s.photo_after_desc || '요약 설명 미등록';
+
+  // Evaluation
+  const score = parseInt(s.reward_points || s.eval_score || 90, 10);
+  document.getElementById('det_score').innerText = score + ' 점';
+  const cleanReviewer = (s.reviewer_name || '진종철').replace(/\s*\([^)]*\)\s*/g, '').trim() || '진종철';
+  document.getElementById('det_reviewer').innerText = cleanReviewer;
+  document.getElementById('det_eval_summary').innerText = s.review_opinion || s.eval_summary || '평가요약 미등록';
+
+  // Extra action result / feedback / reward
+  const extraWrap = document.getElementById('det_extra_wrap');
+  const extras = [];
+  if (s.action_result) extras.push('<div><strong>조치 결과:</strong> ' + escapeHtmlDetail(s.action_result) + '</div>');
+  if (s.feedback_date) extras.push('<div><strong>환류(공지) 일자:</strong> ' + escapeHtmlDetail(s.feedback_date) + '</div>');
+  if (s.reward_note) extras.push('<div><strong>포상 내역:</strong> ' + escapeHtmlDetail(s.reward_note) + '</div>');
+  if (extras.length > 0) {
+    extraWrap.innerHTML = extras.join('');
+    extraWrap.style.display = 'flex';
+  } else {
+    extraWrap.innerHTML = '';
+    extraWrap.style.display = 'none';
+  }
+
+  document.getElementById('det_print_btn').href = 'worker_participation_suggestion_print.php?id=' + encodeURIComponent(s.id);
+  document.getElementById('modalSuggestionDetail').style.display = 'flex';
+}
+
+function escapeHtmlDetail(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function closeSuggestionDetailModal() {
+  document.getElementById('modalSuggestionDetail').style.display = 'none';
+}
+
+function openEditFromDetail() {
+  const s = _currentDetailSug;
+  closeSuggestionDetailModal();
+  if (s) {
+    editSuggestion(s);
+  }
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    const photoModal = document.getElementById('modalPhotoViewer');
+    if (photoModal && photoModal.style.display === 'flex') {
+      closePhotoViewModal();
+      return;
+    }
+    const detailModal = document.getElementById('modalSuggestionDetail');
+    if (detailModal && detailModal.style.display === 'flex') {
+      closeSuggestionDetailModal();
+    }
+  }
+});
 function openQrModal() {
   document.getElementById('modalQrGuide').style.display = 'flex';
 }
