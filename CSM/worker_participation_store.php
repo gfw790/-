@@ -136,6 +136,10 @@ function worker_part_db(): PDO
     try { $db->exec("ALTER TABLE csm_suggestions ADD COLUMN proposer_login_id TEXT DEFAULT NULL"); } catch (Throwable $e) {}
     try { $db->exec("ALTER TABLE csm_suggestions ADD COLUMN submission_channel TEXT DEFAULT '직접등록'"); } catch (Throwable $e) {}
     try { $db->exec("ALTER TABLE csm_suggestions ADD COLUMN proxy_writer_name TEXT DEFAULT NULL"); } catch (Throwable $e) {}
+    try { $db->exec("ALTER TABLE csm_suggestions ADD COLUMN photo_before_desc TEXT DEFAULT NULL"); } catch (Throwable $e) {}
+    try { $db->exec("ALTER TABLE csm_suggestions ADD COLUMN photo_after_desc TEXT DEFAULT NULL"); } catch (Throwable $e) {}
+    try { $db->exec("ALTER TABLE csm_suggestions ADD COLUMN eval_score REAL DEFAULT 90.0"); } catch (Throwable $e) {}
+    try { $db->exec("ALTER TABLE csm_suggestions ADD COLUMN eval_summary TEXT DEFAULT NULL"); } catch (Throwable $e) {}
     try { $db->exec("ALTER TABLE csm_feedback_reports ADD COLUMN manager_sign TEXT DEFAULT NULL"); } catch (Throwable $e) {}
 
     worker_part_seed_defaults($db);

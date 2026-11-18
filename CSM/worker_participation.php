@@ -77,8 +77,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $expected_effect = trim($_POST['expected_effect'] ?? '');
             $status = trim($_POST['status'] ?? '접수');
             $review_date = !empty($_POST['review_date']) ? $_POST['review_date'] : null;
-            $reviewer_name = !empty($_POST['reviewer_name']) ? $_POST['reviewer_name'] : null;
-            $review_opinion = !empty($_POST['review_opinion']) ? $_POST['review_opinion'] : null;
+            $reviewer_name = !empty($_POST['reviewer_name']) ? trim($_POST['reviewer_name']) : '진종철';
+            $review_opinion = !empty($_POST['review_opinion']) ? trim($_POST['review_opinion']) : null;
             $action_plan = !empty($_POST['action_plan']) ? $_POST['action_plan'] : null;
             $action_manager = !empty($_POST['action_manager']) ? $_POST['action_manager'] : null;
             $action_deadline = !empty($_POST['action_deadline']) ? $_POST['action_deadline'] : null;
@@ -86,13 +86,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $action_result = !empty($_POST['action_result']) ? $_POST['action_result'] : null;
             $feedback_date = !empty($_POST['feedback_date']) ? $_POST['feedback_date'] : null;
             $feedback_method = !empty($_POST['feedback_method']) ? $_POST['feedback_method'] : null;
-            $reward_points = (float)($_POST['reward_points'] ?? 0);
+            $reward_points = (float)($_POST['reward_points'] ?? $_POST['eval_score'] ?? 90.0);
+            $eval_score = $reward_points;
+            $eval_summary = $review_opinion;
             $reward_note = !empty($_POST['reward_note']) ? $_POST['reward_note'] : null;
-            $photo_base64 = trim($_POST['photo_base64'] ?? '');
-            $remove_photo = (int)($_POST['remove_photo'] ?? 0);
-            $newPhoto = null;
-            if ($photo_base64 !== '') {
-                $newPhoto = worker_part_save_uploaded_image($photo_base64, null, 'sug');
+
+            // Before Photo & Description
+            $photo_before_desc = !empty($_POST['photo_before_desc']) ? trim($_POST['photo_before_desc']) : null;
+            $photo_before_raw = trim($_POST['photo_before'] ?? $_POST['photo_base64'] ?? '');
+            $remove_photo_before = (int)($_POST['remove_photo_before'] ?? $_POST['remove_photo'] ?? 0);
+            $newPhotoBefore = null;
+            if ($photo_before_raw !== '' && str_starts_with($photo_before_raw, 'data:image/')) {
+                $newPhotoBefore = worker_part_save_uploaded_image($photo_before_raw, null, 'sug_before');
+            }
+
+            // After Photo & Description
+            $photo_after_desc = !empty($_POST['photo_after_desc']) ? trim($_POST['photo_after_desc']) : null;
+            $photo_after_raw = trim($_POST['photo_after'] ?? '');
+            $remove_photo_after = (int)($_POST['remove_photo_after'] ?? 0);
+            $newPhotoAfter = null;
+            if ($photo_after_raw !== '' && str_starts_with($photo_after_raw, 'data:image/')) {
+                $newPhotoAfter = worker_part_save_uploaded_image($photo_after_raw, null, 'sug_after');
             }
 
             if ($title === '' || $proposer_name === '') {
@@ -106,7 +120,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     title = ?, category = ?, location = ?, problem = ?, solution = ?, expected_effect = ?,
                     status = ?, review_date = ?, reviewer_name = ?, review_opinion = ?, action_plan = ?,
                     action_manager = ?, action_deadline = ?, action_date = ?, action_result = ?,
-                    feedback_date = ?, feedback_method = ?, reward_points = ?, reward_note = ?, updated_at = datetime("now","localtime")
+                    feedback_date = ?, feedback_method = ?, reward_points = ?, reward_note = ?,
+                    photo_before_desc = ?, photo_after_desc = ?, eval_score = ?, eval_summary = ?,
+                    updated_at = datetime("now","localtime")
                     WHERE id = ?');
                 $stmt->execute([
                     $reg_no, $reg_date, $proposer_name, $proposer_dept,
@@ -114,41 +130,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $title, $category, $location, $problem, $solution, $expected_effect,
                     $status, $review_date, $reviewer_name, $review_opinion, $action_plan,
                     $action_manager, $action_deadline, $action_date, $action_result,
-                    $feedback_date, $feedback_method, $reward_points, $reward_note, $id
+                    $feedback_date, $feedback_method, $reward_points, $reward_note,
+                    $photo_before_desc, $photo_after_desc, $eval_score, $eval_summary,
+                    $id
                 ]);
 
-                if ($remove_photo) {
+                if ($remove_photo_before) {
                     $db->prepare('UPDATE csm_suggestions SET photo_before = NULL WHERE id = ?')->execute([$id]);
-                } elseif ($newPhoto !== null) {
-                    $db->prepare('UPDATE csm_suggestions SET photo_before = ? WHERE id = ?')->execute([$newPhoto, $id]);
+                } elseif ($newPhotoBefore !== null) {
+                    $db->prepare('UPDATE csm_suggestions SET photo_before = ? WHERE id = ?')->execute([$newPhotoBefore, $id]);
                 }
 
-                $message = '안전제안 내역이 성공적으로 수정되었습니다.';
+                if ($remove_photo_after) {
+                    $db->prepare('UPDATE csm_suggestions SET photo_after = NULL WHERE id = ?')->execute([$id]);
+                } elseif ($newPhotoAfter !== null) {
+                    $db->prepare('UPDATE csm_suggestions SET photo_after = ? WHERE id = ?')->execute([$newPhotoAfter, $id]);
+                }
+
+                $message = '안전제안 내역 및 개선사진·평가요약이 성공적으로 수정되었습니다.';
             } else {
                 if ($reg_no === '') {
                     $reg_no = sprintf('%d-S%03d', $year, $db->query("SELECT COUNT(*) + 1 FROM csm_suggestions WHERE year = $year")->fetchColumn());
                 }
                 $proposerSign = worker_part_make_signature_svg($proposer_name, '#059669');
+                $evaluatorSign = worker_part_make_signature_svg($reviewer_name, '#b91c1c');
                 $now = date('Y-m-d H:i:s');
                 $stmt = $db->prepare('INSERT INTO csm_suggestions (
                     year, reg_no, reg_date, proposer_name, proposer_dept,
                     proposer_login_id, proposer_phone, submission_channel, proxy_writer_name,
                     title, category, location, problem, solution, expected_effect, status, review_date, reviewer_name, review_opinion,
                     action_plan, action_manager, action_deadline, action_date, action_result,
-                    feedback_date, feedback_method, reward_points, reward_note, photo_before, proposer_sign, created_at, updated_at
+                    feedback_date, feedback_method, reward_points, reward_note, photo_before, photo_after,
+                    photo_before_desc, photo_after_desc, eval_score, eval_summary,
+                    proposer_sign, evaluator_sign, created_at, updated_at
                 ) VALUES (
                     ?, ?, ?, ?, ?,
                     ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?, ?, ?
+                    ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?,
+                    ?, ?, ?, ?
                 )');
                 $stmt->execute([
                     $year, $reg_no, $reg_date, $proposer_name, $proposer_dept,
                     $proposer_login_id, $proposer_phone, $submission_channel, $proxy_writer_name,
                     $title, $category, $location, $problem, $solution, $expected_effect, $status, $review_date, $reviewer_name, $review_opinion,
                     $action_plan, $action_manager, $action_deadline, $action_date, $action_result,
-                    $feedback_date, $feedback_method, $reward_points, $reward_note, $newPhoto, $proposerSign, $now, $now
+                    $feedback_date, $feedback_method, $reward_points, $reward_note, $newPhotoBefore, $newPhotoAfter,
+                    $photo_before_desc, $photo_after_desc, $eval_score, $eval_summary,
+                    $proposerSign, $evaluatorSign, $now, $now
                 ]);
                 $newSugId = (int)$db->lastInsertId();
                 $ip = $_SERVER['REMOTE_ADDR'] ?? '';
@@ -551,13 +582,20 @@ if ($tab === 'suggestions') {
                 <div style="font-weight:700;font-size:15px;margin-bottom:4px;color:var(--wp-primary);display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
                   <span><?= $escape($s['title']) ?></span>
                   <?php 
-                    $photoSrc = worker_part_resolve_photo_data($s['photo_before'] ?? '');
+                    $photoBeforeSrc = worker_part_resolve_photo_data($s['photo_before'] ?? '');
+                    $photoAfterSrc = worker_part_resolve_photo_data($s['photo_after'] ?? '');
                   ?>
-                  <?php if (!empty($photoSrc)): ?>
-                    <button type="button" class="wp-btn-photo-view" onclick="openPhotoViewModal(<?= $s['id'] ?>, '<?= $escape($s['title']) ?>')">
-                      📷 사진보기 ↗
+                  <?php if (!empty($photoBeforeSrc)): ?>
+                    <button type="button" class="wp-btn-photo-view" onclick="openPhotoViewModal('before_<?= $s['id'] ?>', '<?= $escape($s['title']) ?> (개선 전)')">
+                      📸 개선전 ↗
                     </button>
-                    <textarea id="photoData_<?= $s['id'] ?>" style="display:none;"><?= $photoSrc ?></textarea>
+                    <textarea id="photoData_before_<?= $s['id'] ?>" style="display:none;"><?= $photoBeforeSrc ?></textarea>
+                  <?php endif; ?>
+                  <?php if (!empty($photoAfterSrc)): ?>
+                    <button type="button" class="wp-btn-photo-view" style="border-color:#10b981;background:#ecfdf5;color:#047857;" onclick="openPhotoViewModal('after_<?= $s['id'] ?>', '<?= $escape($s['title']) ?> (개선 후)')">
+                      ✅ 개선후 ↗
+                    </button>
+                    <textarea id="photoData_after_<?= $s['id'] ?>" style="display:none;"><?= $photoAfterSrc ?></textarea>
                   <?php endif; ?>
                 </div>
                 <div style="font-size:13px;color:#475569;margin-bottom:3px;"><strong>위치:</strong> <?= $escape($s['location'] ?: '현장 전 구역') ?></div>
@@ -871,44 +909,76 @@ if ($tab === 'suggestions') {
             <input type="text" name="expected_effect" id="sug_expected_effect" placeholder="예: 추락사고 원천 차단, 편의성 향상">
           </div>
 
-          <!-- 현장 사진 첨부 및 클립보드 붙여넣기 (개선 전 현황 사진) -->
-          <div class="wp-form-col-full wp-form-group">
-            <label style="display:flex;align-items:center;justify-content:space-between;">
-              <span style="font-weight:700;">현장 사진 첨부 (개선 전 사진)</span>
+          <!-- 개선 사진 대지 (개선 전 / 개선 후 2열 레이아웃) -->
+          <div class="wp-form-col-full" style="border-top:1.5px solid #cbd5e1;padding-top:14px;margin-top:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+              <strong style="color:var(--wp-primary);font-size:14.5px;display:flex;align-items:center;gap:6px;">
+                <span>📸</span> 개선 사진 대지 및 현장 개선 요약 (개선 전 / 개선 후)
+              </strong>
               <span style="font-size:12px;color:var(--wp-accent);font-weight:600;">📋 Ctrl + V 클립보드 붙여넣기 지원</span>
-            </label>
-            <input type="hidden" name="photo_base64" id="sug_photo_base64" value="">
-            <input type="hidden" name="remove_photo" id="sug_remove_photo" value="0">
-            <input type="file" id="sug_photo_file" accept="image/*" style="display:none;" onchange="handleAdminPhotoSelect(event)">
+            </div>
+            <p style="margin:0 0 10px 0;font-size:12px;color:#64748b;">
+              사진을 등록하고 하단에 번호 매김(1, 2...)으로 <strong>사진 요약 글</strong>을 작성하시면 인쇄 양식(A4)에 1:1로 깔끔하게 반영됩니다.
+            </p>
+          </div>
 
-            <div id="sugPhotoDropZone" class="wp-photo-pastezone" onclick="document.getElementById('sug_photo_file').click()">
-              <div style="font-size:24px;margin-bottom:4px;">📸 / 📋</div>
-              <div style="font-size:13.5px;font-weight:700;color:var(--wp-primary);">
-                클릭하여 사진 첨부 또는 키보드의 <strong>Ctrl + V</strong> 로 캡처 사진 바로 붙여넣기
-              </div>
-              <div style="font-size:11.5px;color:#64748b;margin-top:4px;">
-                화면 캡처(Win+Shift+S) 후 바로 붙여넣거나 파일 탐색기에서 이미지 파일을 끌어다 놓으세요.
-              </div>
-              <div style="margin-top:8px;">
-                <button type="button" class="wp-btn-paste" onclick="event.stopPropagation(); pasteAdminPhotoFromClipboard();">
-                  📋 클립보드 사진 붙여넣기
-                </button>
-              </div>
+          <!-- 좌측: < 개 선 전 > 사진 및 요약 설명 -->
+          <div style="background:#f8fafc;border:1.5px solid #cbd5e1;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <strong style="color:#1e3a8a;font-size:13.5px;">&lt; 개 선 전 &gt; 현장 사진</strong>
+              <button type="button" class="wp-btn-paste" onclick="pasteBeforePhotoFromClipboard()">📋 클립보드 붙여넣기</button>
+            </div>
+            <input type="hidden" name="photo_before" id="sug_photo_before" value="">
+            <input type="hidden" name="remove_photo_before" id="sug_remove_photo_before" value="0">
+            <input type="file" id="sug_photo_before_file" accept="image/*" style="display:none;" onchange="handleBeforePhotoSelect(event)">
+            
+            <div id="sugBeforeDropZone" class="wp-photo-pastezone" style="padding:12px;" onclick="document.getElementById('sug_photo_before_file').click()">
+              <div style="font-size:22px;margin-bottom:2px;">📸</div>
+              <div style="font-size:12.5px;font-weight:700;color:var(--wp-primary);">개선 전 사진 첨부 또는 Ctrl+V</div>
+              <div style="font-size:11px;color:#64748b;margin-top:2px;">클릭하여 파일 선택 또는 스크린샷 붙여넣기</div>
             </div>
 
-            <div id="sugPhotoPreviewBox" style="display:none;position:relative;margin-top:10px;border:1px solid #cbd5e1;border-radius:8px;overflow:hidden;background:#f8fafc;max-width:320px;">
-              <img id="sugPhotoPreviewImg" src="" alt="현장 사진" style="width:100%;max-height:220px;object-fit:cover;display:block;">
-              <button type="button" onclick="removeAdminPhoto()" style="position:absolute;top:6px;right:6px;background:rgba(220,38,38,0.88);color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:11.5px;font-weight:700;cursor:pointer;">✕ 사진 삭제</button>
-              <div style="font-size:11.5px;color:#059669;padding:4px 8px;background:#f0fdf4;border-top:1px solid #dcfce7;display:flex;justify-content:space-between;">
-                <span>✅ 사진 첨부됨</span>
-                <span id="sugPhotoSizeBadge" style="color:#64748b;"></span>
-              </div>
+            <div id="sugBeforePreviewBox" style="display:none;position:relative;margin-top:4px;border:1px solid #cbd5e1;border-radius:6px;overflow:hidden;background:#ffffff;">
+              <img id="sugBeforePreviewImg" src="" alt="개선 전" style="width:100%;max-height:160px;object-fit:cover;display:block;">
+              <button type="button" onclick="removeBeforePhoto()" style="position:absolute;top:4px;right:4px;background:rgba(220,38,38,0.88);color:#fff;border:none;border-radius:4px;padding:3px 7px;font-size:11px;font-weight:700;cursor:pointer;">✕ 삭제</button>
+            </div>
+
+            <div style="margin-top:4px;">
+              <label style="font-size:12px;font-weight:700;color:#334155;display:block;margin-bottom:4px;">&lt;개선 전&gt; 사진 요약 글 (문제 상황 요약)</label>
+              <textarea name="photo_before_desc" id="sug_photo_before_desc" style="width:100%;min-height:70px;font-size:12.5px;padding:8px;border:1px solid #cbd5e1;border-radius:6px;font-family:inherit;" placeholder="예: 1. 사다리를 설치하기 어려워 채널 위에 서서 작업해야 함&#10;2. 두 발을 채널 위에 올려야 해서 균형을 잡기 어려움"></textarea>
+            </div>
+          </div>
+
+          <!-- 우측: < 개 선 후 > 사진 및 요약 설명 -->
+          <div style="background:#f8fafc;border:1.5px solid #cbd5e1;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <strong style="color:#059669;font-size:13.5px;">&lt; 개 선 후 &gt; 조치완료 사진</strong>
+              <button type="button" class="wp-btn-paste" onclick="pasteAfterPhotoFromClipboard()">📋 클립보드 붙여넣기</button>
+            </div>
+            <input type="hidden" name="photo_after" id="sug_photo_after" value="">
+            <input type="hidden" name="remove_photo_after" id="sug_remove_photo_after" value="0">
+            <input type="file" id="sug_photo_after_file" accept="image/*" style="display:none;" onchange="handleAfterPhotoSelect(event)">
+            
+            <div id="sugAfterDropZone" class="wp-photo-pastezone" style="padding:12px;" onclick="document.getElementById('sug_photo_after_file').click()">
+              <div style="font-size:22px;margin-bottom:2px;">✅</div>
+              <div style="font-size:12.5px;font-weight:700;color:#059669;">개선 후 사진 첨부 또는 Ctrl+V</div>
+              <div style="font-size:11px;color:#64748b;margin-top:2px;">개선 조치 완료 후 사진을 등록하세요</div>
+            </div>
+
+            <div id="sugAfterPreviewBox" style="display:none;position:relative;margin-top:4px;border:1px solid #cbd5e1;border-radius:6px;overflow:hidden;background:#ffffff;">
+              <img id="sugAfterPreviewImg" src="" alt="개선 후" style="width:100%;max-height:160px;object-fit:cover;display:block;">
+              <button type="button" onclick="removeAfterPhoto()" style="position:absolute;top:4px;right:4px;background:rgba(220,38,38,0.88);color:#fff;border:none;border-radius:4px;padding:3px 7px;font-size:11px;font-weight:700;cursor:pointer;">✕ 삭제</button>
+            </div>
+
+            <div style="margin-top:4px;">
+              <label style="font-size:12px;font-weight:700;color:#334155;display:block;margin-bottom:4px;">&lt;개선 후&gt; 사진 요약 글 (개선 효과 요약)</label>
+              <textarea name="photo_after_desc" id="sug_photo_after_desc" style="width:100%;min-height:70px;font-size:12.5px;padding:8px;border:1px solid #cbd5e1;border-radius:6px;font-family:inherit;" placeholder="예: 1. 안전발판을 제작하여 두발을 옆으로 놓을 수 있어 균형잡기 편리함&#10;2. 휴대가 용이하여 작업 후 손쉽게 이동"></textarea>
             </div>
           </div>
 
           <!-- Review & Action Section -->
           <div class="wp-form-col-full" style="border-top:1px dashed #cbd5e1;padding-top:14px;margin-top:6px;">
-            <strong style="color:var(--wp-primary);">심사 및 개선조치 계획 (관리자)</strong>
+            <strong style="color:var(--wp-primary);font-size:14.5px;">심사 및 개선조치 계획 / 평가 (관리자)</strong>
           </div>
           <div class="wp-form-group">
             <label>진행상태</label>
@@ -952,6 +1022,30 @@ if ($tab === 'suggestions') {
           <div class="wp-form-group">
             <label>환류(공지) 일자</label>
             <input type="date" name="feedback_date" id="sug_feedback_date">
+          </div>
+          <div class="wp-form-group">
+            <label>제안 유형에 따른 안전기여도 평가 (점수)</label>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <input type="number" name="reward_points" id="sug_reward_points" min="0" max="100" step="5" placeholder="예: 90" value="90" style="flex:1;">
+              <span style="font-weight:700;color:#1e3a8a;">점</span>
+            </div>
+          </div>
+          <div class="wp-form-group">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+              <label style="margin:0;">평가자 성명 (인쇄 직인 연동)</label>
+              <span style="font-size:12px;color:var(--wp-accent);font-weight:600;">👥 사내 직원목록</span>
+            </div>
+            <select id="sug_reviewer_select" class="wp-select" onchange="document.getElementById('sug_reviewer_name').value = this.value" style="margin-bottom:6px;background:#f8fafc;font-size:13px;">
+              <option value="">-- 사내 평가자 선택 시 자동입력 --</option>
+              <?php foreach ($userAccounts as $acc): ?>
+                <option value="<?= $escape($acc['name']) ?>"><?= $escape($acc['name']) ?> (<?= $escape($acc['dept'] ?: '안전관리') ?>)</option>
+              <?php endforeach; ?>
+            </select>
+            <input type="text" name="reviewer_name" id="sug_reviewer_name" placeholder="예: 진종철 또는 정연탁">
+          </div>
+          <div class="wp-form-col-full wp-form-group">
+            <label style="font-weight:700;color:var(--wp-primary);">평가요약 코멘트 (A4 인쇄 하단 출력) *</label>
+            <textarea name="review_opinion" id="sug_review_opinion" style="min-height:60px;" placeholder="예: 현장의 작업 여건의 한계를 극복하고 안전에 기여한 바를 높게 평가함"></textarea>
           </div>
           <div class="wp-form-col-full wp-form-group">
             <label>조치 결과 요약</label>
@@ -1350,12 +1444,29 @@ function openSuggestionModal() {
   document.getElementById('sug_feedback_date').value = '';
   document.getElementById('sug_action_result').value = '';
   document.getElementById('sug_reward_note').value = '';
-  // Reset photo
-  document.getElementById('sug_photo_base64').value = '';
-  document.getElementById('sug_remove_photo').value = '0';
-  document.getElementById('sug_photo_file').value = '';
-  document.getElementById('sugPhotoPreviewImg').src = '';
-  document.getElementById('sugPhotoPreviewBox').style.display = 'none';
+
+  // Before Photo & Description reset
+  document.getElementById('sug_photo_before').value = '';
+  document.getElementById('sug_remove_photo_before').value = '0';
+  document.getElementById('sug_photo_before_file').value = '';
+  document.getElementById('sugBeforePreviewImg').src = '';
+  document.getElementById('sugBeforePreviewBox').style.display = 'none';
+  document.getElementById('sug_photo_before_desc').value = '';
+
+  // After Photo & Description reset
+  document.getElementById('sug_photo_after').value = '';
+  document.getElementById('sug_remove_photo_after').value = '0';
+  document.getElementById('sug_photo_after_file').value = '';
+  document.getElementById('sugAfterPreviewImg').src = '';
+  document.getElementById('sugAfterPreviewBox').style.display = 'none';
+  document.getElementById('sug_photo_after_desc').value = '';
+
+  // Evaluation fields reset
+  document.getElementById('sug_reward_points').value = '90';
+  document.getElementById('sug_reviewer_name').value = '진종철';
+  const revSel = document.getElementById('sug_reviewer_select');
+  if (revSel) revSel.value = '진종철';
+  document.getElementById('sug_review_opinion').value = '';
 
   document.getElementById('modalSuggestion').style.display = 'flex';
 }
@@ -1408,25 +1519,53 @@ function editSuggestion(s) {
   document.getElementById('sug_action_result').value = s.action_result || '';
   document.getElementById('sug_reward_note').value = s.reward_note || '';
 
-  // Setup photo preview
-  document.getElementById('sug_photo_base64').value = '';
-  document.getElementById('sug_remove_photo').value = '0';
-  document.getElementById('sug_photo_file').value = '';
+  // Before Photo Setup
+  document.getElementById('sug_photo_before').value = '';
+  document.getElementById('sug_remove_photo_before').value = '0';
+  document.getElementById('sug_photo_before_file').value = '';
   if (s.photo_before) {
-    document.getElementById('sugPhotoPreviewImg').src = s.photo_before;
-    document.getElementById('sugPhotoPreviewBox').style.display = 'block';
-    const badge = document.getElementById('sugPhotoSizeBadge');
-    if (badge) badge.innerText = '등록된 현장 사진';
+    document.getElementById('sugBeforePreviewImg').src = s.photo_before;
+    document.getElementById('sugBeforePreviewBox').style.display = 'block';
   } else {
-    document.getElementById('sugPhotoPreviewImg').src = '';
-    document.getElementById('sugPhotoPreviewBox').style.display = 'none';
+    document.getElementById('sugBeforePreviewImg').src = '';
+    document.getElementById('sugBeforePreviewBox').style.display = 'none';
   }
+  document.getElementById('sug_photo_before_desc').value = s.photo_before_desc || '';
+
+  // After Photo Setup
+  document.getElementById('sug_photo_after').value = '';
+  document.getElementById('sug_remove_photo_after').value = '0';
+  document.getElementById('sug_photo_after_file').value = '';
+  if (s.photo_after) {
+    document.getElementById('sugAfterPreviewImg').src = s.photo_after;
+    document.getElementById('sugAfterPreviewBox').style.display = 'block';
+  } else {
+    document.getElementById('sugAfterPreviewImg').src = '';
+    document.getElementById('sugAfterPreviewBox').style.display = 'none';
+  }
+  document.getElementById('sug_photo_after_desc').value = s.photo_after_desc || '';
+
+  // Evaluation score, reviewer, comment setup
+  document.getElementById('sug_reward_points').value = s.reward_points || s.eval_score || 90;
+  const reviewer = s.reviewer_name || '진종철';
+  document.getElementById('sug_reviewer_name').value = reviewer;
+  const revSel = document.getElementById('sug_reviewer_select');
+  if (revSel) {
+    revSel.value = '';
+    for (let i = 0; i < revSel.options.length; i++) {
+      if (revSel.options[i].value === reviewer) {
+        revSel.selectedIndex = i;
+        break;
+      }
+    }
+  }
+  document.getElementById('sug_review_opinion').value = s.review_opinion || s.eval_summary || '';
 
   document.getElementById('modalSuggestion').style.display = 'flex';
 }
 
-// Admin Photo Processing & Clipboard Paste
-function processAdminPhoto(file) {
+// Generic Photo Processor (resize & compress)
+function processSuggestionPhotoFile(file, onReady) {
   if (!file) return;
   if (!file.type || !file.type.startsWith('image/')) {
     alert('이미지 파일(JPG, PNG, WebP 등)만 첨부할 수 있습니다.');
@@ -1456,33 +1595,28 @@ function processAdminPhoto(file) {
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, w, h);
 
-      const compressed = canvas.toDataURL('image/jpeg', 0.82);
-      document.getElementById('sug_photo_base64').value = compressed;
-      document.getElementById('sug_remove_photo').value = '0';
-
-      const previewImg = document.getElementById('sugPhotoPreviewImg');
-      previewImg.src = compressed;
-      document.getElementById('sugPhotoPreviewBox').style.display = 'block';
-
-      const badge = document.getElementById('sugPhotoSizeBadge');
-      if (badge) {
-        const kb = Math.round((compressed.length * 3 / 4) / 1024);
-        badge.innerText = w + 'x' + h + ' (' + kb + 'KB 최적화)';
-      }
+      const compressed = canvas.toDataURL('image/jpeg', 0.85);
+      onReady(compressed, w, h);
     };
     img.src = evt.target.result;
   };
   reader.readAsDataURL(file);
 }
 
-function handleAdminPhotoSelect(e) {
-  const file = e.target.files && e.target.files[0];
-  if (file) {
-    processAdminPhoto(file);
-  }
+// <개선 전> 사진 처리
+function processBeforePhoto(file) {
+  processSuggestionPhotoFile(file, function(dataUrl) {
+    document.getElementById('sug_photo_before').value = dataUrl;
+    document.getElementById('sug_remove_photo_before').value = '0';
+    document.getElementById('sugBeforePreviewImg').src = dataUrl;
+    document.getElementById('sugBeforePreviewBox').style.display = 'block';
+  });
 }
-
-async function pasteAdminPhotoFromClipboard() {
+function handleBeforePhotoSelect(e) {
+  const file = e.target.files && e.target.files[0];
+  if (file) processBeforePhoto(file);
+}
+async function pasteBeforePhotoFromClipboard() {
   if (navigator.clipboard && navigator.clipboard.read) {
     try {
       const items = await navigator.clipboard.read();
@@ -1490,7 +1624,7 @@ async function pasteAdminPhotoFromClipboard() {
         for (const type of item.types) {
           if (type.startsWith('image/')) {
             const blob = await item.getType(type);
-            processAdminPhoto(blob);
+            processBeforePhoto(blob);
             return;
           }
         }
@@ -1498,22 +1632,64 @@ async function pasteAdminPhotoFromClipboard() {
       alert('클립보드에 복사된 이미지가 없습니다.\n화면 캡처(Win+Shift+S) 또는 이미지를 복사한 뒤 다시 클릭해주세요.');
     } catch (err) {
       console.warn('Clipboard read error:', err);
-      alert('브라우저 보안으로 클립보드 직접 읽기가 제한되었습니다.\n키보드의 [Ctrl + V] 단축키를 눌러 사진을 붙여넣으실 수 있습니다.');
+      alert('브라우저 보안으로 클립보드 직접 읽기가 제한되었습니다.\n키보드의 [Ctrl + V] 단축키로 개선 전 사진 영역에 붙여넣어주세요.');
     }
   } else {
-    alert('현재 브라우저에서는 클립보드 직접 읽기 버튼이 지원되지 않습니다.\n키보드의 [Ctrl + V] 단축키를 눌러 사진을 붙여넣어주세요.');
+    alert('현재 브라우저에서는 클립보드 직접 읽기가 지원되지 않습니다.\n키보드의 [Ctrl + V] 단축키를 눌러 사진을 붙여넣어주세요.');
   }
 }
-
-function removeAdminPhoto() {
-  document.getElementById('sug_photo_file').value = '';
-  document.getElementById('sug_photo_base64').value = '';
-  document.getElementById('sug_remove_photo').value = '1';
-  document.getElementById('sugPhotoPreviewImg').src = '';
-  document.getElementById('sugPhotoPreviewBox').style.display = 'none';
+function removeBeforePhoto() {
+  document.getElementById('sug_photo_before_file').value = '';
+  document.getElementById('sug_photo_before').value = '';
+  document.getElementById('sug_remove_photo_before').value = '1';
+  document.getElementById('sugBeforePreviewImg').src = '';
+  document.getElementById('sugBeforePreviewBox').style.display = 'none';
 }
 
-// Global Paste handler when #modalSuggestion is open
+// <개선 후> 사진 처리
+function processAfterPhoto(file) {
+  processSuggestionPhotoFile(file, function(dataUrl) {
+    document.getElementById('sug_photo_after').value = dataUrl;
+    document.getElementById('sug_remove_photo_after').value = '0';
+    document.getElementById('sugAfterPreviewImg').src = dataUrl;
+    document.getElementById('sugAfterPreviewBox').style.display = 'block';
+  });
+}
+function handleAfterPhotoSelect(e) {
+  const file = e.target.files && e.target.files[0];
+  if (file) processAfterPhoto(file);
+}
+async function pasteAfterPhotoFromClipboard() {
+  if (navigator.clipboard && navigator.clipboard.read) {
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        for (const type of item.types) {
+          if (type.startsWith('image/')) {
+            const blob = await item.getType(type);
+            processAfterPhoto(blob);
+            return;
+          }
+        }
+      }
+      alert('클립보드에 복사된 이미지가 없습니다.\n화면 캡처(Win+Shift+S) 또는 이미지를 복사한 뒤 다시 클릭해주세요.');
+    } catch (err) {
+      console.warn('Clipboard read error:', err);
+      alert('브라우저 보안으로 클립보드 직접 읽기가 제한되었습니다.\n키보드의 [Ctrl + V] 단축키로 개선 후 사진 영역에 붙여넣어주세요.');
+    }
+  } else {
+    alert('현재 브라우저에서는 클립보드 직접 읽기가 지원되지 않습니다.\n키보드의 [Ctrl + V] 단축키를 눌러 사진을 붙여넣어주세요.');
+  }
+}
+function removeAfterPhoto() {
+  document.getElementById('sug_photo_after_file').value = '';
+  document.getElementById('sug_photo_after').value = '';
+  document.getElementById('sug_remove_photo_after').value = '1';
+  document.getElementById('sugAfterPreviewImg').src = '';
+  document.getElementById('sugAfterPreviewBox').style.display = 'none';
+}
+
+// Global Ctrl+V Paste handler inside #modalSuggestion
 window.addEventListener('paste', function(e) {
   const modal = document.getElementById('modalSuggestion');
   if (!modal || modal.style.display !== 'flex') return;
@@ -1526,10 +1702,19 @@ window.addEventListener('paste', function(e) {
       const file = items[i].getAsFile();
       if (file) {
         e.preventDefault();
-        processAdminPhoto(file);
-        const box = document.getElementById('sugPhotoPreviewBox');
-        if (box) {
-          box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Check active focused element or context
+        const act = document.activeElement;
+        const isAfterFocused = act && (act.id === 'sug_photo_after_desc' || act.closest('#sugAfterDropZone'));
+        const hasBefore = !!document.getElementById('sug_photo_before').value || (document.getElementById('sugBeforePreviewImg').src && !document.getElementById('sugBeforePreviewImg').src.endsWith('#'));
+        
+        if (isAfterFocused || hasBefore) {
+          processAfterPhoto(file);
+          const box = document.getElementById('sugAfterPreviewBox');
+          if (box) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+          processBeforePhoto(file);
+          const box = document.getElementById('sugBeforePreviewBox');
+          if (box) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
         break;
       }
@@ -1537,36 +1722,39 @@ window.addEventListener('paste', function(e) {
   }
 });
 
-// Drag and drop for Admin photo
-const sugDropZone = document.getElementById('sugPhotoDropZone');
-if (sugDropZone) {
+// Drag & drop for Before / After dropzones
+function setupDropZone(dropZoneId, processFn) {
+  const zone = document.getElementById(dropZoneId);
+  if (!zone) return;
   ['dragenter', 'dragover'].forEach(eventName => {
-    sugDropZone.addEventListener(eventName, function(e) {
+    zone.addEventListener(eventName, function(e) {
       e.preventDefault();
       e.stopPropagation();
-      sugDropZone.classList.add('dragover');
+      zone.classList.add('dragover');
     }, false);
   });
   ['dragleave', 'drop'].forEach(eventName => {
-    sugDropZone.addEventListener(eventName, function(e) {
+    zone.addEventListener(eventName, function(e) {
       e.preventDefault();
       e.stopPropagation();
-      sugDropZone.classList.remove('dragover');
+      zone.classList.remove('dragover');
     }, false);
   });
-  sugDropZone.addEventListener('drop', function(e) {
+  zone.addEventListener('drop', function(e) {
     const dt = e.dataTransfer;
     const files = dt && dt.files;
     if (files && files.length > 0) {
       for (let i = 0; i < files.length; i++) {
         if (files[i].type.startsWith('image/')) {
-          processAdminPhoto(files[i]);
+          processFn(files[i]);
           break;
         }
       }
     }
   }, false);
 }
+setupDropZone('sugBeforeDropZone', processBeforePhoto);
+setupDropZone('sugAfterDropZone', processAfterPhoto);
 
 function openMeetingModal() {
   document.getElementById('meet_id').value = '0';
