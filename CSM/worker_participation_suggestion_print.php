@@ -282,13 +282,13 @@ function renderCircularSeal(string $name): string {
       table-layout: fixed;
       margin-bottom: 0;
     }
-    .photo-table td, .photo-table th {
+    .photo-box-cell {
+      border: 1.2px solid #000;
       padding: 0;
       vertical-align: top;
-      border: none;
+      background: #fafafa;
     }
     .photo-img-frame {
-      border: 1.2px solid #000;
       height: 64mm;
       display: flex;
       align-items: center;
@@ -308,28 +308,27 @@ function renderCircularSeal(string $name): string {
       text-align: center;
       padding: 10px;
     }
-    .photo-caption-head {
-      text-align: center;
-      font-weight: 700;
-      font-size: 10.5pt;
-      padding: 4px 0;
-      letter-spacing: 2px;
-      border-left: 1.2px solid #000;
-      border-right: 1.2px solid #000;
-      background: #fff;
-      color: #000;
-    }
-    .photo-desc-td {
-      border: 1.2px solid #000 !important;
-      border-top: none !important;
-      padding: 7px 10px;
-      font-size: 9.3pt;
-      line-height: 1.5;
+    .photo-desc-cell {
+      border: 1.2px solid #000;
+      border-top: none;
+      padding: 5px 8px 7px 8px;
       background: #fff;
       color: #000;
       vertical-align: top;
-      height: 24mm;
       box-sizing: border-box;
+    }
+    .photo-desc-title {
+      text-align: center;
+      font-weight: 700;
+      font-size: 10.5pt;
+      letter-spacing: 3px;
+      margin-bottom: 3px;
+      color: #000;
+    }
+    .photo-desc-text {
+      font-size: 9.3pt;
+      line-height: 1.5;
+      color: #000;
     }
 
     /* Evaluation Box */
@@ -608,7 +607,7 @@ function renderCircularSeal(string $name): string {
               <col style="width: 50%;">
             </colgroup>
             <tr>
-              <td>
+              <td class="photo-box-cell">
                 <div class="photo-img-frame">
                   <?php if (!empty($pBefore)): ?>
                     <img src="<?= $pBefore ?>" alt="개선 전">
@@ -620,7 +619,7 @@ function renderCircularSeal(string $name): string {
                   <?php endif; ?>
                 </div>
               </td>
-              <td>
+              <td class="photo-box-cell">
                 <div class="photo-img-frame">
                   <?php if (!empty($pAfter)): ?>
                     <img src="<?= $pAfter ?>" alt="개선 후">
@@ -634,15 +633,13 @@ function renderCircularSeal(string $name): string {
               </td>
             </tr>
             <tr>
-              <th class="photo-caption-head">&lt; 개  선  전 &gt;</th>
-              <th class="photo-caption-head">&lt; 개  선  후 &gt;</th>
-            </tr>
-            <tr>
-              <td class="photo-desc-td">
-                <?= nl2br($escape($beforeDesc)) ?>
+              <td class="photo-desc-cell">
+                <div class="photo-desc-title">&lt; 개 선 전 &gt;</div>
+                <div class="photo-desc-text"><?= nl2br($escape($beforeDesc)) ?></div>
               </td>
-              <td class="photo-desc-td">
-                <?= nl2br($escape($afterDesc)) ?>
+              <td class="photo-desc-cell">
+                <div class="photo-desc-title">&lt; 개 선 후 &gt;</div>
+                <div class="photo-desc-text"><?= nl2br($escape($afterDesc)) ?></div>
               </td>
             </tr>
           </table>
