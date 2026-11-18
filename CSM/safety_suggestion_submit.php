@@ -12,8 +12,41 @@ $today = (new DateTimeImmutable('now', new DateTimeZone('Asia/Seoul')))->format(
 $currentYear = (int)substr($today, 0, 4);
 
 $submitted = false;
+$isUpdated = false;
 $assignedRegNo = '';
+$newId = 0;
 $error = '';
+
+$editId = filter_var($_GET['edit_id'] ?? $_POST['edit_id'] ?? 0, FILTER_VALIDATE_INT);
+if ($editId === false || $editId < 0) {
+    $editId = 0;
+}
+$isEditing = false;
+$editingRecord = null;
+if ($editId > 0) {
+    $findStmt = $db->prepare('SELECT * FROM csm_suggestions WHERE id = ?');
+    $findStmt->execute([$editId]);
+    $editingRecord = $findStmt->fetch(PDO::FETCH_ASSOC);
+    if ($editingRecord) {
+        $isEditing = true;
+    } else {
+        $editId = 0;
+    }
+}
+
+// Quick Search by Reg No via GET (?search_reg=...)
+$searchReg = trim($_GET['search_reg'] ?? '');
+if ($searchReg !== '' && !$isEditing) {
+    $sStmt = $db->prepare('SELECT * FROM csm_suggestions WHERE reg_no = ? LIMIT 1');
+    $sStmt->execute([$searchReg]);
+    $found = $sStmt->fetch(PDO::FETCH_ASSOC);
+    if ($found) {
+        header('Location: safety_suggestion_submit.php?edit_id=' . $found['id']);
+        exit;
+    } else {
+        $error = '입력하신 접수번호 [' . $searchReg . ']에 해당하는 안전제안을 찾을 수 없습니다.';
+    }
+}
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     try {
@@ -30,6 +63,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         $solution = trim($_POST['solution'] ?? '');
         $expected_effect = trim($_POST['expected_effect'] ?? '');
         $signature_data = trim($_POST['signature_data'] ?? '');
+        $removePhoto = (int)($_POST['remove_photo'] ?? 0);
 
         if ($proposer_name === '') {
             throw new InvalidArgumentException('제안자 성명을 입력해주세요.');
@@ -48,56 +82,99 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             'sug'
         );
 
-        // Generate Registration Number
-        $countStmt = $db->prepare('SELECT COUNT(*) FROM csm_suggestions WHERE year = ?');
-        $countStmt->execute([$currentYear]);
-        $nextNum = (int)$countStmt->fetchColumn() + 1;
-        $assignedRegNo = sprintf('%d-S%03d', $currentYear, $nextNum);
-
-        $proposer_login_id = trim($_POST['proposer_login_id'] ?? '') ?: null;
-        $submission_channel = trim($_POST['submission_channel'] ?? '모바일접수');
-        $proxy_writer_name = trim($_POST['proxy_writer_name'] ?? '') ?: null;
-
-        // Prepare Proposer Signature
-        $finalSign = $signature_data;
-        if ($finalSign === '') {
-            $finalSign = worker_part_make_signature_svg($proposer_name, '#059669');
-        }
-
         $now = date('Y-m-d H:i:s');
-        $stmt = $db->prepare('INSERT INTO csm_suggestions (
-            year, reg_no, reg_date, proposer_name, proposer_dept, proposer_phone,
-            proposer_login_id, submission_channel, proxy_writer_name,
-            title, category, location, problem, solution, expected_effect,
-            status, photo_before, proposer_sign, is_mobile_submit, created_at, updated_at
-        ) VALUES (
-            ?, ?, ?, ?, ?, ?,
-            ?, ?, ?,
-            ?, ?, ?, ?, ?, ?,
-            "접수", ?, ?, 1, ?, ?
-        )');
-        $stmt->execute([
-            $currentYear, $assignedRegNo, $today, $proposer_name, $proposer_dept, $proposer_phone,
-            $proposer_login_id, $submission_channel, $proxy_writer_name,
-            $title, $category, $location, $problem, $solution, $expected_effect,
-            $photoPath, $finalSign, $now, $now
-        ]);
-        $newId = (int)$db->lastInsertId();
-
-        // Audit Signature
         $ip = $_SERVER['REMOTE_ADDR'] ?? '';
-        worker_part_save_signature($db, 'suggestion', $newId, 'proposer', $proposer_name, $finalSign, $ip);
 
-        $submitted = true;
+        if ($isEditing && $editingRecord) {
+            // UPDATE EXISTING SUGGESTION (수정 및 사진 보완)
+            $assignedRegNo = $editingRecord['reg_no'];
+            $newId = $editId;
+
+            $finalSign = $signature_data;
+            if ($finalSign === '') {
+                $finalSign = $editingRecord['proposer_sign'] ?: worker_part_make_signature_svg($proposer_name, '#059669');
+            }
+
+            $stmt = $db->prepare('UPDATE csm_suggestions SET
+                proposer_name = ?, proposer_dept = ?, proposer_phone = ?,
+                title = ?, location = ?, problem = ?, solution = ?, expected_effect = ?,
+                proposer_sign = ?, updated_at = ?
+                WHERE id = ?');
+            $stmt->execute([
+                $proposer_name, $proposer_dept, $proposer_phone,
+                $title, $location, $problem, $solution, $expected_effect,
+                $finalSign, $now, $editId
+            ]);
+
+            if ($removePhoto) {
+                $db->prepare('UPDATE csm_suggestions SET photo_before = NULL WHERE id = ?')->execute([$editId]);
+            } elseif ($photoPath !== null) {
+                $db->prepare('UPDATE csm_suggestions SET photo_before = ? WHERE id = ?')->execute([$photoPath, $editId]);
+            }
+
+            worker_part_save_signature($db, 'suggestion', $editId, 'proposer', $proposer_name, $finalSign, $ip);
+
+            $submitted = true;
+            $isUpdated = true;
+        } else {
+            // INSERT NEW SUGGESTION (신규 접수)
+            $countStmt = $db->prepare('SELECT COUNT(*) FROM csm_suggestions WHERE year = ?');
+            $countStmt->execute([$currentYear]);
+            $nextNum = (int)$countStmt->fetchColumn() + 1;
+            $assignedRegNo = sprintf('%d-S%03d', $currentYear, $nextNum);
+
+            $proposer_login_id = trim($_POST['proposer_login_id'] ?? '') ?: null;
+            $submission_channel = trim($_POST['submission_channel'] ?? '모바일접수');
+            $proxy_writer_name = trim($_POST['proxy_writer_name'] ?? '') ?: null;
+
+            // Prepare Proposer Signature
+            $finalSign = $signature_data;
+            if ($finalSign === '') {
+                $finalSign = worker_part_make_signature_svg($proposer_name, '#059669');
+            }
+
+            $stmt = $db->prepare('INSERT INTO csm_suggestions (
+                year, reg_no, reg_date, proposer_name, proposer_dept, proposer_phone,
+                proposer_login_id, submission_channel, proxy_writer_name,
+                title, category, location, problem, solution, expected_effect,
+                status, photo_before, proposer_sign, is_mobile_submit, created_at, updated_at
+            ) VALUES (
+                ?, ?, ?, ?, ?, ?,
+                ?, ?, ?,
+                ?, ?, ?, ?, ?, ?,
+                "접수", ?, ?, 1, ?, ?
+            )');
+            $stmt->execute([
+                $currentYear, $assignedRegNo, $today, $proposer_name, $proposer_dept, $proposer_phone,
+                $proposer_login_id, $submission_channel, $proxy_writer_name,
+                $title, $category, $location, $problem, $solution, $expected_effect,
+                $photoPath, $finalSign, $now, $now
+            ]);
+            $newId = (int)$db->lastInsertId();
+
+            // Audit Signature
+            worker_part_save_signature($db, 'suggestion', $newId, 'proposer', $proposer_name, $finalSign, $ip);
+
+            $submitted = true;
+            $isUpdated = false;
+        }
     } catch (Throwable $e) {
         $error = $e->getMessage();
     }
 }
 
-// Prefill values from logged in user if available
-$prefillName = $user['name'] ?? '';
-$prefillDept = $user['team'] ?? $user['team_name'] ?? $user['department'] ?? '';
-$prefillLoginId = $user['login_id'] ?? '';
+// Prefill values
+$prefillName = $isEditing ? ($editingRecord['proposer_name'] ?? '') : ($user['name'] ?? '');
+$prefillDept = $isEditing ? ($editingRecord['proposer_dept'] ?? '') : ($user['team'] ?? $user['team_name'] ?? $user['department'] ?? '');
+$prefillPhone = $isEditing ? ($editingRecord['proposer_phone'] ?? '') : '';
+$prefillLoginId = $isEditing ? ($editingRecord['proposer_login_id'] ?? '') : ($user['login_id'] ?? '');
+$prefillTitle = $isEditing ? ($editingRecord['title'] ?? '') : '';
+$prefillLocation = $isEditing ? ($editingRecord['location'] ?? '') : '';
+$prefillProblem = $isEditing ? ($editingRecord['problem'] ?? '') : '';
+$prefillSolution = $isEditing ? ($editingRecord['solution'] ?? '') : '';
+$prefillExpectedEffect = $isEditing ? ($editingRecord['expected_effect'] ?? '') : '';
+$prefillPhoto = $isEditing ? ($editingRecord['photo_before'] ?? '') : '';
+$prefillCategory = $isEditing ? ($editingRecord['category'] ?? '미분류(접수자 분류)') : '미분류(접수자 분류)';
 $userAccounts = worker_part_get_user_accounts();
 $activeTeams = worker_part_get_teams();
 ?>
@@ -468,10 +545,13 @@ $activeTeams = worker_part_get_teams();
         </svg>
         주식회사 현대기전 · CSM
       </div>
-      <a href="worker_participation.php?tab=suggestions" style="color:#ffffff;text-decoration:none;font-size:12px;opacity:0.85;">관리대장</a>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button type="button" onclick="openQuickSearchPrompt()" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.35);color:#ffffff;font-size:11.5px;padding:3px 8px;border-radius:6px;cursor:pointer;">🔍 제안조회/수정</button>
+        <a href="worker_participation.php?tab=suggestions" style="color:#ffffff;text-decoration:none;font-size:12px;opacity:0.9;">관리대장</a>
+      </div>
     </div>
-    <h1 class="m-header-title">산업안전보건 안전제안 접수</h1>
-    <p class="m-header-desc">현장의 유해·위험요인과 개선 아이디어를 등록해주세요.</p>
+    <h1 class="m-header-title"><?= $isEditing ? '안전제안 수정 및 사진 보완' : '산업안전보건 안전제안 접수' ?></h1>
+    <p class="m-header-desc"><?= $isEditing ? '누락된 현장 사진을 추가하거나 작성 내용을 수정합니다.' : '현장의 유해·위험요인과 개선 아이디어를 등록해주세요.' ?></p>
     <div class="m-slogan-pill">
       <span>🛡️</span>
       <span><strong>안전은 행동입니다!</strong> 작은 제안이 안전한 현장을 만듭니다.</span>
@@ -482,24 +562,41 @@ $activeTeams = worker_part_get_teams();
     <!-- SUCCESS VIEW -->
     <div class="m-content">
       <div class="m-success-card">
-        <div class="m-success-icon">🎉</div>
-        <h2 style="font-size:22px;color:var(--m-primary);margin:0 0 8px 0;">안전제안이 접수되었습니다!</h2>
-        <p style="font-size:14px;color:#475569;margin:0 0 14px 0;">
-          작성해주신 소중한 제안은 안전관리팀 및 산업안전보건위원회에 실시간 전달되었습니다.
-        </p>
+        <?php if (!empty($isUpdated)): ?>
+          <div class="m-success-icon">✨</div>
+          <h2 style="font-size:22px;color:var(--m-primary);margin:0 0 8px 0;">안전제안이 보완·수정되었습니다!</h2>
+          <p style="font-size:14px;color:#475569;margin:0 0 14px 0;">
+            추가 첨부하신 현장 사진과 수정 내용이 관리대장에 실시간 업데이트되었습니다.
+          </p>
+        <?php else: ?>
+          <div class="m-success-icon">🎉</div>
+          <h2 style="font-size:22px;color:var(--m-primary);margin:0 0 8px 0;">안전제안이 접수되었습니다!</h2>
+          <p style="font-size:14px;color:#475569;margin:0 0 14px 0;">
+            작성해주신 소중한 제안은 안전관리팀 및 산업안전보건위원회에 실시간 전달되었습니다.
+          </p>
+        <?php endif; ?>
+
         <div>
           <span style="font-size:13px;color:var(--m-muted);">접수번호</span><br>
           <div class="m-success-reg"><?= $escape($assignedRegNo) ?></div>
         </div>
-        <div style="background:#f8fafc;border-left:4px solid var(--m-success);padding:14px 16px;text-align:left;border-radius:6px;margin:16px 0 24px;font-size:13.5px;color:#334155;">
-          <strong>💡 향후 진행 절차 안내:</strong><br>
-          1. 안전보건관리책임자 검토 및 개선조치 계획 수립<br>
-          2. 현장 위험요인 즉시 시정 및 개선 이행<br>
-          3. 우수 제안자 선정 및 <strong>이달의 안전인 포상금</strong> 지급
+
+        <div style="background:#f0f9ff;border-left:4px solid var(--m-accent);padding:14px 16px;text-align:left;border-radius:6px;margin:16px 0 22px;font-size:13.5px;color:#1e3a8a;line-height:1.5;">
+          <strong>💡 사진 누락 또는 추가 보완이 필요하신가요?</strong><br>
+          접수할 때 현장 사진을 깜빡하셨거나 내용을 고치고 싶으시면 아래 <strong>[📷 사진 추가 / 내용 수정하기]</strong> 버튼을 누르면 언제든지 사진을 추가하거나 수정하실 수 있습니다.
         </div>
-        <a href="safety_suggestion_submit.php" class="m-btn-submit" style="text-decoration:none;">
-          + 새로운 안전제안 추가 작성
-        </a>
+
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <a href="safety_suggestion_submit.php?edit_id=<?= $newId ?>" class="m-btn-submit" style="background:#ffffff;color:var(--m-primary);border:2px solid var(--m-accent);text-decoration:none;box-shadow:none;">
+            📷 방금 접수한 제안 사진 추가 / 내용 수정하기
+          </a>
+          <a href="safety_suggestion_submit.php" class="m-btn-submit" style="text-decoration:none;">
+            + 새로운 안전제안 추가 작성
+          </a>
+          <a href="worker_participation.php?tab=suggestions" style="text-align:center;font-size:13px;color:#64748b;margin-top:4px;text-decoration:none;">
+            ← 안전제안 관리대장으로 이동
+          </a>
+        </div>
       </div>
     </div>
   <?php else: ?>
@@ -511,16 +608,28 @@ $activeTeams = worker_part_get_teams();
         </div>
       <?php endif; ?>
 
+      <?php if ($isEditing && $editingRecord): ?>
+        <div style="background:#eff6ff;border:1.5px solid #bfdbfe;color:#1e3a8a;padding:12px 14px;border-radius:10px;margin-bottom:18px;font-size:13px;line-height:1.5;">
+          <div style="font-weight:700;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;">
+            <span>✏️ 제안 보완·수정 모드 [접수번호: <?= $escape($editingRecord['reg_no']) ?>]</span>
+            <a href="safety_suggestion_submit.php" style="font-size:11.5px;color:#dc2626;text-decoration:none;">✕ 신규작성으로 전환</a>
+          </div>
+          누락되었던 현장 사진을 첨부(클립보드 붙여넣기 또는 카메라 촬영)하시거나 기존 작성 내용을 수정한 뒤 하단의 <strong>[수정 내용 및 사진 저장하기]</strong>를 눌러주세요.
+        </div>
+      <?php endif; ?>
+
       <form method="post" id="formSuggestion" enctype="multipart/form-data">
-        <input type="hidden" name="category" id="catInput" value="미분류(접수자 분류)">
+        <input type="hidden" name="edit_id" value="<?= (int)$editId ?>">
+        <input type="hidden" name="remove_photo" id="removePhotoInput" value="0">
+        <input type="hidden" name="category" id="catInput" value="<?= $escape($prefillCategory) ?>">
         <input type="hidden" name="photo_base64" id="photoBase64" value="">
         <input type="hidden" name="signature_data" id="sigDataInput" value="">
-        <input type="hidden" name="proposer_login_id" id="propLoginId" value="">
-        <input type="hidden" name="submission_channel" id="subChannel" value="모바일접수">
+        <input type="hidden" name="proposer_login_id" id="propLoginId" value="<?= $escape($prefillLoginId) ?>">
+        <input type="hidden" name="submission_channel" id="subChannel" value="<?= $isEditing ? $escape($editingRecord['submission_channel'] ?? '모바일수정') : '모바일접수' ?>">
         <input type="hidden" name="proxy_writer_name" id="proxyWriterName" value="<?= $escape($user['name'] ?? '안전관리자') ?>">
 
         <!-- Verbal Proxy Mode Toggle (안전관리자 구두 제보 대신 접수) -->
-        <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:12px;padding:12px 14px;margin-bottom:18px;">
+        <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:12px;padding:12px 14px;margin-bottom:18px;<?= $isEditing ? 'display:none;' : '' ?>">
           <div style="display:flex;align-items:center;justify-content:space-between;">
             <label style="font-size:13.5px;font-weight:700;color:#166534;display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;">
               <input type="checkbox" id="chkProxyMode" onchange="toggleProxyMode(this.checked)" style="width:18px;height:18px;accent-color:#16a34a;">
@@ -588,7 +697,7 @@ $activeTeams = worker_part_get_teams();
 
         <div class="m-group">
           <label class="m-label">휴대폰 번호 (포상 및 조치결과 안내용)</label>
-          <input type="tel" name="proposer_phone" id="propPhone" class="m-input" placeholder="010-0000-0000">
+          <input type="tel" name="proposer_phone" id="propPhone" class="m-input" placeholder="010-0000-0000" value="<?= $escape($prefillPhone) ?>">
         </div>
 
         <!-- Step 2: 제안 내용 -->
@@ -598,22 +707,27 @@ $activeTeams = worker_part_get_teams();
 
         <div class="m-group">
           <label class="m-label">제안 제목 <span class="req">*</span></label>
-          <input type="text" name="title" class="m-input" placeholder="예: 2공장 통로 바닥 요철 및 전선 걸림 위험" required>
+          <input type="text" name="title" class="m-input" placeholder="예: 2공장 통로 바닥 요철 및 전선 걸림 위험" value="<?= $escape($prefillTitle) ?>" required>
         </div>
 
         <div class="m-group">
           <label class="m-label">위험 발생 위치</label>
-          <input type="text" name="location" class="m-input" placeholder="예: 2공장 메인 배전반 앞 또는 가공 1라인">
+          <input type="text" name="location" class="m-input" placeholder="예: 2공장 메인 배전반 앞 또는 가공 1라인" value="<?= $escape($prefillLocation) ?>">
         </div>
 
         <div class="m-group">
           <label class="m-label">현황 및 문제점 (어떤 위험이 있나요?) <span class="req">*</span></label>
-          <textarea name="problem" class="m-textarea" placeholder="위험 상황, 걸려 넘어질 위험, 기계 협착 위험 등 구체적으로 적어주세요." required></textarea>
+          <textarea name="problem" class="m-textarea" placeholder="위험 상황, 걸려 넘어질 위험, 기계 협착 위험 등 구체적으로 적어주세요." required><?= $escape($prefillProblem) ?></textarea>
         </div>
 
         <div class="m-group">
           <label class="m-label">개선 아이디어 (어떻게 개선하면 좋을까요?)</label>
-          <textarea name="solution" class="m-textarea" placeholder="보호덮개 설치, 배선 정리, 미끄럼방지 테이프 부착 등 생각나는 아이디어를 적어주세요."></textarea>
+          <textarea name="solution" class="m-textarea" placeholder="보호덮개 설치, 배선 정리, 미끄럼방지 테이프 부착 등 생각나는 아이디어를 적어주세요."><?= $escape($prefillSolution) ?></textarea>
+        </div>
+
+        <div class="m-group">
+          <label class="m-label">기대효과 (선택)</label>
+          <input type="text" name="expected_effect" class="m-input" placeholder="예: 전도 사고 예방 및 작업 통로 확보" value="<?= $escape($prefillExpectedEffect) ?>">
         </div>
 
         <!-- Step 3: 현장 사진 첨부 -->
@@ -643,12 +757,12 @@ $activeTeams = worker_part_get_teams();
             </div>
           </div>
 
-          <div id="photoPreviewContainer" class="m-photo-preview">
-            <img id="photoPreviewImg" src="" alt="미리보기">
+          <div id="photoPreviewContainer" class="m-photo-preview" style="<?= $prefillPhoto !== '' ? 'display:block;' : 'display:none;' ?>">
+            <img id="photoPreviewImg" src="<?= $escape($prefillPhoto) ?>" alt="미리보기">
             <button type="button" class="m-photo-remove" onclick="removePhoto()">✕ 삭제</button>
             <div style="font-size:11.5px;color:#059669;padding:6px 10px;background:#f0fdf4;border-top:1px solid #dcfce7;display:flex;align-items:center;justify-content:space-between;">
-              <span>✅ 사진이 정상 등록되었습니다.</span>
-              <span id="photoSizeBadge" style="font-size:11px;color:#64748b;"></span>
+              <span><?= $prefillPhoto !== '' ? '✅ 등록된 현장 사진 (교체 또는 삭제 가능)' : '✅ 사진이 정상 등록되었습니다.' ?></span>
+              <span id="photoSizeBadge" style="font-size:11px;color:#64748b;"><?= $prefillPhoto !== '' ? '기존 사진' : '' ?></span>
             </div>
           </div>
         </div>
@@ -672,7 +786,7 @@ $activeTeams = worker_part_get_teams();
         <!-- Submit Button -->
         <div class="m-submit-bar">
           <button type="button" class="m-btn-submit" onclick="handleSubmit()">
-            <span>🚀 안전제안 제출하기</span>
+            <span><?= $isEditing ? '💾 수정 내용 및 사진 저장하기' : '🚀 안전제안 제출하기' ?></span>
           </button>
         </div>
       </form>
@@ -788,6 +902,8 @@ function processImageFile(file) {
 
       const compressedData = canvas.toDataURL('image/jpeg', 0.82);
       document.getElementById('photoBase64').value = compressedData;
+      const rem = document.getElementById('removePhotoInput');
+      if (rem) rem.value = '0';
 
       const previewImg = document.getElementById('photoPreviewImg');
       previewImg.src = compressedData;
@@ -892,7 +1008,29 @@ function removePhoto() {
   document.getElementById('photoBase64').value = '';
   document.getElementById('photoPreviewImg').src = '';
   document.getElementById('photoPreviewContainer').style.display = 'none';
+  const rem = document.getElementById('removePhotoInput');
+  if (rem) rem.value = '1';
 }
+
+function openQuickSearchPrompt() {
+  const reg = prompt('조회 또는 수정할 제안의 접수번호를 입력해주세요.\n(예: 2026-S001)');
+  if (reg && reg.trim()) {
+    location.href = 'safety_suggestion_submit.php?search_reg=' + encodeURIComponent(reg.trim());
+  }
+}
+
+<?php if ($isEditing && !empty($prefillSign)): ?>
+window.addEventListener('DOMContentLoaded', function() {
+  const signImg = new Image();
+  signImg.onload = function() {
+    if (canvas && ctx) {
+      ctx.drawImage(signImg, (canvas.width - signImg.width) / 2, (canvas.height - signImg.height) / 2);
+      hasSigned = true;
+    }
+  };
+  signImg.src = <?= json_encode($prefillSign) ?>;
+});
+<?php endif; ?>
 
 // Touch Signature Logic
 const canvas = document.getElementById('mSigCanvas');
