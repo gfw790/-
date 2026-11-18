@@ -912,8 +912,29 @@ if ($tab === 'suggestions') {
             </select>
           </div>
           <div class="wp-form-group">
-            <label>조치 담당자</label>
-            <input type="text" name="action_manager" id="sug_action_manager" placeholder="예: 정주랑 대리">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+              <label style="margin:0;">조치 담당자</label>
+              <span style="font-size:12px;color:var(--wp-accent);font-weight:600;">👥 사내 직원목록에서 선택</span>
+            </div>
+            <select id="sug_action_manager_select" class="wp-select" onchange="onSelectActionManager(this)" style="margin-bottom:6px;background:#f8fafc;font-size:13px;">
+              <option value="">-- 사내 등록 직원목록에서 선택 시 자동입력 --</option>
+              <?php foreach ($userAccounts as $acc): ?>
+                <?php 
+                  $roleSuffix = !empty($acc['role']) ? ' ' . $acc['role'] : '';
+                  $val = $acc['name'] . $roleSuffix;
+                ?>
+                <option value="<?= $escape($val) ?>" data-name="<?= $escape($acc['name']) ?>" data-dept="<?= $escape($acc['dept']) ?>">
+                  <?= $escape($acc['name']) ?><?= $escape($roleSuffix) ?> (<?= $escape($acc['dept'] ?: '현장') ?>)
+                </option>
+              <?php endforeach; ?>
+            </select>
+            <input type="text" name="action_manager" id="sug_action_manager" list="actionManagerDatalist" placeholder="직접 입력 또는 위 직원목록에서 선택 (예: 정주랑 대리)">
+            <datalist id="actionManagerDatalist">
+              <?php foreach ($userAccounts as $acc): ?>
+                <option value="<?= $escape($acc['name']) ?><?= !empty($acc['role']) ? ' ' . $escape($acc['role']) : '' ?>"></option>
+                <option value="<?= $escape($acc['name']) ?>"></option>
+              <?php endforeach; ?>
+            </datalist>
           </div>
           <div class="wp-form-group">
             <label>조치 완료일 (또는 기한)</label>
@@ -1284,6 +1305,8 @@ function openSuggestionModal() {
   document.getElementById('sug_expected_effect').value = '';
   document.getElementById('sug_status').value = '접수';
   document.getElementById('sug_action_manager').value = '';
+  const initMgrSel = document.getElementById('sug_action_manager_select');
+  if (initMgrSel) initMgrSel.value = '';
   document.getElementById('sug_action_date').value = '';
   document.getElementById('sug_feedback_date').value = '';
   document.getElementById('sug_action_result').value = '';
@@ -1299,6 +1322,11 @@ function openSuggestionModal() {
 }
 function closeSuggestionModal() {
   document.getElementById('modalSuggestion').style.display = 'none';
+}
+function onSelectActionManager(sel) {
+  if (sel && sel.value) {
+    document.getElementById('sug_action_manager').value = sel.value;
+  }
 }
 function editSuggestion(s) {
   document.getElementById('sug_id').value = s.id;
@@ -1320,7 +1348,22 @@ function editSuggestion(s) {
   document.getElementById('sug_solution').value = s.solution || '';
   document.getElementById('sug_expected_effect').value = s.expected_effect || '';
   document.getElementById('sug_status').value = s.status || '접수';
-  document.getElementById('sug_action_manager').value = s.action_manager || '';
+
+  const curMgr = s.action_manager || '';
+  document.getElementById('sug_action_manager').value = curMgr;
+  const editMgrSel = document.getElementById('sug_action_manager_select');
+  if (editMgrSel) {
+    editMgrSel.value = '';
+    for (let i = 0; i < editMgrSel.options.length; i++) {
+      const optVal = editMgrSel.options[i].value;
+      const optName = editMgrSel.options[i].getAttribute('data-name');
+      if (optVal && (optVal === curMgr || optName === curMgr || (optName && curMgr.startsWith(optName)))) {
+        editMgrSel.selectedIndex = i;
+        break;
+      }
+    }
+  }
+
   document.getElementById('sug_action_date').value = s.action_date || '';
   document.getElementById('sug_feedback_date').value = s.feedback_date || '';
   document.getElementById('sug_action_result').value = s.action_result || '';
