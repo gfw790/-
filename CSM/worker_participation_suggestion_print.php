@@ -357,12 +357,22 @@ function renderCircularSeal(string $name): string {
 
     /* Footer */
     .doc-footer {
-      text-align: right;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 5px;
       padding-top: 1.5mm;
       font-size: 10pt;
       font-weight: 900;
       letter-spacing: 1px;
       color: #000;
+      line-height: 1;
+    }
+    .doc-footer img {
+      height: 11pt;
+      width: auto;
+      object-fit: contain;
+      display: block;
     }
 
     /* Print Media Rules */
@@ -675,7 +685,10 @@ function renderCircularSeal(string $name): string {
 
         <!-- Footer Outside Document Box -->
         <footer class="doc-footer">
-          주식회사 현대기전
+          <?php if ($logoBase64 !== ''): ?>
+            <img src="<?= $logoBase64 ?>" alt="현대기전 로고">
+          <?php endif; ?>
+          <span>주식회사 현대기전</span>
         </footer>
 
       </div>
