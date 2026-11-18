@@ -84,7 +84,7 @@ function renderCircularSeal(string $name): string {
   <title>산업안전보건 제안 접수서 인쇄 · CSM</title>
   <style>
     :root {
-      --top-pad: 12mm;
+      --top-pad: 20mm;
       --bottom-pad: 10mm;
       --left-pad: 12mm;
       --right-pad: 12mm;
@@ -289,7 +289,7 @@ function renderCircularSeal(string $name): string {
       background: #fafafa;
     }
     .photo-img-frame {
-      height: 64mm;
+      height: 60mm;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -424,10 +424,10 @@ function renderCircularSeal(string $name): string {
         ← 안전제안 목록으로 돌아가기
       </a>
       <div class="pad-control-group">
-        <span class="pad-label">상단 여백:</span>
-        <button type="button" class="pad-btn" onclick="setTopPad('8mm', this)">8mm (타이트)</button>
-        <button type="button" class="pad-btn active" onclick="setTopPad('12mm', this)">12mm (표준)</button>
-        <button type="button" class="pad-btn" onclick="setTopPad('16mm', this)">16mm (타공)</button>
+        <span class="pad-label">상단 편철 여백:</span>
+        <button type="button" class="pad-btn" onclick="setTopPad('14mm', this)">14mm (기본)</button>
+        <button type="button" class="pad-btn active" onclick="setTopPad('20mm', this)">20mm (표준 편철)</button>
+        <button type="button" class="pad-btn" onclick="setTopPad('25mm', this)">25mm (여유 편철)</button>
       </div>
     </div>
     <div class="toolbar-tip">
