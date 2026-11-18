@@ -335,6 +335,11 @@ if ($tab === 'suggestions') {
     $stmt = $db->prepare('SELECT * FROM csm_suggestions WHERE year = ? ORDER BY reg_date DESC, id DESC');
     $stmt->execute([$year]);
     $suggestions = $stmt->fetchAll();
+    foreach ($suggestions as &$sugItem) {
+        $sugItem['photo_before'] = worker_part_resolve_photo_data($sugItem['photo_before'] ?? '');
+        $sugItem['photo_after'] = worker_part_resolve_photo_data($sugItem['photo_after'] ?? '');
+    }
+    unset($sugItem);
 } elseif ($tab === 'meetings') {
     $stmt = $db->prepare('SELECT * FROM csm_safety_meetings WHERE year = ? ORDER BY meeting_date DESC, id DESC');
     $stmt->execute([$year]);
@@ -545,10 +550,14 @@ if ($tab === 'suggestions') {
               <td>
                 <div style="font-weight:700;font-size:15px;margin-bottom:4px;color:var(--wp-primary);display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
                   <span><?= $escape($s['title']) ?></span>
-                  <?php if (!empty($s['photo_before'])): ?>
-                    <a href="<?= $escape($s['photo_before']) ?>" target="_blank" style="text-decoration:none;" title="현장 사진 원본 크게보기">
-                      <span style="font-size:11px;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;padding:1px 6px;border-radius:4px;font-weight:600;display:inline-flex;align-items:center;gap:3px;cursor:pointer;">📷 사진보기 ↗</span>
-                    </a>
+                  <?php 
+                    $photoSrc = worker_part_resolve_photo_data($s['photo_before'] ?? '');
+                  ?>
+                  <?php if (!empty($photoSrc)): ?>
+                    <button type="button" class="wp-btn-photo-view" onclick="openPhotoViewModal(<?= $s['id'] ?>, '<?= $escape($s['title']) ?>')">
+                      📷 사진보기 ↗
+                    </button>
+                    <textarea id="photoData_<?= $s['id'] ?>" style="display:none;"><?= $photoSrc ?></textarea>
                   <?php endif; ?>
                 </div>
                 <div style="font-size:13px;color:#475569;margin-bottom:3px;"><strong>위치:</strong> <?= $escape($s['location'] ?: '현장 전 구역') ?></div>
@@ -1245,7 +1254,37 @@ if ($tab === 'suggestions') {
   </div>
 </div>
 
+<!-- MODAL: PHOTO VIEWER LIGHTBOX -->
+<div id="modalPhotoViewer" class="wp-modal-backdrop" style="display:none;" onclick="closePhotoViewModal()">
+  <div class="wp-modal" style="max-width:820px;padding:0;overflow:hidden;background:#0f172a;border-radius:12px;" onclick="event.stopPropagation()">
+    <div style="padding:14px 20px;background:#1e293b;color:#fff;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #334155;">
+      <h3 id="photoViewerTitle" style="margin:0;font-size:16px;color:#f8fafc;font-weight:700;">📷 현장 개선 전 사진</h3>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <a id="photoDownloadBtn" href="" download="csm_safety_photo.jpg" class="wp-btn wp-btn-outline wp-btn-sm" style="color:#ffffff;border-color:#64748b;background:#334155;text-decoration:none;">💾 원본 다운로드</a>
+        <button type="button" class="wp-modal-close" style="color:#94a3b8;font-size:26px;line-height:1;background:none;border:none;cursor:pointer;" onclick="closePhotoViewModal()">&times;</button>
+      </div>
+    </div>
+    <div style="padding:18px;text-align:center;max-height:78vh;overflow:auto;display:flex;align-items:center;justify-content:center;background:#020617;">
+      <img id="photoViewerImg" src="" alt="현장 사진" style="max-width:100%;max-height:72vh;object-fit:contain;border-radius:6px;box-shadow:0 10px 25px rgba(0,0,0,0.5);">
+    </div>
+  </div>
+</div>
+
 <script>
+function openPhotoViewModal(id, title) {
+  const el = document.getElementById('photoData_' + id);
+  if (!el) return;
+  const src = el.value || el.innerText.trim();
+  if (!src) return;
+  document.getElementById('photoViewerTitle').innerText = '📷 ' + (title || '현장 사진');
+  document.getElementById('photoViewerImg').src = src;
+  document.getElementById('photoDownloadBtn').href = src;
+  document.getElementById('modalPhotoViewer').style.display = 'flex';
+}
+function closePhotoViewModal() {
+  document.getElementById('modalPhotoViewer').style.display = 'none';
+  document.getElementById('photoViewerImg').src = '';
+}
 function openQrModal() {
   document.getElementById('modalQrGuide').style.display = 'flex';
 }

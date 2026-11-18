@@ -193,7 +193,7 @@ function worker_part_save_uploaded_image(string $base64Data = '', ?array $fileDa
 {
     $uploadDir = __DIR__ . '/storage/suggestions';
     if (!is_dir($uploadDir) && !mkdir($uploadDir, 0750, true) && !is_dir($uploadDir)) {
-        return null;
+        // Fallback
     }
 
     $base64Data = trim($base64Data);
@@ -203,24 +203,53 @@ function worker_part_save_uploaded_image(string $base64Data = '', ?array $fileDa
         if ($imgData !== false && strlen($imgData) > 50) {
             $fileName = $prefix . '_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.jpg';
             $dest = $uploadDir . '/' . $fileName;
-            if (file_put_contents($dest, $imgData) !== false) {
-                return 'storage/suggestions/' . $fileName;
-            }
+            @file_put_contents($dest, $imgData);
+            // Return Base64 data directly for 100% self-contained DB storage (no 403 Forbidden issues)
+            return $base64Data;
         }
     }
 
     if ($fileData !== null && isset($fileData['error']) && $fileData['error'] === UPLOAD_ERR_OK) {
         $ext = strtolower(pathinfo((string)$fileData['name'], PATHINFO_EXTENSION));
         if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true)) {
-            $fileName = $prefix . '_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
-            $dest = $uploadDir . '/' . $fileName;
-            if (move_uploaded_file((string)$fileData['tmp_name'], $dest)) {
-                return 'storage/suggestions/' . $fileName;
+            $raw = @file_get_contents((string)$fileData['tmp_name']);
+            if ($raw !== false && strlen($raw) > 0) {
+                $fileName = $prefix . '_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+                $dest = $uploadDir . '/' . $fileName;
+                @move_uploaded_file((string)$fileData['tmp_name'], $dest);
+                $mime = ($ext === 'png') ? 'image/png' : (($ext === 'webp') ? 'image/webp' : 'image/jpeg');
+                return 'data:' . $mime . ';base64,' . base64_encode($raw);
             }
         }
     }
 
     return null;
+}
+
+function worker_part_resolve_photo_data(?string $photo): string
+{
+    $photo = trim((string)$photo);
+    if ($photo === '') {
+        return '';
+    }
+    if (str_starts_with($photo, 'data:image/')) {
+        return $photo;
+    }
+    $fullPath = __DIR__ . '/' . ltrim($photo, '/\\');
+    if (file_exists($fullPath) && is_file($fullPath)) {
+        $ext = strtolower(pathinfo($fullPath, PATHINFO_EXTENSION));
+        $mime = match($ext) {
+            'png' => 'image/png',
+            'webp' => 'image/webp',
+            'gif' => 'image/gif',
+            default => 'image/jpeg'
+        };
+        $data = @file_get_contents($fullPath);
+        if ($data !== false && strlen($data) > 0) {
+            return 'data:' . $mime . ';base64,' . base64_encode($data);
+        }
+    }
+    return $photo;
 }
 
 function worker_part_save_signature(PDO $db, string $docType, int $docId, string $role, string $name, string $sigData, string $ip = ''): void
