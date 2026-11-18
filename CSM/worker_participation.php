@@ -35,7 +35,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
             fputcsv($out, [
                 $row['reg_no'], $row['reg_date'], $row['proposer_name'], $row['proposer_dept'],
                 $row['title'], $row['category'], $row['location'], $row['problem'],
-                $row['solution'], $row['status'], $row['action_manager'], $row['action_date'],
+                $row['solution'], $row['status'], worker_part_clean_person_name($row['action_manager'] ?? ''), $row['action_date'],
                 $row['feedback_date'], $row['reward_note']
             ]);
         }
@@ -80,7 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $reviewer_name = !empty($_POST['reviewer_name']) ? trim($_POST['reviewer_name']) : '진종철';
             $review_opinion = !empty($_POST['review_opinion']) ? trim($_POST['review_opinion']) : null;
             $action_plan = !empty($_POST['action_plan']) ? $_POST['action_plan'] : null;
-            $action_manager = !empty($_POST['action_manager']) ? $_POST['action_manager'] : null;
+            $action_manager = !empty($_POST['action_manager']) ? (worker_part_clean_person_name($_POST['action_manager']) ?: null) : null;
             $action_deadline = !empty($_POST['action_deadline']) ? $_POST['action_deadline'] : null;
             $action_date = !empty($_POST['action_date']) ? $_POST['action_date'] : null;
             $action_result = !empty($_POST['action_result']) ? $_POST['action_result'] : null;
@@ -735,7 +735,7 @@ if ($tab === 'suggestions') {
                   <span class="wp-badge wp-badge-pending"><?= $escape($s['status']) ?></span>
                 <?php endif; ?>
               </td>
-              <td><?= $escape($s['action_manager'] ?: '—') ?></td>
+              <td><?= $escape(worker_part_clean_person_name($s['action_manager'] ?? '') ?: '—') ?></td>
               <td><?= $escape($s['action_date'] ?: ($s['action_deadline'] ? '기한: ' . $s['action_deadline'] : '—')) ?></td>
               <td>
                 <?php if ($s['feedback_date']): ?>
@@ -1132,20 +1132,19 @@ if ($tab === 'suggestions') {
             <select id="sug_action_manager_select" class="wp-select" onchange="onSelectActionManager(this)" style="margin-bottom:6px;background:#f8fafc;font-size:13px;">
               <option value="">-- 사내 등록 직원목록에서 선택 시 자동입력 --</option>
               <?php foreach ($userAccounts as $acc): ?>
-                <?php 
-                  $roleSuffix = !empty($acc['role']) ? ' ' . $acc['role'] : '';
-                  $val = $acc['name'] . $roleSuffix;
-                ?>
-                <option value="<?= $escape($val) ?>" data-name="<?= $escape($acc['name']) ?>" data-dept="<?= $escape($acc['dept']) ?>">
-                  <?= $escape($acc['name']) ?><?= $escape($roleSuffix) ?> (<?= $escape($acc['dept'] ?: '현장') ?>)
+                <?php $cleanMgrName = worker_part_clean_person_name($acc['name'] ?? ''); ?>
+                <?php if ($cleanMgrName === '') continue; ?>
+                <option value="<?= $escape($cleanMgrName) ?>" data-name="<?= $escape($cleanMgrName) ?>" data-dept="<?= $escape($acc['dept']) ?>">
+                  <?= $escape($cleanMgrName) ?> (<?= $escape($acc['dept'] ?: '현장') ?>)
                 </option>
               <?php endforeach; ?>
             </select>
-            <input type="text" name="action_manager" id="sug_action_manager" list="actionManagerDatalist" placeholder="직접 입력 또는 위 직원목록에서 선택 (예: 정주랑 대리)">
+            <input type="text" name="action_manager" id="sug_action_manager" list="actionManagerDatalist" placeholder="직접 입력 또는 위 직원목록에서 선택 (예: 정주랑)">
             <datalist id="actionManagerDatalist">
               <?php foreach ($userAccounts as $acc): ?>
-                <option value="<?= $escape($acc['name']) ?><?= !empty($acc['role']) ? ' ' . $escape($acc['role']) : '' ?>"></option>
-                <option value="<?= $escape($acc['name']) ?>"></option>
+                <?php $cleanMgrName = worker_part_clean_person_name($acc['name'] ?? ''); ?>
+                <?php if ($cleanMgrName === '') continue; ?>
+                <option value="<?= $escape($cleanMgrName) ?>"></option>
               <?php endforeach; ?>
             </datalist>
           </div>
@@ -1626,6 +1625,15 @@ function closePhotoViewModal() {
   document.getElementById('photoViewerImg').src = '';
 }
 
+function cleanPersonName(raw) {
+  return String(raw || '')
+    .replace(/\s*\([^)]*\)\s*/g, ' ')
+    .replace(/\b(?:safety_manager|administrator|supervisor|manager|admin|leader|worker|ceo)\b/gi, ' ')
+    .replace(/(?:^|\s)(?:관리감독자|작업지휘자|안전관리자|보건관리자|안전보건관리책임자)(?=\s|$)/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function onSuggestionRowClick(e, id) {
   if (e && e.target && e.target.closest('button, a, select, input, textarea, form')) {
     return;
@@ -1664,7 +1672,7 @@ function openSuggestionDetailModal(id) {
   }
   document.getElementById('det_channel').innerText = chText;
   document.getElementById('det_location').innerText = s.location || '현장 전 구역';
-  document.getElementById('det_action_mgr').innerText = s.action_manager || '미지정';
+  document.getElementById('det_action_mgr').innerText = cleanPersonName(s.action_manager) || '미지정';
   document.getElementById('det_action_date').innerText = s.action_date ? ('완료: ' + s.action_date) : (s.action_deadline ? ('기한: ' + s.action_deadline) : '');
 
   document.getElementById('det_problem').innerText = s.problem || '—';
@@ -1879,7 +1887,7 @@ function editSuggestion(s) {
   document.getElementById('sug_expected_effect').value = s.expected_effect || '';
   document.getElementById('sug_status').value = s.status || '접수';
 
-  const curMgr = s.action_manager || '';
+  const curMgr = cleanPersonName(s.action_manager);
   document.getElementById('sug_action_manager').value = curMgr;
   const editMgrSel = document.getElementById('sug_action_manager_select');
   if (editMgrSel) {

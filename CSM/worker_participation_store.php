@@ -194,6 +194,21 @@ function worker_part_get_user_accounts(bool $activeTeamsOnly = false): array
     return [];
 }
 
+function worker_part_clean_person_name(?string $raw): string
+{
+    $s = trim((string)($raw ?? ''));
+    if ($s === '') {
+        return '';
+    }
+    // Remove parenthetical suffixes like (관리감독자), (작업지휘자), (안전관리자)
+    $s = (string)preg_replace('/\s*\([^)]*\)\s*/u', ' ', $s);
+    // Remove system role tokens or Korean job titles trailing the name
+    $s = (string)preg_replace('/\b(?:safety_manager|administrator|supervisor|manager|admin|leader|worker|ceo)\b/iu', ' ', $s);
+    $s = (string)preg_replace('/(?:^|\s)(?:관리감독자|작업지휘자|안전관리자|보건관리자|안전보건관리책임자)(?=\s|$)/u', ' ', $s);
+    $s = (string)preg_replace('/\s+/u', ' ', $s);
+    return trim($s);
+}
+
 function worker_part_get_teams(): array
 {
     if (function_exists('auth_read_active_teams')) {
