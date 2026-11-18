@@ -163,11 +163,27 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     }
 }
 
+// Logged-in user account info (auto-fill proposer)
+$loggedUserLoginId = trim((string)($user['login_id'] ?? ''));
+$loggedUserName = trim((string)($user['name'] ?? ''));
+$loggedUserDept = trim((string)($user['team'] ?? $user['team_name'] ?? $user['department'] ?? ''));
+$loggedUserPhone = trim((string)($user['phone'] ?? ''));
+if ($loggedUserLoginId !== '' && function_exists('auth_accounts')) {
+    $allAccs = auth_accounts();
+    if (isset($allAccs[$loggedUserLoginId]) && is_array($allAccs[$loggedUserLoginId])) {
+        $me = $allAccs[$loggedUserLoginId];
+        if ($loggedUserName === '') $loggedUserName = trim((string)($me['name'] ?? ''));
+        if ($loggedUserDept === '') $loggedUserDept = trim((string)($me['team'] ?? $me['team_name'] ?? $me['department'] ?? ''));
+        if ($loggedUserPhone === '') $loggedUserPhone = trim((string)($me['phone'] ?? ''));
+    }
+}
+$isLoggedInUser = ($loggedUserName !== '');
+
 // Prefill values
-$prefillName = $isEditing ? ($editingRecord['proposer_name'] ?? '') : ($user['name'] ?? '');
-$prefillDept = $isEditing ? ($editingRecord['proposer_dept'] ?? '') : ($user['team'] ?? $user['team_name'] ?? $user['department'] ?? '');
-$prefillPhone = $isEditing ? ($editingRecord['proposer_phone'] ?? '') : '';
-$prefillLoginId = $isEditing ? ($editingRecord['proposer_login_id'] ?? '') : ($user['login_id'] ?? '');
+$prefillName = $isEditing ? ($editingRecord['proposer_name'] ?? '') : $loggedUserName;
+$prefillDept = $isEditing ? ($editingRecord['proposer_dept'] ?? '') : $loggedUserDept;
+$prefillPhone = $isEditing ? ($editingRecord['proposer_phone'] ?? '') : $loggedUserPhone;
+$prefillLoginId = $isEditing ? ($editingRecord['proposer_login_id'] ?? '') : $loggedUserLoginId;
 $prefillTitle = $isEditing ? ($editingRecord['title'] ?? '') : '';
 $prefillLocation = $isEditing ? ($editingRecord['location'] ?? '') : '';
 $prefillProblem = $isEditing ? ($editingRecord['problem'] ?? '') : '';
@@ -175,7 +191,7 @@ $prefillSolution = $isEditing ? ($editingRecord['solution'] ?? '') : '';
 $prefillExpectedEffect = $isEditing ? ($editingRecord['expected_effect'] ?? '') : '';
 $prefillPhoto = $isEditing ? worker_part_resolve_photo_data($editingRecord['photo_before'] ?? '') : '';
 $prefillCategory = $isEditing ? ($editingRecord['category'] ?? '미분류(접수자 분류)') : '미분류(접수자 분류)';
-$userAccounts = worker_part_get_user_accounts();
+$userAccounts = worker_part_get_user_accounts(true);
 $activeTeams = worker_part_get_teams();
 ?>
 <!doctype html>
@@ -628,20 +644,30 @@ $activeTeams = worker_part_get_teams();
         <input type="hidden" name="submission_channel" id="subChannel" value="<?= $isEditing ? $escape($editingRecord['submission_channel'] ?? '모바일수정') : '모바일접수' ?>">
         <input type="hidden" name="proxy_writer_name" id="proxyWriterName" value="<?= $escape($user['name'] ?? '안전관리자') ?>">
 
-        <!-- Verbal Proxy Mode Toggle (안전관리자 구두 제보 대신 접수) -->
-        <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:12px;padding:12px 14px;margin-bottom:18px;<?= $isEditing ? 'display:none;' : '' ?>">
-          <div style="display:flex;align-items:center;justify-content:space-between;">
+        <!-- Verbal Proxy Mode Toggle (안전관리자/동료 대신 접수) -->
+        <div id="proxyCard" style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:12px;padding:12px 14px;margin-bottom:18px;<?= $isEditing ? 'display:none;' : '' ?>">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
             <label style="font-size:13.5px;font-weight:700;color:#166534;display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;">
               <input type="checkbox" id="chkProxyMode" onchange="toggleProxyMode(this.checked)" style="width:18px;height:18px;accent-color:#16a34a;">
-              <span>🗣️ 현장 근로자 구두 제보 대신 접수</span>
+              <span>🗣️ 대신접수 (다른 직원 조회·대리등록)</span>
             </label>
-            <span style="font-size:11px;color:#15803d;background:#dcfce7;padding:2px 8px;border-radius:999px;font-weight:600;">대리등록</span>
+            <span id="proxyStatusPill" style="font-size:11px;color:#15803d;background:#dcfce7;padding:2px 8px;border-radius:999px;font-weight:700;white-space:nowrap;">대신접수</span>
           </div>
 
           <div id="proxyAccountSection" style="display:none;margin-top:12px;border-top:1px dashed #bbf7d0;padding-top:10px;">
-            <label class="m-label" style="font-size:12.5px;color:#1e3a8a;">사내 등록 근로자/계정 선택</label>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+              <label class="m-label" style="font-size:12.5px;color:#1e3a8a;margin:0;">활성 팀 기준 직원 조회</label>
+              <span style="font-size:11px;color:#15803d;font-weight:600;">활성 팀 <?= count($activeTeams) ?>개 · <?= count($userAccounts) ?>명</span>
+            </div>
+            <div class="m-pills-row" id="proxyTeamFilterRow" style="margin-top:0;margin-bottom:8px;">
+              <span class="m-pill proxy-team-pill active" data-team="" onclick="filterProxyTeam(this, '')" style="background:#1e3a8a;color:#fff;border-color:#1e3a8a;">전체</span>
+              <?php foreach ($activeTeams as $t): ?>
+                <span class="m-pill proxy-team-pill" data-team="<?= $escape($t) ?>" onclick="filterProxyTeam(this, '<?= $escape($t) ?>')"><?= $escape($t) ?></span>
+              <?php endforeach; ?>
+            </div>
+            <input type="text" id="proxySearchInput" class="m-input" placeholder="🔍 성명 또는 팀명으로 빠르게 검색..." oninput="filterProxyAccounts()" style="margin-bottom:6px;background:#ffffff;font-size:13.5px;padding:9px 12px;">
             <select id="mProposerSelect" class="m-select" onchange="onSelectMobileWorker(this)" style="background:#ffffff;">
-              <option value="">-- 제안한 근로자를 선택하세요 --</option>
+              <option value="">-- 제안한 근로자를 선택하세요 (활성 팀) --</option>
               <?php foreach ($userAccounts as $acc): ?>
                 <option value="<?= $escape($acc['login_id']) ?>"
                         data-name="<?= $escape($acc['name']) ?>"
@@ -652,7 +678,7 @@ $activeTeams = worker_part_get_teams();
               <?php endforeach; ?>
             </select>
             <div style="font-size:11.5px;color:#15803d;margin-top:6px;line-height:1.4;">
-              * 안전관리자가 대신 작성하더라도, 접수 완료 시 <strong>선택하신 근로자(해당 계정)의 제안 실적</strong>으로 온전히 귀속됩니다.
+              * 현재 <strong>활성화된 팀</strong> 소속 직원만 조회됩니다. 선택하신 근로자(해당 계정)의 제안 실적으로 귀속됩니다.
             </div>
           </div>
         </div>
@@ -663,25 +689,18 @@ $activeTeams = worker_part_get_teams();
         </div>
 
         <div class="m-group">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px;">
             <label class="m-label" style="margin:0;">성명 <span class="req">*</span></label>
-            <span style="font-size:12px;color:var(--m-accent);cursor:pointer;" onclick="document.getElementById('mWorkerPicker').focus()">🔍 사내 계정에서 선택</span>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <?php if ($isLoggedInUser && !$isEditing): ?>
+                <span id="autoLoginBadge" style="font-size:11.5px;color:#059669;background:#ecfdf5;border:1px solid #a7f3d0;padding:2px 8px;border-radius:999px;font-weight:700;">✅ 로그인 계정 자동등록</span>
+              <?php endif; ?>
+              <?php if (!$isEditing): ?>
+                <button type="button" id="btnToggleProxyQuick" onclick="toggleProxyModeButton()" style="font-size:11.5px;font-weight:700;color:#166534;background:#dcfce7;border:1px solid #86efac;border-radius:999px;padding:3px 9px;cursor:pointer;">🗣️ 대신접수</button>
+              <?php endif; ?>
+            </div>
           </div>
-          <div style="display:grid;grid-template-columns:1fr;gap:6px;">
-            <select id="mWorkerPicker" class="m-select" onchange="onSelectWorkerPicker(this)" style="background:#f8fafc;font-size:13.5px;">
-              <option value="">-- 사내 계정/성명 선택 시 소속(팀) 자동 입력 --</option>
-              <?php foreach ($userAccounts as $acc): ?>
-                <option value="<?= $escape($acc['login_id']) ?>"
-                        data-name="<?= $escape($acc['name']) ?>"
-                        data-team="<?= $escape($acc['dept']) ?>"
-                        data-phone="<?= $escape($acc['phone']) ?>"
-                        <?= ($prefillName !== '' && $acc['name'] === $prefillName) ? 'selected' : '' ?>>
-                  <?= $escape($acc['name']) ?> (<?= $escape($acc['dept'] ?: '현장') ?>)
-                </option>
-              <?php endforeach; ?>
-            </select>
-            <input type="text" name="proposer_name" id="propName" class="m-input" placeholder="성명 직접 입력 또는 위에서 선택" value="<?= $escape($prefillName) ?>" required oninput="onProposerNameInput(this.value)">
-          </div>
+          <input type="text" name="proposer_name" id="propName" class="m-input" placeholder="제안자 성명" value="<?= $escape($prefillName) ?>" required oninput="onProposerNameInput(this.value)">
         </div>
 
         <div class="m-group">
@@ -692,7 +711,7 @@ $activeTeams = worker_part_get_teams();
               <span class="m-pill" onclick="setDept('<?= $escape($t) ?>')"><?= $escape($t) ?></span>
             <?php endforeach; ?>
           </div>
-          <div class="m-help">* 성명을 선택하시면 계정에 연결되어 있는 <strong>소속 팀(작업반)</strong>이 자동으로 입력됩니다.</div>
+          <div class="m-help">* 로그인된 계정의 <strong>소속 팀(작업반)</strong>이 자동 입력되며, 대신접수 시 활성 팀 직원을 조회해 선택할 수 있습니다.</div>
         </div>
 
         <div class="m-group">
@@ -802,23 +821,13 @@ $activeTeams = worker_part_get_teams();
 
 <script>
 const userAccountsData = <?= json_encode($userAccounts, JSON_UNESCAPED_UNICODE) ?>;
-
-function onSelectWorkerPicker(sel) {
-  const opt = sel.options[sel.selectedIndex];
-  if (!opt || !sel.value) return;
-  const name = opt.getAttribute('data-name') || '';
-  const team = opt.getAttribute('data-team') || opt.getAttribute('data-dept') || '';
-  const phone = opt.getAttribute('data-phone') || '';
-  document.getElementById('propName').value = name;
-  document.getElementById('propDept').value = team;
-  if (phone) {
-    document.getElementById('propPhone').value = phone;
-  }
-  document.getElementById('propLoginId').value = sel.value;
-  if (name) {
-    setTimeout(stampAuto, 50);
-  }
-}
+const loggedUserInfo = <?= json_encode([
+    'login_id' => $loggedUserLoginId,
+    'name' => $loggedUserName,
+    'dept' => $loggedUserDept,
+    'phone' => $loggedUserPhone,
+], JSON_UNESCAPED_UNICODE) ?>;
+let _proxyTeamFilter = '';
 
 function onProposerNameInput(nameVal) {
   const clean = nameVal.trim();
@@ -831,12 +840,108 @@ function onProposerNameInput(nameVal) {
   }
 }
 
+function toggleProxyModeButton() {
+  const chk = document.getElementById('chkProxyMode');
+  if (!chk) return;
+  chk.checked = !chk.checked;
+  toggleProxyMode(chk.checked);
+  if (chk.checked) {
+    const card = document.getElementById('proxyCard');
+    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
 // Proxy Mode Toggle
 function toggleProxyMode(checked) {
   const sec = document.getElementById('proxyAccountSection');
   if (sec) sec.style.display = checked ? 'block' : 'none';
   const chInput = document.getElementById('subChannel');
   if (chInput) chInput.value = checked ? '구두제보(대리등록)' : '모바일접수';
+
+  const badge = document.getElementById('autoLoginBadge');
+  if (badge) badge.style.display = checked ? 'none' : 'inline-block';
+
+  const quickBtn = document.getElementById('btnToggleProxyQuick');
+  if (quickBtn) {
+    if (checked) {
+      quickBtn.innerText = '↩ 본인접수로 되돌리기';
+      quickBtn.style.background = '#fef3c7';
+      quickBtn.style.color = '#92400e';
+      quickBtn.style.borderColor = '#fcd34d';
+    } else {
+      quickBtn.innerText = '🗣️ 대신접수';
+      quickBtn.style.background = '#dcfce7';
+      quickBtn.style.color = '#166534';
+      quickBtn.style.borderColor = '#86efac';
+    }
+  }
+
+  if (checked) {
+    filterProxyAccounts();
+    const searchInp = document.getElementById('proxySearchInput');
+    if (searchInp) setTimeout(() => searchInp.focus(), 60);
+  } else {
+    // Restore logged-in user account automatically
+    const sel = document.getElementById('mProposerSelect');
+    if (sel) sel.value = '';
+    const searchInp = document.getElementById('proxySearchInput');
+    if (searchInp) searchInp.value = '';
+    if (loggedUserInfo && loggedUserInfo.name) {
+      document.getElementById('propName').value = loggedUserInfo.name;
+      document.getElementById('propDept').value = loggedUserInfo.dept || '';
+      document.getElementById('propPhone').value = loggedUserInfo.phone || '';
+      document.getElementById('propLoginId').value = loggedUserInfo.login_id || '';
+    }
+  }
+}
+
+function filterProxyTeam(el, team) {
+  _proxyTeamFilter = team || '';
+  document.querySelectorAll('.proxy-team-pill').forEach(p => {
+    p.style.background = '#f1f5f9';
+    p.style.color = '#334155';
+    p.style.borderColor = '#cbd5e1';
+  });
+  if (el) {
+    el.style.background = '#1e3a8a';
+    el.style.color = '#ffffff';
+    el.style.borderColor = '#1e3a8a';
+  }
+  filterProxyAccounts();
+}
+
+function filterProxyAccounts() {
+  const sel = document.getElementById('mProposerSelect');
+  if (!sel) return;
+  const q = (document.getElementById('proxySearchInput')?.value || '').trim().toLowerCase();
+  const prevVal = sel.value;
+
+  sel.innerHTML = '';
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  const filtered = userAccountsData.filter(acc => {
+    if (_proxyTeamFilter && (acc.dept || '') !== _proxyTeamFilter) return false;
+    if (q) {
+      const hay = ((acc.name || '') + ' ' + (acc.dept || '') + ' ' + (acc.login_id || '')).toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+  placeholder.textContent = filtered.length > 0
+    ? '-- 제안한 근로자를 선택하세요 (' + filtered.length + '명) --'
+    : '-- 조건에 맞는 활성 팀 직원이 없습니다 --';
+  sel.appendChild(placeholder);
+
+  filtered.forEach(acc => {
+    const opt = document.createElement('option');
+    opt.value = acc.login_id;
+    opt.setAttribute('data-name', acc.name || '');
+    opt.setAttribute('data-dept', acc.dept || '');
+    opt.setAttribute('data-phone', acc.phone || '');
+    opt.textContent = (acc.name || '') + ' (' + (acc.dept || '현장') + ' / ID: ' + (acc.login_id || '') + ')';
+    if (acc.login_id === prevVal) opt.selected = true;
+    sel.appendChild(opt);
+  });
 }
 
 function onSelectMobileWorker(sel) {

@@ -146,9 +146,23 @@ function worker_part_db(): PDO
     return $db;
 }
 
-function worker_part_get_user_accounts(): array
+function worker_part_get_user_accounts(bool $activeTeamsOnly = false): array
 {
     if (function_exists('auth_accounts')) {
+        $activeTeamKeys = null;
+        if ($activeTeamsOnly) {
+            $activeTeams = worker_part_get_teams();
+            $activeTeamKeys = [];
+            foreach ($activeTeams as $t) {
+                $key = function_exists('auth_team_key')
+                    ? auth_team_key((string)$t)
+                    : mb_strtolower(trim((string)$t), 'UTF-8');
+                if ($key !== '') {
+                    $activeTeamKeys[$key] = true;
+                }
+            }
+        }
+
         $accounts = auth_accounts();
         $list = [];
         foreach ($accounts as $loginId => $acc) {
@@ -157,6 +171,14 @@ function worker_part_get_user_accounts(): array
                 continue;
             }
             $team = trim((string)($acc['team'] ?? $acc['team_name'] ?? $acc['department'] ?? ''));
+            if ($activeTeamKeys !== null) {
+                $teamKey = function_exists('auth_team_key')
+                    ? auth_team_key($team)
+                    : mb_strtolower($team, 'UTF-8');
+                if ($teamKey === '' || !isset($activeTeamKeys[$teamKey])) {
+                    continue;
+                }
+            }
             $list[] = [
                 'login_id' => (string)$loginId,
                 'name' => $name,
