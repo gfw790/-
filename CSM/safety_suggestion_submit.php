@@ -338,59 +338,63 @@ if ($isLoggedInUser) {
       display: flex;
       flex-direction: column;
     }
-    /* Mobile Top Header */
-    .m-header {
-      background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 60%, #0369a1 100%);
+    /* Mobile Slim Sticky Topbar */
+    .m-topbar {
+      background: #1e3a8a;
       color: #ffffff;
-      padding: 24px 20px 20px;
+      padding: 10px 16px;
       position: sticky;
       top: 0;
       z-index: 100;
-      box-shadow: 0 4px 12px rgba(30, 58, 138, 0.15);
-    }
-    .m-header-top {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 8px;
+      gap: 8px;
+      box-shadow: 0 2px 8px rgba(30, 58, 138, 0.18);
     }
     .m-brand {
-      font-size: 13px;
+      font-size: 12.5px;
       font-weight: 700;
-      letter-spacing: 0.5px;
-      color: #bfdbfe;
+      letter-spacing: 0.3px;
+      color: #dbeafe;
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
+      white-space: nowrap;
+    }
+    /* Scrollable Compact Hero Banner */
+    .m-header {
+      background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 60%, #0369a1 100%);
+      color: #ffffff;
+      padding: 12px 16px 14px;
     }
     .m-header-title {
-      font-size: 21px;
+      font-size: 18px;
       font-weight: 800;
-      margin: 0 0 4px 0;
-      letter-spacing: -0.5px;
+      margin: 0 0 3px 0;
+      letter-spacing: -0.4px;
     }
     .m-header-desc {
-      font-size: 13px;
+      font-size: 12.5px;
       color: #e0e7ff;
       margin: 0;
-      opacity: 0.95;
+      opacity: 0.94;
     }
     .m-slogan-pill {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      background: rgba(255, 255, 255, 0.18);
-      backdrop-filter: blur(4px);
-      padding: 4px 10px;
+      gap: 5px;
+      background: rgba(255, 255, 255, 0.16);
+      padding: 3px 9px;
       border-radius: 999px;
-      font-size: 11.5px;
+      font-size: 11px;
       font-weight: 600;
-      margin-top: 10px;
+      margin-top: 7px;
     }
 
     /* Form Content */
     .m-content {
-      padding: 20px;
+      padding: 16px;
       flex: 1;
     }
     .m-section-title {
@@ -758,22 +762,24 @@ if ($isLoggedInUser) {
 <body>
 
 <div class="m-shell">
-  <!-- Top Header -->
-  <header class="m-header">
-    <div class="m-header-top">
-      <div class="m-brand">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-        </svg>
-        주식회사 현대기전 · CSM
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <button type="button" onclick="openMySuggestionsModal()" style="background:rgba(255,255,255,0.22);border:1px solid rgba(255,255,255,0.45);color:#ffffff;font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:999px;cursor:pointer;">
-          📋 내 제안 조회<?= $isLoggedInUser ? ' (' . count($mySuggestions) . ')' : '' ?>
-        </button>
-        <a href="worker_participation.php?tab=suggestions" style="color:#ffffff;text-decoration:none;font-size:12px;opacity:0.9;">관리대장</a>
-      </div>
+  <!-- Slim Sticky Topbar -->
+  <div class="m-topbar">
+    <div class="m-brand">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+      현대기전 · CSM
     </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button type="button" onclick="openMySuggestionsModal()" style="background:rgba(255,255,255,0.22);border:1px solid rgba(255,255,255,0.45);color:#ffffff;font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:999px;cursor:pointer;white-space:nowrap;">
+        📋 내 제안 조회<?= $isLoggedInUser ? ' (' . count($mySuggestions) . ')' : '' ?>
+      </button>
+      <a href="worker_participation.php?tab=suggestions" style="color:#ffffff;text-decoration:none;font-size:12px;opacity:0.9;white-space:nowrap;">관리대장</a>
+    </div>
+  </div>
+
+  <!-- Scrollable Compact Hero Banner -->
+  <header class="m-header">
     <h1 class="m-header-title"><?= $isEditing ? '안전제안 수정 및 사진 보완' : '산업안전보건 안전제안 접수' ?></h1>
     <p class="m-header-desc"><?= $isEditing ? '누락된 현장 사진을 추가하거나 작성 내용을 수정합니다.' : '현장의 유해·위험요인과 개선 아이디어를 등록해주세요.' ?></p>
     <div class="m-slogan-pill">
