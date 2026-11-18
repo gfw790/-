@@ -243,13 +243,13 @@ function renderCircularSeal(string $name): string {
     .sug-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 9.6pt;
+      font-size: 9.8pt;
       table-layout: fixed;
       margin-bottom: 0;
     }
     .sug-table th, .sug-table td {
       border: 1.2px solid #000;
-      padding: 5px 7px;
+      padding: 6.5px 8px;
       vertical-align: middle;
       color: #000;
     }
@@ -456,13 +456,13 @@ function renderCircularSeal(string $name): string {
               <col style="width: 15%;">
               <col style="width: 15%;">
             </colgroup>
-            <tr>
-              <th class="header-col" style="letter-spacing:4px;">제 안 명</th>
-              <td style="font-weight:700;font-size:10.5pt;padding-left:10px;">
+            <tr style="height: 11mm;">
+              <th class="header-col" style="letter-spacing:4px;padding:7px 6px;">제 안 명</th>
+              <td style="font-weight:700;font-size:11pt;padding:7px 12px;">
                 <?= $escape($s['title']) ?>
               </td>
-              <th class="header-col" style="letter-spacing:2px;">접수번호</th>
-              <td style="text-align:center;font-weight:700;font-size:10.5pt;">
+              <th class="header-col" style="letter-spacing:2px;padding:7px 6px;">접수번호</th>
+              <td style="text-align:center;font-weight:700;font-size:11pt;padding:7px 6px;">
                 <?= $escape($s['reg_no']) ?>
               </td>
             </tr>
@@ -488,14 +488,14 @@ function renderCircularSeal(string $name): string {
               <col style="width: 21.25%;">
               <col style="width: 21.25%;">
             </colgroup>
-            <tr>
+            <tr style="height: 8.5mm;">
               <th rowspan="2" class="header-col" style="letter-spacing:2px;">제안유형</th>
               <td><?= $isWorkplace ? '■' : '□' ?> 작업장 안전</td>
               <td><?= $isConst ? '■' : '□' ?> 건설 안전</td>
               <td><?= $isFacility ? '■' : '□' ?> 시설물 안전</td>
               <td><?= $isEnv ? '■' : '□' ?> 작업환경</td>
             </tr>
-            <tr>
+            <tr style="height: 8.5mm;">
               <td><?= $isHealth ? '■' : '□' ?> 건강관리(보건)</td>
               <td><?= $isEmotion ? '■' : '□' ?> 감정/심리</td>
               <td><?= $isRule ? '■' : '□' ?> 제도(규정, 규칙)</td>
@@ -510,26 +510,26 @@ function renderCircularSeal(string $name): string {
               <col style="width: 13%;">
               <col style="width: 72%;">
             </colgroup>
-            <tr>
+            <tr style="height: 9mm;">
               <th rowspan="4" class="header-col" style="letter-spacing:4px;line-height:1.6;">제<br>안<br>내<br>용</th>
               <th style="letter-spacing:4px;">목    적</th>
-              <td style="font-weight:600;"><?= $escape($s['purpose'] ?? ($s['expected_effect'] ?: '컨베이어 상부 작업용 안전 발판')) ?></td>
+              <td style="font-weight:600;padding-left:10px;"><?= $escape($s['purpose'] ?? ($s['expected_effect'] ?: '컨베이어 상부 작업용 안전 발판')) ?></td>
             </tr>
             <tr>
               <th style="line-height:1.35;">현황 및<br>문제점</th>
-              <td style="line-height:1.5;min-height:18mm;"><?= nl2br($escape($s['problem'])) ?></td>
+              <td style="line-height:1.55;min-height:20mm;padding:8px 10px;"><?= nl2br($escape($s['problem'])) ?></td>
             </tr>
             <tr>
               <th style="letter-spacing:2px;">개선방안</th>
-              <td style="line-height:1.5;font-weight:600;min-height:18mm;"><?= nl2br($escape($s['solution'])) ?></td>
+              <td style="line-height:1.55;font-weight:600;min-height:20mm;padding:8px 10px;"><?= nl2br($escape($s['solution'])) ?></td>
             </tr>
-            <tr>
+            <tr style="height: 9mm;">
               <th style="letter-spacing:2px;">기대효과</th>
-              <td style="line-height:1.5;"><?= nl2br($escape($s['expected_effect'])) ?></td>
+              <td style="line-height:1.5;padding-left:10px;"><?= nl2br($escape($s['expected_effect'])) ?></td>
             </tr>
-            <tr>
+            <tr style="height: 9.5mm;">
               <th colspan="2" class="header-col" style="letter-spacing:3px;">대 상 구 역</th>
-              <td style="font-weight:600;"><?= $escape($s['location'] ?: '현장 전 구역') ?></td>
+              <td style="font-weight:600;padding-left:10px;"><?= $escape($s['location'] ?: '현장 전 구역') ?></td>
             </tr>
           </table>
 
@@ -550,10 +550,10 @@ function renderCircularSeal(string $name): string {
               <col style="width: 13%;">
               <col style="width: 13%;">
             </colgroup>
-            <tr>
+            <tr style="height: 9mm;">
               <th rowspan="2" class="header-col" style="letter-spacing:2px;line-height:1.5;">제안자정보</th>
               <th>성명</th>
-              <td style="text-align:center;font-weight:700;letter-spacing:3px;">
+              <td style="text-align:center;font-weight:700;letter-spacing:3px;font-size:10.5pt;">
                 <?= $escape($s['proposer_name']) ?>
               </td>
               <th>접수일</th>
@@ -561,21 +561,21 @@ function renderCircularSeal(string $name): string {
               <th>개선여부</th>
               <th>완료일자</th>
             </tr>
-            <tr>
+            <tr style="height: 9mm;">
               <th>연락처</th>
-              <td style="text-align:center;font-size:9pt;letter-spacing:0.5px;">
+              <td style="text-align:center;font-size:9.5pt;letter-spacing:0.5px;">
                 <?= $escape($phoneStr) ?>
               </td>
-              <td style="text-align:center;font-size:9pt;">
+              <td style="text-align:center;font-size:9.5pt;">
                 <?= $escape($regDateStr) ?>
               </td>
-              <td style="text-align:center;font-weight:700;">
+              <td style="text-align:center;font-weight:700;font-size:10pt;">
                 <?= $s['status'] === '불채택' ? '불채택' : '채택' ?>
               </td>
-              <td style="text-align:center;font-weight:700;">
+              <td style="text-align:center;font-weight:700;font-size:10pt;">
                 <?= $isDone ? '완료' : '진행중' ?>
               </td>
-              <td style="text-align:center;font-size:9pt;">
+              <td style="text-align:center;font-size:9.5pt;">
                 <?= $escape($isDone ? $doneDateStr : '진행중') ?>
               </td>
             </tr>
