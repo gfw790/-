@@ -193,6 +193,115 @@ $prefillPhoto = $isEditing ? worker_part_resolve_photo_data($editingRecord['phot
 $prefillCategory = $isEditing ? ($editingRecord['category'] ?? '미분류(접수자 분류)') : '미분류(접수자 분류)';
 $userAccounts = worker_part_get_user_accounts(true);
 $activeTeams = worker_part_get_teams();
+
+// Worker Self-Lookup Helper & JSON API (?api=my_suggestions)
+$formatSuggestionForWorker = static function(array $r): array {
+    return [
+        'id' => (int)$r['id'],
+        'reg_no' => (string)($r['reg_no'] ?? ''),
+        'reg_date' => (string)($r['reg_date'] ?? ''),
+        'proposer_name' => worker_part_clean_person_name($r['proposer_name'] ?? ''),
+        'proposer_dept' => (string)($r['proposer_dept'] ?? ''),
+        'submission_channel' => (string)($r['submission_channel'] ?? '직접등록'),
+        'proxy_writer_name' => worker_part_clean_person_name($r['proxy_writer_name'] ?? ''),
+        'title' => (string)($r['title'] ?? ''),
+        'category' => (string)($r['category'] ?? ''),
+        'location' => (string)($r['location'] ?? ''),
+        'problem' => (string)($r['problem'] ?? ''),
+        'solution' => (string)($r['solution'] ?? ''),
+        'expected_effect' => (string)($r['expected_effect'] ?? ''),
+        'status' => (string)($r['status'] ?? '접수'),
+        'action_manager' => worker_part_clean_person_name($r['action_manager'] ?? ''),
+        'action_date' => (string)($r['action_date'] ?? ''),
+        'action_deadline' => (string)($r['action_deadline'] ?? ''),
+        'action_result' => (string)($r['action_result'] ?? ''),
+        'feedback_date' => (string)($r['feedback_date'] ?? ''),
+        'reward_points' => (int)($r['reward_points'] ?: ($r['eval_score'] ?: 0)),
+        'reviewer_name' => worker_part_clean_person_name($r['reviewer_name'] ?? ''),
+        'review_opinion' => (string)($r['review_opinion'] ?: ($r['eval_summary'] ?? '')),
+        'photo_before' => worker_part_resolve_photo_data($r['photo_before'] ?? ''),
+        'photo_after' => worker_part_resolve_photo_data($r['photo_after'] ?? ''),
+        'photo_before_desc' => (string)($r['photo_before_desc'] ?? ''),
+        'photo_after_desc' => (string)($r['photo_after_desc'] ?? ''),
+    ];
+};
+
+$extractLast4 = static function(?string $phone): string {
+    $digits = preg_replace('/\D+/', '', (string)($phone ?? ''));
+    return strlen($digits) >= 4 ? substr($digits, -4) : '';
+};
+
+// Build lookup map of account phones by login_id and clean name (for proxy lookup verification)
+$accountPhonesByLogin = [];
+$accountPhonesByName = [];
+if (function_exists('auth_accounts')) {
+    foreach (auth_accounts() as $lid => $acc) {
+        $l4 = $extractLast4((string)($acc['phone'] ?? ''));
+        if ($l4 !== '') {
+            $accountPhonesByLogin[(string)$lid] = $l4;
+            $cn = worker_part_clean_person_name((string)($acc['name'] ?? ''));
+            if ($cn !== '') {
+                $accountPhonesByName[$cn][$l4] = true;
+            }
+        }
+    }
+}
+
+if (($_GET['api'] ?? '') === 'my_suggestions') {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    $qReg = trim((string)($_GET['reg_no'] ?? ''));
+    $qName = worker_part_clean_person_name((string)($_GET['name'] ?? ''));
+    $qPhone4 = preg_replace('/\D+/', '', (string)($_GET['phone4'] ?? ''));
+    if (strlen($qPhone4) > 4) {
+        $qPhone4 = substr($qPhone4, -4);
+    }
+
+    if ($qReg === '' && ($qName === '' || strlen($qPhone4) !== 4)) {
+        echo json_encode(['ok' => false, 'error' => '접수번호 또는 성명과 휴대폰 뒤 4자리를 입력해주세요.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $allRows = $db->query('SELECT * FROM csm_suggestions ORDER BY reg_date DESC, id DESC')->fetchAll(PDO::FETCH_ASSOC);
+    $matched = [];
+    foreach ($allRows as $r) {
+        if ($qReg !== '') {
+            if (strcasecmp(trim((string)($r['reg_no'] ?? '')), $qReg) === 0) {
+                $matched[] = $formatSuggestionForWorker($r);
+            }
+            continue;
+        }
+        $rowCleanName = worker_part_clean_person_name((string)($r['proposer_name'] ?? ''));
+        if ($rowCleanName === '' || $rowCleanName !== $qName) {
+            continue;
+        }
+        $rowPhone4 = $extractLast4((string)($r['proposer_phone'] ?? ''));
+        $rowLoginId = trim((string)($r['proposer_login_id'] ?? ''));
+        $accPhone4 = ($rowLoginId !== '' && isset($accountPhonesByLogin[$rowLoginId])) ? $accountPhonesByLogin[$rowLoginId] : '';
+        $namePhoneMatch = isset($accountPhonesByName[$rowCleanName][$qPhone4]);
+        if ($rowPhone4 === $qPhone4 || $accPhone4 === $qPhone4 || $namePhoneMatch) {
+            $matched[] = $formatSuggestionForWorker($r);
+        }
+    }
+
+    echo json_encode(['ok' => true, 'items' => $matched], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+// Preload logged-in worker's own submitted suggestions (including proxy submissions under their name/account)
+$mySuggestions = [];
+if ($isLoggedInUser) {
+    $myCleanName = worker_part_clean_person_name($loggedUserName);
+    $allRows = $db->query('SELECT * FROM csm_suggestions ORDER BY reg_date DESC, id DESC')->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($allRows as $r) {
+        $rowLoginId = trim((string)($r['proposer_login_id'] ?? ''));
+        $rowCleanName = worker_part_clean_person_name((string)($r['proposer_name'] ?? ''));
+        if (($loggedUserLoginId !== '' && $rowLoginId === $loggedUserLoginId)
+            || ($myCleanName !== '' && $rowCleanName === $myCleanName)) {
+            $mySuggestions[] = $formatSuggestionForWorker($r);
+        }
+    }
+}
 ?>
 <!doctype html>
 <html lang="ko">
@@ -547,6 +656,103 @@ $activeTeams = worker_part_get_teams();
       border-top: 1px solid #e2e8f0;
       background: #f8fafc;
     }
+
+    /* My Suggestions Modal */
+    .ms-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.62);
+      z-index: 1200;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 14px;
+    }
+    .ms-modal {
+      width: 100%;
+      max-width: 560px;
+      max-height: 90vh;
+      background: #ffffff;
+      border-radius: 16px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+    }
+    .ms-header {
+      background: linear-gradient(135deg, #1e3a8a, #1d4ed8);
+      color: #ffffff;
+      padding: 15px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .ms-body {
+      padding: 16px;
+      overflow-y: auto;
+      background: #f1f5f9;
+      flex: 1;
+    }
+    .ms-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      margin-bottom: 12px;
+      overflow: hidden;
+      box-shadow: 0 2px 6px rgba(15,23,42,0.04);
+    }
+    .ms-card-head {
+      padding: 13px 14px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .ms-card-head:hover {
+      background: #f8fafc;
+    }
+    .ms-card-detail {
+      display: none;
+      padding: 12px 14px 14px;
+      border-top: 1px dashed #cbd5e1;
+      background: #f8fafc;
+      font-size: 13px;
+      color: #1e293b;
+      line-height: 1.55;
+    }
+    .ms-card.open .ms-card-detail {
+      display: block;
+    }
+    .ms-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+    .ms-badge-done { background: #dcfce7; color: #166534; }
+    .ms-badge-progress { background: #dbeafe; color: #1e40af; }
+    .ms-badge-pending { background: #fef3c7; color: #92400e; }
+    .ms-badge-reject { background: #fee2e2; color: #991b1b; }
+    .ms-photo-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .ms-photo-box {
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #ffffff;
+    }
+    .ms-photo-box img {
+      width: 100%;
+      height: 120px;
+      object-fit: cover;
+      display: block;
+      cursor: zoom-in;
+    }
   </style>
 </head>
 <body>
@@ -562,7 +768,9 @@ $activeTeams = worker_part_get_teams();
         주식회사 현대기전 · CSM
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
-        <button type="button" onclick="openQuickSearchPrompt()" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.35);color:#ffffff;font-size:11.5px;padding:3px 8px;border-radius:6px;cursor:pointer;">🔍 제안조회/수정</button>
+        <button type="button" onclick="openMySuggestionsModal()" style="background:rgba(255,255,255,0.22);border:1px solid rgba(255,255,255,0.45);color:#ffffff;font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:999px;cursor:pointer;">
+          📋 내 제안 조회<?= $isLoggedInUser ? ' (' . count($mySuggestions) . ')' : '' ?>
+        </button>
         <a href="worker_participation.php?tab=suggestions" style="color:#ffffff;text-decoration:none;font-size:12px;opacity:0.9;">관리대장</a>
       </div>
     </div>
@@ -1267,7 +1475,261 @@ function handleSubmit() {
 
   form.submit();
 }
+
+// ==========================================
+// 내 제안 내역 조회 모달 (본인 접수 + 대리 접수 명의자 조회)
+// ==========================================
+const initialMySuggestions = <?= json_encode($mySuggestions, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>;
+const isLoggedInWorker = <?= $isLoggedInUser ? 'true' : 'false' ?>;
+const loggedCleanName = <?= json_encode(worker_part_clean_person_name($loggedUserName), JSON_UNESCAPED_UNICODE) ?>;
+
+function escMs(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function openMySuggestionsModal() {
+  const modal = document.getElementById('modalMySuggestions');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  if (isLoggedInWorker) {
+    renderMySuggestionList(initialMySuggestions, loggedCleanName + ' 님 명의로 접수된 제안서 (대리접수 포함)');
+  } else {
+    document.getElementById('msSearchPanel').style.display = 'block';
+  }
+}
+
+function closeMySuggestionsModal() {
+  const modal = document.getElementById('modalMySuggestions');
+  if (modal) modal.style.display = 'none';
+}
+
+function toggleMsSearchPanel() {
+  const p = document.getElementById('msSearchPanel');
+  if (!p) return;
+  p.style.display = (p.style.display === 'none' || !p.style.display) ? 'block' : 'none';
+}
+
+async function searchMySuggestions() {
+  const regNo = (document.getElementById('msRegNoInput')?.value || '').trim();
+  const name = (document.getElementById('msNameInput')?.value || '').trim();
+  const phone4 = (document.getElementById('msPhone4Input')?.value || '').replace(/\D+/g, '').slice(-4);
+  const errEl = document.getElementById('msSearchErr');
+  errEl.style.display = 'none';
+
+  if (!regNo && (!name || phone4.length !== 4)) {
+    errEl.innerText = '접수번호를 입력하시거나, 성명과 휴대폰 뒤 4자리를 모두 입력해주세요.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  const params = new URLSearchParams({ api: 'my_suggestions' });
+  if (regNo) params.set('reg_no', regNo);
+  else {
+    params.set('name', name);
+    params.set('phone4', phone4);
+  }
+
+  const listEl = document.getElementById('msListContainer');
+  listEl.innerHTML = '<div style="text-align:center;padding:30px;color:#64748b;font-size:13px;">조회 중입니다...</div>';
+
+  try {
+    const res = await fetch('safety_suggestion_submit.php?' + params.toString(), { cache: 'no-store' });
+    const data = await res.json();
+    if (!data.ok) {
+      errEl.innerText = data.error || '조회 중 오류가 발생했습니다.';
+      errEl.style.display = 'block';
+      listEl.innerHTML = '';
+      return;
+    }
+    const label = regNo
+      ? ('접수번호 [' + regNo + '] 조회 결과')
+      : (name + ' 님 명의로 접수된 제안서 (대리접수 포함)');
+    renderMySuggestionList(data.items || [], label);
+  } catch (e) {
+    errEl.innerText = '서버 통신 중 오류가 발생했습니다.';
+    errEl.style.display = 'block';
+  }
+}
+
+function getStatusBadgeHtml(status) {
+  if (status === '완료') return '<span class="ms-badge ms-badge-done">조치완료</span>';
+  if (status === '채택·진행') return '<span class="ms-badge ms-badge-progress">진행중</span>';
+  if (status === '불채택') return '<span class="ms-badge ms-badge-reject">불채택</span>';
+  return '<span class="ms-badge ms-badge-pending">' + escMs(status || '접수') + '</span>';
+}
+
+function renderMySuggestionList(items, headingText) {
+  const headerEl = document.getElementById('msListHeading');
+  if (headerEl) {
+    headerEl.innerText = headingText + ' (' + items.length + '건)';
+  }
+  const listEl = document.getElementById('msListContainer');
+  if (!listEl) return;
+
+  if (!items || items.length === 0) {
+    listEl.innerHTML = '<div style="text-align:center;padding:36px 16px;background:#ffffff;border-radius:12px;border:1px dashed #cbd5e1;color:#64748b;font-size:13.5px;">조회된 안전제안이 없습니다.<br><span style="font-size:12px;color:#94a3b8;">직접 접수하시거나 관리자에게 구두 제보하신 제안서가 여기에 표시됩니다.</span></div>';
+    return;
+  }
+
+  let html = '';
+  items.forEach((s, idx) => {
+    const isProxy = (s.submission_channel || '').includes('구두') || (s.submission_channel || '').includes('대리');
+    const proxyBadge = isProxy
+      ? '<span style="font-size:10.5px;background:#fef3c7;color:#92400e;border:1px solid #fde68a;padding:1px 6px;border-radius:999px;font-weight:700;">🗣️ 대리접수' + (s.proxy_writer_name ? ' (' + escMs(s.proxy_writer_name) + ')' : '') + '</span>'
+      : '';
+
+    let photosHtml = '';
+    if (s.photo_before || s.photo_after) {
+      photosHtml = '<div class="ms-photo-grid">';
+      photosHtml += '<div class="ms-photo-box"><div style="font-size:11px;font-weight:700;text-align:center;padding:4px;background:#eff6ff;color:#1e3a8a;">&lt; 개 선 전 &gt;</div>';
+      if (s.photo_before) {
+        photosHtml += '<img src="' + s.photo_before + '" alt="개선 전" onclick="openMyPhotoZoom(this.src, \'' + escMs(s.title) + ' (개선 전)\')">';
+      } else {
+        photosHtml += '<div style="height:120px;display:flex;align-items:center;justify-content:center;font-size:11.5px;color:#94a3b8;">미등록</div>';
+      }
+      if (s.photo_before_desc) {
+        photosHtml += '<div style="padding:6px 8px;font-size:11.5px;color:#334155;white-space:pre-wrap;border-top:1px solid #e2e8f0;">' + escMs(s.photo_before_desc) + '</div>';
+      }
+      photosHtml += '</div>';
+
+      photosHtml += '<div class="ms-photo-box"><div style="font-size:11px;font-weight:700;text-align:center;padding:4px;background:#ecfdf5;color:#047857;">&lt; 개 선 후 &gt;</div>';
+      if (s.photo_after) {
+        photosHtml += '<img src="' + s.photo_after + '" alt="개선 후" onclick="openMyPhotoZoom(this.src, \'' + escMs(s.title) + ' (개선 후)\')">';
+      } else {
+        photosHtml += '<div style="height:120px;display:flex;align-items:center;justify-content:center;font-size:11.5px;color:#94a3b8;">미등록</div>';
+      }
+      if (s.photo_after_desc) {
+        photosHtml += '<div style="padding:6px 8px;font-size:11.5px;color:#334155;white-space:pre-wrap;border-top:1px solid #e2e8f0;">' + escMs(s.photo_after_desc) + '</div>';
+      }
+      photosHtml += '</div></div>';
+    }
+
+    let actionHtml = '';
+    if (s.action_manager || s.action_date || s.action_result || s.review_opinion) {
+      actionHtml = '<div style="margin-top:10px;padding:10px;background:#ffffff;border:1px solid #cbd5e1;border-radius:8px;display:flex;flex-direction:column;gap:5px;">';
+      actionHtml += '<div style="font-size:12px;font-weight:800;color:#1e3a8a;">🛠️ 조치 및 평가 현황</div>';
+      if (s.action_manager || s.action_date) {
+        actionHtml += '<div style="font-size:12.5px;color:#334155;"><strong>담당자:</strong> ' + escMs(s.action_manager || '미지정') + (s.action_date ? ' &nbsp;|&nbsp; <strong>완료일:</strong> ' + escMs(s.action_date) : '') + '</div>';
+      }
+      if (s.action_result) {
+        actionHtml += '<div style="font-size:12.5px;color:#334155;white-space:pre-wrap;background:#f8fafc;padding:7px 9px;border-radius:6px;border:1px solid #e2e8f0;"><strong>조치 결과 요약:</strong>\n' + escMs(s.action_result) + '</div>';
+      }
+      if (s.reward_points > 0 || s.review_opinion) {
+        actionHtml += '<div style="font-size:12.5px;color:#1e293b;">' + (s.reward_points > 0 ? '<strong>안전기여도 평가:</strong> ' + s.reward_points + '점' : '') + (s.reviewer_name ? ' (평가자: ' + escMs(s.reviewer_name) + ')' : '') + '</div>';
+        if (s.review_opinion) {
+          actionHtml += '<div style="font-size:12.5px;color:#334155;white-space:pre-wrap;"><strong>평가요약:</strong> ' + escMs(s.review_opinion) + '</div>';
+        }
+      }
+      actionHtml += '</div>';
+    }
+
+    html += '<div class="ms-card' + (idx === 0 && items.length === 1 ? ' open' : '') + '" id="msCard_' + s.id + '">' +
+      '<div class="ms-card-head" onclick="document.getElementById(\'msCard_' + s.id + '\').classList.toggle(\'open\')">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">' +
+          '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
+            '<span style="font-size:12px;font-weight:800;color:#1e3a8a;">' + escMs(s.reg_no) + '</span>' +
+            getStatusBadgeHtml(s.status) +
+            proxyBadge +
+          '</div>' +
+          '<span style="font-size:11.5px;color:#64748b;">' + escMs(s.reg_date) + ' ▾</span>' +
+        '</div>' +
+        '<div style="font-size:15px;font-weight:800;color:#0f172a;">' + escMs(s.title) + '</div>' +
+        '<div style="font-size:12px;color:#64748b;">제안자: <strong>' + escMs(s.proposer_name) + '</strong>' + (s.proposer_dept ? ' (' + escMs(s.proposer_dept) + ')' : '') + ' &middot; 대상구역: ' + escMs(s.location || '현장 전 구역') + '</div>' +
+      '</div>' +
+      '<div class="ms-card-detail">' +
+        '<div style="margin-bottom:6px;"><strong>현황 및 문제점:</strong><div style="white-space:pre-wrap;margin-top:2px;color:#334155;">' + escMs(s.problem || '—') + '</div></div>' +
+        '<div style="margin-bottom:6px;"><strong>개선방안:</strong><div style="white-space:pre-wrap;margin-top:2px;color:#334155;">' + escMs(s.solution || '—') + '</div></div>' +
+        (s.expected_effect ? '<div style="margin-bottom:6px;"><strong>기대효과:</strong><div style="white-space:pre-wrap;margin-top:2px;color:#334155;">' + escMs(s.expected_effect) + '</div></div>' : '') +
+        photosHtml +
+        actionHtml +
+        '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">' +
+          '<a href="safety_suggestion_submit.php?edit_id=' + encodeURIComponent(s.id) + '" style="display:inline-flex;align-items:center;gap:4px;padding:7px 12px;border-radius:8px;background:#1e3a8a;color:#ffffff;font-size:12.5px;font-weight:700;text-decoration:none;">✏️ 내용/사진 수정</a>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  });
+  listEl.innerHTML = html;
+}
+
+function openMyPhotoZoom(src, title) {
+  if (!src) return;
+  document.getElementById('msPhotoZoomTitle').innerText = '📷 ' + (title || '현장 사진');
+  document.getElementById('msPhotoZoomImg').src = src;
+  document.getElementById('modalMyPhotoZoom').style.display = 'flex';
+}
+function closeMyPhotoZoom() {
+  document.getElementById('modalMyPhotoZoom').style.display = 'none';
+  document.getElementById('msPhotoZoomImg').src = '';
+}
 </script>
+
+<!-- MODAL: MY SUGGESTIONS LOOKUP -->
+<div id="modalMySuggestions" class="ms-backdrop" onclick="closeMySuggestionsModal()">
+  <div class="ms-modal" onclick="event.stopPropagation()">
+    <div class="ms-header">
+      <div>
+        <div style="font-size:16px;font-weight:800;">📋 내 안전제안 조회</div>
+        <div style="font-size:11.5px;opacity:0.88;margin-top:2px;">본인이 직접 접수했거나 대리접수된 제안 내역을 확인할 수 있습니다.</div>
+      </div>
+      <button type="button" onclick="closeMySuggestionsModal()" style="background:none;border:none;color:#cbd5e1;font-size:26px;line-height:1;cursor:pointer;">&times;</button>
+    </div>
+
+    <div class="ms-body">
+      <?php if ($isLoggedInUser): ?>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+          <div id="msListHeading" style="font-size:13px;font-weight:800;color:#1e3a8a;"></div>
+          <button type="button" onclick="toggleMsSearchPanel()" style="font-size:11.5px;font-weight:700;color:#475569;background:#ffffff;border:1px solid #cbd5e1;border-radius:999px;padding:4px 10px;cursor:pointer;">🔍 접수번호 / 다른 이름 조회</button>
+        </div>
+      <?php else: ?>
+        <div id="msListHeading" style="font-size:13px;font-weight:800;color:#1e3a8a;margin-bottom:10px;">본인 제안 조회 (성명 + 휴대폰 뒤 4자리 또는 접수번호)</div>
+      <?php endif; ?>
+
+      <div id="msSearchPanel" style="display:<?= $isLoggedInUser ? 'none' : 'block' ?>;background:#ffffff;border:1px solid #cbd5e1;border-radius:12px;padding:12px;margin-bottom:14px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div>
+            <label style="font-size:11.5px;font-weight:700;color:#475569;display:block;margin-bottom:3px;">제안자 성명</label>
+            <input type="text" id="msNameInput" class="m-input" placeholder="예: 윤택천" style="padding:8px 10px;font-size:13.5px;">
+          </div>
+          <div>
+            <label style="font-size:11.5px;font-weight:700;color:#475569;display:block;margin-bottom:3px;">휴대폰 뒤 4자리</label>
+            <input type="tel" id="msPhone4Input" class="m-input" maxlength="4" placeholder="예: 6209" style="padding:8px 10px;font-size:13.5px;">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:flex-end;">
+          <div style="flex:1;">
+            <label style="font-size:11.5px;font-weight:700;color:#475569;display:block;margin-bottom:3px;">또는 접수번호로 바로 조회</label>
+            <input type="text" id="msRegNoInput" class="m-input" placeholder="예: 26-001 또는 2026-S001" style="padding:8px 10px;font-size:13.5px;" onkeydown="if(event.key==='Enter'){event.preventDefault();searchMySuggestions();}">
+          </div>
+          <button type="button" onclick="searchMySuggestions()" style="padding:9px 16px;border:none;border-radius:8px;background:#1e3a8a;color:#ffffff;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">조회</button>
+        </div>
+        <div id="msSearchErr" style="display:none;margin-top:8px;font-size:12px;color:#b91c1c;font-weight:600;"></div>
+      </div>
+
+      <div id="msListContainer"></div>
+    </div>
+
+    <div style="padding:12px 16px;background:#ffffff;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;">
+      <button type="button" onclick="closeMySuggestionsModal()" style="padding:8px 18px;border:1px solid #cbd5e1;border-radius:8px;background:#f8fafc;color:#334155;font-size:13px;font-weight:700;cursor:pointer;">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: PHOTO ZOOM -->
+<div id="modalMyPhotoZoom" class="ms-backdrop" style="z-index:1300;" onclick="closeMyPhotoZoom()">
+  <div style="max-width:92vw;max-height:88vh;background:#0f172a;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;" onclick="event.stopPropagation()">
+    <div style="padding:10px 14px;background:#1e293b;color:#f8fafc;display:flex;justify-content:space-between;align-items:center;gap:12px;">
+      <span id="msPhotoZoomTitle" style="font-size:13.5px;font-weight:700;">📷 현장 사진</span>
+      <button type="button" onclick="closeMyPhotoZoom()" style="background:none;border:none;color:#cbd5e1;font-size:24px;line-height:1;cursor:pointer;">&times;</button>
+    </div>
+    <div style="padding:12px;display:flex;align-items:center;justify-content:center;background:#020617;">
+      <img id="msPhotoZoomImg" src="" alt="현장 사진 확대" style="max-width:86vw;max-height:76vh;object-fit:contain;border-radius:6px;">
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
