@@ -646,11 +646,11 @@ function renderCircularSeal(string $name): string {
           <?php
             $evalScore = (int)($s['reward_points'] ?: ($s['eval_score'] ?: 90));
             $rawReviewer = trim($s['reviewer_name'] ?? '');
-            $evaluatorName = $rawReviewer !== '' ? $rawReviewer : '진종철';
+            $cleanReviewer = trim((string)preg_replace('/\s*\([^)]*\)\s*/u', '', $rawReviewer));
+            $evaluatorName = $cleanReviewer !== '' ? $cleanReviewer : '진종철';
             $spacedName = mb_strlen($evaluatorName) === 3 
               ? mb_substr($evaluatorName, 0, 1) . ' ' . mb_substr($evaluatorName, 1, 1) . ' ' . mb_substr($evaluatorName, 2, 1) 
               : $evaluatorName;
-            $evaluatorSeal = renderCircularSeal($evaluatorName);
             $evalSummary = trim($s['review_opinion'] ?? ($s['eval_summary'] ?? ''));
             if ($evalSummary === '') {
               $evalSummary = '현장의 작업 여건의 한계를 극복하고 안전에 기여한 바를 높게 평가함';
@@ -661,9 +661,9 @@ function renderCircularSeal(string $name): string {
               <div>
                 제안 유형에 따른 안전기여도 평가 : &nbsp; <span style="font-size:11pt;font-weight:700;"><?= $evalScore ?> 점</span>
               </div>
-              <div style="display:flex;align-items:center;">
-                평가자: &nbsp;<span style="letter-spacing:1px;"><?= $escape($spacedName) ?></span>
-                <img src="<?= $evaluatorSeal ?>" alt="직인" style="height:34px;width:34px;margin-left:4px;">
+              <div style="display:flex;align-items:center;padding-right:6px;">
+                평가자:&nbsp;&nbsp;<span style="letter-spacing:2px;font-weight:700;"><?= $escape($spacedName) ?></span>
+                <span style="display:inline-block;margin-left:22px;font-weight:400;color:#333;font-size:9.5pt;">(서명)</span>
               </div>
             </div>
             <div class="eval-summary-title">평가요약:</div>

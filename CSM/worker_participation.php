@@ -1032,13 +1032,14 @@ if ($tab === 'suggestions') {
           </div>
           <div class="wp-form-group">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-              <label style="margin:0;">평가자 성명 (인쇄 직인 연동)</label>
+              <label style="margin:0;">평가자 성명 (수기 서명란 연동)</label>
               <span style="font-size:12px;color:var(--wp-accent);font-weight:600;">👥 사내 직원목록</span>
             </div>
             <select id="sug_reviewer_select" class="wp-select" onchange="document.getElementById('sug_reviewer_name').value = this.value" style="margin-bottom:6px;background:#f8fafc;font-size:13px;">
               <option value="">-- 사내 평가자 선택 시 자동입력 --</option>
               <?php foreach ($userAccounts as $acc): ?>
-                <option value="<?= $escape($acc['name']) ?>"><?= $escape($acc['name']) ?> (<?= $escape($acc['dept'] ?: '안전관리') ?>)</option>
+                <?php $cleanAccName = trim((string)preg_replace('/\s*\([^)]*\)\s*/u', '', (string)$acc['name'])); ?>
+                <option value="<?= $escape($cleanAccName) ?>"><?= $escape($acc['name']) ?> (<?= $escape($acc['dept'] ?: '안전관리') ?>)</option>
               <?php endforeach; ?>
             </select>
             <input type="text" name="reviewer_name" id="sug_reviewer_name" placeholder="예: 진종철 또는 정연탁">
@@ -1547,7 +1548,7 @@ function editSuggestion(s) {
 
   // Evaluation score, reviewer, comment setup
   document.getElementById('sug_reward_points').value = s.reward_points || s.eval_score || 90;
-  const reviewer = s.reviewer_name || '진종철';
+  const reviewer = (s.reviewer_name || '진종철').replace(/\s*\([^)]*\)\s*/g, '').trim() || '진종철';
   document.getElementById('sug_reviewer_name').value = reviewer;
   const revSel = document.getElementById('sug_reviewer_select');
   if (revSel) {
