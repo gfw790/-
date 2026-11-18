@@ -189,6 +189,40 @@ function worker_part_make_signature_svg(string $name, string $color = '#1e3a8a')
     return 'data:image/svg+xml;utf8,' . rawurlencode($svg);
 }
 
+function worker_part_save_uploaded_image(string $base64Data = '', ?array $fileData = null, string $prefix = 'sug'): ?string
+{
+    $uploadDir = __DIR__ . '/storage/suggestions';
+    if (!is_dir($uploadDir) && !mkdir($uploadDir, 0750, true) && !is_dir($uploadDir)) {
+        return null;
+    }
+
+    $base64Data = trim($base64Data);
+    if ($base64Data !== '' && preg_match('#^data:image/(png|jpeg|jpg|webp);base64,#i', $base64Data)) {
+        $parts = explode(',', $base64Data, 2);
+        $imgData = base64_decode($parts[1] ?? '', true);
+        if ($imgData !== false && strlen($imgData) > 50) {
+            $fileName = $prefix . '_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.jpg';
+            $dest = $uploadDir . '/' . $fileName;
+            if (file_put_contents($dest, $imgData) !== false) {
+                return 'storage/suggestions/' . $fileName;
+            }
+        }
+    }
+
+    if ($fileData !== null && isset($fileData['error']) && $fileData['error'] === UPLOAD_ERR_OK) {
+        $ext = strtolower(pathinfo((string)$fileData['name'], PATHINFO_EXTENSION));
+        if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true)) {
+            $fileName = $prefix . '_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+            $dest = $uploadDir . '/' . $fileName;
+            if (move_uploaded_file((string)$fileData['tmp_name'], $dest)) {
+                return 'storage/suggestions/' . $fileName;
+            }
+        }
+    }
+
+    return null;
+}
+
 function worker_part_save_signature(PDO $db, string $docType, int $docId, string $role, string $name, string $sigData, string $ip = ''): void
 {
     $now = date('Y-m-d H:i:s');

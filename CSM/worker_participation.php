@@ -88,6 +88,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $feedback_method = !empty($_POST['feedback_method']) ? $_POST['feedback_method'] : null;
             $reward_points = (float)($_POST['reward_points'] ?? 0);
             $reward_note = !empty($_POST['reward_note']) ? $_POST['reward_note'] : null;
+            $photo_base64 = trim($_POST['photo_base64'] ?? '');
+            $remove_photo = (int)($_POST['remove_photo'] ?? 0);
+            $newPhoto = null;
+            if ($photo_base64 !== '') {
+                $newPhoto = worker_part_save_uploaded_image($photo_base64, null, 'sug');
+            }
 
             if ($title === '' || $proposer_name === '') {
                 throw new InvalidArgumentException('제안명과 제안자 성명은 필수입니다.');
@@ -110,6 +116,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $action_manager, $action_deadline, $action_date, $action_result,
                     $feedback_date, $feedback_method, $reward_points, $reward_note, $id
                 ]);
+
+                if ($remove_photo) {
+                    $db->prepare('UPDATE csm_suggestions SET photo_before = NULL WHERE id = ?')->execute([$id]);
+                } elseif ($newPhoto !== null) {
+                    $db->prepare('UPDATE csm_suggestions SET photo_before = ? WHERE id = ?')->execute([$newPhoto, $id]);
+                }
+
                 $message = '안전제안 내역이 성공적으로 수정되었습니다.';
             } else {
                 if ($reg_no === '') {
@@ -122,20 +135,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     proposer_login_id, proposer_phone, submission_channel, proxy_writer_name,
                     title, category, location, problem, solution, expected_effect, status, review_date, reviewer_name, review_opinion,
                     action_plan, action_manager, action_deadline, action_date, action_result,
-                    feedback_date, feedback_method, reward_points, reward_note, proposer_sign, created_at, updated_at
+                    feedback_date, feedback_method, reward_points, reward_note, photo_before, proposer_sign, created_at, updated_at
                 ) VALUES (
                     ?, ?, ?, ?, ?,
                     ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?, ?
+                    ?, ?, ?, ?, ?, ?, ?, ?
                 )');
                 $stmt->execute([
                     $year, $reg_no, $reg_date, $proposer_name, $proposer_dept,
                     $proposer_login_id, $proposer_phone, $submission_channel, $proxy_writer_name,
                     $title, $category, $location, $problem, $solution, $expected_effect, $status, $review_date, $reviewer_name, $review_opinion,
                     $action_plan, $action_manager, $action_deadline, $action_date, $action_result,
-                    $feedback_date, $feedback_method, $reward_points, $reward_note, $proposerSign, $now, $now
+                    $feedback_date, $feedback_method, $reward_points, $reward_note, $newPhoto, $proposerSign, $now, $now
                 ]);
                 $newSugId = (int)$db->lastInsertId();
                 $ip = $_SERVER['REMOTE_ADDR'] ?? '';
@@ -533,7 +546,9 @@ if ($tab === 'suggestions') {
                 <div style="font-weight:700;font-size:15px;margin-bottom:4px;color:var(--wp-primary);display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
                   <span><?= $escape($s['title']) ?></span>
                   <?php if (!empty($s['photo_before'])): ?>
-                    <span style="font-size:11px;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;padding:1px 6px;border-radius:4px;font-weight:600;">📷 사진첨부</span>
+                    <a href="<?= $escape($s['photo_before']) ?>" target="_blank" style="text-decoration:none;" title="현장 사진 원본 크게보기">
+                      <span style="font-size:11px;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;padding:1px 6px;border-radius:4px;font-weight:600;display:inline-flex;align-items:center;gap:3px;cursor:pointer;">📷 사진보기 ↗</span>
+                    </a>
                   <?php endif; ?>
                 </div>
                 <div style="font-size:13px;color:#475569;margin-bottom:3px;"><strong>위치:</strong> <?= $escape($s['location'] ?: '현장 전 구역') ?></div>
@@ -845,6 +860,41 @@ if ($tab === 'suggestions') {
           <div class="wp-form-col-full wp-form-group">
             <label>기대효과</label>
             <input type="text" name="expected_effect" id="sug_expected_effect" placeholder="예: 추락사고 원천 차단, 편의성 향상">
+          </div>
+
+          <!-- 현장 사진 첨부 및 클립보드 붙여넣기 (개선 전 현황 사진) -->
+          <div class="wp-form-col-full wp-form-group">
+            <label style="display:flex;align-items:center;justify-content:space-between;">
+              <span style="font-weight:700;">현장 사진 첨부 (개선 전 사진)</span>
+              <span style="font-size:12px;color:var(--wp-accent);font-weight:600;">📋 Ctrl + V 클립보드 붙여넣기 지원</span>
+            </label>
+            <input type="hidden" name="photo_base64" id="sug_photo_base64" value="">
+            <input type="hidden" name="remove_photo" id="sug_remove_photo" value="0">
+            <input type="file" id="sug_photo_file" accept="image/*" style="display:none;" onchange="handleAdminPhotoSelect(event)">
+
+            <div id="sugPhotoDropZone" class="wp-photo-pastezone" onclick="document.getElementById('sug_photo_file').click()">
+              <div style="font-size:24px;margin-bottom:4px;">📸 / 📋</div>
+              <div style="font-size:13.5px;font-weight:700;color:var(--wp-primary);">
+                클릭하여 사진 첨부 또는 키보드의 <strong>Ctrl + V</strong> 로 캡처 사진 바로 붙여넣기
+              </div>
+              <div style="font-size:11.5px;color:#64748b;margin-top:4px;">
+                화면 캡처(Win+Shift+S) 후 바로 붙여넣거나 파일 탐색기에서 이미지 파일을 끌어다 놓으세요.
+              </div>
+              <div style="margin-top:8px;">
+                <button type="button" class="wp-btn-paste" onclick="event.stopPropagation(); pasteAdminPhotoFromClipboard();">
+                  📋 클립보드 사진 붙여넣기
+                </button>
+              </div>
+            </div>
+
+            <div id="sugPhotoPreviewBox" style="display:none;position:relative;margin-top:10px;border:1px solid #cbd5e1;border-radius:8px;overflow:hidden;background:#f8fafc;max-width:320px;">
+              <img id="sugPhotoPreviewImg" src="" alt="현장 사진" style="width:100%;max-height:220px;object-fit:cover;display:block;">
+              <button type="button" onclick="removeAdminPhoto()" style="position:absolute;top:6px;right:6px;background:rgba(220,38,38,0.88);color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:11.5px;font-weight:700;cursor:pointer;">✕ 사진 삭제</button>
+              <div style="font-size:11.5px;color:#059669;padding:4px 8px;background:#f0fdf4;border-top:1px solid #dcfce7;display:flex;justify-content:space-between;">
+                <span>✅ 사진 첨부됨</span>
+                <span id="sugPhotoSizeBadge" style="color:#64748b;"></span>
+              </div>
+            </div>
           </div>
 
           <!-- Review & Action Section -->
@@ -1238,6 +1288,13 @@ function openSuggestionModal() {
   document.getElementById('sug_feedback_date').value = '';
   document.getElementById('sug_action_result').value = '';
   document.getElementById('sug_reward_note').value = '';
+  // Reset photo
+  document.getElementById('sug_photo_base64').value = '';
+  document.getElementById('sug_remove_photo').value = '0';
+  document.getElementById('sug_photo_file').value = '';
+  document.getElementById('sugPhotoPreviewImg').src = '';
+  document.getElementById('sugPhotoPreviewBox').style.display = 'none';
+
   document.getElementById('modalSuggestion').style.display = 'flex';
 }
 function closeSuggestionModal() {
@@ -1268,7 +1325,165 @@ function editSuggestion(s) {
   document.getElementById('sug_feedback_date').value = s.feedback_date || '';
   document.getElementById('sug_action_result').value = s.action_result || '';
   document.getElementById('sug_reward_note').value = s.reward_note || '';
+
+  // Setup photo preview
+  document.getElementById('sug_photo_base64').value = '';
+  document.getElementById('sug_remove_photo').value = '0';
+  document.getElementById('sug_photo_file').value = '';
+  if (s.photo_before) {
+    document.getElementById('sugPhotoPreviewImg').src = s.photo_before;
+    document.getElementById('sugPhotoPreviewBox').style.display = 'block';
+    const badge = document.getElementById('sugPhotoSizeBadge');
+    if (badge) badge.innerText = '등록된 현장 사진';
+  } else {
+    document.getElementById('sugPhotoPreviewImg').src = '';
+    document.getElementById('sugPhotoPreviewBox').style.display = 'none';
+  }
+
   document.getElementById('modalSuggestion').style.display = 'flex';
+}
+
+// Admin Photo Processing & Clipboard Paste
+function processAdminPhoto(file) {
+  if (!file) return;
+  if (!file.type || !file.type.startsWith('image/')) {
+    alert('이미지 파일(JPG, PNG, WebP 등)만 첨부할 수 있습니다.');
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    const img = new Image();
+    img.onload = function() {
+      const maxDim = 1280;
+      let w = img.width;
+      let h = img.height;
+      if (w > maxDim || h > maxDim) {
+        if (w > h) {
+          h = Math.round((h * maxDim) / w);
+          w = maxDim;
+        } else {
+          w = Math.round((w * maxDim) / h);
+          h = maxDim;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+
+      const compressed = canvas.toDataURL('image/jpeg', 0.82);
+      document.getElementById('sug_photo_base64').value = compressed;
+      document.getElementById('sug_remove_photo').value = '0';
+
+      const previewImg = document.getElementById('sugPhotoPreviewImg');
+      previewImg.src = compressed;
+      document.getElementById('sugPhotoPreviewBox').style.display = 'block';
+
+      const badge = document.getElementById('sugPhotoSizeBadge');
+      if (badge) {
+        const kb = Math.round((compressed.length * 3 / 4) / 1024);
+        badge.innerText = w + 'x' + h + ' (' + kb + 'KB 최적화)';
+      }
+    };
+    img.src = evt.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function handleAdminPhotoSelect(e) {
+  const file = e.target.files && e.target.files[0];
+  if (file) {
+    processAdminPhoto(file);
+  }
+}
+
+async function pasteAdminPhotoFromClipboard() {
+  if (navigator.clipboard && navigator.clipboard.read) {
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        for (const type of item.types) {
+          if (type.startsWith('image/')) {
+            const blob = await item.getType(type);
+            processAdminPhoto(blob);
+            return;
+          }
+        }
+      }
+      alert('클립보드에 복사된 이미지가 없습니다.\n화면 캡처(Win+Shift+S) 또는 이미지를 복사한 뒤 다시 클릭해주세요.');
+    } catch (err) {
+      console.warn('Clipboard read error:', err);
+      alert('브라우저 보안으로 클립보드 직접 읽기가 제한되었습니다.\n키보드의 [Ctrl + V] 단축키를 눌러 사진을 붙여넣으실 수 있습니다.');
+    }
+  } else {
+    alert('현재 브라우저에서는 클립보드 직접 읽기 버튼이 지원되지 않습니다.\n키보드의 [Ctrl + V] 단축키를 눌러 사진을 붙여넣어주세요.');
+  }
+}
+
+function removeAdminPhoto() {
+  document.getElementById('sug_photo_file').value = '';
+  document.getElementById('sug_photo_base64').value = '';
+  document.getElementById('sug_remove_photo').value = '1';
+  document.getElementById('sugPhotoPreviewImg').src = '';
+  document.getElementById('sugPhotoPreviewBox').style.display = 'none';
+}
+
+// Global Paste handler when #modalSuggestion is open
+window.addEventListener('paste', function(e) {
+  const modal = document.getElementById('modalSuggestion');
+  if (!modal || modal.style.display !== 'flex') return;
+
+  const items = e.clipboardData && e.clipboardData.items;
+  if (!items) return;
+
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].type.indexOf('image') !== -1) {
+      const file = items[i].getAsFile();
+      if (file) {
+        e.preventDefault();
+        processAdminPhoto(file);
+        const box = document.getElementById('sugPhotoPreviewBox');
+        if (box) {
+          box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        break;
+      }
+    }
+  }
+});
+
+// Drag and drop for Admin photo
+const sugDropZone = document.getElementById('sugPhotoDropZone');
+if (sugDropZone) {
+  ['dragenter', 'dragover'].forEach(eventName => {
+    sugDropZone.addEventListener(eventName, function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      sugDropZone.classList.add('dragover');
+    }, false);
+  });
+  ['dragleave', 'drop'].forEach(eventName => {
+    sugDropZone.addEventListener(eventName, function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      sugDropZone.classList.remove('dragover');
+    }, false);
+  });
+  sugDropZone.addEventListener('drop', function(e) {
+    const dt = e.dataTransfer;
+    const files = dt && dt.files;
+    if (files && files.length > 0) {
+      for (let i = 0; i < files.length; i++) {
+        if (files[i].type.startsWith('image/')) {
+          processAdminPhoto(files[i]);
+          break;
+        }
+      }
+    }
+  }, false);
 }
 
 function openMeetingModal() {

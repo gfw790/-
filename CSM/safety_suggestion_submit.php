@@ -41,39 +41,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             throw new InvalidArgumentException('현장의 위험요인 또는 문제점을 입력해주세요.');
         }
 
-        // Process Photo Upload
-        $photoPath = null;
-        $uploadDir = __DIR__ . '/storage/suggestions';
-        if (!is_dir($uploadDir) && !mkdir($uploadDir, 0750, true) && !is_dir($uploadDir)) {
-            throw new RuntimeException('저장소 디렉토리를 생성할 수 없습니다.');
-        }
-
-        // Option A: Base64 data from compressed mobile canvas
-        $photoBase64 = trim($_POST['photo_base64'] ?? '');
-        if ($photoBase64 !== '' && preg_match('#^data:image/(png|jpeg|jpg|webp);base64,#i', $photoBase64)) {
-            $parts = explode(',', $photoBase64, 2);
-            $imgData = base64_decode($parts[1] ?? '', true);
-            if ($imgData !== false && strlen($imgData) > 50) {
-                $fileName = 'sug_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.jpg';
-                $dest = $uploadDir . '/' . $fileName;
-                if (file_put_contents($dest, $imgData) !== false) {
-                    $photoPath = 'storage/suggestions/' . $fileName;
-                }
-            }
-        }
-
-        // Option B: Fallback Standard File Upload
-        if ($photoPath === null && isset($_FILES['photo_file']) && $_FILES['photo_file']['error'] === UPLOAD_ERR_OK) {
-            $f = $_FILES['photo_file'];
-            $ext = strtolower(pathinfo((string)$f['name'], PATHINFO_EXTENSION));
-            if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true)) {
-                $fileName = 'sug_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
-                $dest = $uploadDir . '/' . $fileName;
-                if (move_uploaded_file((string)$f['tmp_name'], $dest)) {
-                    $photoPath = 'storage/suggestions/' . $fileName;
-                }
-            }
-        }
+        // Process Photo Upload (Base64 from canvas or Clipboard / Fallback File Upload)
+        $photoPath = worker_part_save_uploaded_image(
+            $_POST['photo_base64'] ?? '',
+            $_FILES['photo_file'] ?? null,
+            'sug'
+        );
 
         // Generate Registration Number
         $countStmt = $db->prepare('SELECT COUNT(*) FROM csm_suggestions WHERE year = ?');
@@ -334,6 +307,31 @@ $activeTeams = worker_part_get_teams();
     .m-photo-box:hover {
       border-color: var(--m-accent);
       background: #f0f9ff;
+    }
+    .m-photo-box.dragover {
+      border-color: #0284c7;
+      background: #e0f2fe;
+      transform: scale(1.01);
+    }
+    .m-btn-paste {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #ffffff;
+      color: #1e3a8a;
+      border: 1.5px solid #0284c7;
+      padding: 7px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      transition: all 0.15s;
+    }
+    .m-btn-paste:hover {
+      background: #f0f9ff;
+      border-color: #0369a1;
+      color: #0369a1;
     }
     .m-photo-preview {
       display: none;
@@ -624,18 +622,34 @@ $activeTeams = worker_part_get_teams();
         </div>
 
         <div class="m-group">
-          <label class="m-label">현장 사진 촬영 또는 갤러리 선택</label>
+          <label class="m-label" style="display:flex;justify-content:space-between;align-items:center;">
+            <span>현장 사진 촬영 / 선택 또는 클립보드 붙여넣기</span>
+            <span style="font-size:11.5px;color:var(--m-accent);font-weight:600;">📋 Ctrl + V 지원</span>
+          </label>
           <input type="file" name="photo_file" id="photoInput" accept="image/*" capture="environment" style="display:none;" onchange="handlePhotoSelect(event)">
           
-          <div class="m-photo-box" onclick="document.getElementById('photoInput').click()">
-            <div style="font-size:32px;margin-bottom:6px;">📸</div>
-            <div style="font-size:14px;font-weight:700;color:var(--m-primary);">휴대폰 카메라로 촬영 또는 사진 선택</div>
+          <div class="m-photo-box" id="mPhotoDropZone" onclick="document.getElementById('photoInput').click()">
+            <div style="font-size:32px;margin-bottom:6px;">📸 / 📋</div>
+            <div style="font-size:14px;font-weight:700;color:var(--m-primary);">휴대폰 카메라 촬영 또는 사진 선택</div>
             <div class="m-help">터치하면 카메라가 즉시 실행되거나 사진첩을 열 수 있습니다.</div>
+
+            <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:10px;">
+              <button type="button" class="m-btn-paste" onclick="event.stopPropagation(); pasteFromClipboard();">
+                📋 클립보드 사진 붙여넣기
+              </button>
+            </div>
+            <div style="font-size:11.5px;color:#64748b;margin-top:7px;line-height:1.4;">
+              * PC나 캡처도구에서 복사한 이미지는 <strong>Ctrl + V</strong>를 누르면 즉시 등록됩니다.
+            </div>
           </div>
 
           <div id="photoPreviewContainer" class="m-photo-preview">
             <img id="photoPreviewImg" src="" alt="미리보기">
             <button type="button" class="m-photo-remove" onclick="removePhoto()">✕ 삭제</button>
+            <div style="font-size:11.5px;color:#059669;padding:6px 10px;background:#f0fdf4;border-top:1px solid #dcfce7;display:flex;align-items:center;justify-content:space-between;">
+              <span>✅ 사진이 정상 등록되었습니다.</span>
+              <span id="photoSizeBadge" style="font-size:11px;color:#64748b;"></span>
+            </div>
           </div>
         </div>
 
@@ -740,16 +754,19 @@ function setDept(dept) {
   document.getElementById('propDept').value = dept;
 }
 
-// Photo Compression & Preview
-function handlePhotoSelect(e) {
-  const file = e.target.files && e.target.files[0];
+// Photo Compression & Preview (File, Clipboard, Drag&Drop)
+function processImageFile(file) {
   if (!file) return;
+  if (!file.type || !file.type.startsWith('image/')) {
+    alert('이미지 파일(JPG, PNG, WebP 등)만 첨부할 수 있습니다.');
+    return;
+  }
 
   const reader = new FileReader();
   reader.onload = function(evt) {
     const img = new Image();
     img.onload = function() {
-      // Compress with canvas (max width 1280px)
+      // Compress with canvas (max dimension 1280px)
       const maxDim = 1280;
       let w = img.width;
       let h = img.height;
@@ -772,12 +789,102 @@ function handlePhotoSelect(e) {
       const compressedData = canvas.toDataURL('image/jpeg', 0.82);
       document.getElementById('photoBase64').value = compressedData;
 
-      document.getElementById('photoPreviewImg').src = compressedData;
+      const previewImg = document.getElementById('photoPreviewImg');
+      previewImg.src = compressedData;
       document.getElementById('photoPreviewContainer').style.display = 'block';
+
+      const sizeBadge = document.getElementById('photoSizeBadge');
+      if (sizeBadge) {
+        const kb = Math.round((compressedData.length * 3 / 4) / 1024);
+        sizeBadge.innerText = w + 'x' + h + ' (' + kb + 'KB)';
+      }
     };
     img.src = evt.target.result;
   };
   reader.readAsDataURL(file);
+}
+
+function handlePhotoSelect(e) {
+  const file = e.target.files && e.target.files[0];
+  if (file) {
+    processImageFile(file);
+  }
+}
+
+// Clipboard Paste API
+async function pasteFromClipboard() {
+  if (navigator.clipboard && navigator.clipboard.read) {
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        for (const type of item.types) {
+          if (type.startsWith('image/')) {
+            const blob = await item.getType(type);
+            processImageFile(blob);
+            return;
+          }
+        }
+      }
+      alert('클립보드에 복사된 이미지가 없습니다.\n먼저 스크린샷이나 사진을 복사(Ctrl+C 또는 캡처)한 후 다시 시도해주세요.');
+    } catch (err) {
+      console.warn('Clipboard read error:', err);
+      alert('브라우저 권한 정책으로 클립보드 직접 읽기가 제한되었습니다.\n키보드의 [Ctrl + V] 단축키를 눌러 바로 붙여넣어주세요.');
+    }
+  } else {
+    alert('현재 브라우저에서는 클립보드 버튼 읽기가 지원되지 않습니다.\n키보드의 [Ctrl + V] 단축키를 누르시면 사진이 즉시 붙여넣어집니다.');
+  }
+}
+
+// Global Paste Event Listener (Ctrl + V)
+window.addEventListener('paste', function(e) {
+  const items = e.clipboardData && e.clipboardData.items;
+  if (!items) return;
+
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].type.indexOf('image') !== -1) {
+      const file = items[i].getAsFile();
+      if (file) {
+        e.preventDefault();
+        processImageFile(file);
+        const preview = document.getElementById('photoPreviewContainer');
+        if (preview) {
+          preview.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        break;
+      }
+    }
+  }
+});
+
+// Drag and drop onto photoDropZone
+const dropZone = document.getElementById('mPhotoDropZone');
+if (dropZone) {
+  ['dragenter', 'dragover'].forEach(eventName => {
+    dropZone.addEventListener(eventName, function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.classList.add('dragover');
+    }, false);
+  });
+  ['dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.classList.remove('dragover');
+    }, false);
+  });
+  dropZone.addEventListener('drop', function(e) {
+    const dt = e.dataTransfer;
+    const files = dt && dt.files;
+    if (files && files.length > 0) {
+      for (let i = 0; i < files.length; i++) {
+        if (files[i].type.startsWith('image/')) {
+          processImageFile(files[i]);
+          break;
+        }
+      }
+    }
+  }, false);
 }
 
 function removePhoto() {
