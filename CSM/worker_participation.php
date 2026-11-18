@@ -316,6 +316,7 @@ $meetings = [];
 $champions = [];
 $reports = [];
 $userAccounts = worker_part_get_user_accounts();
+$activeTeams = worker_part_get_teams();
 
 if ($tab === 'suggestions') {
     $stmt = $db->prepare('SELECT * FROM csm_suggestions WHERE year = ? ORDER BY reg_date DESC, id DESC');
@@ -799,8 +800,13 @@ if ($tab === 'suggestions') {
             <input type="text" name="proposer_name" id="sug_proposer_name" required>
           </div>
           <div class="wp-form-group">
-            <label>소속 / 부서</label>
-            <input type="text" name="proposer_dept" id="sug_proposer_dept" placeholder="예: 가공반, 전기반">
+            <label>소속 / 작업반 (계정 연결 팀)</label>
+            <input type="text" name="proposer_dept" id="sug_proposer_dept" list="sugTeamList" placeholder="계정 선택 시 자동입력 또는 팀 선택">
+            <datalist id="sugTeamList">
+              <?php foreach ($activeTeams as $t): ?>
+                <option value="<?= $escape($t) ?>"><?= $escape($t) ?></option>
+              <?php endforeach; ?>
+            </datalist>
           </div>
           <div class="wp-form-group">
             <label>제안자 연락처</label>

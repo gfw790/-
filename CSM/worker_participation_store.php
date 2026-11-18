@@ -152,10 +152,12 @@ function worker_part_get_user_accounts(): array
             if ($name === '' || !empty($acc['is_retired'])) {
                 continue;
             }
+            $team = trim((string)($acc['team'] ?? $acc['team_name'] ?? $acc['department'] ?? ''));
             $list[] = [
                 'login_id' => (string)$loginId,
                 'name' => $name,
-                'dept' => (string)($acc['team_name'] ?? $acc['department'] ?? ''),
+                'dept' => $team,
+                'team' => $team,
                 'phone' => (string)($acc['phone'] ?? ''),
                 'role' => (string)($acc['role'] ?? '')
             ];
@@ -164,6 +166,17 @@ function worker_part_get_user_accounts(): array
         return $list;
     }
     return [];
+}
+
+function worker_part_get_teams(): array
+{
+    if (function_exists('auth_read_active_teams')) {
+        $teams = auth_read_active_teams();
+        if (!empty($teams)) {
+            return $teams;
+        }
+    }
+    return ['공사팀-전기', '공사팀-모터', '가스팀', '제조팀', '안전관리', '경영지원'];
 }
 
 function worker_part_make_signature_svg(string $name, string $color = '#1e3a8a'): string

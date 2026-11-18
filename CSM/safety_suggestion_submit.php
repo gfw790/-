@@ -15,7 +15,7 @@ $submitted = false;
 $assignedRegNo = '';
 $error = '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     try {
         $proposer_name = trim($_POST['proposer_name'] ?? '');
         $proposer_dept = trim($_POST['proposer_dept'] ?? '');
@@ -123,8 +123,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Prefill values from logged in user if available
 $prefillName = $user['name'] ?? '';
-$prefillDept = $user['team_name'] ?? $user['department'] ?? '';
+$prefillDept = $user['team'] ?? $user['team_name'] ?? $user['department'] ?? '';
+$prefillLoginId = $user['login_id'] ?? '';
 $userAccounts = worker_part_get_user_accounts();
+$activeTeams = worker_part_get_teams();
 ?>
 <!doctype html>
 <html lang="ko">
@@ -554,22 +556,36 @@ $userAccounts = worker_part_get_user_accounts();
         </div>
 
         <div class="m-group">
-          <label class="m-label">성명 <span class="req">*</span></label>
-          <input type="text" name="proposer_name" id="propName" class="m-input" placeholder="홍길동" value="<?= $escape($prefillName) ?>" required>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <label class="m-label" style="margin:0;">성명 <span class="req">*</span></label>
+            <span style="font-size:12px;color:var(--m-accent);cursor:pointer;" onclick="document.getElementById('mWorkerPicker').focus()">🔍 사내 계정에서 선택</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr;gap:6px;">
+            <select id="mWorkerPicker" class="m-select" onchange="onSelectWorkerPicker(this)" style="background:#f8fafc;font-size:13.5px;">
+              <option value="">-- 사내 계정/성명 선택 시 소속(팀) 자동 입력 --</option>
+              <?php foreach ($userAccounts as $acc): ?>
+                <option value="<?= $escape($acc['login_id']) ?>"
+                        data-name="<?= $escape($acc['name']) ?>"
+                        data-team="<?= $escape($acc['dept']) ?>"
+                        data-phone="<?= $escape($acc['phone']) ?>"
+                        <?= ($prefillName !== '' && $acc['name'] === $prefillName) ? 'selected' : '' ?>>
+                  <?= $escape($acc['name']) ?> (<?= $escape($acc['dept'] ?: '현장') ?>)
+                </option>
+              <?php endforeach; ?>
+            </select>
+            <input type="text" name="proposer_name" id="propName" class="m-input" placeholder="성명 직접 입력 또는 위에서 선택" value="<?= $escape($prefillName) ?>" required oninput="onProposerNameInput(this.value)">
+          </div>
         </div>
 
         <div class="m-group">
-          <label class="m-label">소속 / 작업반</label>
-          <input type="text" name="proposer_dept" id="propDept" class="m-input" placeholder="선택 또는 직접 입력" value="<?= $escape($prefillDept) ?>">
+          <label class="m-label">소속 / 작업반 (팀)</label>
+          <input type="text" name="proposer_dept" id="propDept" class="m-input" placeholder="계정에 연결된 팀이 자동으로 불러와집니다" value="<?= $escape($prefillDept) ?>">
           <div class="m-pills-row">
-            <span class="m-pill" onclick="setDept('가공반')">가공반</span>
-            <span class="m-pill" onclick="setDept('제관반')">제관반</span>
-            <span class="m-pill" onclick="setDept('도장반')">도장반</span>
-            <span class="m-pill" onclick="setDept('조립반')">조립반</span>
-            <span class="m-pill" onclick="setDept('전기반')">전기반</span>
-            <span class="m-pill" onclick="setDept('공무팀')">공무팀</span>
-            <span class="m-pill" onclick="setDept('협력업체')">협력업체</span>
+            <?php foreach ($activeTeams as $t): ?>
+              <span class="m-pill" onclick="setDept('<?= $escape($t) ?>')"><?= $escape($t) ?></span>
+            <?php endforeach; ?>
           </div>
+          <div class="m-help">* 성명을 선택하시면 계정에 연결되어 있는 <strong>소속 팀(작업반)</strong>이 자동으로 입력됩니다.</div>
         </div>
 
         <div class="m-group">
@@ -657,6 +673,36 @@ $userAccounts = worker_part_get_user_accounts();
 </div>
 
 <script>
+const userAccountsData = <?= json_encode($userAccounts, JSON_UNESCAPED_UNICODE) ?>;
+
+function onSelectWorkerPicker(sel) {
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt || !sel.value) return;
+  const name = opt.getAttribute('data-name') || '';
+  const team = opt.getAttribute('data-team') || opt.getAttribute('data-dept') || '';
+  const phone = opt.getAttribute('data-phone') || '';
+  document.getElementById('propName').value = name;
+  document.getElementById('propDept').value = team;
+  if (phone) {
+    document.getElementById('propPhone').value = phone;
+  }
+  document.getElementById('propLoginId').value = sel.value;
+  if (name) {
+    setTimeout(stampAuto, 50);
+  }
+}
+
+function onProposerNameInput(nameVal) {
+  const clean = nameVal.trim();
+  if (!clean) return;
+  const found = userAccountsData.find(a => a.name === clean);
+  if (found) {
+    document.getElementById('propDept').value = found.dept || '';
+    if (found.phone) document.getElementById('propPhone').value = found.phone;
+    document.getElementById('propLoginId').value = found.login_id;
+  }
+}
+
 // Proxy Mode Toggle
 function toggleProxyMode(checked) {
   const sec = document.getElementById('proxyAccountSection');
