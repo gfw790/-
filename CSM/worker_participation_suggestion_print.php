@@ -283,17 +283,17 @@ function renderCircularSeal(string $name): string {
     }
     .photo-box-cell {
       border: 1.2px solid #000;
-      padding: 0;
-      vertical-align: top;
-      background: #fafafa;
+      padding: 3.5px 4px;
+      vertical-align: middle;
+      background: #fff;
     }
     .photo-img-frame {
-      height: 60mm;
+      height: 58.5mm;
       display: flex;
       align-items: center;
       justify-content: center;
       overflow: hidden;
-      background: #fafafa;
+      background: #fff;
     }
     .photo-img-frame img {
       width: 100%;
