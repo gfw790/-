@@ -1292,8 +1292,8 @@ function buildOptionBSheetHtml(s, forPrint) {
     if (!matched.length) return '';
     return matched.map(im => {
       usedImgIds.add(im.id);
-      const maxH = forPrint ? 210 : 230;
-      const wStyle = im.px_w ? `max-width:min(94%, ${Math.round(im.px_w * 0.78)}px);max-height:${maxH}px;` : `max-width:92%;max-height:${maxH}px;`;
+      const maxH = forPrint ? 195 : 230;
+      const wStyle = im.px_w ? `max-width:min(92%, ${Math.round(im.px_w * 0.72)}px);max-height:${maxH}px;` : `max-width:90%;max-height:${maxH}px;`;
       return `<div class="sop-b-img-box"><img src="standard_procedure.php?img_id=${im.id}" alt="SOP 도해" style="${wStyle}"></div>`;
     }).join('');
   }
@@ -1306,11 +1306,13 @@ function buildOptionBSheetHtml(s, forPrint) {
     const loRows = lay.lo;
     const upSpan = Math.max(1, upRows.length);
     const loSpan = Math.max(1, loRows.length);
+    const totalRowCount = upSpan + loSpan;
+    const printRowScale = totalRowCount > 44 ? 0.86 : (totalRowCount > 38 ? 0.94 : 1.0);
 
     upRows.forEach((rObj, idx) => {
       const leftHtml = renderSideCellsHtml(rObj.l, 2) + renderImagesAtRow('L', rObj.r);
       const rightHtml = renderSideCellsHtml(rObj.rt, 15) + renderImagesAtRow('R', rObj.r);
-      const hPx = forPrint ? Math.max(14, Math.round((rObj.h || 14.25) * 1.05)) : Math.max(16, Math.round((rObj.h || 14.25) * 1.15));
+      const hPx = forPrint ? Math.max(12, Math.round((rObj.h || 14.25) * printRowScale)) : Math.max(16, Math.round((rObj.h || 14.25) * 1.15));
       bodyRowsHtml += `<tr style="min-height:${hPx}px;">`;
       if (idx === 0) {
         bodyRowsHtml += `<td rowspan="${upSpan}" class="sop-b-vbar sop-b-vbar-left">①<br>작<br>업<br>준<br>비<br>사<br>항</td>`;
@@ -1330,12 +1332,12 @@ function buildOptionBSheetHtml(s, forPrint) {
         imgs.forEach(im => {
           if (!usedImgIds.has(im.id)) {
             usedImgIds.add(im.id);
-            const tag = `<div class="sop-b-img-box"><img src="standard_procedure.php?img_id=${im.id}" alt="SOP 도해" style="max-width:92%;max-height:210px;"></div>`;
+            const tag = `<div class="sop-b-img-box"><img src="standard_procedure.php?img_id=${im.id}" alt="SOP 도해" style="max-width:90%;max-height:195px;"></div>`;
             if (im.side === 'L') leftHtml += tag; else rightHtml += tag;
           }
         });
       }
-      const hPx = forPrint ? Math.max(14, Math.round((rObj.h || 14.25) * 1.05)) : Math.max(16, Math.round((rObj.h || 14.25) * 1.15));
+      const hPx = forPrint ? Math.max(12, Math.round((rObj.h || 14.25) * printRowScale)) : Math.max(16, Math.round((rObj.h || 14.25) * 1.15));
       bodyRowsHtml += `<tr class="${idx === 0 ? 'sop-b-divider-row' : ''}" style="min-height:${hPx}px;">`;
       if (idx === 0) {
         bodyRowsHtml += `<td rowspan="${loSpan}" class="sop-b-vbar sop-b-vbar-left">③<br><br>작<br><br>업<br><br>순<br><br>서</td>`;
@@ -1484,19 +1486,108 @@ function printFromModal() {
       <meta charset="utf-8">
       <title>No.${escHtml(s.sop_no)} ${escHtml(s.title)} · 안전작업표준서</title>
       <style>
-        @page { size: A4 portrait; margin: 10mm 11mm 9mm 11mm; }
-        * { box-sizing: border-box; }
+        :root {
+          --top-pad: 20mm;
+          --right-pad: 12mm;
+          --bottom-pad: 12mm;
+          --left-pad: 12mm;
+        }
+        @page { size: A4 portrait; margin: 0; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
+          background-color: #f1f5f9;
           font-family: "Malgun Gothic", "맑은 고딕", Dotum, sans-serif;
           color: #000000;
-          margin: 0;
-          padding: 0;
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
         }
+        /* Screen Toolbar */
+        .screen-toolbar {
+          position: sticky;
+          top: 0;
+          z-index: 100;
+          background: #ffffff;
+          border-bottom: 1px solid #cbd5e1;
+          padding: 10px 20px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          box-shadow: 0 4px 6px -1px rgba(0,0,0,0.07);
+        }
+        .toolbar-left {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .toolbar-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 16px;
+          font-size: 13px;
+          font-weight: 700;
+          border-radius: 8px;
+          cursor: pointer;
+          border: 1px solid transparent;
+        }
+        .btn-print { background: #1e3a8a; color: #fff; }
+        .btn-print:hover { background: #1e40af; }
+        .btn-close { background: #f1f5f9; color: #475569; border-color: #cbd5e1; }
+        .btn-close:hover { background: #e2e8f0; }
+        .pad-control-group {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          margin-left: 6px;
+          padding-left: 12px;
+          border-left: 1px solid #cbd5e1;
+        }
+        .pad-label { font-size: 12px; font-weight: 700; color: #334155; }
+        .pad-btn {
+          padding: 5px 10px;
+          font-size: 11.5px;
+          font-weight: 700;
+          border-radius: 6px;
+          border: 1px solid #cbd5e1;
+          background: #fff;
+          color: #475569;
+          cursor: pointer;
+        }
+        .pad-btn.active {
+          background: #1e3a8a;
+          color: #fff;
+          border-color: #1e3a8a;
+        }
+        .toolbar-tip {
+          font-size: 12px;
+          color: #475569;
+          background: #f8fafc;
+          padding: 6px 12px;
+          border-radius: 8px;
+          border: 1px solid #e2e8f0;
+        }
+        /* A4 Paper Container (CSM 인쇄 여백 규정: 상단 20mm 편철 / 좌·우·하단 12mm) */
+        .paper-container {
+          max-width: 210mm;
+          margin: 16px auto 32px auto;
+        }
+        .a4-page {
+          width: 210mm;
+          height: 297mm;
+          min-height: 297mm;
+          max-height: 297mm;
+          background: #ffffff;
+          padding: var(--top-pad) var(--right-pad) var(--bottom-pad) var(--left-pad);
+          box-shadow: 0 10px 25px -5px rgba(0,0,0,0.12);
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+        }
         .sop-b-sheet {
           width: 100%;
-          min-height: 274mm;
+          height: 100%;
+          flex: 1 1 auto;
           display: flex;
           flex-direction: column;
         }
@@ -1506,6 +1597,7 @@ function printFromModal() {
           table-layout: fixed;
           border: 1.8pt solid #000;
           margin-bottom: 1.5mm;
+          flex-shrink: 0;
         }
         .sop-b-head td {
           border: 0.5pt solid #000;
@@ -1536,9 +1628,9 @@ function printFromModal() {
         }
         .sop-b-body td {
           vertical-align: top;
-          font-size: 8pt;
-          line-height: 1.28;
-          padding: 0.6pt 4pt;
+          font-size: 7.9pt;
+          line-height: 1.24;
+          padding: 0.45pt 4pt;
           color: #000;
           word-break: keep-all;
           overflow-wrap: break-word;
@@ -1550,9 +1642,9 @@ function printFromModal() {
           text-align: center;
           vertical-align: middle !important;
           font-weight: 800;
-          font-size: 8.2pt;
-          line-height: 1.28;
-          padding: 3pt 1pt !important;
+          font-size: 8pt;
+          line-height: 1.25;
+          padding: 2pt 1pt !important;
         }
         .sop-b-vbar-left {
           border-left: none !important;
@@ -1564,11 +1656,11 @@ function printFromModal() {
           border-right: 1.2pt solid #000;
         }
         .sop-b-img-box {
-          margin: 2pt 0;
+          margin: 1.5pt 0;
           text-align: center;
         }
         .sop-b-img-box img {
-          max-width: 92%;
+          max-width: 90%;
           height: auto;
           display: inline-block;
         }
@@ -1578,14 +1670,68 @@ function printFromModal() {
           font-weight: 600;
           margin-top: 1mm;
           color: #000;
+          flex-shrink: 0;
+        }
+        @media print {
+          html, body {
+            background: #ffffff !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 210mm !important;
+            height: 297mm !important;
+          }
+          .no-print { display: none !important; }
+          .paper-container {
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          .a4-page {
+            width: 210mm !important;
+            height: 297mm !important;
+            min-height: 297mm !important;
+            max-height: 297mm !important;
+            margin: 0 !important;
+            padding: var(--top-pad) var(--right-pad) var(--bottom-pad) var(--left-pad) !important;
+            box-shadow: none !important;
+            border: none !important;
+            overflow: hidden !important;
+          }
         }
       </style>
     </head>
     <body>
-      ${sheetHtml}
+      <aside class="screen-toolbar no-print">
+        <div class="toolbar-left">
+          <button type="button" onclick="window.print()" class="toolbar-btn btn-print">🖨️ 바로 인쇄하기 (Ctrl+P)</button>
+          <button type="button" onclick="window.close()" class="toolbar-btn btn-close">✕ 창 닫기</button>
+          <div class="pad-control-group">
+            <span class="pad-label">여백 규정:</span>
+            <button type="button" class="pad-btn active" onclick="setPadPreset('20mm','12mm','12mm','12mm',this)">상단 편철 표준 (상 20 / 좌·우·하 12mm)</button>
+            <button type="button" class="pad-btn" onclick="setPadPreset('12mm','12mm','12mm','20mm',this)">좌측 편철 (좌 20 / 상·우·하 12mm)</button>
+            <button type="button" class="pad-btn" onclick="setPadPreset('25mm','12mm','12mm','12mm',this)">여유 편철 (상 25 / 좌·우·하 12mm)</button>
+          </div>
+        </div>
+        <div class="toolbar-tip">
+          💡 <strong>CSM A4 인쇄 여백 규정(상단 20mm · 좌우하단 12mm)</strong> 적용 &bull; 인쇄 설정에서 <strong>[배경 그래픽]</strong>을 켜주세요.
+        </div>
+      </aside>
+      <div class="paper-container">
+        <div class="a4-page">
+          ${sheetHtml}
+        </div>
+      </div>
       <script>
+        function setPadPreset(top, right, bottom, left, btn) {
+          document.documentElement.style.setProperty('--top-pad', top);
+          document.documentElement.style.setProperty('--right-pad', right);
+          document.documentElement.style.setProperty('--bottom-pad', bottom);
+          document.documentElement.style.setProperty('--left-pad', left);
+          document.querySelectorAll('.pad-btn').forEach(function(b) { b.classList.remove('active'); });
+          if (btn) btn.classList.add('active');
+        }
         window.addEventListener('load', function() {
-          setTimeout(function() { window.print(); }, 180);
+          setTimeout(function() { window.print(); }, 220);
         });
       <\/script>
     </body>

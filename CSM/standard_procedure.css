@@ -322,16 +322,27 @@ body {
   display: none;
 }
 @media print {
-  body {
-    background: #fff;
-    color: #000;
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+  html, body {
+    background: #fff !important;
+    color: #000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 210mm !important;
   }
   .sop-header, .sop-metrics-grid, .sop-controls, .no-print {
     display: none !important;
   }
   .sop-container {
-    max-width: 100%;
-    padding: 0;
+    width: 210mm !important;
+    max-width: none !important;
+    min-height: 297mm !important;
+    margin: 0 !important;
+    padding: 20mm 12mm 12mm 12mm !important;
+    box-sizing: border-box !important;
   }
   .sop-print-sheet {
     display: block !important;
