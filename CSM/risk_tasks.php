@@ -292,10 +292,38 @@ body {
 .rpt-kicker { font-size: 8pt; color: #334155; font-weight: 700; margin-bottom: 3px; }
 .rpt-title { font-size: 15.5pt; font-weight: 800; margin: 0 0 3px; letter-spacing: -.3px; }
 .rpt-docno { font-size: 8.3pt; color: #334155; }
-.approval { border-collapse: collapse; table-layout: fixed; width: 48mm; font-size: 8.2pt; text-align: center; flex-shrink: 0; }
-.approval th, .approval td { border: 1px solid #000; padding: 3px 4px; }
-.approval th { background: #f1f5f9; font-weight: 700; }
-.approval .sign-cell { height: 14mm; }
+.approval-grid {
+  display: grid;
+  grid-template-columns: 8mm 22mm 22mm;
+  grid-template-rows: auto 15mm;
+  width: 52mm;
+  border-top: 1px solid #000;
+  border-left: 1px solid #000;
+  font-size: 8.2pt;
+  text-align: center;
+  flex-shrink: 0;
+}
+.approval-grid > div {
+  border-right: 1px solid #000;
+  border-bottom: 1px solid #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 2px;
+}
+.approval-grid .ap-label {
+  grid-row: 1 / 3;
+  background: #f1f5f9;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.approval-grid .ap-head {
+  background: #f1f5f9;
+  font-weight: 700;
+}
+.approval-grid .ap-sign {
+  background: #fff;
+}
 .sec-title {
   font-size: 10pt;
   font-weight: 800;
@@ -422,11 +450,13 @@ function buildFirstHeader() {
       <h1 class="rpt-title">안전작업표준서(SOP) 검토·개정 결과 보고서</h1>
       <div class="rpt-docno">문서번호: ${esc(RPT.docNo)} &nbsp;|&nbsp; 검토일자: ${esc(RPT.recordDate)}</div>
     </div>
-    <table class="approval">
-      <colgroup><col style="width:8mm"><col style="width:20mm"><col style="width:20mm"></colgroup>
-      <tr><th rowspan="2">결<br>재</th><th>작성</th><th>승인</th></tr>
-      <tr><td class="sign-cell"></td><td class="sign-cell"></td></tr>
-    </table>
+    <div class="approval-grid">
+      <div class="ap-label">결<br>재</div>
+      <div class="ap-head">작성</div>
+      <div class="ap-head">승인</div>
+      <div class="ap-sign"></div>
+      <div class="ap-sign"></div>
+    </div>
   </div>`;
 }
 function buildContHeader() {
