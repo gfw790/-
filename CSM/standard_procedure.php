@@ -1052,8 +1052,8 @@ $queryBase = http_build_query(array_filter([
             <input type="number" name="revision_no" id="sop_revision_no" min="0" value="0">
           </div>
           <div class="sop-form-col-full sop-form-group">
-            <label>관리이력 / 개정사유</label>
-            <input type="text" name="change_reason" id="sop_change_reason" placeholder="예: 모회사 개정반영 / 신규등록">
+            <label>관리이력 / 개정사유 (5~6자 요약 권장)</label>
+            <input type="text" name="change_reason" id="sop_change_reason" placeholder="예: 상하역보완 / 산소측정추가 / 신규등록">
             <input type="hidden" name="scope" id="sop_scope" value="">
           </div>
           <div class="sop-form-col-full sop-form-group">
@@ -1389,7 +1389,7 @@ function buildOptionBHeaderHtml(s, forPrint) {
   const revLabel = isDep ? '폐지' : String(s.revision_no ?? 0);
   const dateLabel = (parseInt(s.revision_no, 10) > 0 || isDep) ? '사내개정일' : '사내등록일';
   const dateDot = formatDotDate(s.revised_date || s.enact_date);
-  const historyText = s.change_reason || (isDep ? '폐지(타입변경삭제)' : '사내전환');
+  const historyText = s.change_reason || (isDep ? '타입변경폐지' : '사내전환');
   const rawAuthor = String(s.author_name || '공사팀 김남균').trim();
   const teamPerson = rawAuthor.includes('/')
     ? rawAuthor
@@ -1577,7 +1577,7 @@ function buildOptionAHeaderRowsHtml(s, forPrint) {
   const revLabel = isDep ? '폐지' : String(s.revision_no ?? 0);
   const datePrefix = (parseInt(s.revision_no, 10) > 0 || isDep) ? '개정' : '등록';
   const dateDot = formatDotDate(s.revised_date || s.enact_date);
-  const historyText = s.change_reason || (isDep ? '폐지(타입변경삭제)' : '사내전환');
+  const historyText = s.change_reason || (isDep ? '타입변경폐지' : '사내전환');
   const rawAuthor = String(s.author_name || '공사팀 김남균').trim();
   const teamPerson = rawAuthor.includes('/')
     ? rawAuthor
