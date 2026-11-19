@@ -549,13 +549,13 @@ $queryBase = http_build_query(array_filter([
       width: 100%;
       border-collapse: collapse;
       table-layout: fixed;
-      border: 2pt solid #000;
+      border: 0.75pt solid #000;
       margin-bottom: 4px;
     }
     .sop-b-head td {
-      border: 0.6pt solid #000;
+      border: 0.75pt solid #000;
       padding: 3px 5px;
-      font-size: 12px;
+      font-size: 13px;
       line-height: 1.25;
       vertical-align: middle;
       color: #000;
@@ -563,51 +563,51 @@ $queryBase = http_build_query(array_filter([
     .sop-b-title-wrap {
       display: flex;
       align-items: center;
-      gap: 10px;
-      padding-left: 4px;
+      justify-content: center;
+      gap: 2px;
     }
     .sop-b-title-text {
-      font-size: 18px;
+      font-size: 23px;
       font-weight: 800;
-      letter-spacing: 3px;
+      letter-spacing: 0.5px;
       white-space: nowrap;
     }
     .sop-b-body {
       width: 100%;
       border-collapse: collapse;
       table-layout: fixed;
-      border: 2pt solid #000;
+      border: 0.75pt solid #000;
     }
     .sop-b-body td {
       vertical-align: top;
-      font-size: 11.5px;
+      font-size: 12px;
       line-height: 1.38;
-      padding: 1px 6px;
+      padding: 1.5px 6px;
       color: #000;
       word-break: keep-all;
       overflow-wrap: break-word;
     }
     .sop-b-vbar {
       background-color: #CCFFCC !important;
-      border-right: 0.7pt solid #000;
-      border-left: 1.3pt solid #000;
+      border-right: 0.75pt solid #000;
+      border-left: 0.75pt solid #000;
       width: 26px;
       text-align: center;
-      vertical-align: middle !important;
+      vertical-align: top !important;
       font-weight: 800;
-      font-size: 11.5px;
-      line-height: 1.35;
-      padding: 6px 2px !important;
+      font-size: 12px;
+      line-height: 1.3;
+      padding: 5px 2px !important;
       user-select: none;
     }
     .sop-b-vbar-left {
       border-left: none !important;
     }
     .sop-b-divider-row td {
-      border-top: 1.6pt solid #000 !important;
+      border-top: 0.75pt solid #000 !important;
     }
     .sop-b-cell-left {
-      border-right: 1.3pt solid #000;
+      border-right: 0.75pt solid #000;
     }
     .sop-b-img-box {
       margin: 4px 0;
@@ -1217,8 +1217,8 @@ $queryBase = http_build_query(array_filter([
     <div class="sop-modal-header" style="gap:12px;flex-wrap:wrap;">
       <h3 id="view_title" style="margin-right:auto;">표준작업절차서 상세조회</h3>
       <div class="sop-tpl-switch" title="표준서 서식 타입 전환">
-        <button type="button" id="tplBtnA" class="sop-tpl-btn active" onclick="setTemplateType('A')">A타입 (Word 가로형 표준)</button>
-        <button type="button" id="tplBtnB" class="sop-tpl-btn" onclick="setTemplateType('B')">B타입 (Excel 세로형)</button>
+        <button type="button" id="tplBtnB" class="sop-tpl-btn active" onclick="setTemplateType('B')">최종통합본 인쇄용 (세로형 표준)</button>
+        <button type="button" id="tplBtnA" class="sop-tpl-btn" onclick="setTemplateType('A')">Word 샘플 (가로형)</button>
       </div>
       <button type="button" class="sop-modal-close" onclick="closeViewModal()">&times;</button>
     </div>
@@ -1240,7 +1240,7 @@ $queryBase = http_build_query(array_filter([
 <script>
 const COMPANY_LOGO = <?= json_encode($logoBase64) ?>;
 let currentViewingSop = null;
-let currentTemplateType = 'A';
+let currentTemplateType = 'B';
 
 function escHtml(s) {
   return String(s ?? '')
@@ -1364,7 +1364,24 @@ function renderSideCellsHtml(items, baseCol) {
 }
 
 /**
- * Build Header Table HTML (repeated on every page in print mode).
+ * Build Option B Header Table HTML (공사팀_안전작업표준서_1-247_최종통합본_시트명표시_인쇄용.docx 11-col tblGrid 1:1 규격).
+ * Word tblGrid (total 10772 dxa):
+ *  [795, 3912, 680, 567, 1020, 567, 680, 57, 397, 1020, 1077]
+ *  Row 1 (trHeight=567 dxa = 10.0mm):
+ *   - Cell 0 (gridSpan=2, 4707 dxa = 43.696%): [Logo 6mm] 안 전 작 업 표 준 서 (18pt Bold, centered)
+ *   - Cell 1 (gridSpan=1, 680 dxa = 6.313%): NO (10pt)
+ *   - Cell 2 (gridSpan=2, 1587 dxa = 14.733%): <code_no> (10pt)
+ *   - Cell 3 (gridSpan=3, 1304 dxa = 12.105%): Team/<br>Person (10pt)
+ *   - Cell 4 (gridSpan=3, 2494 dxa = 23.153%): 공사팀 / 김남균 (10pt single line)
+ *  Row 2 (trHeight=624 dxa = 11.0mm):
+ *   - Cell 0 (gridSpan=1, 795 dxa = 7.380%): 작업명 (10pt Bold)
+ *   - Cell 1 (gridSpan=1, 3912 dxa = 36.316%): <title> (11pt Bold, left-aligned)
+ *   - Cell 2 (gridSpan=2, 1247 dxa = 11.576%): 사내등록일 (10pt Bold)
+ *   - Cell 3 (gridSpan=2, 1587 dxa = 14.733%): <date> (10pt)
+ *   - Cell 4 (gridSpan=1, 680 dxa = 6.313%): Rev' (10pt Bold)
+ *   - Cell 5 (gridSpan=2, 454 dxa = 4.215%): <rev> (10pt)
+ *   - Cell 6 (gridSpan=1, 1020 dxa = 9.469%): 관리이력 (10pt Bold)
+ *   - Cell 7 (gridSpan=1, 1077 dxa = 9.998%): <change_reason> (10pt)
  */
 function buildOptionBHeaderHtml(s, forPrint) {
   const code = s.job_plan_code || s.doc_code || '';
@@ -1374,46 +1391,50 @@ function buildOptionBHeaderHtml(s, forPrint) {
   const dateDot = formatDotDate(s.revised_date || s.enact_date);
   const historyText = s.change_reason || (isDep ? '폐지(타입변경삭제)' : '사내전환');
   const rawAuthor = String(s.author_name || '공사팀 김남균').trim();
-  const authorParts = rawAuthor.split(/[\s/]+/).filter(Boolean);
-  const teamLine = authorParts[0] || '공사팀';
-  const personLine = authorParts.slice(1).join(' ') || '김남균';
+  const teamPerson = rawAuthor.includes('/')
+    ? rawAuthor
+    : rawAuthor.replace(/^공사팀\s+/, '공사팀 / ');
+  const logoSize = forPrint ? '6mm' : '23px';
   const logoHtml = COMPANY_LOGO
-    ? `<img src="${COMPANY_LOGO}" alt="현대기전" style="height:${forPrint ? '22px' : '22px'};width:auto;display:block;">`
+    ? `<img src="${COMPANY_LOGO}" alt="현대기전" style="width:${logoSize};height:${logoSize};object-fit:contain;display:inline-block;vertical-align:middle;">`
     : '';
 
   return `
     <table class="sop-b-head">
       <colgroup>
-        <col style="width:7%;">
-        <col style="width:35.5%;">
-        <col style="width:8.5%;">
-        <col style="width:11%;">
-        <col style="width:6.5%;">
-        <col style="width:7.5%;">
-        <col style="width:8.5%;">
-        <col style="width:15.5%;">
+        <col style="width:7.380%;">
+        <col style="width:36.316%;">
+        <col style="width:6.313%;">
+        <col style="width:5.264%;">
+        <col style="width:9.469%;">
+        <col style="width:5.264%;">
+        <col style="width:6.313%;">
+        <col style="width:0.529%;">
+        <col style="width:3.685%;">
+        <col style="width:9.469%;">
+        <col style="width:9.998%;">
       </colgroup>
-      <tr>
-        <td colspan="2" style="height:${forPrint ? '32px' : '36px'};">
+      <tr style="height:${forPrint ? '10.0mm' : '38px'};">
+        <td colspan="2" style="text-align:center;">
           <div class="sop-b-title-wrap">
             ${logoHtml}
             <span class="sop-b-title-text">안 전 작 업 표 준 서</span>
           </div>
         </td>
-        <td style="text-align:center;">NO</td>
-        <td style="text-align:center;font-weight:600;">${escHtml(code)}</td>
-        <td style="text-align:center;line-height:1.15;font-size:11px;">Team/<br>Person</td>
-        <td colspan="3" style="text-align:center;line-height:1.25;">${escHtml(teamLine)}<br>${escHtml(personLine)}</td>
+        <td colspan="1" style="text-align:center;">NO</td>
+        <td colspan="2" style="text-align:center;">${escHtml(code)}</td>
+        <td colspan="3" style="text-align:center;line-height:1.18;">Team/<br>Person</td>
+        <td colspan="3" style="text-align:center;">${escHtml(teamPerson)}</td>
       </tr>
-      <tr>
-        <td style="text-align:center;height:${forPrint ? '24px' : '26px'};">작업명</td>
-        <td style="font-weight:800;font-size:${forPrint ? '12.5px' : '13px'};">${escHtml(s.title)}</td>
-        <td style="text-align:center;font-size:11px;">${escHtml(dateLabel)}</td>
-        <td style="text-align:center;font-weight:800;font-size:11.5px;">${escHtml(dateDot)}</td>
-        <td style="text-align:center;">Rev'</td>
-        <td style="text-align:center;font-weight:800;">${escHtml(revLabel)}</td>
-        <td style="text-align:center;font-size:11px;">관리이력</td>
-        <td style="text-align:center;font-weight:700;">${escHtml(historyText)}</td>
+      <tr style="height:${forPrint ? '11.0mm' : '42px'};">
+        <td colspan="1" style="text-align:center;font-weight:700;">작업명</td>
+        <td colspan="1" style="text-align:left;font-weight:700;font-size:${forPrint ? '11pt' : '14.5px'};padding-left:${forPrint ? '5pt' : '8px'};">${escHtml(s.title)}</td>
+        <td colspan="2" style="text-align:center;font-weight:700;">${escHtml(dateLabel)}</td>
+        <td colspan="2" style="text-align:center;">${escHtml(dateDot)}</td>
+        <td colspan="1" style="text-align:center;font-weight:700;">Rev'</td>
+        <td colspan="2" style="text-align:center;">${escHtml(revLabel)}</td>
+        <td colspan="1" style="text-align:center;font-weight:700;">관리이력</td>
+        <td colspan="1" style="text-align:center;">${escHtml(historyText)}</td>
       </tr>
     </table>
   `;
@@ -1496,7 +1517,9 @@ function prepareOptionBRows(s, forPrint) {
 
 /**
  * Render a single body table slice (with optional ①/② upper rows and a slice of ③/④ lower rows).
- * Each page's body table gets its own complete 4-sided outer box border and vertical green section bars.
+ * Matches 공사팀_안전작업표준서_1-247_최종통합본_시트명표시_인쇄용.docx Table 2:
+ *  - 4 columns: [340, 5046, 340, 5046] dxa = [3.156%, 46.844%, 3.156%, 46.844%]
+ *  - Top-aligned single-spaced vertical characters in #CCFFCC bars
  */
 function renderOptionBBodyTableHtml(upSlice, loSlice) {
   let rowsHtml = '';
@@ -1519,11 +1542,11 @@ function renderOptionBBodyTableHtml(upSlice, loSlice) {
     const isDiv = (idx === 0 && upSpan > 0);
     rowsHtml += `<tr class="sop-b-lo-row ${isDiv ? 'sop-b-divider-row' : ''}" data-lo-idx="${idx}" style="min-height:${row.hPx}px;">`;
     if (idx === 0) {
-      rowsHtml += `<td rowspan="${loSpan}" class="sop-b-vbar sop-b-vbar-left">③<br><br>작<br><br>업<br><br>순<br><br>서</td>`;
+      rowsHtml += `<td rowspan="${loSpan}" class="sop-b-vbar sop-b-vbar-left">③<br>작<br>업<br>순<br>서</td>`;
     }
     rowsHtml += `<td class="sop-b-cell-left" style="height:${row.hPx}px;">${row.leftHtml || '&nbsp;'}</td>`;
     if (idx === 0) {
-      rowsHtml += `<td rowspan="${loSpan}" class="sop-b-vbar">④<br><br>안<br><br>전<br><br>작<br><br>업<br><br>순<br><br>서</td>`;
+      rowsHtml += `<td rowspan="${loSpan}" class="sop-b-vbar">④<br>안<br>전<br>작<br>업<br>순<br>서</td>`;
     }
     rowsHtml += `<td style="height:${row.hPx}px;">${row.rightHtml || '&nbsp;'}</td></tr>`;
   });
@@ -1531,10 +1554,10 @@ function renderOptionBBodyTableHtml(upSlice, loSlice) {
   return `
     <table class="sop-b-body">
       <colgroup>
-        <col style="width:3.6%;">
-        <col style="width:46.4%;">
-        <col style="width:3.6%;">
-        <col style="width:46.4%;">
+        <col style="width:3.156%;">
+        <col style="width:46.844%;">
+        <col style="width:3.156%;">
+        <col style="width:46.844%;">
       </colgroup>
       ${rowsHtml}
     </table>
@@ -1668,12 +1691,17 @@ function buildOptionBSheetHtml(s, forPrint) {
   const bodyTableHtml = renderOptionBBodyTableHtml(upList, loList);
   const pgCnt = Math.max(1, parseInt(s.page_count, 10) || 1);
   const shLabel = pgCnt > 1 ? `총 ${pgCnt}페이지 (1/${pgCnt},SH ~ ${pgCnt}/${pgCnt},SH)` : '1/1,SH';
+  const sheetTitle = s.sheet_name || ((s.sop_no ? s.sop_no + '.' : '') + (s.title || ''));
 
   return `
     <div class="sop-b-sheet">
       ${headerHtml}
       ${bodyTableHtml}
-      <div class="sop-b-footer-sh">${shLabel}</div>
+      <div class="sop-b-footer-sh" style="display:flex;justify-content:space-between;align-items:center;padding:2px 2px 0;">
+        <span style="visibility:hidden;">${escHtml(sheetTitle)}</span>
+        <span>${shLabel}</span>
+        <span style="color:#404040;font-size:11px;">${escHtml(sheetTitle)}</span>
+      </div>
     </div>
   `;
 }
@@ -1752,8 +1780,10 @@ function printFromModal() {
   const headerARowsHtml = buildOptionAHeaderRowsHtml(s, true);
   const rowsData = prepareOptionBRows(s, true);
   const colsA = prepareOptionAColumns(s, true);
+  const sheetTitle = s.sheet_name || ((s.sop_no ? s.sop_no + '.' : '') + (s.title || ''));
   const payloadJson = JSON.stringify({
-    tpl: currentTemplateType || 'A',
+    tpl: currentTemplateType || 'B',
+    sheetTitle: sheetTitle,
     headerBHtml: headerBHtml,
     headerARowsHtml: headerARowsHtml,
     upList: rowsData.upList,
@@ -1952,7 +1982,7 @@ function printFromModal() {
         .sop-a-line {
           margin-bottom: 1.5pt;
         }
-        /* Option B (Excel 세로바 서식) Print Styles */
+        /* Option B (공사팀_안전작업표준서_1-247_최종통합본_시트명표시_인쇄용.docx 1:1 규격) Print Styles */
         .sop-b-sheet {
           width: 100%;
           height: 100%;
@@ -1964,14 +1994,14 @@ function printFromModal() {
           width: 100%;
           border-collapse: collapse;
           table-layout: fixed;
-          border: 1.8pt solid #000;
-          margin-bottom: 1.5mm;
+          border: 0.75pt solid #000;
+          margin-bottom: 1.06mm;
           flex-shrink: 0;
         }
         .sop-b-head td {
-          border: 0.5pt solid #000;
-          padding: 2pt 4pt;
-          font-size: 8.5pt;
+          border: 0.75pt solid #000;
+          padding: 1.5pt 2.25pt;
+          font-size: 10pt;
           line-height: 1.2;
           vertical-align: middle;
           color: #000;
@@ -1979,13 +2009,13 @@ function printFromModal() {
         .sop-b-title-wrap {
           display: flex;
           align-items: center;
-          gap: 8px;
-          padding-left: 3px;
+          justify-content: center;
+          gap: 2pt;
         }
         .sop-b-title-text {
-          font-size: 13.5pt;
+          font-size: 18pt;
           font-weight: 800;
-          letter-spacing: 2.5px;
+          letter-spacing: 0.5px;
           white-space: nowrap;
         }
         .sop-b-body {
@@ -1993,39 +2023,39 @@ function printFromModal() {
           flex: 1 1 auto;
           border-collapse: collapse;
           table-layout: fixed;
-          border: 1.8pt solid #000;
+          border: 0.75pt solid #000;
         }
         .sop-b-body-compact {
           flex: 0 0 auto !important;
         }
         .sop-b-body td {
           vertical-align: top;
-          font-size: 8pt;
+          font-size: 9pt;
           line-height: 1.28;
-          padding: 0.6pt 4pt;
+          padding: 0.8pt 2.25pt;
           color: #000;
           word-break: keep-all;
           overflow-wrap: break-word;
         }
         .sop-b-vbar {
           background-color: #CCFFCC !important;
-          border-right: 0.6pt solid #000;
-          border-left: 1.2pt solid #000;
+          border-right: 0.75pt solid #000;
+          border-left: 0.75pt solid #000;
           text-align: center;
-          vertical-align: middle !important;
+          vertical-align: top !important;
           font-weight: 800;
-          font-size: 8.2pt;
+          font-size: 9pt;
           line-height: 1.28;
-          padding: 2.5pt 1pt !important;
+          padding: 3pt 1pt !important;
         }
         .sop-b-vbar-left {
           border-left: none !important;
         }
         .sop-b-divider-row td {
-          border-top: 1.5pt solid #000 !important;
+          border-top: 0.75pt solid #000 !important;
         }
         .sop-b-cell-left {
-          border-right: 1.2pt solid #000;
+          border-right: 0.75pt solid #000;
         }
         .sop-b-img-box {
           margin: 2pt 0;
@@ -2037,12 +2067,19 @@ function printFromModal() {
           display: inline-block;
         }
         .sop-b-footer-sh {
-          text-align: center;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
           font-size: 8pt;
           font-weight: 600;
-          margin-top: 1mm;
+          margin-top: 1.2mm;
           color: #000;
           flex-shrink: 0;
+        }
+        .sop-b-footer-sheetname {
+          color: #404040;
+          font-size: 8pt;
+          font-weight: 400;
         }
         /* Hidden measurement staging box matching printable width */
         #measureStage {
@@ -2094,8 +2131,8 @@ function printFromModal() {
           <span id="pageCountBadge" class="page-badge">총 1페이지</span>
           <div class="pad-control-group">
             <span class="pad-label">서식 타입:</span>
-            <button type="button" id="pTplA" class="pad-btn" onclick="switchPrintTemplate('A')">A타입 (Word 가로형 표준)</button>
-            <button type="button" id="pTplB" class="pad-btn" onclick="switchPrintTemplate('B')">B타입 (Excel 세로형)</button>
+            <button type="button" id="pTplB" class="pad-btn" onclick="switchPrintTemplate('B')">최종통합본 인쇄용 (세로형 표준)</button>
+            <button type="button" id="pTplA" class="pad-btn" onclick="switchPrintTemplate('A')">Word 샘플 (가로형)</button>
           </div>
           <div class="pad-control-group">
             <span class="pad-label">여백 규정:</span>
@@ -2105,14 +2142,14 @@ function printFromModal() {
           </div>
         </div>
         <div class="toolbar-tip">
-          💡 <strong>A타입(Word 가로형 통합표) / B타입(Excel 세로형)</strong> 실시간 전환 가능 &bull; 인쇄 설정에서 <strong>[배경 그래픽]</strong>을 켜주세요.
+          💡 <strong>공사팀_안전작업표준서_1-247_최종통합본_시트명표시_인쇄용.docx</strong> 템플릿 1:1 반영 &bull; 인쇄 설정에서 <strong>[배경 그래픽]</strong>을 켜주세요.
         </div>
       </aside>
       <div id="measureStage"></div>
       <div id="paperContainer" class="paper-container"></div>
       <script>
         const SOP_DATA = ${payloadJson};
-        let activeTpl = SOP_DATA.tpl || 'A';
+        let activeTpl = SOP_DATA.tpl || 'B';
 
         function buildOptionATableHtml(upLeftSlice, upRightSlice, loLeftSlice, loRightSlice, includeUpper, isCompactHeight) {
           const colgroup = '<colgroup><col style="width:17.817%;"><col style="width:17.818%;"><col style="width:14.365%;"><col style="width:14.365%;"><col style="width:17.817%;"><col style="width:17.818%;"></colgroup>';
@@ -2255,17 +2292,17 @@ function printFromModal() {
             const isDiv = (idx === 0 && upSpan > 0);
             rowsHtml += '<tr class="sop-b-lo-row' + (isDiv ? ' sop-b-divider-row' : '') + '" data-lo-idx="' + idx + '" style="min-height:' + row.hPx + 'px;">';
             if (idx === 0) {
-              rowsHtml += '<td rowspan="' + loSpan + '" class="sop-b-vbar sop-b-vbar-left">③<br><br>작<br><br>업<br><br>순<br><br>서</td>';
+              rowsHtml += '<td rowspan="' + loSpan + '" class="sop-b-vbar sop-b-vbar-left">③<br>작<br>업<br>순<br>서</td>';
             }
             rowsHtml += '<td class="sop-b-cell-left" style="height:' + row.hPx + 'px;">' + (row.leftHtml || '&nbsp;') + '</td>';
             if (idx === 0) {
-              rowsHtml += '<td rowspan="' + loSpan + '" class="sop-b-vbar">④<br><br>안<br><br>전<br><br>작<br><br>업<br><br>순<br><br>서</td>';
+              rowsHtml += '<td rowspan="' + loSpan + '" class="sop-b-vbar">④<br>안<br>전<br>작<br>업<br>순<br>서</td>';
             }
             rowsHtml += '<td style="height:' + row.hPx + 'px;">' + (row.rightHtml || '&nbsp;') + '</td></tr>';
           });
 
           const cls = isCompactHeight ? 'sop-b-body sop-b-body-compact' : 'sop-b-body';
-          return '<table class="' + cls + '"><colgroup><col style="width:3.6%;"><col style="width:46.4%;"><col style="width:3.6%;"><col style="width:46.4%;"></colgroup>' + rowsHtml + '</table>';
+          return '<table class="' + cls + '"><colgroup><col style="width:3.156%;"><col style="width:46.844%;"><col style="width:3.156%;"><col style="width:46.844%;"></colgroup>' + rowsHtml + '</table>';
         }
 
         function paginateOptionB() {
@@ -2338,17 +2375,22 @@ function printFromModal() {
           }
 
           const totalPages = pages.length;
+          const sheetNameEsc = SOP_DATA.sheetTitle ? String(SOP_DATA.sheetTitle).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : '';
           container.innerHTML = pages.map(function(pg, idx) {
             const pageNo = idx + 1;
             const isTrailingMultiPage = (totalPages > 1 && idx === totalPages - 1 && pg.loSlice.length < 34);
-            const compactStyle = isCompactSingle ? ' style="font-size:7.4pt;line-height:1.18;"' : '';
+            const compactStyle = isCompactSingle ? ' style="font-size:8pt;line-height:1.2;"' : '';
             const upCompact = isCompactSingle ? pg.upSlice.map(function(r) { return Object.assign({}, r, { hPx: Math.max(11, Math.round(r.hPx * 0.85)) }); }) : pg.upSlice;
             const loCompact = isCompactSingle ? pg.loSlice.map(function(r) { return Object.assign({}, r, { hPx: Math.max(11, Math.round(r.hPx * 0.85)) }); }) : pg.loSlice;
             return '<div class="a4-page">' +
               '<div class="sop-b-sheet"' + compactStyle + '>' +
                 SOP_DATA.headerBHtml +
                 buildBodyTableHtml(upCompact, loCompact, isTrailingMultiPage) +
-                '<div class="sop-b-footer-sh">' + pageNo + '/' + totalPages + ',SH</div>' +
+                '<div class="sop-b-footer-sh">' +
+                  '<span class="sop-b-footer-sheetname" style="visibility:hidden;">' + sheetNameEsc + '</span>' +
+                  '<span>' + pageNo + '/' + totalPages + ',SH</span>' +
+                  '<span class="sop-b-footer-sheetname">' + sheetNameEsc + '</span>' +
+                '</div>' +
               '</div>' +
             '</div>';
           }).join('');
