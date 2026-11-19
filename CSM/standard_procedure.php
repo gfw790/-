@@ -108,13 +108,14 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
         }
     } else {
         header('Content-Disposition: attachment; filename="CSM_standard_procedures_' . $year . '.csv"');
-        fputcsv($out, ['No.', '권호', '문서번호', '작업분류', '작업표준명', '상태', '개정차수', '제정일', '최종개정일', '관리이력', '작성자', '승인자']);
+        fputcsv($out, ['No.', '권호', '문서번호', '작업분류', '작업표준명', '페이지수', '상태', '개정차수', '제정일', '최종개정일', '관리이력', '작성자', '승인자']);
         $stmt = $db->prepare('SELECT * FROM csm_sop_master WHERE year = ? ORDER BY sop_no ASC, id ASC');
         $stmt->execute([$year]);
         while ($row = $stmt->fetch()) {
+            $pgCnt = max(1, (int)($row['page_count'] ?? 1));
             fputcsv($out, [
                 $row['sop_no'], $row['volume'], $row['job_plan_code'] ?: $row['doc_code'],
-                $row['category'], $row['title'], $row['status'] ?: '유효',
+                $row['category'], $row['title'], $pgCnt . 'P', $row['status'] ?: '유효',
                 'Rev.' . $row['revision_no'], $row['enact_date'], $row['revised_date'],
                 $row['change_reason'], $row['author_name'], $row['approver_name']
             ]);
@@ -287,6 +288,8 @@ $distRowsCount = (int)$db->query("SELECT COUNT(*) FROM csm_sop_distribution d JO
 $totalDbImages = (int)$db->query("SELECT COUNT(*) FROM csm_sop_images")->fetchColumn();
 $bodyDbImages = (int)$db->query("SELECT COUNT(*) FROM csm_sop_images WHERE role = 'body'")->fetchColumn();
 $backupCount = (int)$db->query("SELECT COUNT(*) FROM csm_sop_backup_log")->fetchColumn();
+$multiPageCount = (int)$db->query("SELECT COUNT(*) FROM csm_sop_master WHERE year = $year AND COALESCE(page_count, 1) > 1")->fetchColumn();
+$totalPrintPages = (int)$db->query("SELECT COALESCE(SUM(COALESCE(page_count, 1)), 0) FROM csm_sop_master WHERE year = $year AND status != '폐지'")->fetchColumn();
 
 // Categories & Volumes
 $categories = ['고압·수변전·전기', '전동기(Motor)', '계장·제어', '케이블·배관', '기계·설비정비', '고소·철탑·양중', '화기·용접', '일반안전'];
@@ -344,6 +347,8 @@ if ($statusFilter === 'active') {
     $where[] = "status = '폐지'";
 } elseif ($statusFilter === 'recent') {
     $where[] = "id IN (SELECT sop_id FROM csm_sop_revisions)";
+} elseif ($statusFilter === 'multipage') {
+    $where[] = "COALESCE(page_count, 1) > 1";
 }
 if ($search !== '') {
     $where[] = '(title LIKE ? OR doc_code LIKE ? OR job_plan_code LIKE ? OR CAST(sop_no AS TEXT) = ? OR pre_work_safety LIKE ? OR in_work_safety LIKE ? OR post_work_safety LIKE ?)';
@@ -431,6 +436,8 @@ $queryBase = http_build_query(array_filter([
     .sop-badge-upd { background: #fef3c7; color: #92400e; padding: 2px 7px; border-radius: 999px; font-size: 11px; font-weight: 800; }
     .sop-badge-del { background: #fee2e2; color: #991b1b; padding: 2px 7px; border-radius: 999px; font-size: 11px; font-weight: 800; }
     .sop-badge-img { background: #e0f2fe; color: #0369a1; padding: 2px 7px; border-radius: 999px; font-size: 11px; font-weight: 800; }
+    .sop-badge-pg1 { background: #f1f5f9; color: #475569; padding: 2px 8px; border-radius: 6px; font-size: 11.5px; font-weight: 700; border: 1px solid #cbd5e1; }
+    .sop-badge-pgn { background: #ede9fe; color: #5b21b6; padding: 2px 8px; border-radius: 6px; font-size: 11.5px; font-weight: 800; border: 1px solid #c4b5fd; }
     .sop-badge-vol { background: #e0e7ff; color: #1e40af; padding: 2px 7px; border-radius: 6px; font-size: 11px; font-weight: 700; }
     .sop-pagination {
       display: flex;
@@ -628,9 +635,10 @@ $queryBase = http_build_query(array_filter([
           <?php endforeach; ?>
         </select>
         <select name="status" class="sop-select" onchange="this.form.submit()">
-          <option value="active" <?= $statusFilter === 'active' ? 'selected' : '' ?>>유효 표준서만 (<?= $totalActive ?>)</option>
+          <option value="active" <?= $statusFilter === 'active' ? 'selected' : '' ?>>유효 표준서만 (<?= $totalActive ?>종 · 총 <?= $totalPrintPages ?>P)</option>
           <option value="all" <?= $statusFilter === 'all' ? 'selected' : '' ?>>전체 보기 (<?= $totalAll ?>)</option>
           <option value="recent" <?= $statusFilter === 'recent' ? 'selected' : '' ?>>2026 개정·신규·폐지 (<?= count($revsBySop) ?>)</option>
+          <option value="multipage" <?= $statusFilter === 'multipage' ? 'selected' : '' ?>>다중 페이지 문서 (2P 이상 · <?= $multiPageCount ?>건)</option>
           <option value="deprecated" <?= $statusFilter === 'deprecated' ? 'selected' : '' ?>>폐지 문서만 (<?= $totalDeprecated ?>)</option>
         </select>
         <input type="text" name="search" class="sop-input" placeholder="번호·문서코드·작업명·본문 검색" value="<?= $escape($search) ?>" style="width:240px;">
@@ -649,25 +657,27 @@ $queryBase = http_build_query(array_filter([
       <table class="sop-table">
         <thead>
           <tr>
-            <th style="width:62px;text-align:center;">No.</th>
-            <th style="width:74px;text-align:center;">권호</th>
-            <th style="width:115px;">문서번호</th>
-            <th style="width:125px;">작업분류</th>
+            <th style="width:58px;text-align:center;">No.</th>
+            <th style="width:70px;text-align:center;">권호</th>
+            <th style="width:112px;">문서번호</th>
+            <th style="width:120px;">작업분류</th>
             <th>표준작업절차서(SOP) 명 및 변경 요약</th>
-            <th style="width:82px;text-align:center;">개정차수</th>
-            <th style="width:105px;text-align:center;">등록/개정일</th>
-            <th style="width:110px;">담당/승인</th>
-            <th class="no-print" style="width:195px;text-align:center;">관리 및 인쇄</th>
+            <th style="width:82px;text-align:center;">페이지</th>
+            <th style="width:78px;text-align:center;">개정차수</th>
+            <th style="width:100px;text-align:center;">등록/개정일</th>
+            <th style="width:105px;">담당/승인</th>
+            <th class="no-print" style="width:190px;text-align:center;">관리 및 인쇄</th>
           </tr>
         </thead>
         <tbody>
           <?php if (empty($sops)): ?>
-            <tr><td colspan="9" style="text-align:center;padding:44px;color:var(--sop-muted);">조건에 해당하는 안전작업표준서가 없습니다.</td></tr>
+            <tr><td colspan="10" style="text-align:center;padding:44px;color:var(--sop-muted);">조건에 해당하는 안전작업표준서가 없습니다.</td></tr>
           <?php else: foreach ($sops as $sop):
             $sid = (int)$sop['id'];
             $isDep = (($sop['status'] ?? '유효') === '폐지');
             $hasRevs = !empty($revsBySop[$sid]);
             $imgCnt = count($imagesBySop[$sid] ?? []);
+            $pgCnt = max(1, (int)($sop['page_count'] ?? 1));
           ?>
             <tr class="sop-row-click <?= $isDep ? 'sop-row-deprecated' : '' ?>" onclick="onSopRowClick(event, <?= $sid ?>)">
               <td style="text-align:center;font-weight:800;color:#1e3a8a;"><?= (int)$sop['sop_no'] ?></td>
@@ -692,6 +702,13 @@ $queryBase = http_build_query(array_filter([
                 </div>
                 <?php if (!empty($sop['change_reason']) && $sop['change_reason'] !== '사내전환'): ?>
                   <div style="font-size:12px;color:#475569;margin-top:2px;">관리이력: <?= $escape($sop['change_reason']) ?></div>
+                <?php endif; ?>
+              </td>
+              <td style="text-align:center;white-space:nowrap;">
+                <?php if ($pgCnt > 1): ?>
+                  <span class="sop-badge-pgn" title="다중 페이지 표준서 (1/<?= $pgCnt ?>,SH ~ <?= $pgCnt ?>/<?= $pgCnt ?>,SH)"><?= $pgCnt ?>P <small style="font-weight:600;opacity:0.85;">(<?= $pgCnt ?>/<?= $pgCnt ?>)</small></span>
+                <?php else: ?>
+                  <span class="sop-badge-pg1" title="단일 페이지 표준서 (1/1,SH)">1P</span>
                 <?php endif; ?>
               </td>
               <td style="text-align:center;">
@@ -1447,12 +1464,14 @@ function buildOptionBSheetHtml(s, forPrint) {
   const headerHtml = buildOptionBHeaderHtml(s, forPrint);
   const { upList, loList } = prepareOptionBRows(s, forPrint);
   const bodyTableHtml = renderOptionBBodyTableHtml(upList, loList);
+  const pgCnt = Math.max(1, parseInt(s.page_count, 10) || 1);
+  const shLabel = pgCnt > 1 ? `총 ${pgCnt}페이지 (1/${pgCnt},SH ~ ${pgCnt}/${pgCnt},SH)` : '1/1,SH';
 
   return `
     <div class="sop-b-sheet">
       ${headerHtml}
       ${bodyTableHtml}
-      <div class="sop-b-footer-sh">1/1,SH</div>
+      <div class="sop-b-footer-sh">${shLabel}</div>
     </div>
   `;
 }
@@ -1460,7 +1479,8 @@ function buildOptionBSheetHtml(s, forPrint) {
 function viewSop(s) {
   currentViewingSop = s;
   const code = s.job_plan_code || s.doc_code || '';
-  document.getElementById('view_title').innerText = 'No.' + (s.sop_no || '') + ' · ' + (s.title || '') + (code ? ' [' + code + ']' : '');
+  const pgCnt = Math.max(1, parseInt(s.page_count, 10) || 1);
+  document.getElementById('view_title').innerText = 'No.' + (s.sop_no || '') + ' · ' + (s.title || '') + (code ? ' [' + code + ']' : '') + ' (' + pgCnt + '페이지)';
 
   let revHtml = '';
   if (s.revisions && s.revisions.length > 0) {
@@ -1853,10 +1873,16 @@ function printFromModal() {
           });
 
           const totalLoH = loHeights.reduce(function(a, b) { return a + b; }, 0);
+          const totalRowsCount = SOP_DATA.upList.length + SOP_DATA.loList.length;
 
-          // Check if everything fits on 1 page (allow tiny 6px tolerance so normal 1-page sheets never split unnecessarily)
+          // Standard 1-page sheets in Excel (<= 61 rows and within compact threshold) fit on 1 A4 page;
+          // If slightly taller than maxBodyH (up to +135px), compact row heights and font-size slightly so 1-page SOPs stay 1/1,SH.
+          let isCompactSingle = false;
           const pages = [];
-          if (upTotalH + totalLoH <= maxBodyH + 6 || SOP_DATA.loList.length <= 1) {
+          if ((upTotalH + totalLoH <= maxBodyH + 135 && totalRowsCount <= 61) || SOP_DATA.loList.length <= 1) {
+            if (upTotalH + totalLoH > maxBodyH) {
+              isCompactSingle = true;
+            }
             pages.push({ upSlice: SOP_DATA.upList, loSlice: SOP_DATA.loList });
           } else {
             // Split lower rows across multiple pages; Page 1 carries ①/② + first slice of ③/④, Page 2+ carries remaining slices of ③/④
@@ -1891,10 +1917,13 @@ function printFromModal() {
           const totalPages = pages.length;
           container.innerHTML = pages.map(function(pg, idx) {
             const pageNo = idx + 1;
+            const compactStyle = isCompactSingle ? ' style="font-size:7.4pt;line-height:1.18;"' : '';
+            const upCompact = isCompactSingle ? pg.upSlice.map(function(r) { return Object.assign({}, r, { hPx: Math.max(11, Math.round(r.hPx * 0.85)) }); }) : pg.upSlice;
+            const loCompact = isCompactSingle ? pg.loSlice.map(function(r) { return Object.assign({}, r, { hPx: Math.max(11, Math.round(r.hPx * 0.85)) }); }) : pg.loSlice;
             return '<div class="a4-page">' +
-              '<div class="sop-b-sheet">' +
+              '<div class="sop-b-sheet"' + compactStyle + '>' +
                 SOP_DATA.headerHtml +
-                buildBodyTableHtml(pg.upSlice, pg.loSlice) +
+                buildBodyTableHtml(upCompact, loCompact) +
                 '<div class="sop-b-footer-sh">' + pageNo + '/' + totalPages + ',SH</div>' +
               '</div>' +
             '</div>';

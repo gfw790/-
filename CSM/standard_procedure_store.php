@@ -74,6 +74,7 @@ function sop_db(): PDO
     try { $db->exec("ALTER TABLE csm_sop_master ADD COLUMN change_reason TEXT DEFAULT ''"); } catch (Throwable $e) {}
     try { $db->exec("ALTER TABLE csm_sop_master ADD COLUMN sheet_name TEXT DEFAULT ''"); } catch (Throwable $e) {}
     try { $db->exec("ALTER TABLE csm_sop_master ADD COLUMN layout_json TEXT"); } catch (Throwable $e) {}
+    try { $db->exec("ALTER TABLE csm_sop_master ADD COLUMN page_count INTEGER NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
 
     $db->exec('CREATE TABLE IF NOT EXISTS csm_sop_images (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
