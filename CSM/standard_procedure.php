@@ -475,14 +475,14 @@ $queryBase = http_build_query(array_filter([
       width: 100%;
       border-collapse: collapse;
       table-layout: fixed;
-      border: 2pt solid #000;
+      border: 1.5pt solid #000;
     }
     .sop-a-table th,
     .sop-a-table td {
-      border: 0.6pt solid #000;
-      padding: 6px 9px;
+      border: 0.5pt solid #000;
+      padding: 6px 8px;
       font-size: 12.5px;
-      line-height: 1.5;
+      line-height: 1.45;
       vertical-align: middle;
       color: #000;
       word-break: keep-all;
@@ -490,28 +490,30 @@ $queryBase = http_build_query(array_filter([
     }
     .sop-a-title-wrap {
       display: flex;
-      align-items: center;
-      gap: 12px;
-      padding-left: 4px;
+      align-items: flex-end;
+      gap: 10px;
+      padding-left: 2px;
     }
     .sop-a-title-text {
       font-size: 19px;
       font-weight: 800;
-      letter-spacing: 3px;
+      letter-spacing: 0.5px;
+      line-height: 1.15;
       white-space: nowrap;
     }
     .sop-a-meta-center {
       text-align: center;
       font-weight: 700;
       font-size: 12.5px;
+      line-height: 1.45;
     }
     .sop-a-sec-head {
       background-color: #E2EFDA !important;
       text-align: center;
       font-size: 13px !important;
       font-weight: 800;
-      letter-spacing: 2px;
-      padding: 6px 8px !important;
+      letter-spacing: 0.5px;
+      padding: 8px 8px !important;
       color: #000;
     }
     .sop-a-body-cell {
@@ -1540,7 +1542,11 @@ function renderOptionBBodyTableHtml(upSlice, loSlice) {
 }
 
 /**
- * Build Option A (Word 6열 가로형 통합표 서식) Header Rows (Rows 1 & 2)
+ * Build Option A (Word 6열 가로형 통합표 서식 - 안전작업표준서_Word샘플.docx 1:1 규격) Header Rows (Rows 1 & 2)
+ * Word XML cell widths (total 9864 dxa):
+ *  - Row 1: Cell 0 (gridSpan 3, 4932 dxa = 50.00%) | Cell 1 (gridSpan 1, 1417 dxa = 14.365%) | Cell 2 (gridSpan 2, 3515 dxa = 35.635%)
+ *  - Row 2: Cell 0 (gridSpan 2, 3515 dxa = 35.635%) | Cell 1 (gridSpan 1, 1417 dxa = 14.365%) | Cell 2 (gridSpan 1, 1417 dxa = 14.365%) | Cell 3 (gridSpan 2, 3515 dxa = 35.635%)
+ *  - Resulting 6-col grid proportions: [17.817%, 17.818%, 14.365%, 14.365%, 17.817%, 17.818%]
  */
 function buildOptionAHeaderRowsHtml(s, forPrint) {
   const code = s.job_plan_code || s.doc_code || '';
@@ -1553,37 +1559,38 @@ function buildOptionAHeaderRowsHtml(s, forPrint) {
   const teamPerson = rawAuthor.includes('/')
     ? rawAuthor
     : rawAuthor.replace(/^공사팀\s+/, '공사팀 / ');
+  const logoSize = forPrint ? '13mm' : '46px';
   const logoHtml = COMPANY_LOGO
-    ? `<img src="${COMPANY_LOGO}" alt="현대기전" style="height:${forPrint ? '26px' : '24px'};width:auto;display:block;flex-shrink:0;">`
+    ? `<img src="${COMPANY_LOGO}" alt="현대기전" style="width:${logoSize};height:${logoSize};object-fit:contain;display:block;flex-shrink:0;">`
     : '';
 
   return `
-    <tr>
-      <td colspan="3" style="text-align:left;padding:${forPrint ? '6pt 8pt' : '8px 10px'};">
+    <tr style="height:${forPrint ? '21mm' : '74px'};">
+      <td colspan="3" style="text-align:left;vertical-align:middle;padding:${forPrint ? '3.5mm 3mm 3.5mm 3.5mm' : '10px 12px'};">
         <div class="sop-a-title-wrap">
           ${logoHtml}
-          <span class="sop-a-title-text">안 전 작 업 표 준 서</span>
+          <span class="sop-a-title-text">&nbsp;안 전 작 업 표 준 서</span>
         </div>
       </td>
-      <td colspan="1" class="sop-a-meta-center">
-        <div style="line-height:1.25;">NO</div>
-        <div style="line-height:1.35;margin-top:2px;">${escHtml(code)}</div>
+      <td colspan="1" class="sop-a-meta-center" style="font-size:${forPrint ? '9.5pt' : '13px'};">
+        <div style="line-height:1.45;">NO</div>
+        <div style="line-height:1.45;word-break:break-all;">${escHtml(code)}</div>
       </td>
-      <td colspan="2" class="sop-a-meta-center">
+      <td colspan="2" class="sop-a-meta-center" style="font-size:${forPrint ? '9.5pt' : '13px'};">
         Team/Person: ${escHtml(teamPerson)}
       </td>
     </tr>
-    <tr>
-      <td colspan="2" style="text-align:left;font-weight:700;">
+    <tr style="height:${forPrint ? '14mm' : '50px'};">
+      <td colspan="2" style="text-align:left;vertical-align:middle;font-weight:700;font-size:${forPrint ? '9.5pt' : '13px'};padding:${forPrint ? '2.5mm 3.5mm' : '8px 12px'};line-height:1.45;">
         작업명: ${escHtml(s.title)}
       </td>
-      <td colspan="1" class="sop-a-meta-center">
+      <td colspan="1" class="sop-a-meta-center" style="font-size:${forPrint ? '9pt' : '12.5px'};">
         ${escHtml(datePrefix)}: ${escHtml(dateDot)}
       </td>
-      <td colspan="1" class="sop-a-meta-center">
+      <td colspan="1" class="sop-a-meta-center" style="font-size:${forPrint ? '9pt' : '12.5px'};">
         Rev': ${escHtml(revLabel)}
       </td>
-      <td colspan="2" class="sop-a-meta-center">
+      <td colspan="2" class="sop-a-meta-center" style="font-size:${forPrint ? '9pt' : '12.5px'};">
         이력: ${escHtml(historyText)}
       </td>
     </tr>
@@ -1622,12 +1629,12 @@ function buildOptionASheetHtml(s, forPrint) {
     <div class="sop-a-sheet">
       <table class="sop-a-table">
         <colgroup>
-          <col style="width:16.6667%;">
-          <col style="width:16.6667%;">
-          <col style="width:16.6667%;">
-          <col style="width:16.6667%;">
-          <col style="width:16.6667%;">
-          <col style="width:16.6667%;">
+          <col style="width:17.817%;">
+          <col style="width:17.818%;">
+          <col style="width:14.365%;">
+          <col style="width:14.365%;">
+          <col style="width:17.817%;">
+          <col style="width:17.818%;">
         </colgroup>
         ${headerRowsHtml}
         <tr>
@@ -1878,7 +1885,7 @@ function printFromModal() {
           overflow: hidden;
           position: relative;
         }
-        /* Option A (Word 6열 가로형 통합표 서식) Print Styles */
+        /* Option A (Word 6열 가로형 통합표 서식 - 안전작업표준서_Word샘플.docx 1:1 규격) Print Styles */
         .sop-a-sheet {
           width: 100%;
           height: 100%;
@@ -1891,16 +1898,16 @@ function printFromModal() {
           flex: 1 1 auto;
           border-collapse: collapse;
           table-layout: fixed;
-          border: 1.8pt solid #000;
+          border: 1.5pt solid #000;
         }
         .sop-a-table-compact {
           flex: 0 0 auto !important;
         }
         .sop-a-table th,
         .sop-a-table td {
-          border: 0.6pt solid #000;
-          padding: 4pt 6pt;
-          font-size: 8.8pt;
+          border: 0.5pt solid #000;
+          padding: 3.5pt 5.5pt;
+          font-size: 8.5pt;
           line-height: 1.42;
           vertical-align: middle;
           color: #000;
@@ -1909,36 +1916,38 @@ function printFromModal() {
         }
         .sop-a-title-wrap {
           display: flex;
-          align-items: center;
-          gap: 10px;
-          padding-left: 2px;
+          align-items: flex-end;
+          gap: 8px;
+          padding-left: 1px;
         }
         .sop-a-title-text {
-          font-size: 14.5pt;
+          font-size: 14pt;
           font-weight: 800;
-          letter-spacing: 3px;
+          letter-spacing: 0.5px;
+          line-height: 1.15;
           white-space: nowrap;
         }
         .sop-a-meta-center {
           text-align: center;
           font-weight: 700;
           font-size: 9pt;
+          line-height: 1.42;
         }
         .sop-a-sec-head {
           background-color: #E2EFDA !important;
           text-align: center;
           font-size: 9.5pt !important;
           font-weight: 800;
-          letter-spacing: 2px;
-          padding: 4.5pt 6pt !important;
+          letter-spacing: 0.5px;
+          padding: 5.5pt 6pt !important;
           color: #000;
-          height: 28px;
+          height: 9.5mm;
         }
         .sop-a-body-cell {
           vertical-align: top !important;
-          padding: 5.5pt 7pt !important;
-          font-size: 8.6pt;
-          line-height: 1.44;
+          padding: 4.5pt 5.5pt !important;
+          font-size: 8.5pt;
+          line-height: 1.42;
         }
         .sop-a-line {
           margin-bottom: 1.5pt;
@@ -2106,7 +2115,7 @@ function printFromModal() {
         let activeTpl = SOP_DATA.tpl || 'A';
 
         function buildOptionATableHtml(upLeftSlice, upRightSlice, loLeftSlice, loRightSlice, includeUpper, isCompactHeight) {
-          const colgroup = '<colgroup><col style="width:16.6667%;"><col style="width:16.6667%;"><col style="width:16.6667%;"><col style="width:16.6667%;"><col style="width:16.6667%;"><col style="width:16.6667%;"></colgroup>';
+          const colgroup = '<colgroup><col style="width:17.817%;"><col style="width:17.818%;"><col style="width:14.365%;"><col style="width:14.365%;"><col style="width:17.817%;"><col style="width:17.818%;"></colgroup>';
           let rows = SOP_DATA.headerARowsHtml;
           if (includeUpper) {
             const uL = upLeftSlice.map(function(h) { return '<div class="sop-a-line">' + h + '</div>'; }).join('');
