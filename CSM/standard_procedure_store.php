@@ -73,9 +73,109 @@ function sop_db(): PDO
     try { $db->exec("ALTER TABLE csm_sop_master ADD COLUMN status TEXT DEFAULT '유효'"); } catch (Throwable $e) {}
     try { $db->exec("ALTER TABLE csm_sop_master ADD COLUMN change_reason TEXT DEFAULT ''"); } catch (Throwable $e) {}
     try { $db->exec("ALTER TABLE csm_sop_master ADD COLUMN sheet_name TEXT DEFAULT ''"); } catch (Throwable $e) {}
+    try { $db->exec("ALTER TABLE csm_sop_master ADD COLUMN layout_json TEXT"); } catch (Throwable $e) {}
+
+    $db->exec('CREATE TABLE IF NOT EXISTS csm_sop_images (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sop_id INTEGER NOT NULL,
+        role TEXT NOT NULL DEFAULT "body",
+        seq INTEGER NOT NULL DEFAULT 1,
+        side TEXT NOT NULL DEFAULT "R",
+        from_row INTEGER NOT NULL DEFAULT 0, from_col INTEGER NOT NULL DEFAULT 0,
+        from_row_off INTEGER NOT NULL DEFAULT 0, from_col_off INTEGER NOT NULL DEFAULT 0,
+        to_row INTEGER NOT NULL DEFAULT 0, to_col INTEGER NOT NULL DEFAULT 0,
+        to_row_off INTEGER NOT NULL DEFAULT 0, to_col_off INTEGER NOT NULL DEFAULT 0,
+        width_emu INTEGER NOT NULL DEFAULT 0, height_emu INTEGER NOT NULL DEFAULT 0,
+        px_w INTEGER NOT NULL DEFAULT 0, px_h INTEGER NOT NULL DEFAULT 0,
+        mime TEXT NOT NULL DEFAULT "image/png",
+        sha256 TEXT NOT NULL,
+        data BLOB NOT NULL,
+        orig_name TEXT NOT NULL DEFAULT "",
+        orig_sha256 TEXT NOT NULL DEFAULT "",
+        orig_data BLOB,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (sop_id) REFERENCES csm_sop_master(id) ON DELETE CASCADE
+    )');
+    $db->exec('CREATE INDEX IF NOT EXISTS idx_sop_images_sop ON csm_sop_images(sop_id)');
+
+    $db->exec('CREATE TABLE IF NOT EXISTS csm_sop_backup_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        file_name TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        size_bytes INTEGER NOT NULL DEFAULT 0,
+        sha256 TEXT NOT NULL DEFAULT "",
+        sop_count INTEGER NOT NULL DEFAULT 0,
+        image_count INTEGER NOT NULL DEFAULT 0,
+        note TEXT NOT NULL DEFAULT "",
+        created_at TEXT NOT NULL
+    )');
 
     // Example data is never inserted into an operational database automatically.
     return $db;
+}
+
+/**
+ * Consistent point-in-time snapshot of the SOP database (SQLite VACUUM INTO).
+ * kind: auto | manual | change
+ * Keeps the newest $keepAuto auto/change snapshots; manual snapshots are never pruned.
+ * @return array{ok:bool,file?:string,size?:int,error?:string}
+ */
+function sop_backup_db(string $kind = 'manual', string $note = '', int $keepAuto = 30): array
+{
+    try {
+        $db = sop_db();
+        $dir = __DIR__ . '/storage/backups';
+        if (!is_dir($dir) && !mkdir($dir, 0750, true) && !is_dir($dir)) {
+            return ['ok' => false, 'error' => '백업 폴더를 만들 수 없습니다.'];
+        }
+        $ht = $dir . '/.htaccess';
+        if (!is_file($ht)) {
+            @file_put_contents($ht, "Require all denied\n");
+        }
+        $kind = in_array($kind, ['auto', 'manual', 'change'], true) ? $kind : 'manual';
+        $name = 'standard_procedure_' . date('Ymd_His') . '_' . $kind . '.sqlite';
+        $path = $dir . '/' . $name;
+        $quoted = str_replace("'", "''", $path);
+        $db->exec("VACUUM INTO '" . $quoted . "'");
+        if (!is_file($path)) {
+            return ['ok' => false, 'error' => '백업 파일이 생성되지 않았습니다.'];
+        }
+        $size = (int)filesize($path);
+        $sha = (string)hash_file('sha256', $path);
+        $sopCount = (int)$db->query('SELECT COUNT(*) FROM csm_sop_master')->fetchColumn();
+        $imgCount = (int)$db->query('SELECT COUNT(*) FROM csm_sop_images')->fetchColumn();
+        $db->prepare('INSERT INTO csm_sop_backup_log (file_name, kind, size_bytes, sha256, sop_count, image_count, note, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, datetime("now","localtime"))')
+           ->execute([$name, $kind, $size, $sha, $sopCount, $imgCount, $note]);
+
+        // prune old auto/change snapshots
+        $old = $db->query("SELECT id, file_name FROM csm_sop_backup_log WHERE kind IN ('auto','change') ORDER BY id DESC LIMIT -1 OFFSET " . max(1, $keepAuto))->fetchAll();
+        foreach ($old as $o) {
+            $f = $dir . '/' . basename((string)$o['file_name']);
+            if (is_file($f)) {
+                @unlink($f);
+            }
+            $db->prepare('DELETE FROM csm_sop_backup_log WHERE id = ?')->execute([$o['id']]);
+        }
+        return ['ok' => true, 'file' => $name, 'size' => $size];
+    } catch (Throwable $e) {
+        return ['ok' => false, 'error' => $e->getMessage()];
+    }
+}
+
+/** Take one automatic snapshot per calendar day (called on page load). */
+function sop_backup_daily(): void
+{
+    try {
+        $db = sop_db();
+        $has = (int)$db->query("SELECT COUNT(*) FROM csm_sop_backup_log WHERE date(created_at) = date('now','localtime')")->fetchColumn();
+        $sop = (int)$db->query('SELECT COUNT(*) FROM csm_sop_master')->fetchColumn();
+        if ($has === 0 && $sop > 0) {
+            sop_backup_db('auto', '일일 자동 백업');
+        }
+    } catch (Throwable $e) {
+        // never block the page on backup problems
+    }
 }
 
 function sop_seed_defaults(PDO $db): void

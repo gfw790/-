@@ -5,16 +5,66 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/standard_procedure_store.php';
 
 $user = csm_require_auth();
+$db = sop_db();
+
+// 1. Direct DB image streaming endpoint (?img_id=<id>)
+if (isset($_GET['img_id'])) {
+    $imgId = filter_var($_GET['img_id'], FILTER_VALIDATE_INT) ?: 0;
+    if ($imgId <= 0) {
+        http_response_code(404);
+        exit;
+    }
+    $stmt = $db->prepare('SELECT mime, sha256, data FROM csm_sop_images WHERE id = ?');
+    $stmt->execute([$imgId]);
+    $imgRow = $stmt->fetch();
+    if (!$imgRow || empty($imgRow['data'])) {
+        http_response_code(404);
+        exit;
+    }
+    $etag = '"' . ($imgRow['sha256'] ?: md5((string)$imgId)) . '"';
+    if (isset($_SERVER['HTTP_IF_NONE_MATCH']) && trim((string)$_SERVER['HTTP_IF_NONE_MATCH']) === $etag) {
+        http_response_code(304);
+        exit;
+    }
+    header('Content-Type: ' . ($imgRow['mime'] ?: 'image/png'));
+    header('Cache-Control: private, max-age=604800');
+    header('ETag: ' . $etag);
+    header('Content-Length: ' . strlen((string)$imgRow['data']));
+    echo $imgRow['data'];
+    exit;
+}
+
+// 2. Backup download endpoint (?download_backup=<file_name>)
+if (isset($_GET['download_backup'])) {
+    if (!auth_can_manage($user)) {
+        http_response_code(403);
+        exit('다운로드 권한이 없습니다.');
+    }
+    $fileName = basename((string)$_GET['download_backup']);
+    $filePath = __DIR__ . '/storage/backups/' . $fileName;
+    if ($fileName === '' || !preg_match('/^standard_procedure_[0-9A-Za-z_.-]+\.sqlite$/', $fileName) || !is_file($filePath)) {
+        http_response_code(404);
+        exit('백업 파일을 찾을 수 없습니다.');
+    }
+    header('Content-Type: application/x-sqlite3');
+    header('Content-Disposition: attachment; filename="' . $fileName . '"');
+    header('Content-Length: ' . (string)filesize($filePath));
+    readfile($filePath);
+    exit;
+}
+
 header('Cache-Control: no-store');
 $_SESSION['csm_standard_procedure_csrf'] ??= bin2hex(random_bytes(32));
 
+// Daily automatic DB backup snapshot
+sop_backup_daily();
+
 $escape = static fn($v): string => htmlspecialchars((string)($v ?? ''), ENT_QUOTES, 'UTF-8');
-$db = sop_db();
 
 $today = (new DateTimeImmutable('now', new DateTimeZone('Asia/Seoul')))->format('Y-m-d');
 $year = filter_var($_GET['year'] ?? 2026, FILTER_VALIDATE_INT) ?: 2026;
 $tab = $_GET['tab'] ?? 'list';
-if (!in_array($tab, ['list', 'revisions', 'distribution'], true)) {
+if (!in_array($tab, ['list', 'revisions', 'distribution', 'backups'], true)) {
     $tab = 'list';
 }
 $volume = trim((string)($_GET['volume'] ?? ''));
@@ -27,7 +77,7 @@ $perPage = (($_GET['show'] ?? '') === 'all') ? 500 : 50;
 $message = '';
 $error = '';
 
-// Logo base64 for A4 print (exact logo from Word SOP template)
+// Logo base64 for A4 print
 $logoPath = __DIR__ . '/assets/sop-word-logo.png';
 if (!file_exists($logoPath)) {
     $logoPath = __DIR__ . '/assets/policy-logo.png';
@@ -128,7 +178,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                     $emergency_action, $enact_date, $revised_date, $revision_no, $status, $is_active,
                     $change_reason, $author_name, $approver_name, $id
                 ]);
-                $message = '안전작업표준서가 수정되었습니다.';
+                sop_backup_db('change', '표준서 수정: No.' . $sop_no . ' ' . $title);
+                $message = '안전작업표준서가 수정되었으며 DB 백업 스냅샷이 자동 생성되었습니다.';
             } else {
                 if ($sop_no <= 0) {
                     $sop_no = (int)$db->query('SELECT COALESCE(MAX(sop_no), 0) + 1 FROM csm_sop_master')->fetchColumn();
@@ -163,7 +214,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                     $newSopId, $revision_no, $enact_date, '[신규] 사내 안전작업표준서 신규 제정',
                     $change_reason ?: ($title . ' 신규 등록'), $author_name, $approver_name
                 ]);
-                $message = '새로운 안전작업표준서(No.' . $sop_no . ')가 제정·등록되었습니다.';
+                sop_backup_db('change', '표준서 신규제정: No.' . $sop_no . ' ' . $title);
+                $message = '새로운 안전작업표준서(No.' . $sop_no . ')가 제정·등록되었으며 DB가 자동 백업되었습니다.';
             }
         } elseif ($action === 'add_revision') {
             $sop_id = filter_var($_POST['sop_id'] ?? 0, FILTER_VALIDATE_INT) ?: 0;
@@ -184,7 +236,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $db->prepare('UPDATE csm_sop_master SET revision_no = ?, revised_date = ?, status = ?, is_active = ?, change_reason = ?, updated_at = datetime("now","localtime") WHERE id = ?')
                ->execute([$rev_no, $rev_date, $new_status, $new_status === '유효' ? 1 : 0, $reason, $sop_id]);
 
-            $message = '제·개정 이력이 등록되었습니다 (Rev.' . $rev_no . ').';
+            sop_backup_db('change', '개정이력 등록: SOP #' . $sop_id . ' Rev.' . $rev_no);
+            $message = '제·개정 이력이 등록되었으며 DB 백업이 완료되었습니다 (Rev.' . $rev_no . ').';
         } elseif ($action === 'add_dist') {
             $sop_id = filter_var($_POST['sop_id'] ?? 0, FILTER_VALIDATE_INT) ?: 0;
             $dist_date = trim((string)($_POST['dist_date'] ?? $today));
@@ -206,8 +259,18 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $id = filter_var($_POST['id'] ?? 0, FILTER_VALIDATE_INT) ?: 0;
             if ($id > 0) {
                 $db->prepare('DELETE FROM csm_sop_master WHERE id = ?')->execute([$id]);
-                $message = '작업표준서가 삭제되었습니다.';
+                sop_backup_db('change', '표준서 삭제: ID #' . $id);
+                $message = '작업표준서가 삭제되었으며 DB 백업이 갱신되었습니다.';
             }
+        } elseif ($action === 'create_backup') {
+            $note = trim((string)($_POST['backup_note'] ?? '관리자 수동 백업'));
+            $res = sop_backup_db('manual', $note ?: '관리자 수동 백업');
+            if (!empty($res['ok'])) {
+                $message = 'DB 전체 백업(본문 252종 + 내장 이미지 BLOB 포함)이 생성되었습니다: ' . ($res['file'] ?? '');
+            } else {
+                $error = '백업 생성 실패: ' . ($res['error'] ?? '알 수 없는 오류');
+            }
+            $tab = 'backups';
         }
     } catch (Throwable $e) {
         $error = $e->getMessage();
@@ -221,6 +284,9 @@ $totalDeprecated = $totalAll - $totalActive;
 $revCount = (int)$db->query("SELECT COUNT(*) FROM csm_sop_revisions r JOIN csm_sop_master m ON m.id = r.sop_id WHERE m.year = $year")->fetchColumn();
 $distConfirmed = (int)$db->query("SELECT COALESCE(SUM(confirmed_count), 0) FROM csm_sop_distribution d JOIN csm_sop_master m ON m.id = d.sop_id WHERE m.year = $year")->fetchColumn();
 $distRowsCount = (int)$db->query("SELECT COUNT(*) FROM csm_sop_distribution d JOIN csm_sop_master m ON m.id = d.sop_id WHERE m.year = $year")->fetchColumn();
+$totalDbImages = (int)$db->query("SELECT COUNT(*) FROM csm_sop_images")->fetchColumn();
+$bodyDbImages = (int)$db->query("SELECT COUNT(*) FROM csm_sop_images WHERE role = 'body'")->fetchColumn();
+$backupCount = (int)$db->query("SELECT COUNT(*) FROM csm_sop_backup_log")->fetchColumn();
 
 // Categories & Volumes
 $categories = ['고압·수변전·전기', '전동기(Motor)', '계장·제어', '케이블·배관', '기계·설비정비', '고소·철탑·양중', '화기·용접', '일반안전'];
@@ -237,6 +303,28 @@ $revAllStmt->execute([$year]);
 $allRevisions = $revAllStmt->fetchAll();
 foreach ($allRevisions as $rv) {
     $revsBySop[(int)$rv['sop_id']][] = $rv;
+}
+
+// Body image metadata map per sop_id (without heavy BLOB data)
+$imagesBySop = [];
+$imgMetaStmt = $db->query("SELECT id, sop_id, role, seq, side, from_row, from_col, to_row, to_col, width_emu, height_emu, px_w, px_h, orig_name
+    FROM csm_sop_images
+    WHERE role = 'body'
+    ORDER BY sop_id ASC, from_row ASC, seq ASC");
+foreach ($imgMetaStmt->fetchAll() as $im) {
+    $imagesBySop[(int)$im['sop_id']][] = [
+        'id' => (int)$im['id'],
+        'seq' => (int)$im['seq'],
+        'side' => (string)$im['side'],
+        'from_row' => (int)$im['from_row'],
+        'from_col' => (int)$im['from_col'],
+        'to_row' => (int)$im['to_row'],
+        'to_col' => (int)$im['to_col'],
+        'w_emu' => (int)$im['width_emu'],
+        'h_emu' => (int)$im['height_emu'],
+        'px_w' => (int)$im['px_w'],
+        'px_h' => (int)$im['px_h'],
+    ];
 }
 
 // Fetch filtered SOP list
@@ -285,6 +373,9 @@ $distStmt = $db->prepare('SELECT d.*, m.sop_no, m.volume, m.job_plan_code, m.doc
     ORDER BY d.dist_date DESC, d.id DESC');
 $distStmt->execute([$year]);
 $distributions = $distStmt->fetchAll();
+
+// Fetch backup logs for backups tab
+$backupLogs = $db->query('SELECT * FROM csm_sop_backup_log ORDER BY id DESC LIMIT 50')->fetchAll();
 
 // Light list for distribution modal dropdown
 $sopOptionsStmt = $db->prepare("SELECT id, sop_no, volume, job_plan_code, title FROM csm_sop_master WHERE year = ? AND status != '폐지' ORDER BY sop_no ASC");
@@ -339,6 +430,7 @@ $queryBase = http_build_query(array_filter([
     .sop-badge-new { background: #dcfce7; color: #166534; padding: 2px 7px; border-radius: 999px; font-size: 11px; font-weight: 800; }
     .sop-badge-upd { background: #fef3c7; color: #92400e; padding: 2px 7px; border-radius: 999px; font-size: 11px; font-weight: 800; }
     .sop-badge-del { background: #fee2e2; color: #991b1b; padding: 2px 7px; border-radius: 999px; font-size: 11px; font-weight: 800; }
+    .sop-badge-img { background: #e0f2fe; color: #0369a1; padding: 2px 7px; border-radius: 999px; font-size: 11px; font-weight: 800; }
     .sop-badge-vol { background: #e0e7ff; color: #1e40af; padding: 2px 7px; border-radius: 6px; font-size: 11px; font-weight: 700; }
     .sop-pagination {
       display: flex;
@@ -363,37 +455,93 @@ $queryBase = http_build_query(array_filter([
       font-size: 12.5px;
     }
     .sop-page-btn.active { background: #1e3a8a; color: #fff; border-color: #1e3a8a; }
-    .sop-view-2col {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      margin-bottom: 14px;
+
+    /* Option B (기존 엑셀 PDF 서식 1:1) Preview & Print Shared Styles */
+    .sop-b-sheet {
+      font-family: "Malgun Gothic", "맑은 고딕", Dotum, sans-serif;
+      color: #000;
+      background: #fff;
+      width: 100%;
     }
-    @media (max-width: 720px) {
-      .sop-view-2col { grid-template-columns: 1fr; }
+    .sop-b-head {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      border: 2pt solid #000;
+      margin-bottom: 4px;
     }
-    .sop-view-panel {
-      border: 1px solid #cbd5e1;
-      border-radius: 8px;
-      overflow: hidden;
-      background: #ffffff;
+    .sop-b-head td {
+      border: 0.6pt solid #000;
+      padding: 3px 5px;
+      font-size: 12px;
+      line-height: 1.25;
+      vertical-align: middle;
+      color: #000;
     }
-    .sop-view-panel-head {
-      background: #eff6ff;
-      color: #1e3a8a;
+    .sop-b-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-left: 4px;
+    }
+    .sop-b-title-text {
+      font-size: 18px;
       font-weight: 800;
-      font-size: 13px;
-      padding: 8px 12px;
-      border-bottom: 1px solid #cbd5e1;
+      letter-spacing: 3px;
+      white-space: nowrap;
     }
-    .sop-view-panel-body {
-      padding: 10px 12px;
-      font-size: 13px;
-      line-height: 1.6;
-      white-space: pre-wrap;
-      color: #1e293b;
-      max-height: 360px;
-      overflow-y: auto;
+    .sop-b-body {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      border: 2pt solid #000;
+    }
+    .sop-b-body td {
+      vertical-align: top;
+      font-size: 11.5px;
+      line-height: 1.38;
+      padding: 1px 6px;
+      color: #000;
+      word-break: keep-all;
+      overflow-wrap: break-word;
+    }
+    .sop-b-vbar {
+      background-color: #CCFFCC !important;
+      border-right: 0.7pt solid #000;
+      border-left: 1.3pt solid #000;
+      width: 26px;
+      text-align: center;
+      vertical-align: middle !important;
+      font-weight: 800;
+      font-size: 11.5px;
+      line-height: 1.35;
+      padding: 6px 2px !important;
+      user-select: none;
+    }
+    .sop-b-vbar-left {
+      border-left: none !important;
+    }
+    .sop-b-divider-row td {
+      border-top: 1.6pt solid #000 !important;
+    }
+    .sop-b-cell-left {
+      border-right: 1.3pt solid #000;
+    }
+    .sop-b-img-box {
+      margin: 4px 0;
+      text-align: center;
+    }
+    .sop-b-img-box img {
+      max-width: 94%;
+      height: auto;
+      display: inline-block;
+    }
+    .sop-b-footer-sh {
+      text-align: center;
+      font-size: 11.5px;
+      font-weight: 600;
+      margin-top: 2px;
+      color: #000;
     }
   </style>
 </head>
@@ -408,10 +556,11 @@ $queryBase = http_build_query(array_filter([
         안전작업절차서·작업표준서(SOP) 관리
         <span class="sop-badge-eval">배점 2점 · 공사팀 최종본(01~06권)</span>
       </h1>
-      <p class="sop-subtitle">현대기전 공사팀 안전작업표준서 <?= number_format($totalActive) ?>종(유효)의 절차 본문, 2026년 제·개정 이력 및 근로자 배포·열람을 통합 관리합니다.</p>
+      <p class="sop-subtitle">현대기전 공사팀 안전작업표준서 <?= number_format($totalActive) ?>종(유효)의 절차 본문, 내장 도해·사진(<?= number_format($bodyDbImages) ?>건 DB 내장), 제·개정 이력 및 DB 백업을 통합 관리합니다.</p>
     </div>
     <div class="sop-actions no-print">
       <a href="?<?= $escape($queryBase) ?>&amp;export=csv" class="sop-btn sop-btn-outline">📊 Excel/CSV 내보내기</a>
+      <a href="?year=<?= $year ?>&amp;tab=backups" class="sop-btn sop-btn-outline">💾 DB 백업 (<?= $backupCount ?>)</a>
       <button type="button" class="sop-btn sop-btn-outline" onclick="openDistModal(0)">📢 배포 기록</button>
       <button type="button" class="sop-btn sop-btn-primary" onclick="openSopModal()">+ 새 표준서 제정</button>
     </div>
@@ -445,10 +594,10 @@ $queryBase = http_build_query(array_filter([
       <div class="sop-metric-value"><?= number_format($revCount) ?>건</div>
       <div class="sop-metric-sub">개정 대장 및 변경사유 추적 관리</div>
     </a>
-    <a href="?year=<?= $year ?>&amp;tab=distribution" class="sop-metric-card" style="text-decoration:none;color:inherit;">
-      <div class="sop-metric-title">근로자 배포·열람 확인</div>
-      <div class="sop-metric-value"><?= number_format($distConfirmed) ?>명</div>
-      <div class="sop-metric-sub">배포 이력 <?= number_format($distRowsCount) ?>건 등록됨</div>
+    <a href="?year=<?= $year ?>&amp;tab=backups" class="sop-metric-card" style="text-decoration:none;color:inherit;">
+      <div class="sop-metric-title">DB 이미지 내장 · 백업</div>
+      <div class="sop-metric-value"><?= number_format($totalDbImages) ?>개</div>
+      <div class="sop-metric-sub">본문 도해 <?= number_format($bodyDbImages) ?>개 · 스냅샷 <?= number_format($backupCount) ?>회</div>
     </a>
   </div>
 
@@ -457,6 +606,7 @@ $queryBase = http_build_query(array_filter([
     <a href="?year=<?= $year ?>&amp;tab=list" class="sop-tab <?= $tab === 'list' ? 'active' : '' ?>">📋 표준서 전체목록 (<?= number_format($totalAll) ?>)</a>
     <a href="?year=<?= $year ?>&amp;tab=revisions" class="sop-tab <?= $tab === 'revisions' ? 'active' : '' ?>">📝 제·개정 이력 대장 (<?= number_format($revCount) ?>)</a>
     <a href="?year=<?= $year ?>&amp;tab=distribution" class="sop-tab <?= $tab === 'distribution' ? 'active' : '' ?>">📢 근로자 배포·열람 대장 (<?= number_format($distRowsCount) ?>)</a>
+    <a href="?year=<?= $year ?>&amp;tab=backups" class="sop-tab <?= $tab === 'backups' ? 'active' : '' ?>">💾 DB 백업 관리 (<?= number_format($backupCount) ?>)</a>
   </div>
 
   <?php if ($tab === 'list'): ?>
@@ -490,7 +640,7 @@ $queryBase = http_build_query(array_filter([
         <?php endif; ?>
       </form>
       <div style="font-size:12.5px;color:#64748b;font-weight:600;">
-        조회 결과: <strong style="color:#1e3a8a;"><?= number_format($filteredTotal) ?>건</strong> (행 클릭 시 상세 절차 조회)
+        조회 결과: <strong style="color:#1e3a8a;"><?= number_format($filteredTotal) ?>건</strong> (행 클릭 시 원본 서식 조회 및 인쇄)
       </div>
     </div>
 
@@ -517,8 +667,7 @@ $queryBase = http_build_query(array_filter([
             $sid = (int)$sop['id'];
             $isDep = (($sop['status'] ?? '유효') === '폐지');
             $hasRevs = !empty($revsBySop[$sid]);
-            $sopPayload = $sop;
-            $sopPayload['revisions'] = $revsBySop[$sid] ?? [];
+            $imgCnt = count($imagesBySop[$sid] ?? []);
           ?>
             <tr class="sop-row-click <?= $isDep ? 'sop-row-deprecated' : '' ?>" onclick="onSopRowClick(event, <?= $sid ?>)">
               <td style="text-align:center;font-weight:800;color:#1e3a8a;"><?= (int)$sop['sop_no'] ?></td>
@@ -536,6 +685,9 @@ $queryBase = http_build_query(array_filter([
                     <span class="sop-badge-new">신규</span>
                   <?php elseif ($hasRevs): ?>
                     <span class="sop-badge-upd">개정</span>
+                  <?php endif; ?>
+                  <?php if ($imgCnt > 0): ?>
+                    <span class="sop-badge-img" title="DB 내장 도해/사진 <?= $imgCnt ?>개">🖼️ 도해 <?= $imgCnt ?></span>
                   <?php endif; ?>
                 </div>
                 <?php if (!empty($sop['change_reason']) && $sop['change_reason'] !== '사내전환'): ?>
@@ -596,6 +748,9 @@ $queryBase = http_build_query(array_filter([
       foreach ($sops as $item) {
           $sid = (int)$item['id'];
           $item['revisions'] = $revsBySop[$sid] ?? [];
+          $item['images'] = $imagesBySop[$sid] ?? [];
+          $item['layout'] = !empty($item['layout_json']) ? json_decode((string)$item['layout_json'], true) : null;
+          unset($item['layout_json']);
           $sopJsMap[$sid] = $item;
       }
     ?>
@@ -685,6 +840,64 @@ $queryBase = http_build_query(array_filter([
               <td><?= $escape($d['dist_method']) ?></td>
               <td style="text-align:center;font-weight:800;color:#059669;"><?= (int)$d['confirmed_count'] ?>명</td>
               <td><?= $escape($d['distributor_name']) ?></td>
+            </tr>
+          <?php endforeach; endif; ?>
+        </tbody>
+      </table>
+    </div>
+
+  <?php elseif ($tab === 'backups'): ?>
+    <!-- TAB 4: DB BACKUP MANAGEMENT -->
+    <div class="sop-table-card">
+      <div style="padding:16px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;background:#f8fafc;">
+        <div>
+          <div style="font-size:15px;font-weight:800;color:#1e3a8a;">💾 안전작업표준서 SQLite 데이터베이스 통합 백업 관리</div>
+          <div style="font-size:12.5px;color:#475569;margin-top:4px;">
+            전체 표준서 본문(<?= number_format($totalAll) ?>종), 행 정렬 레이아웃(`layout_json`), 내장 이미지 BLOB(<?= number_format($totalDbImages) ?>개: 본문 도해 <?= number_format($bodyDbImages) ?>개 + 로고 <?= number_format($totalDbImages - $bodyDbImages) ?>개)이 단일 DB 파일에 완전 내장되어 원본 엑셀 유실과 무관하게 영구 보존됩니다.
+          </div>
+        </div>
+        <form method="post" style="display:flex;gap:8px;align-items:center;">
+          <input type="hidden" name="csrf" value="<?= $escape($_SESSION['csm_standard_procedure_csrf']) ?>">
+          <input type="hidden" name="action" value="create_backup">
+          <input type="text" name="backup_note" class="sop-input" placeholder="백업 메모 (예: 2026년 11월 개정 완료본)" style="width:240px;">
+          <button type="submit" class="sop-btn sop-btn-primary">+ 즉시 DB 백업 생성</button>
+        </form>
+      </div>
+      <table class="sop-table">
+        <thead>
+          <tr>
+            <th style="width:155px;text-align:center;">백업 일시</th>
+            <th style="width:90px;text-align:center;">구분</th>
+            <th>백업 파일명 및 무결성 해시 (SHA-256)</th>
+            <th style="width:95px;text-align:center;">용량</th>
+            <th style="width:110px;text-align:center;">표준서 / 이미지</th>
+            <th style="width:220px;">백업 사유 / 메모</th>
+            <th style="width:115px;text-align:center;">다운로드</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php if (empty($backupLogs)): ?>
+            <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--sop-muted);">생성된 백업 이력이 없습니다.</td></tr>
+          <?php else: foreach ($backupLogs as $bk):
+            $kindLabel = $bk['kind'] === 'manual' ? '수동 영구' : ($bk['kind'] === 'change' ? '변경시 자동' : '일일 자동');
+            $kindStyle = $bk['kind'] === 'manual' ? 'background:#dcfce7;color:#166534;' : ($bk['kind'] === 'change' ? 'background:#fef3c7;color:#92400e;' : 'background:#e0e7ff;color:#1e40af;');
+            $sizeMb = number_format(((int)$bk['size_bytes']) / 1048576, 2) . ' MB';
+          ?>
+            <tr>
+              <td style="text-align:center;font-weight:700;font-size:12.5px;"><?= $escape($bk['created_at']) ?></td>
+              <td style="text-align:center;"><span style="<?= $kindStyle ?>padding:3px 8px;border-radius:999px;font-size:11.5px;font-weight:800;"><?= $kindLabel ?></span></td>
+              <td>
+                <div style="font-weight:700;font-size:13px;color:#0f172a;"><?= $escape($bk['file_name']) ?></div>
+                <div style="font-family:monospace;font-size:11px;color:#64748b;">SHA256: <?= $escape(substr((string)$bk['sha256'], 0, 24)) ?>...</div>
+              </td>
+              <td style="text-align:center;font-weight:700;"><?= $sizeMb ?></td>
+              <td style="text-align:center;font-size:12.5px;">
+                <strong><?= (int)$bk['sop_count'] ?>종</strong> / <?= (int)$bk['image_count'] ?>개
+              </td>
+              <td style="font-size:12.5px;color:#334155;"><?= $escape($bk['note']) ?></td>
+              <td style="text-align:center;">
+                <a href="?download_backup=<?= urlencode((string)$bk['file_name']) ?>" class="sop-btn sop-btn-outline sop-btn-sm">⬇ 다운로드</a>
+              </td>
             </tr>
           <?php endforeach; endif; ?>
         </tbody>
@@ -906,17 +1119,17 @@ $queryBase = http_build_query(array_filter([
   </div>
 </div>
 
-<!-- MODAL: VIEW SOP DETAIL -->
+<!-- MODAL: VIEW SOP DETAIL (Option B Form Preview) -->
 <div id="modalView" class="sop-modal-backdrop" style="display:none;" onclick="closeViewModal()">
-  <div class="sop-modal" style="max-width:960px;width:95%;" onclick="event.stopPropagation()">
+  <div class="sop-modal" style="max-width:980px;width:96%;" onclick="event.stopPropagation()">
     <div class="sop-modal-header">
       <h3 id="view_title">표준작업절차서 상세조회</h3>
       <button type="button" class="sop-modal-close" onclick="closeViewModal()">&times;</button>
     </div>
-    <div class="sop-modal-body" id="view_body" style="font-size:13.5px;line-height:1.6;"></div>
+    <div class="sop-modal-body" id="view_body" style="font-size:13px;line-height:1.5;max-height:78vh;overflow-y:auto;"></div>
     <div class="sop-modal-footer" style="justify-content:space-between;">
       <div style="display:flex;gap:8px;">
-        <button type="button" class="sop-btn sop-btn-primary" onclick="printFromModal()">🖨️ A4 표준서 인쇄</button>
+        <button type="button" class="sop-btn sop-btn-primary" onclick="printFromModal()">🖨️ A4 표준서 인쇄 (원본 서식)</button>
         <button type="button" class="sop-btn sop-btn-outline" onclick="openRevFromView()">+ 개정 등록</button>
         <button type="button" class="sop-btn sop-btn-outline" onclick="openDistFromView()">📢 배포 기록</button>
       </div>
@@ -1028,15 +1241,198 @@ function closeDistModal() {
   document.getElementById('modalDist').style.display = 'none';
 }
 
+function formatDotDate(d) {
+  const m = String(d || '').match(/(\d{4})[-./](\d{1,2})[-./](\d{1,2})/);
+  if (!m) return d || '';
+  return m[1] + '. ' + m[2].padStart(2, '0') + '. ' + m[3].padStart(2, '0') + '.';
+}
+
+/**
+ * Render cell items from layout_json row ('l' or 'rt') with original indentation, red colors & bold runs.
+ */
+function renderSideCellsHtml(items, baseCol) {
+  if (!items || !items.length) return '';
+  return items.map(it => {
+    const colOffset = Math.max(0, (it.col || baseCol) - baseCol);
+    const padLeft = colOffset > 0 ? (colOffset * 14) : 0;
+    const runsHtml = (it.runs || []).map(run => {
+      let style = '';
+      if (run.b) style += 'font-weight:700;';
+      if (run.c) style += 'color:#' + escHtml(run.c) + ';';
+      const txt = escHtml(run.t || '').replace(/\r?\n/g, '<br>');
+      return style ? `<span style="${style}">${txt}</span>` : txt;
+    }).join('');
+    return `<div style="${padLeft ? 'padding-left:' + padLeft + 'px;' : ''}">${runsHtml}</div>`;
+  }).join('');
+}
+
+/**
+ * Build Option B (기존 엑셀 PDF 서식 1:1) HTML for both Modal Preview and A4 Print.
+ */
+function buildOptionBSheetHtml(s, forPrint) {
+  const code = s.job_plan_code || s.doc_code || '';
+  const isDep = (s.status === '폐지');
+  const revLabel = isDep ? '폐지' : String(s.revision_no ?? 0);
+  const dateLabel = (parseInt(s.revision_no, 10) > 0 || isDep) ? '사내개정일' : '사내등록일';
+  const dateDot = formatDotDate(s.revised_date || s.enact_date);
+  const historyText = s.change_reason || (isDep ? '폐지(타입변경삭제)' : '사내전환');
+  const rawAuthor = String(s.author_name || '공사팀 김남균').trim();
+  const authorParts = rawAuthor.split(/[\s/]+/).filter(Boolean);
+  const teamLine = authorParts[0] || '공사팀';
+  const personLine = authorParts.slice(1).join(' ') || '김남균';
+  const logoHtml = COMPANY_LOGO
+    ? `<img src="${COMPANY_LOGO}" alt="현대기전" style="height:${forPrint ? '23px' : '22px'};width:auto;display:block;">`
+    : '';
+
+  const imgs = Array.isArray(s.images) ? s.images : [];
+  const usedImgIds = new Set();
+
+  function renderImagesAtRow(side, rowNum) {
+    const matched = imgs.filter(im => im.side === side && im.from_row === rowNum);
+    if (!matched.length) return '';
+    return matched.map(im => {
+      usedImgIds.add(im.id);
+      const maxH = forPrint ? 210 : 230;
+      const wStyle = im.px_w ? `max-width:min(94%, ${Math.round(im.px_w * 0.78)}px);max-height:${maxH}px;` : `max-width:92%;max-height:${maxH}px;`;
+      return `<div class="sop-b-img-box"><img src="standard_procedure.php?img_id=${im.id}" alt="SOP 도해" style="${wStyle}"></div>`;
+    }).join('');
+  }
+
+  let bodyRowsHtml = '';
+  const lay = s.layout;
+
+  if (lay && Array.isArray(lay.up) && Array.isArray(lay.lo) && (lay.up.length > 0 || lay.lo.length > 0)) {
+    const upRows = lay.up;
+    const loRows = lay.lo;
+    const upSpan = Math.max(1, upRows.length);
+    const loSpan = Math.max(1, loRows.length);
+
+    upRows.forEach((rObj, idx) => {
+      const leftHtml = renderSideCellsHtml(rObj.l, 2) + renderImagesAtRow('L', rObj.r);
+      const rightHtml = renderSideCellsHtml(rObj.rt, 15) + renderImagesAtRow('R', rObj.r);
+      const hPx = forPrint ? Math.max(14, Math.round((rObj.h || 14.25) * 1.05)) : Math.max(16, Math.round((rObj.h || 14.25) * 1.15));
+      bodyRowsHtml += `<tr style="min-height:${hPx}px;">`;
+      if (idx === 0) {
+        bodyRowsHtml += `<td rowspan="${upSpan}" class="sop-b-vbar sop-b-vbar-left">①<br>작<br>업<br>준<br>비<br>사<br>항</td>`;
+      }
+      bodyRowsHtml += `<td class="sop-b-cell-left" style="height:${hPx}px;">${leftHtml || '&nbsp;'}</td>`;
+      if (idx === 0) {
+        bodyRowsHtml += `<td rowspan="${upSpan}" class="sop-b-vbar">②<br>안<br>전<br>일<br>반</td>`;
+      }
+      bodyRowsHtml += `<td style="height:${hPx}px;">${rightHtml || '&nbsp;'}</td></tr>`;
+    });
+
+    loRows.forEach((rObj, idx) => {
+      let leftHtml = renderSideCellsHtml(rObj.l, 2) + renderImagesAtRow('L', rObj.r);
+      let rightHtml = renderSideCellsHtml(rObj.rt, 15) + renderImagesAtRow('R', rObj.r);
+      if (idx === loRows.length - 1) {
+        // append any remaining unanchored images
+        imgs.forEach(im => {
+          if (!usedImgIds.has(im.id)) {
+            usedImgIds.add(im.id);
+            const tag = `<div class="sop-b-img-box"><img src="standard_procedure.php?img_id=${im.id}" alt="SOP 도해" style="max-width:92%;max-height:210px;"></div>`;
+            if (im.side === 'L') leftHtml += tag; else rightHtml += tag;
+          }
+        });
+      }
+      const hPx = forPrint ? Math.max(14, Math.round((rObj.h || 14.25) * 1.05)) : Math.max(16, Math.round((rObj.h || 14.25) * 1.15));
+      bodyRowsHtml += `<tr class="${idx === 0 ? 'sop-b-divider-row' : ''}" style="min-height:${hPx}px;">`;
+      if (idx === 0) {
+        bodyRowsHtml += `<td rowspan="${loSpan}" class="sop-b-vbar sop-b-vbar-left">③<br><br>작<br><br>업<br><br>순<br><br>서</td>`;
+      }
+      bodyRowsHtml += `<td class="sop-b-cell-left" style="height:${hPx}px;">${leftHtml || '&nbsp;'}</td>`;
+      if (idx === 0) {
+        bodyRowsHtml += `<td rowspan="${loSpan}" class="sop-b-vbar">④<br><br>안<br><br>전<br><br>작<br><br>업<br><br>순<br><br>서</td>`;
+      }
+      bodyRowsHtml += `<td style="height:${hPx}px;">${rightHtml || '&nbsp;'}</td></tr>`;
+    });
+  } else {
+    // Fallback for newly created SOPs without Excel layout_json
+    const preLines = String(s.pre_work_safety || '').split(/\r?\n/);
+    const genLines = String(s.danger_factors || '').split(/\r?\n/);
+    const upMax = Math.max(8, preLines.length, genLines.length);
+    for (let i = 0; i < upMax; i++) {
+      const lTxt = escHtml(preLines[i] || '');
+      const rRaw = genLines[i] || '';
+      const isRed = /^(1\.|2\.|\*)/.test(rRaw.trim()) || /LOTOTO|위험성\s*평가|전도\s*주의/.test(rRaw);
+      const rTxt = isRed ? `<span style="color:#FF0000;font-weight:700;">${escHtml(rRaw)}</span>` : escHtml(rRaw);
+      bodyRowsHtml += `<tr>`;
+      if (i === 0) bodyRowsHtml += `<td rowspan="${upMax}" class="sop-b-vbar sop-b-vbar-left">①<br>작<br>업<br>준<br>비<br>사<br>항</td>`;
+      bodyRowsHtml += `<td class="sop-b-cell-left" style="height:18px;">${lTxt || '&nbsp;'}</td>`;
+      if (i === 0) bodyRowsHtml += `<td rowspan="${upMax}" class="sop-b-vbar">②<br>안<br>전<br>일<br>반</td>`;
+      bodyRowsHtml += `<td style="height:18px;">${rTxt || '&nbsp;'}</td></tr>`;
+    }
+    const inLines = String(s.in_work_safety || '').split(/\r?\n/);
+    const postLines = String(s.post_work_safety || '').split(/\r?\n/);
+    const loMax = Math.max(26, inLines.length, postLines.length);
+    for (let i = 0; i < loMax; i++) {
+      bodyRowsHtml += `<tr class="${i === 0 ? 'sop-b-divider-row' : ''}">`;
+      if (i === 0) bodyRowsHtml += `<td rowspan="${loMax}" class="sop-b-vbar sop-b-vbar-left">③<br><br>작<br><br>업<br><br>순<br><br>서</td>`;
+      bodyRowsHtml += `<td class="sop-b-cell-left" style="height:18px;">${escHtml(inLines[i] || '') || '&nbsp;'}</td>`;
+      if (i === 0) bodyRowsHtml += `<td rowspan="${loMax}" class="sop-b-vbar">④<br><br>안<br><br>전<br><br>작<br><br>업<br><br>순<br><br>서</td>`;
+      bodyRowsHtml += `<td style="height:18px;">${escHtml(postLines[i] || '') || '&nbsp;'}</td></tr>`;
+    }
+  }
+
+  return `
+    <div class="sop-b-sheet">
+      <table class="sop-b-head">
+        <colgroup>
+          <col style="width:7%;">
+          <col style="width:35.5%;">
+          <col style="width:8.5%;">
+          <col style="width:11%;">
+          <col style="width:6.5%;">
+          <col style="width:7.5%;">
+          <col style="width:8.5%;">
+          <col style="width:15.5%;">
+        </colgroup>
+        <tr>
+          <td colspan="2" style="height:36px;">
+            <div class="sop-b-title-wrap">
+              ${logoHtml}
+              <span class="sop-b-title-text">안 전 작 업 표 준 서</span>
+            </div>
+          </td>
+          <td style="text-align:center;">NO</td>
+          <td style="text-align:center;font-weight:600;">${escHtml(code)}</td>
+          <td style="text-align:center;line-height:1.15;font-size:11px;">Team/<br>Person</td>
+          <td colspan="3" style="text-align:center;line-height:1.25;">${escHtml(teamLine)}<br>${escHtml(personLine)}</td>
+        </tr>
+        <tr>
+          <td style="text-align:center;height:26px;">작업명</td>
+          <td style="font-weight:800;font-size:13px;">${escHtml(s.title)}</td>
+          <td style="text-align:center;font-size:11px;">${escHtml(dateLabel)}</td>
+          <td style="text-align:center;font-weight:800;font-size:11.5px;">${escHtml(dateDot)}</td>
+          <td style="text-align:center;">Rev'</td>
+          <td style="text-align:center;font-weight:800;">${escHtml(revLabel)}</td>
+          <td style="text-align:center;font-size:11px;">관리이력</td>
+          <td style="text-align:center;font-weight:700;">${escHtml(historyText)}</td>
+        </tr>
+      </table>
+
+      <table class="sop-b-body">
+        <colgroup>
+          <col style="width:3.6%;">
+          <col style="width:46.4%;">
+          <col style="width:3.6%;">
+          <col style="width:46.4%;">
+        </colgroup>
+        ${bodyRowsHtml}
+      </table>
+      <div class="sop-b-footer-sh">1/1,SH</div>
+    </div>
+  `;
+}
+
 function viewSop(s) {
   currentViewingSop = s;
   const code = s.job_plan_code || s.doc_code || '';
-  const isDep = (s.status === '폐지');
   document.getElementById('view_title').innerText = 'No.' + (s.sop_no || '') + ' · ' + (s.title || '') + (code ? ' [' + code + ']' : '');
 
   let revHtml = '';
   if (s.revisions && s.revisions.length > 0) {
-    revHtml = '<div style="margin-top:12px;border:1px solid #fcd34d;background:#fffbeb;border-radius:8px;padding:10px 12px;">' +
+    revHtml = '<div style="margin-bottom:12px;border:1px solid #fcd34d;background:#fffbeb;border-radius:8px;padding:10px 12px;">' +
       '<div style="font-weight:800;font-size:12.5px;color:#92400e;margin-bottom:6px;">📝 제·개정 이력 (' + s.revisions.length + '건)</div>';
     s.revisions.forEach(r => {
       revHtml += '<div style="font-size:12.5px;color:#334155;padding:4px 0;border-top:1px dashed #fde68a;">' +
@@ -1046,44 +1442,7 @@ function viewSop(s) {
     revHtml += '</div>';
   }
 
-  let html = `
-    <div style="background:#f8fafc;padding:12px 14px;border-radius:8px;border:1px solid #cbd5e1;margin-bottom:14px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-      <div>
-        <strong>권호:</strong> ${escHtml(s.volume)} &nbsp;|&nbsp;
-        <strong>문서번호:</strong> ${escHtml(code)} &nbsp;|&nbsp;
-        <strong>분류:</strong> ${escHtml(s.category)} &nbsp;|&nbsp;
-        <strong>상태:</strong> <strong style="color:${isDep ? '#dc2626' : '#059669'};">${escHtml(s.status || '유효')}</strong> (Rev.${escHtml(s.revision_no)})
-      </div>
-      <div style="font-size:12.5px;color:#475569;">
-        등록/개정일: <strong>${escHtml(s.revised_date)}</strong> &nbsp;|&nbsp;
-        담당: <strong>${escHtml(s.author_name)}</strong> &nbsp;|&nbsp;
-        승인: <strong>${escHtml(s.approver_name)}</strong>
-      </div>
-    </div>
-    <div class="sop-view-2col">
-      <div class="sop-view-panel">
-        <div class="sop-view-panel-head">① 작업준비사항</div>
-        <div class="sop-view-panel-body">${escHtml(s.pre_work_safety)}</div>
-      </div>
-      <div class="sop-view-panel">
-        <div class="sop-view-panel-head" style="background:#fef2f2;color:#991b1b;">② 안전일반</div>
-        <div class="sop-view-panel-body">${escHtml(s.danger_factors)}</div>
-      </div>
-    </div>
-    <div class="sop-view-2col">
-      <div class="sop-view-panel">
-        <div class="sop-view-panel-head">③ 작업순서</div>
-        <div class="sop-view-panel-body">${escHtml(s.in_work_safety)}</div>
-      </div>
-      <div class="sop-view-panel">
-        <div class="sop-view-panel-head" style="background:#ecfdf5;color:#065f46;">④ 안전작업순서</div>
-        <div class="sop-view-panel-body">${escHtml(s.post_work_safety)}</div>
-      </div>
-    </div>
-    ${s.emergency_action ? `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 12px;font-size:12.5px;color:#991b1b;"><strong>🚨 비상시 조치요령:</strong> ${escHtml(s.emergency_action)}</div>` : ''}
-    ${revHtml}
-  `;
-  document.getElementById('view_body').innerHTML = html;
+  document.getElementById('view_body').innerHTML = revHtml + buildOptionBSheetHtml(s, false);
   document.getElementById('modalView').style.display = 'flex';
 }
 function closeViewModal() {
@@ -1112,40 +1471,10 @@ function printSopById(id) {
   printFromModal();
 }
 
-function formatDotDate(d) {
-  const m = String(d || '').match(/(\d{4})[-./](\d{1,2})[-./](\d{1,2})/);
-  if (!m) return d || '';
-  return m[1] + '. ' + m[2].padStart(2, '0') + '. ' + m[3].padStart(2, '0') + '.';
-}
-
-function formatSafetyGeneralHtml(raw) {
-  const lines = String(raw || '').split(/\r?\n/);
-  return lines.map(line => {
-    const trimmed = line.trim();
-    if (!trimmed) return '';
-    // Highlight key warning lines (LOTOTO, 위험성평가, 주의, 금지, 전도, 감전) in Word template red (#C00000)
-    const isHighlight = /^(1\.|2\.|\*)/.test(trimmed) || /LOTOTO|위험성\s*평가|전도\s*주의|금지|감전|추락/.test(trimmed);
-    return isHighlight
-      ? '<div style="color:#C00000;font-weight:700;">' + escHtml(line) + '</div>'
-      : '<div>' + escHtml(line) + '</div>';
-  }).join('');
-}
-
 function printFromModal() {
   if (!currentViewingSop) return;
   const s = currentViewingSop;
-  const code = s.job_plan_code || s.doc_code || '';
-  const isDep = (s.status === '폐지');
-  const revLabel = isDep ? '폐지' : String(s.revision_no ?? 0);
-  const datePrefix = (parseInt(s.revision_no, 10) > 0 || isDep) ? '개정' : '등록';
-  const dateDot = formatDotDate(s.revised_date || s.enact_date);
-  const historyText = s.change_reason || (isDep ? '폐지(타입변경삭제)' : '사내전환');
-  const teamPerson = (s.author_name || '공사팀 김남균').includes('/')
-    ? s.author_name
-    : (s.author_name || '공사팀 김남균').replace(/^공사팀\s+/, '공사팀 / ');
-  const logoHtml = COMPANY_LOGO
-    ? `<img src="${COMPANY_LOGO}" alt="현대기전" style="height:22px;width:auto;vertical-align:middle;margin-right:10px;flex-shrink:0;">`
-    : '';
+  const sheetHtml = buildOptionBSheetHtml(s, true);
 
   const pw = window.open('', '_blank');
   pw.document.write(`
@@ -1155,136 +1484,110 @@ function printFromModal() {
       <meta charset="utf-8">
       <title>No.${escHtml(s.sop_no)} ${escHtml(s.title)} · 안전작업표준서</title>
       <style>
-        @page { size: A4 portrait; margin: 12mm 14mm 12mm 22mm; }
+        @page { size: A4 portrait; margin: 10mm 11mm 9mm 11mm; }
         * { box-sizing: border-box; }
         body {
-          font-family: "Malgun Gothic", "맑은 고딕", sans-serif;
+          font-family: "Malgun Gothic", "맑은 고딕", Dotum, sans-serif;
           color: #000000;
-          font-size: 8.5pt;
-          line-height: 1.45;
           margin: 0;
+          padding: 0;
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
         }
-        table.docx-sop {
+        .sop-b-sheet {
+          width: 100%;
+          min-height: 274mm;
+          display: flex;
+          flex-direction: column;
+        }
+        .sop-b-head {
           width: 100%;
           border-collapse: collapse;
           table-layout: fixed;
-          border: 1.5pt solid #000000;
+          border: 1.8pt solid #000;
+          margin-bottom: 1.5mm;
         }
-        table.docx-sop th,
-        table.docx-sop td {
-          border: 0.5pt solid #000000;
-          padding: 4.5pt 6pt;
+        .sop-b-head td {
+          border: 0.5pt solid #000;
+          padding: 2pt 4pt;
+          font-size: 8.5pt;
+          line-height: 1.2;
           vertical-align: middle;
+          color: #000;
+        }
+        .sop-b-title-wrap {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding-left: 3px;
+        }
+        .sop-b-title-text {
+          font-size: 13.5pt;
+          font-weight: 800;
+          letter-spacing: 2.5px;
+          white-space: nowrap;
+        }
+        .sop-b-body {
+          width: 100%;
+          flex: 1 1 auto;
+          border-collapse: collapse;
+          table-layout: fixed;
+          border: 1.8pt solid #000;
+        }
+        .sop-b-body td {
+          vertical-align: top;
+          font-size: 8pt;
+          line-height: 1.28;
+          padding: 0.6pt 4pt;
+          color: #000;
           word-break: keep-all;
           overflow-wrap: break-word;
         }
-        .docx-title-cell {
-          text-align: left;
-          padding: 6pt 8pt !important;
-        }
-        .docx-title-wrap {
-          display: flex;
-          align-items: center;
-          justify-content: flex-start;
-        }
-        .docx-title-text {
-          font-size: 14pt;
-          font-weight: 800;
-          letter-spacing: 3px;
-          color: #000000;
-          white-space: nowrap;
-        }
-        .docx-meta-center {
+        .sop-b-vbar {
+          background-color: #CCFFCC !important;
+          border-right: 0.6pt solid #000;
+          border-left: 1.2pt solid #000;
           text-align: center;
-          font-size: 9.5pt;
-          font-weight: 700;
-        }
-        .docx-meta-row2 {
-          font-size: 9pt;
-          font-weight: 700;
-        }
-        .docx-sec-head {
-          background-color: #E2EFDA !important;
-          text-align: center;
-          font-size: 9.5pt;
+          vertical-align: middle !important;
           font-weight: 800;
-          letter-spacing: 2px;
-          padding: 4.5pt 6pt !important;
-          color: #000000;
+          font-size: 8.2pt;
+          line-height: 1.28;
+          padding: 3pt 1pt !important;
         }
-        .docx-sec-body {
-          vertical-align: top !important;
-          font-size: 8.5pt;
-          line-height: 1.48;
-          white-space: pre-wrap;
-          padding: 6pt 7pt !important;
+        .sop-b-vbar-left {
+          border-left: none !important;
+        }
+        .sop-b-divider-row td {
+          border-top: 1.5pt solid #000 !important;
+        }
+        .sop-b-cell-left {
+          border-right: 1.2pt solid #000;
+        }
+        .sop-b-img-box {
+          margin: 2pt 0;
+          text-align: center;
+        }
+        .sop-b-img-box img {
+          max-width: 92%;
+          height: auto;
+          display: inline-block;
+        }
+        .sop-b-footer-sh {
+          text-align: center;
+          font-size: 8pt;
+          font-weight: 600;
+          margin-top: 1mm;
+          color: #000;
         }
       </style>
     </head>
-    <body onload="window.print()">
-      <table class="docx-sop">
-        <colgroup>
-          <col style="width:16.6667%;">
-          <col style="width:16.6667%;">
-          <col style="width:16.6667%;">
-          <col style="width:16.6667%;">
-          <col style="width:16.6667%;">
-          <col style="width:16.6667%;">
-        </colgroup>
-        <!-- Row 1: Logo + Title | NO + Code | Team/Person -->
-        <tr>
-          <td colspan="3" class="docx-title-cell">
-            <div class="docx-title-wrap">
-              ${logoHtml}
-              <span class="docx-title-text">안 전 작 업 표 준 서</span>
-            </div>
-          </td>
-          <td colspan="1" class="docx-meta-center">
-            <div style="font-size:8.5pt;line-height:1.2;">NO</div>
-            <div style="font-size:9.5pt;line-height:1.3;">${escHtml(code)}</div>
-          </td>
-          <td colspan="2" class="docx-meta-center">
-            Team/Person: ${escHtml(teamPerson)}
-          </td>
-        </tr>
-        <!-- Row 2: 작업명 | 등록/개정일 | Rev' | 이력 -->
-        <tr>
-          <td colspan="2" class="docx-meta-row2" style="text-align:left;font-size:9.5pt;">
-            작업명: ${escHtml(s.title)}
-          </td>
-          <td colspan="1" class="docx-meta-row2" style="text-align:center;">
-            ${datePrefix}: ${escHtml(dateDot)}
-          </td>
-          <td colspan="1" class="docx-meta-row2" style="text-align:center;">
-            Rev': ${escHtml(revLabel)}
-          </td>
-          <td colspan="2" class="docx-meta-row2" style="text-align:center;">
-            이력: ${escHtml(historyText)}
-          </td>
-        </tr>
-        <!-- Row 3: ① 작업준비사항 | ② 안전일반 -->
-        <tr>
-          <th colspan="3" class="docx-sec-head">① &nbsp;작 업 준 비 사 항</th>
-          <th colspan="3" class="docx-sec-head">② &nbsp;안 전 일 반</th>
-        </tr>
-        <!-- Row 4: ①/② Body -->
-        <tr>
-          <td colspan="3" class="docx-sec-body" style="min-height:38mm;">${escHtml(s.pre_work_safety)}</td>
-          <td colspan="3" class="docx-sec-body" style="min-height:38mm;">${formatSafetyGeneralHtml(s.danger_factors)}</td>
-        </tr>
-        <!-- Row 5: ③ 작업순서 | ④ 안전작업순서 -->
-        <tr>
-          <th colspan="3" class="docx-sec-head">③ &nbsp;작 업 순 서</th>
-          <th colspan="3" class="docx-sec-head">④ &nbsp;안 전 작 업 순 서</th>
-        </tr>
-        <!-- Row 6: ③/④ Body -->
-        <tr>
-          <td colspan="3" class="docx-sec-body" style="min-height:135mm;">${escHtml(s.in_work_safety)}</td>
-          <td colspan="3" class="docx-sec-body" style="min-height:135mm;">${escHtml(s.post_work_safety)}</td>
-        </tr>
-      </table>
+    <body>
+      ${sheetHtml}
+      <script>
+        window.addEventListener('load', function() {
+          setTimeout(function() { window.print(); }, 180);
+        });
+      <\/script>
     </body>
     </html>
   `);
