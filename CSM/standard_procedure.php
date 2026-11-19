@@ -1365,7 +1365,9 @@ function prepareOptionBRows(s, forPrint) {
     lay.up.forEach(rObj => {
       const leftHtml = renderSideCellsHtml(rObj.l, 2) + renderImagesAtRow('L', rObj.r);
       const rightHtml = renderSideCellsHtml(rObj.rt, 15) + renderImagesAtRow('R', rObj.r);
-      const hPx = forPrint ? Math.max(13, Math.round(rObj.h || 14.25)) : Math.max(16, Math.round((rObj.h || 14.25) * 1.15));
+      const isEmpty = (!leftHtml && !rightHtml);
+      const rawH = Math.min(20, rObj.h || 14.25);
+      const hPx = isEmpty ? 9 : (forPrint ? Math.max(12, Math.round(rawH)) : Math.max(15, Math.round(rawH * 1.1)));
       upList.push({ leftHtml, rightHtml, hPx });
     });
 
@@ -1381,7 +1383,9 @@ function prepareOptionBRows(s, forPrint) {
           }
         });
       }
-      const hPx = forPrint ? Math.max(13, Math.round(rObj.h || 14.25)) : Math.max(16, Math.round((rObj.h || 14.25) * 1.15));
+      const isEmpty = (!leftHtml && !rightHtml);
+      const rawH = Math.min(20, rObj.h || 14.25);
+      const hPx = isEmpty ? 9 : (forPrint ? Math.max(12, Math.round(rawH)) : Math.max(15, Math.round(rawH * 1.1)));
       loList.push({ leftHtml, rightHtml, hPx });
     });
   } else {
@@ -1697,6 +1701,9 @@ function printFromModal() {
           table-layout: fixed;
           border: 1.8pt solid #000;
         }
+        .sop-b-body-compact {
+          flex: 0 0 auto !important;
+        }
         .sop-b-body td {
           vertical-align: top;
           font-size: 8pt;
@@ -1807,7 +1814,7 @@ function printFromModal() {
       <script>
         const SOP_DATA = ${payloadJson};
 
-        function buildBodyTableHtml(upSlice, loSlice) {
+        function buildBodyTableHtml(upSlice, loSlice, isCompactHeight) {
           let rowsHtml = '';
           const upSpan = upSlice.length;
           const loSpan = loSlice.length;
@@ -1837,7 +1844,8 @@ function printFromModal() {
             rowsHtml += '<td style="height:' + row.hPx + 'px;">' + (row.rightHtml || '&nbsp;') + '</td></tr>';
           });
 
-          return '<table class="sop-b-body"><colgroup><col style="width:3.6%;"><col style="width:46.4%;"><col style="width:3.6%;"><col style="width:46.4%;"></colgroup>' + rowsHtml + '</table>';
+          const cls = isCompactHeight ? 'sop-b-body sop-b-body-compact' : 'sop-b-body';
+          return '<table class="' + cls + '"><colgroup><col style="width:3.6%;"><col style="width:46.4%;"><col style="width:3.6%;"><col style="width:46.4%;"></colgroup>' + rowsHtml + '</table>';
         }
 
         function paginateSopPages() {
@@ -1906,24 +1914,25 @@ function printFromModal() {
             }
           }
 
-          // Pad the last page with blank aligned rows if it has fewer than 18 rows so the vertical green bars and box look well-proportioned
+          // Ensure the last page of a multi-page SOP has at least 9 rows so the vertical title '④ 안전작업순서' fits cleanly without stretching to the bottom of A4
           if (pages.length > 1) {
             const lastPage = pages[pages.length - 1];
-            while (lastPage.loSlice.length < 18) {
-              lastPage.loSlice.push({ leftHtml: '', rightHtml: '', hPx: 18 });
+            while (lastPage.loSlice.length < 9) {
+              lastPage.loSlice.push({ leftHtml: '', rightHtml: '', hPx: 14 });
             }
           }
 
           const totalPages = pages.length;
           container.innerHTML = pages.map(function(pg, idx) {
             const pageNo = idx + 1;
+            const isTrailingMultiPage = (totalPages > 1 && idx === totalPages - 1 && pg.loSlice.length < 34);
             const compactStyle = isCompactSingle ? ' style="font-size:7.4pt;line-height:1.18;"' : '';
             const upCompact = isCompactSingle ? pg.upSlice.map(function(r) { return Object.assign({}, r, { hPx: Math.max(11, Math.round(r.hPx * 0.85)) }); }) : pg.upSlice;
             const loCompact = isCompactSingle ? pg.loSlice.map(function(r) { return Object.assign({}, r, { hPx: Math.max(11, Math.round(r.hPx * 0.85)) }); }) : pg.loSlice;
             return '<div class="a4-page">' +
               '<div class="sop-b-sheet"' + compactStyle + '>' +
                 SOP_DATA.headerHtml +
-                buildBodyTableHtml(upCompact, loCompact) +
+                buildBodyTableHtml(upCompact, loCompact, isTrailingMultiPage) +
                 '<div class="sop-b-footer-sh">' + pageNo + '/' + totalPages + ',SH</div>' +
               '</div>' +
             '</div>';
