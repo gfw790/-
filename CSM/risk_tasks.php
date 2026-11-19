@@ -292,36 +292,42 @@ body {
 .rpt-kicker { font-size: 8pt; color: #334155; font-weight: 700; margin-bottom: 3px; }
 .rpt-title { font-size: 15.5pt; font-weight: 800; margin: 0 0 3px; letter-spacing: -.3px; }
 .rpt-docno { font-size: 8.3pt; color: #334155; }
-.approval-grid {
-  display: grid;
-  grid-template-columns: 8mm 22mm 22mm;
-  grid-template-rows: auto 15mm;
+.approval-wrap {
+  display: flex;
+  align-items: stretch;
   width: 52mm;
-  border-top: 1px solid #000;
-  border-left: 1px solid #000;
+  flex-shrink: 0;
   font-size: 8.2pt;
   text-align: center;
-  flex-shrink: 0;
 }
-.approval-grid > div {
-  border-right: 1px solid #000;
-  border-bottom: 1px solid #000;
+.ap-side {
+  width: 8mm;
+  border: 1pt solid #000;
+  border-right: 0;
+  background: #f1f5f9;
+  font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 3px 2px;
-}
-.approval-grid .ap-label {
-  grid-row: 1 / 3;
-  background: #f1f5f9;
-  font-weight: 700;
   line-height: 1.3;
 }
-.approval-grid .ap-head {
+.ap-tbl {
+  width: 44mm;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.ap-tbl th, .ap-tbl td {
+  width: 50%;
+  border: 1pt solid #000;
+  padding: 3px 2px;
+  text-align: center;
+}
+.ap-tbl th {
   background: #f1f5f9;
   font-weight: 700;
 }
-.approval-grid .ap-sign {
+.ap-tbl td.ap-sign {
+  height: 15mm;
   background: #fff;
 }
 .sec-title {
@@ -332,11 +338,11 @@ body {
   border-left: 3.5px solid #176053;
 }
 table.meta { width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 8.8pt; }
-table.meta th, table.meta td { border: 1px solid #475569; padding: 5px 7px; text-align: left; }
+table.meta th, table.meta td { border: 0.75pt solid #334155; padding: 5px 7px; text-align: left; }
 table.meta th { width: 17%; background: #f8fafc; font-weight: 700; color: #1e293b; }
 table.meta td { width: 33%; }
 .box {
-  border: 1px solid #475569;
+  border: 0.75pt solid #334155;
   padding: 8px 10px;
   white-space: pre-wrap;
   font-size: 8.8pt;
@@ -344,7 +350,7 @@ table.meta td { width: 33%; }
   background: #fff;
 }
 table.rev-tbl { width: 100%; border-collapse: collapse; font-size: 8pt; margin-top: 2px; }
-table.rev-tbl th, table.rev-tbl td { border: 1px solid #475569; padding: 3.5px 5px; vertical-align: top; line-height: 1.38; }
+table.rev-tbl th, table.rev-tbl td { border: 0.75pt solid #334155; padding: 3.5px 5px; vertical-align: top; line-height: 1.38; }
 table.rev-tbl th { background: #f1f5f9; text-align: center; font-weight: 700; }
 table.rev-tbl td.c { text-align: center; white-space: nowrap; }
 .rpt-footer {
@@ -450,12 +456,12 @@ function buildFirstHeader() {
       <h1 class="rpt-title">안전작업표준서(SOP) 검토·개정 결과 보고서</h1>
       <div class="rpt-docno">문서번호: ${esc(RPT.docNo)} &nbsp;|&nbsp; 검토일자: ${esc(RPT.recordDate)}</div>
     </div>
-    <div class="approval-grid">
-      <div class="ap-label">결<br>재</div>
-      <div class="ap-head">작성</div>
-      <div class="ap-head">승인</div>
-      <div class="ap-sign"></div>
-      <div class="ap-sign"></div>
+    <div class="approval-wrap">
+      <div class="ap-side">결<br>재</div>
+      <table class="ap-tbl">
+        <tr><th>작성</th><th>승인</th></tr>
+        <tr><td class="ap-sign">&nbsp;</td><td class="ap-sign">&nbsp;</td></tr>
+      </table>
     </div>
   </div>`;
 }
