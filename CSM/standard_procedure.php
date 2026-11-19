@@ -781,9 +781,9 @@ $queryBase = http_build_query(array_filter([
               </td>
               <td style="text-align:center;white-space:nowrap;">
                 <?php if ($pgCnt > 1): ?>
-                  <span class="sop-badge-pgn" title="다중 페이지 표준서 (1/<?= $pgCnt ?>,SH ~ <?= $pgCnt ?>/<?= $pgCnt ?>,SH)"><?= $pgCnt ?>P <small style="font-weight:600;opacity:0.85;">(<?= $pgCnt ?>/<?= $pgCnt ?>)</small></span>
+                  <span class="sop-badge-pgn" title="다중 페이지 표준서 (1/<?= $pgCnt ?> ~ <?= $pgCnt ?>/<?= $pgCnt ?>)"><?= $pgCnt ?>P <small style="font-weight:600;opacity:0.85;">(<?= $pgCnt ?>/<?= $pgCnt ?>)</small></span>
                 <?php else: ?>
-                  <span class="sop-badge-pg1" title="단일 페이지 표준서 (1/1,SH)">1P</span>
+                  <span class="sop-badge-pg1" title="단일 페이지 표준서 (1/1)">1P</span>
                 <?php endif; ?>
               </td>
               <td style="text-align:center;">
@@ -1641,7 +1641,8 @@ function buildOptionASheetHtml(s, forPrint) {
   const headerRowsHtml = buildOptionAHeaderRowsHtml(s, forPrint);
   const { upLeft, upRight, loLeft, loRight } = prepareOptionAColumns(s, forPrint);
   const pgCnt = Math.max(1, parseInt(s.page_count, 10) || 1);
-  const shLabel = pgCnt > 1 ? `총 ${pgCnt}페이지 (1/${pgCnt},SH ~ ${pgCnt}/${pgCnt},SH)` : '1/1,SH';
+  const centerPageTxt = pgCnt > 1 ? `총 ${pgCnt}페이지 (1/${pgCnt} ~ ${pgCnt}/${pgCnt})` : '';
+  const sheetTitle = s.sheet_name || ((s.sop_no ? s.sop_no + '.' : '') + (s.title || ''));
 
   const upLeftHtml = upLeft.map(h => `<div class="sop-a-line">${h}</div>`).join('');
   const upRightHtml = upRight.map(h => `<div class="sop-a-line">${h}</div>`).join('');
@@ -1677,7 +1678,11 @@ function buildOptionASheetHtml(s, forPrint) {
           <td colspan="3" class="sop-a-body-cell">${loRightHtml || '&nbsp;'}</td>
         </tr>
       </table>
-      <div class="sop-b-footer-sh">${shLabel}</div>
+      <div class="sop-b-footer-sh" style="display:flex;justify-content:space-between;align-items:center;padding:2px 2px 0;">
+        <span style="visibility:hidden;">${escHtml(sheetTitle)}</span>
+        <span>${centerPageTxt}</span>
+        <span style="color:#404040;font-size:11px;">${escHtml(sheetTitle)}</span>
+      </div>
     </div>
   `;
 }
@@ -1690,7 +1695,7 @@ function buildOptionBSheetHtml(s, forPrint) {
   const { upList, loList } = prepareOptionBRows(s, forPrint);
   const bodyTableHtml = renderOptionBBodyTableHtml(upList, loList);
   const pgCnt = Math.max(1, parseInt(s.page_count, 10) || 1);
-  const shLabel = pgCnt > 1 ? `총 ${pgCnt}페이지 (1/${pgCnt},SH ~ ${pgCnt}/${pgCnt},SH)` : '1/1,SH';
+  const centerPageTxt = pgCnt > 1 ? `총 ${pgCnt}페이지 (1/${pgCnt} ~ ${pgCnt}/${pgCnt})` : '';
   const sheetTitle = s.sheet_name || ((s.sop_no ? s.sop_no + '.' : '') + (s.title || ''));
 
   return `
@@ -1699,7 +1704,7 @@ function buildOptionBSheetHtml(s, forPrint) {
       ${bodyTableHtml}
       <div class="sop-b-footer-sh" style="display:flex;justify-content:space-between;align-items:center;padding:2px 2px 0;">
         <span style="visibility:hidden;">${escHtml(sheetTitle)}</span>
-        <span>${shLabel}</span>
+        <span>${centerPageTxt}</span>
         <span style="color:#404040;font-size:11px;">${escHtml(sheetTitle)}</span>
       </div>
     </div>
@@ -2175,7 +2180,7 @@ function printFromModal() {
           stage.innerHTML = '<div class="a4-page" id="probePageA" style="height:297mm;min-height:297mm;max-height:297mm;">' +
             '<div class="sop-a-sheet" style="height:auto;flex:0 0 auto;">' +
               buildOptionATableHtml(SOP_DATA.upLeft, SOP_DATA.upRight, SOP_DATA.loLeft, SOP_DATA.loRight, true, true) +
-              '<div id="probeFootA" class="sop-b-footer-sh">1/1,SH</div>' +
+              '<div id="probeFootA" class="sop-b-footer-sh"><span class="sop-b-footer-sheetname">1</span></div>' +
             '</div></div>';
 
           const probePage = document.getElementById('probePageA');
@@ -2256,19 +2261,25 @@ function printFromModal() {
           }
 
           const totalPages = pages.length;
+          const sheetNameEsc = SOP_DATA.sheetTitle ? String(SOP_DATA.sheetTitle).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : '';
           container.innerHTML = pages.map(function(pg, idx) {
             const pageNo = idx + 1;
             const compactStyle = isCompactSingle ? ' style="font-size:8pt;line-height:1.3;"' : '';
+            const centerPageTxt = totalPages > 1 ? (pageNo + ' / ' + totalPages) : '';
             return '<div class="a4-page">' +
               '<div class="sop-a-sheet"' + compactStyle + '>' +
                 buildOptionATableHtml(pg.upLeft, pg.upRight, pg.loLeft, pg.loRight, pg.includeUpper, false) +
-                '<div class="sop-b-footer-sh">' + pageNo + '/' + totalPages + ',SH</div>' +
+                '<div class="sop-b-footer-sh">' +
+                  '<span class="sop-b-footer-sheetname" style="visibility:hidden;">' + sheetNameEsc + '</span>' +
+                  '<span>' + centerPageTxt + '</span>' +
+                  '<span class="sop-b-footer-sheetname">' + sheetNameEsc + '</span>' +
+                '</div>' +
               '</div>' +
             '</div>';
           }).join('');
 
           const badge = document.getElementById('pageCountBadge');
-          if (badge) badge.textContent = '총 ' + totalPages + '페이지 (' + (totalPages === 1 ? '1/1,SH' : '1/' + totalPages + '~' + totalPages + '/' + totalPages + ',SH') + ')';
+          if (badge) badge.textContent = '총 ' + totalPages + '페이지' + (totalPages > 1 ? ' (1/' + totalPages + '~' + totalPages + '/' + totalPages + ')' : '');
         }
 
         function buildBodyTableHtml(upSlice, loSlice, isCompactHeight) {
@@ -2313,7 +2324,7 @@ function printFromModal() {
             '<div class="sop-b-sheet" style="height:auto;flex:0 0 auto;">' +
               '<div id="probeHead">' + SOP_DATA.headerBHtml + '</div>' +
               '<div id="probeBody">' + buildBodyTableHtml(SOP_DATA.upList, SOP_DATA.loList) + '</div>' +
-              '<div id="probeFoot" class="sop-b-footer-sh">1/1,SH</div>' +
+              '<div id="probeFoot" class="sop-b-footer-sh"><span class="sop-b-footer-sheetname">1</span></div>' +
             '</div></div>';
 
           const probePage = document.getElementById('probePage');
@@ -2382,13 +2393,14 @@ function printFromModal() {
             const compactStyle = isCompactSingle ? ' style="font-size:8pt;line-height:1.2;"' : '';
             const upCompact = isCompactSingle ? pg.upSlice.map(function(r) { return Object.assign({}, r, { hPx: Math.max(11, Math.round(r.hPx * 0.85)) }); }) : pg.upSlice;
             const loCompact = isCompactSingle ? pg.loSlice.map(function(r) { return Object.assign({}, r, { hPx: Math.max(11, Math.round(r.hPx * 0.85)) }); }) : pg.loSlice;
+            const centerPageTxt = totalPages > 1 ? (pageNo + ' / ' + totalPages) : '';
             return '<div class="a4-page">' +
               '<div class="sop-b-sheet"' + compactStyle + '>' +
                 SOP_DATA.headerBHtml +
                 buildBodyTableHtml(upCompact, loCompact, isTrailingMultiPage) +
                 '<div class="sop-b-footer-sh">' +
                   '<span class="sop-b-footer-sheetname" style="visibility:hidden;">' + sheetNameEsc + '</span>' +
-                  '<span>' + pageNo + '/' + totalPages + ',SH</span>' +
+                  '<span>' + centerPageTxt + '</span>' +
                   '<span class="sop-b-footer-sheetname">' + sheetNameEsc + '</span>' +
                 '</div>' +
               '</div>' +
@@ -2396,7 +2408,7 @@ function printFromModal() {
           }).join('');
 
           const badge = document.getElementById('pageCountBadge');
-          if (badge) badge.textContent = '총 ' + totalPages + '페이지 (' + (totalPages === 1 ? '1/1,SH' : '1/' + totalPages + '~' + totalPages + '/' + totalPages + ',SH') + ')';
+          if (badge) badge.textContent = '총 ' + totalPages + '페이지' + (totalPages > 1 ? ' (1/' + totalPages + '~' + totalPages + '/' + totalPages + ')' : '');
         }
 
         function paginateSopPages() {
