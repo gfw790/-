@@ -292,10 +292,10 @@ body {
 .rpt-kicker { font-size: 8pt; color: #334155; font-weight: 700; margin-bottom: 3px; }
 .rpt-title { font-size: 15.5pt; font-weight: 800; margin: 0 0 3px; letter-spacing: -.3px; }
 .rpt-docno { font-size: 8.3pt; color: #334155; }
-.approval { border-collapse: collapse; width: 64mm; font-size: 8pt; text-align: center; }
-.approval th, .approval td { border: 1px solid #000; padding: 2.5px 4px; }
+.approval { border-collapse: collapse; width: 48mm; font-size: 8.2pt; text-align: center; }
+.approval th, .approval td { border: 1px solid #000; padding: 3px 4px; }
 .approval th { background: #f1f5f9; font-weight: 700; }
-.approval .sign-cell { height: 12.5mm; vertical-align: bottom; font-size: 7.8pt; color: #475569; }
+.approval .sign-cell { height: 14mm; }
 .sec-title {
   font-size: 10pt;
   font-weight: 800;
@@ -423,8 +423,8 @@ function buildFirstHeader() {
       <div class="rpt-docno">문서번호: ${esc(RPT.docNo)} &nbsp;|&nbsp; 검토일자: ${esc(RPT.recordDate)}</div>
     </div>
     <table class="approval">
-      <tr><th rowspan="2" style="width:14%">결<br>재</th><th>작성</th><th>검토</th><th>승인</th></tr>
-      <tr><td class="sign-cell">김남균</td><td class="sign-cell">안전관리자</td><td class="sign-cell">정연탁 대표</td></tr>
+      <tr><th rowspan="2" style="width:18%">결<br>재</th><th style="width:41%">작성</th><th style="width:41%">승인</th></tr>
+      <tr><td class="sign-cell"></td><td class="sign-cell"></td></tr>
     </table>
   </div>`;
 }
