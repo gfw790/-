@@ -66,7 +66,15 @@ function sop_db(): PDO
         FOREIGN KEY (sop_id) REFERENCES csm_sop_master(id) ON DELETE CASCADE
     )');
 
-    sop_seed_defaults($db);
+    // Safe schema migrations for 252-item SOP catalog
+    try { $db->exec("ALTER TABLE csm_sop_master ADD COLUMN sop_no INTEGER DEFAULT 0"); } catch (Throwable $e) {}
+    try { $db->exec("ALTER TABLE csm_sop_master ADD COLUMN volume TEXT DEFAULT ''"); } catch (Throwable $e) {}
+    try { $db->exec("ALTER TABLE csm_sop_master ADD COLUMN job_plan_code TEXT DEFAULT ''"); } catch (Throwable $e) {}
+    try { $db->exec("ALTER TABLE csm_sop_master ADD COLUMN status TEXT DEFAULT '유효'"); } catch (Throwable $e) {}
+    try { $db->exec("ALTER TABLE csm_sop_master ADD COLUMN change_reason TEXT DEFAULT ''"); } catch (Throwable $e) {}
+    try { $db->exec("ALTER TABLE csm_sop_master ADD COLUMN sheet_name TEXT DEFAULT ''"); } catch (Throwable $e) {}
+
+    // Example data is never inserted into an operational database automatically.
     return $db;
 }
 
