@@ -3214,6 +3214,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
         <?php if ($canAccessCsm): ?>
           <a class="btn-secondary" href="/CSM/">CSM 통합시스템</a>
         <?php endif; ?>
+        <a class="btn-secondary" href="/CSM/safety_suggestion_submit.php">안전제안</a>
         <a class="btn-secondary" href="../near_miss/">아차사고</a>
         <a class="btn-secondary btn-header-cta" href="../board/index.php">게시판</a>
         <a class="btn-secondary" href="../calendar/index.html">달력</a>
@@ -3231,6 +3232,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
             <?php if ($canAccessCsm): ?>
               <a class="btn-secondary" href="/CSM/">CSM 통합시스템</a>
             <?php endif; ?>
+            <a class="btn-secondary" href="/CSM/safety_suggestion_submit.php">안전제안</a>
             <a class="btn-secondary btn-header-cta" href="../board/index.php">게시판</a>
             <a class="btn-secondary" href="../tbm/index.php">TBM일지</a>
             <button type="button" class="btn-secondary" onclick="openOrgModal()">조직도</button>
@@ -3268,6 +3270,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
                   <a class="btn-secondary" href="/material_management/index.php">물질관리</a>
                 <?php endif; ?>
               <?php endif; ?>
+              <a class="btn-secondary" href="/CSM/safety_suggestion_submit.php">안전제안</a>
               <a class="btn-secondary" href="../near_miss/">아차사고</a>
               <a class="btn-secondary" href="../calendar/index.html">달력</a>
               <a class="btn-secondary" href="hazard_review.php">수시위험성평가</a>
@@ -3662,6 +3665,7 @@ $workListDescription = '저장된 작업리스트를 확인하고 필요한 항�
       <?php if ($canAccessCsm): ?>
         <a class="btn-secondary" href="/CSM/">CSM 통합시스템</a>
       <?php endif; ?>
+      <a class="btn-secondary" href="/CSM/safety_suggestion_submit.php">안전제안</a>
       <a class="btn-secondary" href="../calendar/index.html">달력</a>
       <a class="btn-secondary" href="<?= h($entryPage) ?>?logout=1">로그아웃</a>
     </div>

@@ -712,7 +712,11 @@ if ($isLoggedInUser) {
       <button type="button" onclick="openMySuggestionsModal()" style="background:rgba(255,255,255,0.22);border:1px solid rgba(255,255,255,0.45);color:#ffffff;font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:999px;cursor:pointer;white-space:nowrap;">
         📋 내 제안 조회<?= $isLoggedInUser ? ' (' . count($mySuggestions) . ')' : '' ?>
       </button>
-      <a href="worker_participation.php?tab=suggestions" style="color:#ffffff;text-decoration:none;font-size:12px;opacity:0.9;white-space:nowrap;">관리대장</a>
+      <?php if (csm_is_portal_allowed($user)): ?>
+        <a href="worker_participation.php?tab=suggestions" style="color:#ffffff;text-decoration:none;font-size:12px;opacity:0.9;white-space:nowrap;">관리대장</a>
+      <?php else: ?>
+        <a href="/risk_assessment/work_list.php" style="color:#ffffff;text-decoration:none;font-size:12px;opacity:0.9;white-space:nowrap;">← 작업목록</a>
+      <?php endif; ?>
     </div>
   </div>
 
@@ -761,9 +765,15 @@ if ($isLoggedInUser) {
           <a href="safety_suggestion_submit.php" class="m-btn-submit" style="text-decoration:none;">
             + 새로운 안전제안 추가 작성
           </a>
-          <a href="worker_participation.php?tab=suggestions" style="text-align:center;font-size:13px;color:#64748b;margin-top:4px;text-decoration:none;">
-            ← 안전제안 관리대장으로 이동
-          </a>
+          <?php if (csm_is_portal_allowed($user)): ?>
+            <a href="worker_participation.php?tab=suggestions" style="text-align:center;font-size:13px;color:#64748b;margin-top:4px;text-decoration:none;">
+              ← 안전제안 관리대장으로 이동
+            </a>
+          <?php else: ?>
+            <a href="/risk_assessment/work_list.php" style="text-align:center;font-size:13px;color:#64748b;margin-top:4px;text-decoration:none;">
+              ← 위험성평가 작업목록으로 이동
+            </a>
+          <?php endif; ?>
         </div>
       </div>
     </div>
