@@ -528,6 +528,70 @@ function csm_ra_procedure_score_summary(?PDO $db, int $year): array
     return csm_ra_procedure_summary($db, $year);
 }
 
+function csm_sop_procedure_score_summary(?PDO $db, int $year, float $points = 2.0): array
+{
+    $empty = ['earned' => 0.0, 'evidence_count' => 0, 'state' => 'no_evidence',
+        'multiplier' => 0.0, 'revision' => 0, 'automatic' => true, 'assessment' => null];
+    if ($db === null) return $empty;
+
+    $evidenceCount = 0;
+    if ($db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='csm_risk_tasks'")->fetch()) {
+        $q = $db->prepare("SELECT evidence_path FROM csm_risk_tasks WHERE section='2.2' AND substr(record_date,1,4)=? AND evidence_path != ''");
+        $q->execute([(string)$year]);
+        foreach ($q->fetchAll() as $row) {
+            $stored = (string)$row['evidence_path'];
+            if (preg_match('/^[a-f0-9]{40}\.(?:pdf|jpg|jpeg|png|xlsx|docx)$/D', $stored)) {
+                $path = __DIR__ . '/storage/risk_task_evidence/' . $stored;
+                if (is_file($path) && filesize($path) > 0) {
+                    $evidenceCount++;
+                }
+            }
+        }
+    }
+
+    $assessment = null;
+    if ($db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='csm_sop_assessments'")->fetch()) {
+        $aq = $db->prepare('SELECT multiplier, note, updated_by, updated_at FROM csm_sop_assessments WHERE year=?');
+        $aq->execute([$year]);
+        $assessment = $aq->fetch() ?: null;
+    }
+
+    if ($evidenceCount === 0) {
+        return ['earned' => 0.0, 'evidence_count' => 0, 'state' => 'no_evidence',
+            'multiplier' => 0.0, 'revision' => 0, 'automatic' => $assessment === null, 'assessment' => $assessment];
+    }
+
+    if ($assessment !== null) {
+        $mult = (float)$assessment['multiplier'];
+        return ['earned' => round($points * $mult, 2), 'evidence_count' => $evidenceCount, 'state' => 'assessed',
+            'multiplier' => $mult, 'revision' => 0, 'automatic' => false, 'assessment' => $assessment];
+    }
+
+    // 증빙 파일이 첨부된 경우, 표준서 DB 보유 및 정기 제·개정 이력 여부에 따라 자동 배율 적용
+    $mult = 0.8;
+    $sopDbPath = __DIR__ . '/storage/standard_procedure.sqlite';
+    if (is_file($sopDbPath)) {
+        try {
+            $sopPdo = new PDO('sqlite:file:' . str_replace('\\', '/', $sopDbPath) . '?mode=ro', null, null, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            ]);
+            $sopCnt = (int)$sopPdo->query('SELECT COUNT(*) FROM csm_sop_master')->fetchColumn();
+            $revCnt = (int)$sopPdo->query('SELECT COUNT(*) FROM csm_sop_revisions')->fetchColumn();
+            if ($sopCnt > 0 && $revCnt > 0) {
+                $mult = 1.0; // 자체 작성(정기 개정)
+            } elseif ($sopCnt > 0) {
+                $mult = 0.9;
+            }
+        } catch (Throwable $e) {
+            error_log('csm_sop_procedure_score_summary error: ' . $e->getMessage());
+        }
+    }
+
+    return ['earned' => round($points * $mult, 2), 'evidence_count' => $evidenceCount, 'state' => 'assessed',
+        'multiplier' => $mult, 'revision' => 0, 'automatic' => true, 'assessment' => null];
+}
+
 function csm_score_summary(?PDO $db, array $catalog, int $year): array
 {
     $counts = csm_scoring_evidence($db, $year);
@@ -595,6 +659,12 @@ function csm_score_summary(?PDO $db, array $catalog, int $year): array
             }
             if ($code === '2.1.2') {
                 $items[$code] = csm_ra_procedure_score_summary($db, $year);
+                $earned = $items[$code]['earned'];
+                $hasEvidence = $items[$code]['evidence_count'] > 0;
+                $assessment = $items[$code]['state'] === 'assessed' ? $items[$code] : null;
+            }
+            if ($code === '2.2.1') {
+                $items[$code] = csm_sop_procedure_score_summary($db, $year, (float)$criterion['points']);
                 $earned = $items[$code]['earned'];
                 $hasEvidence = $items[$code]['evidence_count'] > 0;
                 $assessment = $items[$code]['state'] === 'assessed' ? $items[$code] : null;

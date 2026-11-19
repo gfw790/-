@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/scoring.php';
 $user = csm_require_auth();
 header('Cache-Control: no-store');
 $sections = [
@@ -29,6 +30,8 @@ $db->exec('CREATE TABLE IF NOT EXISTS csm_risk_tasks (id INTEGER PRIMARY KEY AUT
 $columns = array_column($db->query('PRAGMA table_info(csm_risk_tasks)')->fetchAll(), 'name');
 if (!in_array('item_code', $columns, true)) $db->exec("ALTER TABLE csm_risk_tasks ADD COLUMN item_code TEXT NOT NULL DEFAULT ''");
 $db->exec('CREATE TABLE IF NOT EXISTS csm_risk_task_history (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER NOT NULL, section TEXT NOT NULL, operation TEXT NOT NULL, snapshot TEXT NOT NULL, actor TEXT NOT NULL, created_at TEXT NOT NULL)');
+$db->exec('CREATE TABLE IF NOT EXISTS csm_sop_assessments (year INTEGER PRIMARY KEY, multiplier REAL NOT NULL, note TEXT NOT NULL DEFAULT "", updated_by TEXT NOT NULL, updated_at TEXT NOT NULL)');
+$scoreYear = (int)(new DateTimeImmutable('now', new DateTimeZone('Asia/Seoul')))->format('Y');
 
 $sopStats = null;
 if ($isSopReview && is_file(__DIR__ . '/standard_procedure_store.php')) {
@@ -80,7 +83,7 @@ $id = filter_var($_GET['id'] ?? $_POST['id'] ?? 0, FILTER_VALIDATE_INT) ?: 0;
 $get = $db->prepare('SELECT * FROM csm_risk_tasks WHERE id=? AND section=?');
 $get->execute([$id, $section]); $record = $get->fetch() ?: null;
 if (isset($_GET['file'])) {
- if (!$record || !preg_match('/^[a-f0-9]{40}\.(pdf|jpg|jpeg|png)$/D', $record['evidence_path'])) { http_response_code(404); exit('첨부파일을 찾을 수 없습니다.'); }
+ if (!$record || !preg_match('/^[a-f0-9]{40}\.(pdf|jpg|jpeg|png|xlsx|docx)$/D', $record['evidence_path'])) { http_response_code(404); exit('첨부파일을 찾을 수 없습니다.'); }
  $path = __DIR__ . '/storage/risk_task_evidence/' . $record['evidence_path'];
  if (!is_file($path)) { http_response_code(404); exit('첨부파일을 찾을 수 없습니다.'); }
  header('X-Content-Type-Options: nosniff'); header('Content-Type: ' . $record['evidence_mime']);
@@ -93,12 +96,21 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
   if (!is_string($_POST['csrf'] ?? null) || !hash_equals($_SESSION['csm_risk_tasks_csrf'], $_POST['csrf'])) throw new InvalidArgumentException('요청을 확인할 수 없습니다. 새로고침해 주세요.');
   if ($id && !$record) throw new InvalidArgumentException('기록을 찾을 수 없습니다.');
   $action = $_POST['operation'] ?? 'save';
-  if ($action === 'delete') {
+  if ($action === 'assess_221' && $isSopReview) {
+   $level = (string)($_POST['level'] ?? '');
+   $note = trim((string)($_POST['note'] ?? ''));
+   if (!in_array($level, ['1', '0.9', '0.8', '0.5', '0'], true)) throw new InvalidArgumentException('평가 수준을 선택해 주세요.');
+   if (mb_strlen($note) > 2000) throw new InvalidArgumentException('검토 메모가 너무 깁니다.');
+   $stmt = $db->prepare('INSERT INTO csm_sop_assessments(year, multiplier, note, updated_by, updated_at) VALUES(?,?,?,?,?) ON CONFLICT(year) DO UPDATE SET multiplier=excluded.multiplier, note=excluded.note, updated_by=excluded.updated_by, updated_at=excluded.updated_at');
+   $stmt->execute([$scoreYear, (float)$level, $note, (string)($user['login_id'] ?? ''), date('Y-m-d H:i:s')]);
+   $_SESSION['csm_risk_tasks_notice'] = '2.2.1 평가 수준을 저장했습니다. CSM 점수에 즉시 반영됩니다.';
+   header('Location: risk_tasks.php?section=2.2', true, 303); exit;
+  } elseif ($action === 'delete') {
    if (!$record) throw new InvalidArgumentException('기록을 찾을 수 없습니다.');
    $audit = $db->prepare('INSERT INTO csm_risk_task_history(task_id,section,operation,snapshot,actor,created_at) VALUES(?,?,?,?,?,?)');
    $audit->execute([$id,$section,'delete',json_encode($record, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),(string)($user['login_id'] ?? ''),date('Y-m-d H:i:s')]);
    $q = $db->prepare('DELETE FROM csm_risk_tasks WHERE id=? AND section=?'); $q->execute([$id, $section]);
-   if ($record['evidence_path'] && preg_match('/^[a-f0-9]{40}\.(pdf|jpg|jpeg|png)$/D', $record['evidence_path'])) @unlink(__DIR__ . '/storage/risk_task_evidence/' . $record['evidence_path']);
+   if ($record['evidence_path'] && preg_match('/^[a-f0-9]{40}\.(pdf|jpg|jpeg|png|xlsx|docx)$/D', $record['evidence_path'])) @unlink(__DIR__ . '/storage/risk_task_evidence/' . $record['evidence_path']);
   } elseif ($action === 'save') {
    $values = []; foreach (['title','record_date','subject','details','action','owner','due_date','status'] as $key) { $v = $_POST[$key] ?? ''; if (!is_string($v) || mb_strlen($v) > 10000) throw new InvalidArgumentException('입력값을 확인해 주세요.'); $values[$key] = trim($v); }
    if ($values['title'] === '' || $values['record_date'] === '' || !in_array($values['status'], ['계획','진행','완료'], true)) throw new InvalidArgumentException('제목, 일자, 상태를 확인해 주세요.');
@@ -111,10 +123,26 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
    $name = $record['evidence_name'] ?? ''; $stored = $record['evidence_path'] ?? ''; $mime = $record['evidence_mime'] ?? ''; $newPath = '';
    $file = $_FILES['evidence'] ?? ['error'=>UPLOAD_ERR_NO_FILE];
    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
-    if ($file['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name']) || $file['size'] < 1 || $file['size'] > 15*1024*1024) throw new InvalidArgumentException('15MB 이하의 파일을 선택해 주세요.');
+    if ($file['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name']) || $file['size'] < 1 || $file['size'] > 20*1024*1024) throw new InvalidArgumentException('20MB 이하의 파일을 선택해 주세요.');
     $name = mb_substr(basename(str_replace('\\', '/', $file['name'])), 0, 180); $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
-    $allowed = ['pdf'=>'application/pdf','jpg'=>'image/jpeg','jpeg'=>'image/jpeg','png'=>'image/png']; $mime = (new finfo(FILEINFO_MIME_TYPE))->file($file['tmp_name']);
-    if (!isset($allowed[$ext]) || $mime !== $allowed[$ext] || ($ext !== 'pdf' && @getimagesize($file['tmp_name']) === false)) throw new InvalidArgumentException('PDF, JPG, PNG 증빙을 선택해 주세요.');
+    $allowed = [
+     'pdf' => ['application/pdf'],
+     'jpg' => ['image/jpeg'],
+     'jpeg' => ['image/jpeg'],
+     'png' => ['image/png'],
+     'xlsx' => ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/zip'],
+     'docx' => ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/zip'],
+    ];
+    $mime = (new finfo(FILEINFO_MIME_TYPE))->file($file['tmp_name']);
+    if (!isset($allowed[$ext]) || !in_array($mime, $allowed[$ext], true)) throw new InvalidArgumentException('PDF, JPG, PNG, XLSX, DOCX 증빙을 선택해 주세요.');
+    if (in_array($ext, ['jpg','jpeg','png'], true) && @getimagesize($file['tmp_name']) === false) throw new InvalidArgumentException('이미지 파일을 확인해 주세요.');
+    if (in_array($ext, ['xlsx','docx'], true)) {
+     $zip = new ZipArchive();
+     if ($zip->open($file['tmp_name']) !== true) throw new InvalidArgumentException('Office 문서 형식을 확인해 주세요.');
+     $expected = $ext === 'xlsx' ? 'xl/workbook.xml' : 'word/document.xml';
+     if ($zip->locateName('[Content_Types].xml') === false || $zip->locateName($expected) === false) { $zip->close(); throw new InvalidArgumentException('Office 문서 형식을 확인해 주세요.'); }
+     $zip->close();
+    }
     $dir = __DIR__ . '/storage/risk_task_evidence'; if (!is_dir($dir) && !mkdir($dir, 0750, true) && !is_dir($dir)) throw new RuntimeException('저장소 오류');
     $stored = bin2hex(random_bytes(20)) . '.' . $ext; $newPath = $dir . '/' . $stored; if (!move_uploaded_file($file['tmp_name'], $newPath)) throw new RuntimeException('파일 저장 오류');
    }
@@ -130,13 +158,15 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     $audit->execute([$savedId,$section,$id ? 'update' : 'create',json_encode(['previous'=>$record,'values'=>$values,'item_code'=>$itemCode], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),(string)($user['login_id'] ?? ''),date('Y-m-d H:i:s')]);
     $db->commit();
    } catch (Throwable $e) { if ($db->inTransaction()) $db->rollBack(); if ($newPath) @unlink($newPath); throw $e; }
-   if ($newPath && !empty($record['evidence_path']) && preg_match('/^[a-f0-9]{40}\.(pdf|jpg|jpeg|png)$/D', $record['evidence_path'])) @unlink(__DIR__ . '/storage/risk_task_evidence/' . $record['evidence_path']);
+   if ($newPath && !empty($record['evidence_path']) && preg_match('/^[a-f0-9]{40}\.(pdf|jpg|jpeg|png|xlsx|docx)$/D', $record['evidence_path'])) @unlink(__DIR__ . '/storage/risk_task_evidence/' . $record['evidence_path']);
   } else throw new InvalidArgumentException('요청을 확인해 주세요.');
   $_SESSION['csm_risk_tasks_notice'] = $action === 'delete' ? '기록을 삭제했습니다.' : '기록을 저장했습니다.';
   header('Location: risk_tasks.php?section=' . rawurlencode($section), true, 303); exit;
  } catch (Throwable $e) { $error = $e instanceof InvalidArgumentException ? $e->getMessage() : '저장 중 오류가 발생했습니다.'; if (!($e instanceof InvalidArgumentException)) error_log('CSM risk tasks: ' . $e->getMessage()); }
 }
 $q=$db->prepare('SELECT * FROM csm_risk_tasks WHERE section=? ORDER BY record_date DESC,id DESC'); $q->execute([$section]); $rows=$q->fetchAll();
+$sopScore = $isSopReview ? csm_sop_procedure_score_summary($db, $scoreYear, 2.0) : null;
+$sopCriterion = $isSopReview ? ($items['2.2.1'] ?? null) : null;
 $v = static fn(string $key, string $default = ''): string => (string)($_POST[$key] ?? $record[$key] ?? $default);
 ?>
 <!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title><?= $h($sections[$section][0]) ?> · CSM</title><link rel="stylesheet" href="leadership.css"><link rel="stylesheet" href="risk_tasks.css"><style>
@@ -157,6 +187,17 @@ $v = static fn(string $key, string $default = ''): string => (string)($_POST[$ke
 .status-badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:.82rem;font-weight:700;background:#e2e8f0;color:#334155}
 .status-badge.done{background:#dcfce7;color:#166534}
 .status-badge.prog{background:#fef3c7;color:#92400e}
+.score-panel{background:#fff;border:1px solid #cbd5e1;border-left:5px solid #176053;border-radius:10px;padding:18px 20px;margin:16px 0}
+.score-panel.warn{border-left-color:#d97706;background:#fffbeb}
+.score-top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px}
+.score-val{font-size:1.35rem;font-weight:800;color:#176053}
+.score-panel.warn .score-val{color:#b45309}
+.score-meta{font-size:.9rem;color:#334155;margin:8px 0 0}
+.score-form{display:grid;grid-template-columns:minmax(220px,1fr) minmax(240px,1.5fr) auto;gap:10px;align-items:end;margin-top:14px;padding-top:14px;border-top:1px solid #e2e8f0}
+.score-form label{display:grid;gap:4px;font-size:.86rem;font-weight:600;color:#334155}
+.ev-badge{display:inline-block;margin-left:8px;padding:2px 8px;border-radius:999px;font-size:.78rem;font-weight:700;background:#dcfce7;color:#166534}
+.ev-missing{display:inline-block;font-size:.84rem;color:#b45309;font-weight:600;margin-top:4px}
+@media(max-width:720px){.score-form{grid-template-columns:1fr}}
 </style></head><body>
 <header><div><a href="area.php?group=2&amp;section=<?= $h($section) ?>">← 위험관리</a><strong><?= $h($section . ' ' . $sections[$section][0]) ?></strong><span><?= $h($user['name'] ?? '') ?></span></div></header>
 <main><div class="heading"><div><small>위험관리 · <?= $h($section) ?></small><h1><?= $h($sections[$section][0]) ?></h1><p><?= $h($sections[$section][1]) ?></p><?php if ($section === '2.8'): ?><p>건강검진의 상세 결과 등 민감정보는 입력하지 마세요. 실시 여부와 필요한 최소한의 관리 정보만 기록합니다.</p><?php endif; ?></div></div>
@@ -175,6 +216,47 @@ $v = static fn(string $key, string $default = ''): string => (string)($_POST[$ke
   <a href="standard_procedure.php?tab=distribution">📢 작업자 배포·열람 대장 ↗</a>
  </div>
 </div>
+<?php endif; ?>
+
+<?php if ($isSopReview && $sopScore && $sopCriterion): ?>
+<section class="score-panel <?= $sopScore['evidence_count'] === 0 ? 'warn' : '' ?>">
+ <div class="score-top">
+  <div>
+   <strong>🏆 CSM 2.2.1 평가 점수 반영 현황 (<?= $scoreYear ?>년 기준)</strong>
+   <p class="score-meta">
+    <?php if ($sopScore['evidence_count'] === 0): ?>
+     ⚠️ 현재 첨부된 증빙 파일이 없어 <strong>0.0점</strong>입니다. 아래 검토 기록을 <strong>수정</strong>하거나 새 기록에 <strong>증빙 파일(PDF·JPG·PNG·XLSX·DOCX)</strong>을 첨부하면 즉시 점수에 반영됩니다.
+    <?php else: ?>
+     ✅ 유효 증빙 <strong><?= (int)$sopScore['evidence_count'] ?>건</strong> 확인됨 ·
+     <?= $sopScore['automatic'] ? '표준서 DB 보유 및 정기 제·개정 이력 기준 자동 반영' : '평가 수준 직접 지정 (' . $h($sopScore['assessment']['updated_at'] ?? '') . ')' ?>
+    <?php endif; ?>
+   </p>
+  </div>
+  <div class="score-val"><?= number_format((float)$sopScore['earned'], 1) ?> / 2.0점</div>
+ </div>
+ <?php if ($canManage): ?>
+ <form method="post" class="score-form">
+  <input type="hidden" name="csrf" value="<?= $h($_SESSION['csm_risk_tasks_csrf']) ?>">
+  <input type="hidden" name="section" value="2.2">
+  <input type="hidden" name="operation" value="assess_221">
+  <label>평가 수준 (증빙 첨부 시 반영)
+   <select name="level" required>
+    <?php
+     $curMult = $sopScore['assessment'] ? (float)$sopScore['assessment']['multiplier'] : ((float)$sopScore['multiplier'] ?: 1.0);
+     foreach ($sopCriterion['criteria'] as $lvl => $lbl):
+      if (!is_numeric($lvl)) continue;
+    ?>
+     <option value="<?= $h($lvl) ?>" <?= abs($curMult - (float)$lvl) < 0.001 ? 'selected' : '' ?>><?= $h(str_replace("\n", ' ', $lbl)) ?> (<?= number_format(2.0 * (float)$lvl, 1) ?>점)</option>
+    <?php endforeach; ?>
+   </select>
+  </label>
+  <label>평가 검토 메모 (선택)
+   <input name="note" maxlength="500" placeholder="예: 자체 안전작업표준서 252종 보유 및 정기 검토·개정 증빙 확인" value="<?= $h($sopScore['assessment']['note'] ?? '') ?>">
+  </label>
+  <button type="submit">평가 수준 저장</button>
+ </form>
+ <?php endif; ?>
+</section>
 <?php endif; ?>
 
 <?php if ($error): ?><p class="message error" role="alert"><?= $h($error) ?></p><?php endif; ?><?php if ($notice): ?><p class="message" role="status"><?= $h($notice) ?></p><?php endif; ?>
@@ -230,9 +312,9 @@ $v = static fn(string $key, string $default = ''): string => (string)($_POST[$ke
  </div>
  <textarea id="sop-action" name="action" rows="4" placeholder="1. 제·개정 표준서 현장 작업반 비치 및 공람&#10;2. 작업 전 안전미팅(TBM)을 통한 개정 절차 교육&#10;3. 해당 작업 위험성평가(JSA) 유해위험요인·감소대책 연계 반영 및 폐지 표준서 회수"><?= $h($v('action')) ?></textarea>
 </div>
-<label class="wide">증빙 첨부 (검토 보고서 · 개정이력 대장 스캔본 등 PDF, JPG, PNG · 15MB 이하)<input type="file" name="evidence" accept=".pdf,.jpg,.jpeg,.png"><?php if ($record && $record['evidence_name']): ?><small>현재: <?= $h($record['evidence_name']) ?> · 새 파일을 선택하면 교체됩니다.</small><?php endif; ?></label>
+<label class="wide">증빙 첨부 — <strong>2.2.1 점수 반영 근거</strong> (검토 보고서 · 개정이력 대장 · 승인본 등 PDF, JPG, PNG, XLSX, DOCX · 20MB 이하)<input type="file" name="evidence" accept=".pdf,.jpg,.jpeg,.png,.xlsx,.docx"><?php if ($record && $record['evidence_name']): ?><small>현재: <?= $h($record['evidence_name']) ?> · 새 파일을 선택하면 교체됩니다.</small><?php endif; ?></label>
 <?php else: ?>
-<label>제목 *<input name="title" required maxlength="200" value="<?= $h($v('title')) ?>"></label><label>일자 *<input type="date" name="record_date" required value="<?= $h($v('record_date', date('Y-m-d'))) ?>"></label><label>대상·장소<input name="subject" maxlength="200" value="<?= $h($v('subject')) ?>"></label><label>담당자<input name="owner" maxlength="200" value="<?= $h($v('owner')) ?>"></label><label>조치 기한<input type="date" name="due_date" value="<?= $h($v('due_date')) ?>"></label><label>진행상태<select name="status"><?php foreach (['계획','진행','완료'] as $s): ?><option <?= $v('status') === $s ? 'selected' : '' ?>><?= $s ?></option><?php endforeach; ?></select></label><label class="wide">조사·점검·활동 내용<textarea name="details" rows="4"><?= $h($v('details')) ?></textarea></label><label class="wide">개선·후속 조치 및 확인 내용<textarea name="action" rows="3"><?= $h($v('action')) ?></textarea></label><label class="wide">증빙 첨부 (PDF, JPG, PNG · 15MB 이하)<input type="file" name="evidence" accept=".pdf,.jpg,.jpeg,.png"><?php if ($record && $record['evidence_name']): ?><small>현재: <?= $h($record['evidence_name']) ?> · 새 파일을 선택하면 교체됩니다.</small><?php endif; ?></label>
+<label>제목 *<input name="title" required maxlength="200" value="<?= $h($v('title')) ?>"></label><label>일자 *<input type="date" name="record_date" required value="<?= $h($v('record_date', date('Y-m-d'))) ?>"></label><label>대상·장소<input name="subject" maxlength="200" value="<?= $h($v('subject')) ?>"></label><label>담당자<input name="owner" maxlength="200" value="<?= $h($v('owner')) ?>"></label><label>조치 기한<input type="date" name="due_date" value="<?= $h($v('due_date')) ?>"></label><label>진행상태<select name="status"><?php foreach (['계획','진행','완료'] as $s): ?><option <?= $v('status') === $s ? 'selected' : '' ?>><?= $s ?></option><?php endforeach; ?></select></label><label class="wide">조사·점검·활동 내용<textarea name="details" rows="4"><?= $h($v('details')) ?></textarea></label><label class="wide">개선·후속 조치 및 확인 내용<textarea name="action" rows="3"><?= $h($v('action')) ?></textarea></label><label class="wide">증빙 첨부 (PDF, JPG, PNG, XLSX, DOCX · 20MB 이하)<input type="file" name="evidence" accept=".pdf,.jpg,.jpeg,.png,.xlsx,.docx"><?php if ($record && $record['evidence_name']): ?><small>현재: <?= $h($record['evidence_name']) ?> · 새 파일을 선택하면 교체됩니다.</small><?php endif; ?></label>
 <?php endif; ?>
 </div><button type="submit"><?= $isSopReview ? '검토 기록 저장' : '저장' ?></button> <?php if ($record): ?><a href="risk_tasks.php?section=<?= $h($section) ?>">수정 취소</a><?php endif; ?></form></section><?php endif; ?>
 
@@ -244,7 +326,7 @@ $v = static fn(string $key, string $default = ''): string => (string)($_POST[$ke
 <?php else: ?>
 <p><?= $h($row['record_date']) ?> · 대상: <?= $h($row['subject'] ?: '미입력') ?> · 담당: <?= $h($row['owner'] ?: '미지정') ?> · 기한: <?= $h($row['due_date'] ?: '미지정') ?></p><p><b>활동 내용</b><br><?= nl2br($h($row['details'] ?: '미입력')) ?></p><p><b>후속 조치</b><br><?= nl2br($h($row['action'] ?: '미입력')) ?></p>
 <?php endif; ?>
-<?php if ($row['evidence_name']): ?><a href="?section=<?= $h($section) ?>&amp;id=<?= (int)$row['id'] ?>&amp;file=1">📎 <?= $h($row['evidence_name']) ?> 다운로드 ↓</a><?php endif; ?><?php if ($canManage): ?><div class="actions"><a href="?section=<?= $h($section) ?>&amp;id=<?= (int)$row['id'] ?>">수정</a><form method="post" onsubmit="return confirm('이 기록과 첨부파일을 삭제할까요?')"><input type="hidden" name="csrf" value="<?= $h($_SESSION['csm_risk_tasks_csrf']) ?>"><input type="hidden" name="section" value="<?= $h($section) ?>"><input type="hidden" name="id" value="<?= (int)$row['id'] ?>"><button name="operation" value="delete">삭제</button></form></div><?php endif; ?></article><?php endforeach; ?></section></main><script>
+<?php if ($row['evidence_name']): ?><p><a href="?section=<?= $h($section) ?>&amp;id=<?= (int)$row['id'] ?>&amp;file=1">📎 <?= $h($row['evidence_name']) ?> 다운로드 ↓</a><?php if ($isSopReview): ?><span class="ev-badge">✅ 2.2.1 점수 증빙 반영됨</span><?php endif; ?></p><?php elseif ($isSopReview): ?><p class="ev-missing">⚠️ 증빙 미첨부 — 아래 '수정'을 눌러 증빙 파일을 첨부하면 2.2.1 점수에 즉시 반영됩니다.</p><?php endif; ?><?php if ($canManage): ?><div class="actions"><a href="?section=<?= $h($section) ?>&amp;id=<?= (int)$row['id'] ?>">수정</a><form method="post" onsubmit="return confirm('이 기록과 첨부파일을 삭제할까요?')"><input type="hidden" name="csrf" value="<?= $h($_SESSION['csm_risk_tasks_csrf']) ?>"><input type="hidden" name="section" value="<?= $h($section) ?>"><input type="hidden" name="id" value="<?= (int)$row['id'] ?>"><button name="operation" value="delete">삭제</button></form></div><?php endif; ?></article><?php endforeach; ?></section></main><script>
 const itemGuidance = <?= json_encode(array_map(static fn($item) => $item['evidence'] ?: '현장 확인 내역을 기록하세요.', $items), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 const itemSelect = document.querySelector('select[name="item_code"]');
 if (itemSelect) { const showGuidance = () => { document.getElementById('item-guidance').textContent = itemGuidance[itemSelect.value] || '평가항목을 선택하면 확인할 증빙이 표시됩니다.'; }; itemSelect.addEventListener('change', showGuidance); showGuidance(); }
