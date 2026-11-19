@@ -259,7 +259,7 @@ foreach ($allEquipment as $eq) {
 <title>2.6.3 위험기계·기구 관리대장 및 안전점검표 · CSM</title>
 <link rel="stylesheet" href="leadership.css">
 <style>
-main { max-width: 1380px; margin: 0 auto; padding: 24px 20px 60px; }
+main { max-width: 1560px; margin: 0 auto; padding: 22px 20px 60px; }
 .hm-top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 14px; margin-bottom: 18px; }
 .hm-top h1 { margin: 4px 0 6px; font-size: 1.65rem; }
 .hm-top p { margin: 0; color: #475569; font-size: .94rem; }
@@ -291,16 +291,22 @@ main { max-width: 1380px; margin: 0 auto; padding: 24px 20px 60px; }
 
 .filter-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .filter-bar form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.filter-bar input, .filter-bar select { padding: 8px 11px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: .88rem; }
+.filter-bar input[type="text"] { width: 270px; padding: 8px 11px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: .88rem; }
+.filter-bar select { width: 135px; padding: 8px 11px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: .88rem; }
 
 .tbl-wrap { overflow-x: auto; }
-table.hm-tbl { width: 100%; border-collapse: collapse; font-size: .86rem; }
-table.hm-tbl th, table.hm-tbl td { border: 1px solid #dbe2e8; padding: 8px 9px; text-align: center; vertical-align: middle; }
+table.hm-tbl { width: 100%; border-collapse: collapse; font-size: .83rem; }
+table.hm-tbl th, table.hm-tbl td { border: 1px solid #dbe2e8; padding: 7px 6px; text-align: center; vertical-align: middle; }
 table.hm-tbl th { background: #f8fafc; font-weight: 700; color: #1e293b; white-space: nowrap; }
 table.hm-tbl td.left { text-align: left; }
+table.hm-tbl td.nowrap { white-space: nowrap; }
 table.hm-tbl tbody tr:hover { background: #f8fafc; }
-.thumb { width: 54px; height: 42px; object-fit: cover; border-radius: 6px; border: 1px solid #cbd5e1; cursor: pointer; background: #f1f5f9; }
-.no-thumb { display: inline-flex; align-items: center; justify-content: center; width: 54px; height: 42px; border-radius: 6px; border: 1px dashed #cbd5e1; color: #94a3b8; font-size: .72rem; }
+table.hm-tbl th.sticky-col, table.hm-tbl td.sticky-col { position: sticky; right: 0; background: #fff; box-shadow: -2px 0 4px rgba(15,23,42,.06); z-index: 2; }
+table.hm-tbl th.sticky-col { background: #f8fafc; z-index: 3; }
+table.hm-tbl tbody tr:hover td.sticky-col { background: #f8fafc; }
+.round-cell { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.thumb { width: 48px; height: 38px; object-fit: cover; border-radius: 6px; border: 1px solid #cbd5e1; cursor: pointer; background: #f1f5f9; }
+.no-thumb { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 38px; border-radius: 6px; border: 1px dashed #cbd5e1; color: #94a3b8; font-size: .7rem; }
 .badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: .76rem; font-weight: 700; white-space: nowrap; }
 .b-ok { background: #dcfce7; color: #166534; }
 .b-warn { background: #fef3c7; color: #92400e; }
@@ -434,26 +440,20 @@ table.hm-tbl tbody tr:hover { background: #f8fafc; }
       <table class="hm-tbl">
         <thead>
           <tr>
-            <th rowspan="2">순번</th>
-            <th rowspan="2">사진</th>
-            <th rowspan="2">관리번호</th>
-            <th rowspan="2">기계·기구 설비명</th>
-            <th rowspan="2">규격</th>
-            <th rowspan="2">수량</th>
-            <th rowspan="2">검사대상 / 유효기간</th>
-            <th rowspan="2">방호장치</th>
-            <th rowspan="2">주기</th>
-            <th rowspan="2">발생가능 재해형태</th>
-            <th colspan="2">1차 점검 (상반기)</th>
-            <th colspan="2">2차 점검 (하반기)</th>
-            <th rowspan="2">상태</th>
-            <th rowspan="2">관리</th>
-          </tr>
-          <tr>
-            <th>점검결과</th>
-            <th>스티커</th>
-            <th>점검결과</th>
-            <th>스티커</th>
+            <th>순번</th>
+            <th>사진</th>
+            <th>관리번호</th>
+            <th>기계·기구 설비명</th>
+            <th>규격</th>
+            <th>수량</th>
+            <th>검사대상 / 유효기간</th>
+            <th>방호장치</th>
+            <th>주기</th>
+            <th>발생가능 재해형태</th>
+            <th>1차 점검 (상반기)</th>
+            <th>2차 점검 (하반기)</th>
+            <th>상태</th>
+            <th class="sticky-col">관리</th>
           </tr>
         </thead>
         <tbody>
@@ -461,7 +461,7 @@ table.hm-tbl tbody tr:hover { background: #f8fafc; }
             $expired = ($eq['cert_valid_until'] !== '' && $eq['cert_valid_until'] < $today);
           ?>
           <tr>
-            <td><?= (int)$eq['seq_no'] ?></td>
+            <td class="nowrap"><?= (int)$eq['seq_no'] ?></td>
             <td>
               <?php if ($eq['photo_file'] !== ''): ?>
                 <img class="thumb" src="?photo=<?= $h($eq['photo_file']) ?>" alt="<?= $h($eq['name']) ?>" onclick="openPhotoModal(this.src, '<?= $h($eq['code'] . ' · ' . $eq['name']) ?>')">
@@ -469,41 +469,43 @@ table.hm-tbl tbody tr:hover { background: #f8fafc; }
                 <span class="no-thumb">미등록</span>
               <?php endif; ?>
             </td>
-            <td><strong><?= $h($eq['code']) ?></strong></td>
-            <td class="left"><strong><?= $h($eq['name']) ?></strong><br><small style="color:#64748b">점검항목 <?= (int)$eq['item_count'] ?>개</small></td>
-            <td><?= $h($eq['spec'] ?: '-') ?></td>
-            <td><?= (int)$eq['qty'] ?></td>
-            <td>
+            <td class="nowrap"><strong><?= $h($eq['code']) ?></strong></td>
+            <td class="left nowrap"><strong><?= $h($eq['name']) ?></strong><br><small style="color:#64748b">점검항목 <?= (int)$eq['item_count'] ?>개</small></td>
+            <td class="nowrap"><?= $h($eq['spec'] ?: '-') ?></td>
+            <td class="nowrap"><?= (int)$eq['qty'] ?></td>
+            <td class="nowrap">
               <span class="badge <?= str_contains($eq['inspection_target'], '법정') ? 'b-blue' : 'b-gray' ?>"><?= $h($eq['inspection_target']) ?></span>
               <?php if ($eq['cert_valid_until'] !== ''): ?>
-                <div style="font-size:.76rem;margin-top:3px;<?= $expired ? 'color:#b91c1c;font-weight:700' : 'color:#475569' ?>">
+                <div style="font-size:.74rem;margin-top:2px;<?= $expired ? 'color:#b91c1c;font-weight:700' : 'color:#475569' ?>">
                   ~<?= $h($eq['cert_valid_until']) ?><?= $expired ? ' (경과)' : '' ?>
                 </div>
               <?php endif; ?>
             </td>
             <td class="left"><?= $h($eq['guard_device'] ?: '-') ?></td>
-            <td><?= $h($eq['check_cycle']) ?></td>
+            <td class="nowrap"><?= $h($eq['check_cycle']) ?></td>
             <td class="left"><?= $h($eq['hazard_type'] ?: '-') ?></td>
-            <td>
-              <?php if ($eq['check1_result'] !== ''): ?>
-                <span class="badge <?= str_starts_with($eq['check1_result'], '부적정') ? 'b-bad' : 'b-ok' ?>"><?= $h($eq['check1_result']) ?></span>
-                <div style="font-size:.72rem;color:#64748b"><?= $h($eq['check1_date']) ?></div>
-              <?php else: ?>
-                <span class="badge b-gray">미점검</span>
-              <?php endif; ?>
+            <td class="nowrap">
+              <div class="round-cell">
+                <?php if ($eq['check1_result'] !== ''): ?>
+                  <span class="badge <?= str_starts_with($eq['check1_result'], '부적정') ? 'b-bad' : 'b-ok' ?>"><?= $h($eq['check1_result']) ?></span>
+                <?php else: ?>
+                  <span class="badge b-gray">미점검</span>
+                <?php endif; ?>
+                <span class="badge <?= $eq['check1_sticker'] === '발부' ? 'b-ok' : 'b-gray' ?>" style="font-size:.7rem">스티커: <?= $h($eq['check1_sticker']) ?></span>
+              </div>
             </td>
-            <td><span class="badge <?= $eq['check1_sticker'] === '발부' ? 'b-ok' : 'b-gray' ?>"><?= $h($eq['check1_sticker']) ?></span></td>
-            <td>
-              <?php if ($eq['check2_result'] !== ''): ?>
-                <span class="badge <?= str_starts_with($eq['check2_result'], '부적정') ? 'b-bad' : 'b-ok' ?>"><?= $h($eq['check2_result']) ?></span>
-                <div style="font-size:.72rem;color:#64748b"><?= $h($eq['check2_date']) ?></div>
-              <?php else: ?>
-                <span class="badge b-gray">미점검</span>
-              <?php endif; ?>
+            <td class="nowrap">
+              <div class="round-cell">
+                <?php if ($eq['check2_result'] !== ''): ?>
+                  <span class="badge <?= str_starts_with($eq['check2_result'], '부적정') ? 'b-bad' : 'b-ok' ?>"><?= $h($eq['check2_result']) ?></span>
+                <?php else: ?>
+                  <span class="badge b-gray">미점검</span>
+                <?php endif; ?>
+                <span class="badge <?= $eq['check2_sticker'] === '발부' ? 'b-ok' : 'b-gray' ?>" style="font-size:.7rem">스티커: <?= $h($eq['check2_sticker']) ?></span>
+              </div>
             </td>
-            <td><span class="badge <?= $eq['check2_sticker'] === '발부' ? 'b-ok' : 'b-gray' ?>"><?= $h($eq['check2_sticker']) ?></span></td>
-            <td><span class="badge <?= $eq['status'] === '사용 가능' ? 'b-ok' : ($eq['status'] === '수리 중' ? 'b-warn' : 'b-bad') ?>"><?= $h($eq['status']) ?></span></td>
-            <td style="white-space:nowrap">
+            <td class="nowrap"><span class="badge <?= $eq['status'] === '사용 가능' ? 'b-ok' : ($eq['status'] === '수리 중' ? 'b-warn' : 'b-bad') ?>"><?= $h($eq['status']) ?></span></td>
+            <td class="nowrap sticky-col">
               <a class="btn btn-sm btn-primary" href="?tab=checklist&amp;id=<?= (int)$eq['id'] ?>&amp;year=<?= $year ?>">점검표</a>
               <?php if ($canManage): ?>
               <button type="button" class="btn btn-sm" onclick='openEqModal(<?= json_encode($eq, JSON_UNESCAPED_UNICODE | JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'>수정</button>
