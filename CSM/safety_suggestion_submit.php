@@ -226,68 +226,6 @@ $formatSuggestionForWorker = static function(array $r): array {
     ];
 };
 
-$extractLast4 = static function(?string $phone): string {
-    $digits = preg_replace('/\D+/', '', (string)($phone ?? ''));
-    return strlen($digits) >= 4 ? substr($digits, -4) : '';
-};
-
-// Build lookup map of account phones by login_id and clean name (for proxy lookup verification)
-$accountPhonesByLogin = [];
-$accountPhonesByName = [];
-if (function_exists('auth_accounts')) {
-    foreach (auth_accounts() as $lid => $acc) {
-        $l4 = $extractLast4((string)($acc['phone'] ?? ''));
-        if ($l4 !== '') {
-            $accountPhonesByLogin[(string)$lid] = $l4;
-            $cn = worker_part_clean_person_name((string)($acc['name'] ?? ''));
-            if ($cn !== '') {
-                $accountPhonesByName[$cn][$l4] = true;
-            }
-        }
-    }
-}
-
-if (($_GET['api'] ?? '') === 'my_suggestions') {
-    header('Content-Type: application/json; charset=utf-8');
-    header('Cache-Control: no-store');
-    $qReg = trim((string)($_GET['reg_no'] ?? ''));
-    $qName = worker_part_clean_person_name((string)($_GET['name'] ?? ''));
-    $qPhone4 = preg_replace('/\D+/', '', (string)($_GET['phone4'] ?? ''));
-    if (strlen($qPhone4) > 4) {
-        $qPhone4 = substr($qPhone4, -4);
-    }
-
-    if ($qReg === '' && ($qName === '' || strlen($qPhone4) !== 4)) {
-        echo json_encode(['ok' => false, 'error' => '접수번호 또는 성명과 휴대폰 뒤 4자리를 입력해주세요.'], JSON_UNESCAPED_UNICODE);
-        exit;
-    }
-
-    $allRows = $db->query('SELECT * FROM csm_suggestions ORDER BY reg_date DESC, id DESC')->fetchAll(PDO::FETCH_ASSOC);
-    $matched = [];
-    foreach ($allRows as $r) {
-        if ($qReg !== '') {
-            if (strcasecmp(trim((string)($r['reg_no'] ?? '')), $qReg) === 0) {
-                $matched[] = $formatSuggestionForWorker($r);
-            }
-            continue;
-        }
-        $rowCleanName = worker_part_clean_person_name((string)($r['proposer_name'] ?? ''));
-        if ($rowCleanName === '' || $rowCleanName !== $qName) {
-            continue;
-        }
-        $rowPhone4 = $extractLast4((string)($r['proposer_phone'] ?? ''));
-        $rowLoginId = trim((string)($r['proposer_login_id'] ?? ''));
-        $accPhone4 = ($rowLoginId !== '' && isset($accountPhonesByLogin[$rowLoginId])) ? $accountPhonesByLogin[$rowLoginId] : '';
-        $namePhoneMatch = isset($accountPhonesByName[$rowCleanName][$qPhone4]);
-        if ($rowPhone4 === $qPhone4 || $accPhone4 === $qPhone4 || $namePhoneMatch) {
-            $matched[] = $formatSuggestionForWorker($r);
-        }
-    }
-
-    echo json_encode(['ok' => true, 'items' => $matched], JSON_UNESCAPED_UNICODE);
-    exit;
-}
-
 // Preload logged-in worker's own submitted suggestions (including proxy submissions under their name/account)
 $mySuggestions = [];
 if ($isLoggedInUser) {
@@ -1503,62 +1441,12 @@ function openMySuggestionsModal() {
   modal.style.display = 'flex';
   if (isLoggedInWorker) {
     renderMySuggestionList(initialMySuggestions, loggedCleanName + ' 님 명의로 접수된 제안서 (대리접수 포함)');
-  } else {
-    document.getElementById('msSearchPanel').style.display = 'block';
   }
 }
 
 function closeMySuggestionsModal() {
   const modal = document.getElementById('modalMySuggestions');
   if (modal) modal.style.display = 'none';
-}
-
-function toggleMsSearchPanel() {
-  const p = document.getElementById('msSearchPanel');
-  if (!p) return;
-  p.style.display = (p.style.display === 'none' || !p.style.display) ? 'block' : 'none';
-}
-
-async function searchMySuggestions() {
-  const regNo = (document.getElementById('msRegNoInput')?.value || '').trim();
-  const name = (document.getElementById('msNameInput')?.value || '').trim();
-  const phone4 = (document.getElementById('msPhone4Input')?.value || '').replace(/\D+/g, '').slice(-4);
-  const errEl = document.getElementById('msSearchErr');
-  errEl.style.display = 'none';
-
-  if (!regNo && (!name || phone4.length !== 4)) {
-    errEl.innerText = '접수번호를 입력하시거나, 성명과 휴대폰 뒤 4자리를 모두 입력해주세요.';
-    errEl.style.display = 'block';
-    return;
-  }
-
-  const params = new URLSearchParams({ api: 'my_suggestions' });
-  if (regNo) params.set('reg_no', regNo);
-  else {
-    params.set('name', name);
-    params.set('phone4', phone4);
-  }
-
-  const listEl = document.getElementById('msListContainer');
-  listEl.innerHTML = '<div style="text-align:center;padding:30px;color:#64748b;font-size:13px;">조회 중입니다...</div>';
-
-  try {
-    const res = await fetch('safety_suggestion_submit.php?' + params.toString(), { cache: 'no-store' });
-    const data = await res.json();
-    if (!data.ok) {
-      errEl.innerText = data.error || '조회 중 오류가 발생했습니다.';
-      errEl.style.display = 'block';
-      listEl.innerHTML = '';
-      return;
-    }
-    const label = regNo
-      ? ('접수번호 [' + regNo + '] 조회 결과')
-      : (name + ' 님 명의로 접수된 제안서 (대리접수 포함)');
-    renderMySuggestionList(data.items || [], label);
-  } catch (e) {
-    errEl.innerText = '서버 통신 중 오류가 발생했습니다.';
-    errEl.style.display = 'block';
-  }
 }
 
 function getStatusBadgeHtml(status) {
@@ -1686,36 +1574,18 @@ function closeMyPhotoZoom() {
 
     <div class="ms-body">
       <?php if ($isLoggedInUser): ?>
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
-          <div id="msListHeading" style="font-size:13px;font-weight:800;color:#1e3a8a;"></div>
-          <button type="button" onclick="toggleMsSearchPanel()" style="font-size:11.5px;font-weight:700;color:#475569;background:#ffffff;border:1px solid #cbd5e1;border-radius:999px;padding:4px 10px;cursor:pointer;">🔍 접수번호 / 다른 이름 조회</button>
-        </div>
+        <div id="msListHeading" style="font-size:13px;font-weight:800;color:#1e3a8a;margin-bottom:10px;"></div>
+        <div id="msListContainer"></div>
       <?php else: ?>
-        <div id="msListHeading" style="font-size:13px;font-weight:800;color:#1e3a8a;margin-bottom:10px;">본인 제안 조회 (성명 + 휴대폰 뒤 4자리 또는 접수번호)</div>
+        <div style="text-align:center;padding:34px 18px;background:#ffffff;border-radius:12px;border:1px solid #cbd5e1;">
+          <div style="font-size:28px;margin-bottom:8px;">🔐</div>
+          <div style="font-size:14.5px;font-weight:800;color:#0f172a;margin-bottom:6px;">로그인이 필요합니다</div>
+          <div style="font-size:12.5px;color:#64748b;line-height:1.5;margin-bottom:14px;">
+            본인 계정으로 로그인하시면 직접 접수했거나<br>대리접수된 내 안전제안 내역을 바로 조회할 수 있습니다.
+          </div>
+          <a href="/CSM/login.php" style="display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:8px;background:#1e3a8a;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;">로그인하기</a>
+        </div>
       <?php endif; ?>
-
-      <div id="msSearchPanel" style="display:<?= $isLoggedInUser ? 'none' : 'block' ?>;background:#ffffff;border:1px solid #cbd5e1;border-radius:12px;padding:12px;margin-bottom:14px;">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
-          <div>
-            <label style="font-size:11.5px;font-weight:700;color:#475569;display:block;margin-bottom:3px;">제안자 성명</label>
-            <input type="text" id="msNameInput" class="m-input" placeholder="예: 윤택천" style="padding:8px 10px;font-size:13.5px;">
-          </div>
-          <div>
-            <label style="font-size:11.5px;font-weight:700;color:#475569;display:block;margin-bottom:3px;">휴대폰 뒤 4자리</label>
-            <input type="tel" id="msPhone4Input" class="m-input" maxlength="4" placeholder="예: 6209" style="padding:8px 10px;font-size:13.5px;">
-          </div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:flex-end;">
-          <div style="flex:1;">
-            <label style="font-size:11.5px;font-weight:700;color:#475569;display:block;margin-bottom:3px;">또는 접수번호로 바로 조회</label>
-            <input type="text" id="msRegNoInput" class="m-input" placeholder="예: 26-001 또는 2026-S001" style="padding:8px 10px;font-size:13.5px;" onkeydown="if(event.key==='Enter'){event.preventDefault();searchMySuggestions();}">
-          </div>
-          <button type="button" onclick="searchMySuggestions()" style="padding:9px 16px;border:none;border-radius:8px;background:#1e3a8a;color:#ffffff;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">조회</button>
-        </div>
-        <div id="msSearchErr" style="display:none;margin-top:8px;font-size:12px;color:#b91c1c;font-weight:600;"></div>
-      </div>
-
-      <div id="msListContainer"></div>
     </div>
 
     <div style="padding:12px 16px;background:#ffffff;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;">
