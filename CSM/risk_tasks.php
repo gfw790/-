@@ -102,6 +102,29 @@ if ($isSopReview && isset($_GET['print']) && $record) {
   }
  }
  $showRevTable = count($revsForPrint) > 0;
+ $printPayload = [
+  'docNo' => $docNo,
+  'rptYear' => $rptYear,
+  'title' => (string)$record['title'],
+  'recordDate' => (string)$record['record_date'],
+  'status' => $record['status'] === '완료' ? '검토·개정 및 배포 완료' : (string)$record['status'],
+  'subject' => (string)($record['subject'] ?: '01~06권 전권'),
+  'owner' => (string)($record['owner'] ?: '검토: 공사팀 김남균 / 승인: 정연탁 대표'),
+  'details' => (string)($record['details'] ?: '미입력'),
+  'action' => (string)($record['action'] ?: '미입력'),
+  'sopStats' => $sopStats ? [
+   'total' => (int)$sopStats['total'],
+   'valid' => (int)$sopStats['valid'],
+   'abolished' => (int)$sopStats['abolished'],
+  ] : null,
+  'revisions' => array_map(static fn($rv) => [
+   'sop_no' => (int)$rv['sop_no'],
+   'revision_date' => (string)$rv['revision_date'],
+   'title' => (string)$rv['title'],
+   'change_reason' => (string)($rv['change_reason'] ?: ('Rev.' . $rv['revision_no'])),
+   'changes_summary' => (string)$rv['changes_summary'],
+  ], $revsForPrint),
+ ];
  ?>
 <!doctype html>
 <html lang="ko">
@@ -109,146 +132,418 @@ if ($isSopReview && isset($_GET['print']) && $record) {
 <meta charset="utf-8">
 <title><?= $h($record['title']) ?> · 보고서 인쇄</title>
 <style>
-@page { size: A4 portrait; margin: 14mm 12mm 14mm 12mm; }
-* { box-sizing: border-box; }
-body { margin: 0; padding: 0; font-family: "Malgun Gothic", "맑은 고딕", sans-serif; color: #111; background: #e5e7eb; font-size: 10pt; line-height: 1.5; }
-.toolbar { position: sticky; top: 0; z-index: 20; background: #0f172a; color: #fff; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.toolbar-left { display: flex; align-items: center; gap: 14px; font-size: 13px; }
-.toolbar-left label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
-.toolbar-right { display: flex; gap: 8px; }
-.toolbar button, .toolbar a { background: #10b981; color: #fff; border: 0; border-radius: 6px; padding: 7px 14px; font-size: 13px; font-weight: 700; cursor: pointer; text-decoration: none; }
-.toolbar a { background: #475569; }
-.sheet { width: 210mm; min-height: 297mm; margin: 16px auto; background: #fff; padding: 16mm 14mm; box-shadow: 0 4px 20px rgba(0,0,0,.15); }
-.rpt-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; border-bottom: 2.5px solid #111; padding-bottom: 10px; margin-bottom: 14px; }
+:root {
+  --top-pad: 20mm;
+  --right-pad: 12mm;
+  --bottom-pad: 12mm;
+  --left-pad: 12mm;
+}
+@page { size: A4 portrait; margin: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background-color: #f1f5f9;
+  font-family: "Malgun Gothic", "맑은 고딕", Dotum, sans-serif;
+  color: #000000;
+  font-size: 9.5pt;
+  line-height: 1.5;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+/* CSM 표준 인쇄 툴바 */
+.screen-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: #ffffff;
+  border-bottom: 1px solid #cbd5e1;
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.07);
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  text-decoration: none;
+}
+.btn-print { background: #1e3a8a; color: #fff; }
+.btn-print:hover { background: #1e40af; }
+.btn-close { background: #f1f5f9; color: #475569; border-color: #cbd5e1; }
+.btn-close:hover { background: #e2e8f0; }
+.pad-control-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 4px;
+  padding-left: 12px;
+  border-left: 1px solid #cbd5e1;
+  flex-wrap: wrap;
+}
+.pad-label { font-size: 12px; font-weight: 700; color: #334155; }
+.pad-btn {
+  padding: 5px 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #475569;
+  cursor: pointer;
+}
+.pad-btn.active {
+  background: #1e3a8a;
+  color: #fff;
+  border-color: #1e3a8a;
+}
+.page-badge {
+  background: #dcfce7;
+  color: #166534;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid #86efac;
+}
+.rev-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+  cursor: pointer;
+}
+.toolbar-tip {
+  font-size: 12px;
+  color: #475569;
+  background: #f8fafc;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+/* CSM A4 출력원칙 용지 규격 (상단 20mm 편철 / 좌·우·하단 12mm) */
+.paper-container {
+  max-width: 210mm;
+  margin: 16px auto 32px auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.a4-page {
+  width: 210mm;
+  height: 297mm;
+  min-height: 297mm;
+  max-height: 297mm;
+  background: #ffffff;
+  padding: var(--top-pad) var(--right-pad) var(--bottom-pad) var(--left-pad);
+  box-shadow: 0 10px 25px -5px rgba(0,0,0,0.12);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+.page-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.rpt-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  border-bottom: 2px solid #000;
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+}
+.rpt-header-cont {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 1.5px solid #000;
+  padding-bottom: 5px;
+  margin-bottom: 10px;
+  font-size: 9pt;
+}
 .rpt-title-box { flex: 1; }
-.rpt-kicker { font-size: 8.5pt; color: #475569; font-weight: 700; letter-spacing: .3px; margin-bottom: 4px; }
-.rpt-title { font-size: 16.5pt; font-weight: 800; margin: 0 0 4px; letter-spacing: -.3px; }
-.rpt-docno { font-size: 8.5pt; color: #334155; }
-.approval { border-collapse: collapse; width: 68mm; font-size: 8.5pt; text-align: center; }
-.approval th, .approval td { border: 1px solid #111; padding: 3px 4px; }
+.rpt-kicker { font-size: 8pt; color: #334155; font-weight: 700; margin-bottom: 3px; }
+.rpt-title { font-size: 15.5pt; font-weight: 800; margin: 0 0 3px; letter-spacing: -.3px; }
+.rpt-docno { font-size: 8.3pt; color: #334155; }
+.approval { border-collapse: collapse; width: 64mm; font-size: 8pt; text-align: center; }
+.approval th, .approval td { border: 1px solid #000; padding: 2.5px 4px; }
 .approval th { background: #f1f5f9; font-weight: 700; }
-.approval .sign-cell { height: 14mm; vertical-align: bottom; font-size: 8pt; color: #475569; }
-.sec-title { font-size: 10.5pt; font-weight: 800; margin: 14px 0 6px; padding-left: 8px; border-left: 3.5px solid #176053; }
-table.meta { width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 9.2pt; }
-table.meta th, table.meta td { border: 1px solid #64748b; padding: 6px 8px; text-align: left; }
-table.meta th { width: 18%; background: #f8fafc; font-weight: 700; color: #1e293b; }
-table.meta td { width: 32%; }
-.box { border: 1px solid #64748b; padding: 10px 12px; white-space: pre-wrap; font-size: 9.2pt; line-height: 1.58; background: #fff; }
-table.rev-tbl { width: 100%; border-collapse: collapse; font-size: 8.3pt; margin-top: 4px; }
-table.rev-tbl th, table.rev-tbl td { border: 1px solid #64748b; padding: 4px 6px; vertical-align: top; }
+.approval .sign-cell { height: 12.5mm; vertical-align: bottom; font-size: 7.8pt; color: #475569; }
+.sec-title {
+  font-size: 10pt;
+  font-weight: 800;
+  margin: 10px 0 5px;
+  padding-left: 7px;
+  border-left: 3.5px solid #176053;
+}
+table.meta { width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 8.8pt; }
+table.meta th, table.meta td { border: 1px solid #475569; padding: 5px 7px; text-align: left; }
+table.meta th { width: 17%; background: #f8fafc; font-weight: 700; color: #1e293b; }
+table.meta td { width: 33%; }
+.box {
+  border: 1px solid #475569;
+  padding: 8px 10px;
+  white-space: pre-wrap;
+  font-size: 8.8pt;
+  line-height: 1.5;
+  background: #fff;
+}
+table.rev-tbl { width: 100%; border-collapse: collapse; font-size: 8pt; margin-top: 2px; }
+table.rev-tbl th, table.rev-tbl td { border: 1px solid #475569; padding: 3.5px 5px; vertical-align: top; line-height: 1.38; }
 table.rev-tbl th { background: #f1f5f9; text-align: center; font-weight: 700; }
 table.rev-tbl td.c { text-align: center; white-space: nowrap; }
-.rpt-footer { margin-top: 18px; padding-top: 10px; border-top: 1px solid #cbd5e1; display: flex; justify-content: space-between; align-items: center; font-size: 8.8pt; color: #334155; }
-.rpt-company { font-weight: 800; font-size: 10.5pt; color: #111; }
+.rpt-footer {
+  flex: 0 0 auto;
+  margin-top: auto;
+  padding-top: 7px;
+  border-top: 1px solid #94a3b8;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 8.2pt;
+  color: #334155;
+}
+.rpt-company { font-weight: 800; font-size: 9.5pt; color: #000; }
+.rpt-pageno { font-weight: 700; font-size: 8.5pt; color: #1e293b; }
+#measureStage {
+  position: fixed;
+  left: -99999px;
+  top: 0;
+  width: calc(210mm - var(--left-pad) - var(--right-pad));
+  visibility: hidden;
+  pointer-events: none;
+}
 @media print {
- body { background: #fff; }
- .toolbar { display: none !important; }
- .sheet { width: auto; min-height: auto; margin: 0; padding: 0; box-shadow: none; }
- .sec-title, .box, table.rev-tbl tr { break-inside: avoid; }
+  body { background: #fff !important; }
+  .screen-toolbar, #measureStage { display: none !important; }
+  .paper-container { max-width: none; margin: 0; gap: 0; }
+  .a4-page {
+    box-shadow: none;
+    margin: 0;
+    break-after: page;
+    page-break-after: always;
+  }
+  .a4-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
 }
 </style>
 </head>
 <body>
-<div class="toolbar">
- <div class="toolbar-left">
-  <strong>📄 안전작업표준서 검토·개정 결과 보고서 미리보기</strong>
-  <?php if ($showRevTable): ?>
-  <label><input type="checkbox" id="toggle-rev" checked onchange="document.getElementById('rev-section').style.display=this.checked?'block':'none'"> <?= $h($rptYear) ?>년 제·개정 세부 목록표 포함 (<?= count($revsForPrint) ?>건)</label>
-  <?php endif; ?>
- </div>
- <div class="toolbar-right">
-  <button type="button" onclick="window.print()">🖨️ 인쇄 / PDF 저장</button>
-  <a href="risk_tasks.php?section=2.2">← 목록으로</a>
- </div>
-</div>
-
-<div class="sheet">
- <div class="rpt-header">
-  <div class="rpt-title-box">
-   <div class="rpt-kicker">CSM 안전보건활동평가 2.2.1 · 안전작업절차(표준서) 정기·수시 검토</div>
-   <h1 class="rpt-title">안전작업표준서(SOP) 검토·개정 결과 보고서</h1>
-   <div class="rpt-docno">문서번호: <?= $h($docNo) ?> &nbsp;|&nbsp; 검토일자: <?= $h($record['record_date']) ?></div>
+<aside class="screen-toolbar">
+  <div class="toolbar-left">
+    <button type="button" class="toolbar-btn btn-print" onclick="window.print()">🖨️ 인쇄 / PDF 저장</button>
+    <a class="toolbar-btn btn-close" href="risk_tasks.php?section=2.2">← 목록으로</a>
+    <span id="pageCountBadge" class="page-badge">총 1P</span>
+    <div class="pad-control-group">
+      <span class="pad-label">여백 규정:</span>
+      <button type="button" class="pad-btn active" onclick="setPadPreset('20mm','12mm','12mm','12mm',this)">상단 편철 (상 20 / 좌·우·하 12mm)</button>
+      <button type="button" class="pad-btn" onclick="setPadPreset('12mm','12mm','12mm','20mm',this)">좌측 편철 (좌 20 / 상·우·하 12mm)</button>
+      <button type="button" class="pad-btn" onclick="setPadPreset('25mm','12mm','12mm','12mm',this)">여유 편철 (상 25 / 좌·우·하 12mm)</button>
+    </div>
+    <?php if ($showRevTable): ?>
+    <div class="pad-control-group">
+      <label class="rev-toggle"><input type="checkbox" id="toggle-rev" checked onchange="renderReport()"> <?= $h($rptYear) ?>년 제·개정 세부 목록표 포함 (<?= count($revsForPrint) ?>건)</label>
+    </div>
+    <?php endif; ?>
   </div>
-  <table class="approval">
-   <tr>
-    <th rowspan="2" style="width:14%">결<br>재</th>
-    <th>작성</th>
-    <th>검토</th>
-    <th>승인</th>
-   </tr>
-   <tr>
-    <td class="sign-cell">김남균</td>
-    <td class="sign-cell">안전관리자</td>
-    <td class="sign-cell">정연탁 대표</td>
-   </tr>
-  </table>
- </div>
+  <div class="toolbar-tip">
+    💡 <strong>CSM A4 출력원칙 적용</strong> (상단 20mm 편철 기본) &bull; 인쇄 설정에서 <strong>[배경 그래픽]</strong> 켜기 / <strong>[여백: 없음]</strong> 권장
+  </div>
+</aside>
 
- <div class="sec-title">1. 검토 개요</div>
- <table class="meta">
-  <tr>
-   <th>검토 제목</th>
-   <td colspan="3"><strong><?= $h($record['title']) ?></strong></td>
-  </tr>
-  <tr>
-   <th>검토 일자</th>
-   <td><?= $h($record['record_date']) ?></td>
-   <th>검토 결과 상태</th>
-   <td><strong><?= $h($record['status'] === '완료' ? '검토·개정 및 배포 완료' : $record['status']) ?></strong></td>
-  </tr>
-  <tr>
-   <th>검토 구분·범위</th>
-   <td><?= $h($record['subject'] ?: '01~06권 전권') ?></td>
-   <th>검토자 / 승인자</th>
-   <td><?= $h($record['owner'] ?: '검토: 공사팀 김남균 / 승인: 정연탁 대표') ?></td>
-  </tr>
-  <?php if ($sopStats): ?>
-  <tr>
-   <th>보유 표준서 현황</th>
-   <td colspan="3">총 <strong><?= (int)$sopStats['total'] ?>종</strong> (유효 <strong><?= (int)$sopStats['valid'] ?>종</strong> / 폐지 <strong><?= (int)$sopStats['abolished'] ?>종</strong>) · 01~06권 통합 관리 중</td>
-  </tr>
-  <?php endif; ?>
- </table>
+<div id="measureStage"></div>
+<div id="paperContainer" class="paper-container"></div>
 
- <div class="sec-title">2. 표준서 검토 및 제·개정 내역 요약</div>
- <div class="box"><?= $h($record['details'] ?: '미입력') ?></div>
-
- <?php if ($showRevTable): ?>
- <div id="rev-section">
-  <div class="sec-title">3. <?= $h($rptYear) ?>년 안전작업표준서 제·개정 및 폐지 세부 목록 (<?= count($revsForPrint) ?>건)</div>
+<script>
+const RPT = <?= json_encode($printPayload, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function setPadPreset(top, right, bottom, left, btn) {
+  const root = document.documentElement.style;
+  root.setProperty('--top-pad', top);
+  root.setProperty('--right-pad', right);
+  root.setProperty('--bottom-pad', bottom);
+  root.setProperty('--left-pad', left);
+  document.querySelectorAll('.pad-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderReport();
+}
+function buildFirstHeader() {
+  return `<div class="rpt-header">
+    <div class="rpt-title-box">
+      <div class="rpt-kicker">CSM 안전보건활동평가 2.2.1 · 안전작업절차(표준서) 정기·수시 검토</div>
+      <h1 class="rpt-title">안전작업표준서(SOP) 검토·개정 결과 보고서</h1>
+      <div class="rpt-docno">문서번호: ${esc(RPT.docNo)} &nbsp;|&nbsp; 검토일자: ${esc(RPT.recordDate)}</div>
+    </div>
+    <table class="approval">
+      <tr><th rowspan="2" style="width:14%">결<br>재</th><th>작성</th><th>검토</th><th>승인</th></tr>
+      <tr><td class="sign-cell">김남균</td><td class="sign-cell">안전관리자</td><td class="sign-cell">정연탁 대표</td></tr>
+    </table>
+  </div>`;
+}
+function buildContHeader() {
+  return `<div class="rpt-header-cont">
+    <strong>안전작업표준서(SOP) 검토·개정 결과 보고서 (계속)</strong>
+    <span>문서번호: ${esc(RPT.docNo)} &nbsp;|&nbsp; 검토일자: ${esc(RPT.recordDate)}</span>
+  </div>`;
+}
+function buildFooter(pageNo, totalPages) {
+  return `<div class="rpt-footer">
+    <div>※ 본 보고서는 결재(서명) 후 PDF 스캔하여 CSM 2.2.1 증빙으로 첨부·보관합니다.</div>
+    <div class="rpt-pageno">${pageNo} / ${totalPages}</div>
+    <div class="rpt-company">주식회사 성호이앤씨 (공사팀)</div>
+  </div>`;
+}
+function buildMetaBlock() {
+  const sopRow = RPT.sopStats
+    ? `<tr><th>보유 표준서 현황</th><td colspan="3">총 <strong>${RPT.sopStats.total}종</strong> (유효 <strong>${RPT.sopStats.valid}종</strong> / 폐지 <strong>${RPT.sopStats.abolished}종</strong>) · 01~06권 통합 관리 중</td></tr>`
+    : '';
+  return `<div class="sec-title">1. 검토 개요</div>
+  <table class="meta">
+    <tr><th>검토 제목</th><td colspan="3"><strong>${esc(RPT.title)}</strong></td></tr>
+    <tr><th>검토 일자</th><td>${esc(RPT.recordDate)}</td><th>검토 결과 상태</th><td><strong>${esc(RPT.status)}</strong></td></tr>
+    <tr><th>검토 구분·범위</th><td>${esc(RPT.subject)}</td><th>검토자 / 승인자</th><td>${esc(RPT.owner)}</td></tr>
+    ${sopRow}
+  </table>`;
+}
+function buildDetailsBlock() {
+  return `<div class="sec-title">2. 표준서 검토 및 제·개정 내역 요약</div><div class="box">${esc(RPT.details)}</div>`;
+}
+function buildActionBlock(secNum) {
+  return `<div class="sec-title">${secNum}. 현장 배포 · TBM 교육 및 위험성평가 연계 조치</div><div class="box">${esc(RPT.action)}</div>`;
+}
+function buildRevTableHtml(rows, isCont) {
+  const trs = rows.map(rv => `<tr>
+    <td class="c">${rv.sop_no}</td>
+    <td class="c">${esc(rv.revision_date)}</td>
+    <td><strong>${esc(rv.title)}</strong></td>
+    <td class="c">${esc(rv.change_reason)}</td>
+    <td>${esc(rv.changes_summary)}</td>
+  </tr>`).join('');
+  return `${isCont ? `<div class="sec-title">3. ${esc(RPT.rptYear)}년 제·개정 및 폐지 세부 목록 (계속)</div>` : `<div class="sec-title">3. ${esc(RPT.rptYear)}년 안전작업표준서 제·개정 및 폐지 세부 목록 (${RPT.revisions.length}건)</div>`}
   <table class="rev-tbl">
-   <thead>
-    <tr>
-     <th style="width:7%">No.</th>
-     <th style="width:11%">개정일</th>
-     <th style="width:24%">표준서 작업명</th>
-     <th style="width:14%">변경 구분</th>
-     <th style="width:44%">주요 변경 내용</th>
-    </tr>
-   </thead>
-   <tbody>
-    <?php foreach ($revsForPrint as $rv): ?>
-    <tr>
-     <td class="c"><?= (int)$rv['sop_no'] ?></td>
-     <td class="c"><?= $h($rv['revision_date']) ?></td>
-     <td><strong><?= $h($rv['title']) ?></strong></td>
-     <td class="c"><?= $h($rv['change_reason'] ?: ('Rev.' . $rv['revision_no'])) ?></td>
-     <td><?= $h($rv['changes_summary']) ?></td>
-    </tr>
-    <?php endforeach; ?>
-   </tbody>
-  </table>
- </div>
- <?php endif; ?>
+    <thead><tr><th style="width:7%">No.</th><th style="width:11%">개정일</th><th style="width:24%">표준서 작업명</th><th style="width:14%">변경 구분</th><th style="width:44%">주요 변경 내용</th></tr></thead>
+    <tbody>${trs}</tbody>
+  </table>`;
+}
+function measureHeight(html) {
+  const stage = document.getElementById('measureStage');
+  stage.innerHTML = html;
+  return stage.getBoundingClientRect().height;
+}
+function renderReport() {
+  const container = document.getElementById('paperContainer');
+  const includeRevEl = document.getElementById('toggle-rev');
+  const includeRev = includeRevEl ? includeRevEl.checked && RPT.revisions.length > 0 : false;
 
- <div class="sec-title"><?= $showRevTable ? '4.' : '3.' ?> 현장 배포 · TBM 교육 및 위험성평가 연계 조치</div>
- <div class="box"><?= $h($record['action'] ?: '미입력') ?></div>
+  // Measure available content height inside an .a4-page
+  const probe = document.createElement('div');
+  probe.className = 'a4-page';
+  probe.style.position = 'fixed';
+  probe.style.left = '-99999px';
+  probe.innerHTML = buildFirstHeader() + '<div class="page-body"></div>' + buildFooter(1, 1);
+  document.body.appendChild(probe);
+  const firstBodyMax = probe.querySelector('.page-body').getBoundingClientRect().height - 4;
+  probe.innerHTML = buildContHeader() + '<div class="page-body"></div>' + buildFooter(2, 2);
+  const contBodyMax = probe.querySelector('.page-body').getBoundingClientRect().height - 4;
+  document.body.removeChild(probe);
 
- <div class="rpt-footer">
-  <div>※ 본 보고서는 결재(서명) 후 PDF 스캔하여 CSM 2.2.1 증빙으로 첨부·보관합니다.</div>
-  <div class="rpt-company">주식회사 성호이앤씨 (공사팀)</div>
- </div>
-</div>
+  const pages = [[]];
+  let curIdx = 0;
+  let curH = 0;
+  const maxFor = (idx) => idx === 0 ? firstBodyMax : contBodyMax;
+
+  function pushBlock(html) {
+    const h = measureHeight(html);
+    if (curH > 0 && curH + h > maxFor(curIdx)) {
+      pages.push([]);
+      curIdx++;
+      curH = 0;
+    }
+    pages[curIdx].push(html);
+    curH += h;
+  }
+
+  pushBlock(buildMetaBlock());
+  pushBlock(buildDetailsBlock());
+
+  if (includeRev) {
+    let remaining = [...RPT.revisions];
+    let isCont = false;
+    while (remaining.length > 0) {
+      // Binary/greedy fit rows on current page
+      let fitCount = 0;
+      for (let k = 1; k <= remaining.length; k++) {
+        const testHtml = buildRevTableHtml(remaining.slice(0, k), isCont);
+        const h = measureHeight(testHtml);
+        if (curH + h <= maxFor(curIdx)) {
+          fitCount = k;
+        } else {
+          break;
+        }
+      }
+      if (fitCount === 0) {
+        if (curH > 0) {
+          pages.push([]);
+          curIdx++;
+          curH = 0;
+          continue;
+        }
+        fitCount = 1; // At least 1 row on an empty page
+      }
+      const chunkHtml = buildRevTableHtml(remaining.slice(0, fitCount), isCont);
+      pages[curIdx].push(chunkHtml);
+      curH += measureHeight(chunkHtml);
+      remaining = remaining.slice(fitCount);
+      isCont = true;
+      if (remaining.length > 0) {
+        pages.push([]);
+        curIdx++;
+        curH = 0;
+      }
+    }
+  }
+
+  pushBlock(buildActionBlock(includeRev ? 4 : 3));
+
+  const totalPages = pages.length;
+  container.innerHTML = pages.map((blocks, idx) => `
+    <section class="a4-page">
+      ${idx === 0 ? buildFirstHeader() : buildContHeader()}
+      <div class="page-body">${blocks.join('')}</div>
+      ${buildFooter(idx + 1, totalPages)}
+    </section>
+  `).join('');
+
+  const badge = document.getElementById('pageCountBadge');
+  if (badge) badge.textContent = `총 ${totalPages}P`;
+}
+window.addEventListener('DOMContentLoaded', renderReport);
+</script>
 </body>
 </html>
  <?php
