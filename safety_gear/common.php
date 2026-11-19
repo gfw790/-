@@ -87,9 +87,13 @@ function sg_get_pdo(): PDO
     static $pdo = null;
     if ($pdo === null) {
         $pdo = getDB();
-        sg_ensure_tables($pdo);
-        sg_backfill_missing_receive_history($pdo);
-        sg_backfill_missing_issue_history($pdo);
+        $schemaFlag = __DIR__ . '/.sg_schema_ready_v1.flag';
+        if (!is_file($schemaFlag)) {
+            sg_ensure_tables($pdo);
+            sg_backfill_missing_receive_history($pdo);
+            sg_backfill_missing_issue_history($pdo);
+            @file_put_contents($schemaFlag, date('Y-m-d H:i:s'));
+        }
     }
     return $pdo;
 }
@@ -902,8 +906,10 @@ function sg_fetch_my_items(PDO $pdo, array $user, string $statusFilter = 'active
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     $rows = $stmt->fetchAll() ?: [];
-    $items = array_map(static function (array $row) use ($pdo): array {
-        return sg_map_item_row($pdo, $row);
+    $historyMap = sg_fetch_histories_batch($pdo, $rows);
+    $items = array_map(static function (array $row) use ($pdo, $historyMap): array {
+        $uid = sg_normalize_text($row['gear_uid'] ?? '');
+        return sg_map_item_row($pdo, $row, $historyMap[$uid] ?? []);
     }, $rows);
 
     $signatureMap = sg_fetch_signature_map($pdo, $loginId);
@@ -1012,6 +1018,106 @@ function sg_update_user_item_status(PDO $pdo, array $user, array $gearUids, stri
     return $count;
 }
 
+function sg_normalize_history_entries(array $rawRows, array $item = []): array
+{
+    $entries = [];
+    foreach ($rawRows as $row) {
+        $entry = [
+            'timestamp' => sg_normalize_text($row['created_at'] ?? ''),
+            'type' => sg_normalize_text($row['history_type'] ?? ''),
+            'note' => sg_normalize_text($row['history_note'] ?? ''),
+            'employee_id' => isset($row['employee_id']) && $row['employee_id'] !== null ? (string)$row['employee_id'] : '',
+            'employee_name' => sg_normalize_text($row['employee_name'] ?? ''),
+            'employee_team' => sg_normalize_text($row['employee_team'] ?? ''),
+            'history_id' => isset($row['history_id']) ? (int)$row['history_id'] : 0,
+        ];
+        if (sg_is_legacy_registration_history($entry)) {
+            continue;
+        }
+        $entry['effective_timestamp'] = sg_history_effective_timestamp($item, $entry);
+        $entries[] = $entry;
+    }
+
+    if (count($entries) > 1) {
+        usort($entries, static function (array $a, array $b): int {
+            $timeCompare = strcmp(
+                (string)($a['effective_timestamp'] ?? ''),
+                (string)($b['effective_timestamp'] ?? '')
+            );
+            if ($timeCompare !== 0) {
+                return $timeCompare;
+            }
+            return ((int)($a['history_id'] ?? 0)) <=> ((int)($b['history_id'] ?? 0));
+        });
+    }
+
+    foreach ($entries as &$entry) {
+        $entry['timestamp'] = (string)($entry['effective_timestamp'] !== '' ? $entry['effective_timestamp'] : $entry['timestamp']);
+        unset($entry['effective_timestamp']);
+    }
+    unset($entry);
+
+    return $entries;
+}
+
+function sg_fetch_histories_batch(PDO $pdo, array $itemRows): array
+{
+    if (empty($itemRows)) {
+        return [];
+    }
+
+    $uids = [];
+    foreach ($itemRows as $row) {
+        $uid = sg_normalize_text($row['gear_uid'] ?? '');
+        if ($uid !== '') {
+            $uids[$uid] = true;
+        }
+    }
+    if (empty($uids)) {
+        return [];
+    }
+
+    $rawByUid = [];
+    $uidList = array_keys($uids);
+    if (count($uidList) > 1000) {
+        $stmt = $pdo->query("
+            SELECT gear_uid, created_at, history_id, history_type, history_note, employee_id, employee_name, employee_team
+            FROM safety_gear_history
+            ORDER BY created_at ASC, history_id ASC
+        ");
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $uid = (string)($row['gear_uid'] ?? '');
+            if (isset($uids[$uid])) {
+                $rawByUid[$uid][] = $row;
+            }
+        }
+    } else {
+        $placeholders = implode(',', array_fill(0, count($uidList), '?'));
+        $stmt = $pdo->prepare("
+            SELECT gear_uid, created_at, history_id, history_type, history_note, employee_id, employee_name, employee_team
+            FROM safety_gear_history
+            WHERE gear_uid IN ($placeholders)
+            ORDER BY created_at ASC, history_id ASC
+        ");
+        $stmt->execute($uidList);
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $uid = (string)($row['gear_uid'] ?? '');
+            $rawByUid[$uid][] = $row;
+        }
+    }
+
+    $result = [];
+    foreach ($itemRows as $itemRow) {
+        $uid = sg_normalize_text($itemRow['gear_uid'] ?? '');
+        if ($uid === '') {
+            continue;
+        }
+        $result[$uid] = sg_normalize_history_entries($rawByUid[$uid] ?? [], $itemRow);
+    }
+
+    return $result;
+}
+
 function sg_fetch_history(PDO $pdo, string $gearUid, array $item = []): array
 {
     $stmt = $pdo->prepare("
@@ -1022,43 +1128,10 @@ function sg_fetch_history(PDO $pdo, string $gearUid, array $item = []): array
     ");
     $stmt->execute([':gear_uid' => $gearUid]);
 
-    $entries = array_map(static function (array $row) use ($item): array {
-        $entry = [
-            'timestamp' => sg_normalize_text($row['created_at'] ?? ''),
-            'type' => sg_normalize_text($row['history_type'] ?? ''),
-            'note' => sg_normalize_text($row['history_note'] ?? ''),
-            'employee_id' => isset($row['employee_id']) && $row['employee_id'] !== null ? (string)$row['employee_id'] : '',
-            'employee_name' => sg_normalize_text($row['employee_name'] ?? ''),
-            'employee_team' => sg_normalize_text($row['employee_team'] ?? ''),
-            'history_id' => isset($row['history_id']) ? (int)$row['history_id'] : 0,
-        ];
-        $entry['effective_timestamp'] = sg_history_effective_timestamp($item, $entry);
-
-        return $entry;
-    }, $stmt->fetchAll() ?: []);
-
-    $entries = array_values(array_filter($entries, static fn(array $entry): bool => !sg_is_legacy_registration_history($entry)));
-
-    usort($entries, static function (array $a, array $b): int {
-        $timeCompare = strcmp(
-            sg_normalize_text($a['effective_timestamp'] ?? ''),
-            sg_normalize_text($b['effective_timestamp'] ?? '')
-        );
-        if ($timeCompare !== 0) {
-            return $timeCompare;
-        }
-
-        return ((int)($a['history_id'] ?? 0)) <=> ((int)($b['history_id'] ?? 0));
-    });
-
-    return array_map(static function (array $entry): array {
-        $entry['timestamp'] = sg_normalize_text($entry['effective_timestamp'] ?? $entry['timestamp'] ?? '');
-        unset($entry['effective_timestamp']);
-        return $entry;
-    }, $entries);
+    return sg_normalize_history_entries($stmt->fetchAll() ?: [], $item);
 }
 
-function sg_map_item_row(PDO $pdo, array $row): array
+function sg_map_item_row(PDO $pdo, array $row, ?array $preloadedHistory = null): array
 {
     $gearUid = sg_normalize_text($row['gear_uid'] ?? '');
     $itemName = sg_normalize_text($row['item_name'] ?? '');
@@ -1071,7 +1144,7 @@ function sg_map_item_row(PDO $pdo, array $row): array
         $itemName = $legacyProductName;
     }
     $combinedProductName = sg_build_product_name($itemName, $specName, $modelName, $legacyProductName);
-    $history = $gearUid !== '' ? sg_fetch_history($pdo, $gearUid, $row) : [];
+    $history = $preloadedHistory !== null ? $preloadedHistory : ($gearUid !== '' ? sg_fetch_history($pdo, $gearUid, $row) : []);
     $resolvedStatus = sg_resolve_item_status($row, $history);
 
     return [
@@ -1147,9 +1220,11 @@ function sg_fetch_all_items(PDO $pdo, string $query = ''): array
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     $rows = $stmt->fetchAll() ?: [];
+    $historyMap = sg_fetch_histories_batch($pdo, $rows);
 
-    return array_map(static function (array $row) use ($pdo): array {
-        return sg_map_item_row($pdo, $row);
+    return array_map(static function (array $row) use ($pdo, $historyMap): array {
+        $uid = sg_normalize_text($row['gear_uid'] ?? '');
+        return sg_map_item_row($pdo, $row, $historyMap[$uid] ?? []);
     }, $rows);
 }
 
@@ -1411,10 +1486,13 @@ function sg_fetch_employee_options(): array
 
     $pdo = new PDO('sqlite:' . $dbPath);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    try { $pdo->exec("ALTER TABLE employees ADD COLUMN employment_status TEXT NOT NULL DEFAULT 'active'"); } catch (PDOException) {}
-    try { $pdo->exec("ALTER TABLE employees ADD COLUMN retired_at TEXT"); } catch (PDOException) {}
-    try { $pdo->exec("ALTER TABLE employees ADD COLUMN retired_reason TEXT"); } catch (PDOException) {}
-    try { $pdo->exec("ALTER TABLE employees ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1"); } catch (PDOException) {}
+    $cols = array_column($pdo->query('PRAGMA table_info(employees)')->fetchAll(PDO::FETCH_ASSOC) ?: [], 'name');
+    if (!in_array('employment_status', $cols, true)) {
+        try { $pdo->exec("ALTER TABLE employees ADD COLUMN employment_status TEXT NOT NULL DEFAULT 'active'"); } catch (PDOException) {}
+    }
+    if (!in_array('is_active', $cols, true)) {
+        try { $pdo->exec("ALTER TABLE employees ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1"); } catch (PDOException) {}
+    }
     $stmt = $pdo->query("
         SELECT id, employee_no, name, team, position
         FROM employees

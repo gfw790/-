@@ -18,7 +18,7 @@ function respond(array $payload, int $status = 200): void
     if (!headers_sent()) {
         http_response_code($status);
     }
-    echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
 
@@ -780,12 +780,15 @@ $existingItem = $id !== '' ? sg_fetch_item_by_uid($pdo, $id) : null;
         respond(['ok' => false, 'message' => '저장 중 오류가 발생했습니다: ' . $e->getMessage()], 500);
     }
 
-    respond([
+    $response = [
         'ok' => true,
         'message' => '저장되었습니다.',
         'item' => sg_fetch_item_by_uid($pdo, $id),
-        'items' => sg_fetch_all_items($pdo),
-    ]);
+    ];
+    if (sg_normalize_text($_POST['compact'] ?? '') !== '1') {
+        $response['items'] = sg_fetch_all_items($pdo);
+    }
+    respond($response);
 }
 
 if ($action === 'add_history') {
