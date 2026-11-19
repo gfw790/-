@@ -90,6 +90,170 @@ if (isset($_GET['file'])) {
  header('Content-Disposition: attachment; filename="evidence"; filename*=UTF-8\'\'' . rawurlencode($record['evidence_name']));
  header('Content-Length: ' . filesize($path)); readfile($path); exit;
 }
+if ($isSopReview && isset($_GET['print']) && $record) {
+ $rptYear = substr((string)$record['record_date'], 0, 4) ?: date('Y');
+ $docNo = sprintf('CSM-SOP-RPT-%s-%02d', $rptYear, (int)$record['id']);
+ $revsForPrint = [];
+ if ($sopStats && !empty($sopStats['revisions'])) {
+  foreach ($sopStats['revisions'] as $rv) {
+   if (substr((string)$rv['revision_date'], 0, 4) === $rptYear) {
+    $revsForPrint[] = $rv;
+   }
+  }
+ }
+ $showRevTable = count($revsForPrint) > 0;
+ ?>
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title><?= $h($record['title']) ?> · 보고서 인쇄</title>
+<style>
+@page { size: A4 portrait; margin: 14mm 12mm 14mm 12mm; }
+* { box-sizing: border-box; }
+body { margin: 0; padding: 0; font-family: "Malgun Gothic", "맑은 고딕", sans-serif; color: #111; background: #e5e7eb; font-size: 10pt; line-height: 1.5; }
+.toolbar { position: sticky; top: 0; z-index: 20; background: #0f172a; color: #fff; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.toolbar-left { display: flex; align-items: center; gap: 14px; font-size: 13px; }
+.toolbar-left label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.toolbar-right { display: flex; gap: 8px; }
+.toolbar button, .toolbar a { background: #10b981; color: #fff; border: 0; border-radius: 6px; padding: 7px 14px; font-size: 13px; font-weight: 700; cursor: pointer; text-decoration: none; }
+.toolbar a { background: #475569; }
+.sheet { width: 210mm; min-height: 297mm; margin: 16px auto; background: #fff; padding: 16mm 14mm; box-shadow: 0 4px 20px rgba(0,0,0,.15); }
+.rpt-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; border-bottom: 2.5px solid #111; padding-bottom: 10px; margin-bottom: 14px; }
+.rpt-title-box { flex: 1; }
+.rpt-kicker { font-size: 8.5pt; color: #475569; font-weight: 700; letter-spacing: .3px; margin-bottom: 4px; }
+.rpt-title { font-size: 16.5pt; font-weight: 800; margin: 0 0 4px; letter-spacing: -.3px; }
+.rpt-docno { font-size: 8.5pt; color: #334155; }
+.approval { border-collapse: collapse; width: 68mm; font-size: 8.5pt; text-align: center; }
+.approval th, .approval td { border: 1px solid #111; padding: 3px 4px; }
+.approval th { background: #f1f5f9; font-weight: 700; }
+.approval .sign-cell { height: 14mm; vertical-align: bottom; font-size: 8pt; color: #475569; }
+.sec-title { font-size: 10.5pt; font-weight: 800; margin: 14px 0 6px; padding-left: 8px; border-left: 3.5px solid #176053; }
+table.meta { width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 9.2pt; }
+table.meta th, table.meta td { border: 1px solid #64748b; padding: 6px 8px; text-align: left; }
+table.meta th { width: 18%; background: #f8fafc; font-weight: 700; color: #1e293b; }
+table.meta td { width: 32%; }
+.box { border: 1px solid #64748b; padding: 10px 12px; white-space: pre-wrap; font-size: 9.2pt; line-height: 1.58; background: #fff; }
+table.rev-tbl { width: 100%; border-collapse: collapse; font-size: 8.3pt; margin-top: 4px; }
+table.rev-tbl th, table.rev-tbl td { border: 1px solid #64748b; padding: 4px 6px; vertical-align: top; }
+table.rev-tbl th { background: #f1f5f9; text-align: center; font-weight: 700; }
+table.rev-tbl td.c { text-align: center; white-space: nowrap; }
+.rpt-footer { margin-top: 18px; padding-top: 10px; border-top: 1px solid #cbd5e1; display: flex; justify-content: space-between; align-items: center; font-size: 8.8pt; color: #334155; }
+.rpt-company { font-weight: 800; font-size: 10.5pt; color: #111; }
+@media print {
+ body { background: #fff; }
+ .toolbar { display: none !important; }
+ .sheet { width: auto; min-height: auto; margin: 0; padding: 0; box-shadow: none; }
+ .sec-title, .box, table.rev-tbl tr { break-inside: avoid; }
+}
+</style>
+</head>
+<body>
+<div class="toolbar">
+ <div class="toolbar-left">
+  <strong>📄 안전작업표준서 검토·개정 결과 보고서 미리보기</strong>
+  <?php if ($showRevTable): ?>
+  <label><input type="checkbox" id="toggle-rev" checked onchange="document.getElementById('rev-section').style.display=this.checked?'block':'none'"> <?= $h($rptYear) ?>년 제·개정 세부 목록표 포함 (<?= count($revsForPrint) ?>건)</label>
+  <?php endif; ?>
+ </div>
+ <div class="toolbar-right">
+  <button type="button" onclick="window.print()">🖨️ 인쇄 / PDF 저장</button>
+  <a href="risk_tasks.php?section=2.2">← 목록으로</a>
+ </div>
+</div>
+
+<div class="sheet">
+ <div class="rpt-header">
+  <div class="rpt-title-box">
+   <div class="rpt-kicker">CSM 안전보건활동평가 2.2.1 · 안전작업절차(표준서) 정기·수시 검토</div>
+   <h1 class="rpt-title">안전작업표준서(SOP) 검토·개정 결과 보고서</h1>
+   <div class="rpt-docno">문서번호: <?= $h($docNo) ?> &nbsp;|&nbsp; 검토일자: <?= $h($record['record_date']) ?></div>
+  </div>
+  <table class="approval">
+   <tr>
+    <th rowspan="2" style="width:14%">결<br>재</th>
+    <th>작성</th>
+    <th>검토</th>
+    <th>승인</th>
+   </tr>
+   <tr>
+    <td class="sign-cell">김남균</td>
+    <td class="sign-cell">안전관리자</td>
+    <td class="sign-cell">정연탁 대표</td>
+   </tr>
+  </table>
+ </div>
+
+ <div class="sec-title">1. 검토 개요</div>
+ <table class="meta">
+  <tr>
+   <th>검토 제목</th>
+   <td colspan="3"><strong><?= $h($record['title']) ?></strong></td>
+  </tr>
+  <tr>
+   <th>검토 일자</th>
+   <td><?= $h($record['record_date']) ?></td>
+   <th>검토 결과 상태</th>
+   <td><strong><?= $h($record['status'] === '완료' ? '검토·개정 및 배포 완료' : $record['status']) ?></strong></td>
+  </tr>
+  <tr>
+   <th>검토 구분·범위</th>
+   <td><?= $h($record['subject'] ?: '01~06권 전권') ?></td>
+   <th>검토자 / 승인자</th>
+   <td><?= $h($record['owner'] ?: '검토: 공사팀 김남균 / 승인: 정연탁 대표') ?></td>
+  </tr>
+  <?php if ($sopStats): ?>
+  <tr>
+   <th>보유 표준서 현황</th>
+   <td colspan="3">총 <strong><?= (int)$sopStats['total'] ?>종</strong> (유효 <strong><?= (int)$sopStats['valid'] ?>종</strong> / 폐지 <strong><?= (int)$sopStats['abolished'] ?>종</strong>) · 01~06권 통합 관리 중</td>
+  </tr>
+  <?php endif; ?>
+ </table>
+
+ <div class="sec-title">2. 표준서 검토 및 제·개정 내역 요약</div>
+ <div class="box"><?= $h($record['details'] ?: '미입력') ?></div>
+
+ <?php if ($showRevTable): ?>
+ <div id="rev-section">
+  <div class="sec-title">3. <?= $h($rptYear) ?>년 안전작업표준서 제·개정 및 폐지 세부 목록 (<?= count($revsForPrint) ?>건)</div>
+  <table class="rev-tbl">
+   <thead>
+    <tr>
+     <th style="width:7%">No.</th>
+     <th style="width:11%">개정일</th>
+     <th style="width:24%">표준서 작업명</th>
+     <th style="width:14%">변경 구분</th>
+     <th style="width:44%">주요 변경 내용</th>
+    </tr>
+   </thead>
+   <tbody>
+    <?php foreach ($revsForPrint as $rv): ?>
+    <tr>
+     <td class="c"><?= (int)$rv['sop_no'] ?></td>
+     <td class="c"><?= $h($rv['revision_date']) ?></td>
+     <td><strong><?= $h($rv['title']) ?></strong></td>
+     <td class="c"><?= $h($rv['change_reason'] ?: ('Rev.' . $rv['revision_no'])) ?></td>
+     <td><?= $h($rv['changes_summary']) ?></td>
+    </tr>
+    <?php endforeach; ?>
+   </tbody>
+  </table>
+ </div>
+ <?php endif; ?>
+
+ <div class="sec-title"><?= $showRevTable ? '4.' : '3.' ?> 현장 배포 · TBM 교육 및 위험성평가 연계 조치</div>
+ <div class="box"><?= $h($record['action'] ?: '미입력') ?></div>
+
+ <div class="rpt-footer">
+  <div>※ 본 보고서는 결재(서명) 후 PDF 스캔하여 CSM 2.2.1 증빙으로 첨부·보관합니다.</div>
+  <div class="rpt-company">주식회사 성호이앤씨 (공사팀)</div>
+ </div>
+</div>
+</body>
+</html>
+ <?php
+ exit;
+}
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
  try {
   if (!$canManage) throw new InvalidArgumentException('변경 권한이 없습니다.');
@@ -326,7 +490,7 @@ $v = static fn(string $key, string $default = ''): string => (string)($_POST[$ke
 <?php else: ?>
 <p><?= $h($row['record_date']) ?> · 대상: <?= $h($row['subject'] ?: '미입력') ?> · 담당: <?= $h($row['owner'] ?: '미지정') ?> · 기한: <?= $h($row['due_date'] ?: '미지정') ?></p><p><b>활동 내용</b><br><?= nl2br($h($row['details'] ?: '미입력')) ?></p><p><b>후속 조치</b><br><?= nl2br($h($row['action'] ?: '미입력')) ?></p>
 <?php endif; ?>
-<?php if ($row['evidence_name']): ?><p><a href="?section=<?= $h($section) ?>&amp;id=<?= (int)$row['id'] ?>&amp;file=1">📎 <?= $h($row['evidence_name']) ?> 다운로드 ↓</a><?php if ($isSopReview): ?><span class="ev-badge">✅ 2.2.1 점수 증빙 반영됨</span><?php endif; ?></p><?php elseif ($isSopReview): ?><p class="ev-missing">⚠️ 증빙 미첨부 — 아래 '수정'을 눌러 증빙 파일을 첨부하면 2.2.1 점수에 즉시 반영됩니다.</p><?php endif; ?><?php if ($canManage): ?><div class="actions"><a href="?section=<?= $h($section) ?>&amp;id=<?= (int)$row['id'] ?>">수정</a><form method="post" onsubmit="return confirm('이 기록과 첨부파일을 삭제할까요?')"><input type="hidden" name="csrf" value="<?= $h($_SESSION['csm_risk_tasks_csrf']) ?>"><input type="hidden" name="section" value="<?= $h($section) ?>"><input type="hidden" name="id" value="<?= (int)$row['id'] ?>"><button name="operation" value="delete">삭제</button></form></div><?php endif; ?></article><?php endforeach; ?></section></main><script>
+<?php if ($row['evidence_name']): ?><p><a href="?section=<?= $h($section) ?>&amp;id=<?= (int)$row['id'] ?>&amp;file=1">📎 <?= $h($row['evidence_name']) ?> 다운로드 ↓</a><?php if ($isSopReview): ?><span class="ev-badge">✅ 2.2.1 점수 증빙 반영됨</span><?php endif; ?></p><?php elseif ($isSopReview): ?><p class="ev-missing">⚠️ 증빙 미첨부 — '보고서 인쇄/PDF'로 출력·결재 후 '수정'에서 첨부하면 2.2.1 점수에 즉시 반영됩니다.</p><?php endif; ?><div class="actions"><?php if ($isSopReview): ?><a href="?section=2.2&amp;id=<?= (int)$row['id'] ?>&amp;print=1" target="_blank" style="background:#0f766e;color:#fff;padding:7px 13px;border-radius:6px;text-decoration:none;font-size:.86rem;font-weight:700">🖨️ 보고서 인쇄 / PDF</a><?php endif; ?><?php if ($canManage): ?><a href="?section=<?= $h($section) ?>&amp;id=<?= (int)$row['id'] ?>">수정</a><form method="post" onsubmit="return confirm('이 기록과 첨부파일을 삭제할까요?')"><input type="hidden" name="csrf" value="<?= $h($_SESSION['csm_risk_tasks_csrf']) ?>"><input type="hidden" name="section" value="<?= $h($section) ?>"><input type="hidden" name="id" value="<?= (int)$row['id'] ?>"><button name="operation" value="delete">삭제</button></form><?php endif; ?></div></article><?php endforeach; ?></section></main><script>
 const itemGuidance = <?= json_encode(array_map(static fn($item) => $item['evidence'] ?: '현장 확인 내역을 기록하세요.', $items), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 const itemSelect = document.querySelector('select[name="item_code"]');
 if (itemSelect) { const showGuidance = () => { document.getElementById('item-guidance').textContent = itemGuidance[itemSelect.value] || '평가항목을 선택하면 확인할 증빙이 표시됩니다.'; }; itemSelect.addEventListener('change', showGuidance); showGuidance(); }
