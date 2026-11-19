@@ -511,10 +511,11 @@ table.hm-tbl tbody tr:hover td.sticky-col { background: #f8fafc; }
       <p>보유 위험기계·기구 21종의 총괄 관리대장, 안전검사 유효기간, 반기별(1·2차) 개별 안전점검표 및 스티커 발부 이력을 통합 관리합니다.</p>
     </div>
     <div class="hm-top-actions">
+      <a class="btn btn-primary" href="hazardous_machinery_mobile.php?year=<?= $year ?>">📱 모바일 현장점검</a>
       <a class="btn btn-blue" href="hazardous_machinery_print.php?mode=register&amp;year=<?= $year ?>" target="_blank">🖨️ 관리대장 A4 인쇄</a>
       <a class="btn" href="hazardous_machinery_print.php?mode=all_checklists&amp;year=<?= $year ?>" target="_blank">📑 전체 21종 점검표 일괄 인쇄</a>
       <?php if ($canManage): ?>
-      <button type="button" class="btn btn-primary" onclick="openEqModal(null)">+ 위험기계·기구 신규 등록</button>
+      <button type="button" class="btn" onclick="openEqModal(null)">+ 장비 신규 등록</button>
       <?php endif; ?>
     </div>
   </div>
@@ -657,32 +658,12 @@ table.hm-tbl tbody tr:hover td.sticky-col { background: #f8fafc; }
     </div>
   </section>
 
-  <?php elseif ($tab === 'checklist' && $selectedEq):
-    $activeRound = (int)($_GET['round'] ?? ((int)date('n') >= 7 ? 2 : 1));
-    if (!in_array($activeRound, [1, 2], true)) $activeRound = 1;
-    $eqIds = array_map(static fn($e) => (int)$e['id'], $allEquipment);
-    $curPos = array_search((int)$selectedEq['id'], $eqIds, true);
-    $prevEqId = ($curPos !== false && $curPos > 0) ? $eqIds[$curPos - 1] : 0;
-    $nextEqId = ($curPos !== false && $curPos < count($eqIds) - 1) ? $eqIds[$curPos + 1] : 0;
-  ?>
-  <!-- Mobile Quick Equipment Selector -->
-  <div class="mobile-eq-bar">
-    <?php if ($prevEqId): ?><a class="btn btn-sm" href="?tab=checklist&amp;id=<?= $prevEqId ?>&amp;round=<?= $activeRound ?>&amp;year=<?= $year ?>">◀</a><?php endif; ?>
-    <select onchange="location.href='?tab=checklist&id='+this.value+'&round='+activeRound+'&year=<?= $year ?>'">
-      <?php foreach ($allEquipment as $eq): ?>
-      <option value="<?= (int)$eq['id'] ?>" <?= (int)$eq['id'] === (int)$selectedEq['id'] ? 'selected' : '' ?>>
-        <?= $h($eq['code'] . ' · ' . $eq['name'] . ($eq['check' . $activeRound . '_result'] ? ' [' . $eq['check' . $activeRound . '_result'] . ']' : '')) ?>
-      </option>
-      <?php endforeach; ?>
-    </select>
-    <?php if ($nextEqId): ?><a class="btn btn-sm" href="?tab=checklist&amp;id=<?= $nextEqId ?>&amp;round=<?= $activeRound ?>&amp;year=<?= $year ?>">▶</a><?php endif; ?>
-  </div>
-
+  <?php elseif ($tab === 'checklist' && $selectedEq): ?>
   <div class="chk-layout">
     <aside class="eq-sidebar">
       <div class="eq-sidebar-head">위험기계·기구 선택 (<?= $totalEq ?>종)</div>
       <?php foreach ($allEquipment as $eq): ?>
-      <a class="eq-nav-item <?= (int)$eq['id'] === (int)$selectedEq['id'] ? 'active' : '' ?>" href="?tab=checklist&amp;id=<?= (int)$eq['id'] ?>&amp;round=<?= $activeRound ?>&amp;year=<?= $year ?>">
+      <a class="eq-nav-item <?= (int)$eq['id'] === (int)$selectedEq['id'] ? 'active' : '' ?>" href="?tab=checklist&amp;id=<?= (int)$eq['id'] ?>&amp;year=<?= $year ?>">
         <div>
           <div><?= $h($eq['code']) ?> · <?= $h($eq['name']) ?></div>
           <div class="eq-nav-meta"><?= $h($eq['spec'] ?: '규격 미기재') ?> · 항목 <?= (int)$eq['item_count'] ?>개</div>
@@ -702,20 +683,15 @@ table.hm-tbl tbody tr:hover td.sticky-col { background: #f8fafc; }
             <img class="chk-eq-photo" src="?photo=<?= $h($selectedEq['photo_file']) ?>" alt="<?= $h($selectedEq['name']) ?>" onclick="openPhotoModal(this.src, '<?= $h($selectedEq['code'] . ' · ' . $selectedEq['name']) ?>')">
           <?php endif; ?>
           <div>
-            <div style="font-size:.78rem;color:#176053;font-weight:700"><?= $h($selectedEq['legal_basis']) ?></div>
-            <h2 style="margin:2px 0 4px;font-size:1.2rem"><?= $h($selectedEq['code'] . ' · ' . $selectedEq['name']) ?></h2>
-            <div style="font-size:.82rem;color:#475569">규격: <?= $h($selectedEq['spec'] ?: '-') ?> · 방호장치: <?= $h($selectedEq['guard_device'] ?: '-') ?> · 재해: <?= $h($selectedEq['hazard_type'] ?: '-') ?></div>
+            <div style="font-size:.8rem;color:#176053;font-weight:700"><?= $h($selectedEq['legal_basis']) ?></div>
+            <h2 style="margin:2px 0 4px"><?= $h($selectedEq['code'] . ' · ' . $selectedEq['name']) ?> 안전점검표</h2>
+            <div style="font-size:.84rem;color:#475569">규격: <?= $h($selectedEq['spec'] ?: '-') ?> · 방호장치: <?= $h($selectedEq['guard_device'] ?: '-') ?> · 재해형태: <?= $h($selectedEq['hazard_type'] ?: '-') ?></div>
           </div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <a class="btn btn-sm btn-blue" href="hazardous_machinery_print.php?mode=checklist&amp;id=<?= (int)$selectedEq['id'] ?>&amp;year=<?= $year ?>" target="_blank">🖨️ A4 인쇄</a>
+          <a class="btn btn-sm btn-primary" href="hazardous_machinery_mobile.php?id=<?= (int)$selectedEq['id'] ?>&amp;year=<?= $year ?>">📱 이 장비 모바일 점검</a>
+          <a class="btn btn-sm btn-blue" href="hazardous_machinery_print.php?mode=checklist&amp;id=<?= (int)$selectedEq['id'] ?>&amp;year=<?= $year ?>" target="_blank">🖨️ 이 장비 점검표 A4 인쇄</a>
         </div>
-      </div>
-
-      <!-- Round Switcher (1차 상반기 / 2차 하반기) -->
-      <div class="round-tabs">
-        <button type="button" id="rtab-1" class="round-tab-btn <?= $activeRound === 1 ? 'active' : '' ?>" onclick="switchRound(1)">1차 점검 (상반기)</button>
-        <button type="button" id="rtab-2" class="round-tab-btn <?= $activeRound === 2 ? 'active' : '' ?>" onclick="switchRound(2)">2차 점검 (하반기)</button>
       </div>
 
       <form method="post" id="checklistForm">
@@ -724,8 +700,8 @@ table.hm-tbl tbody tr:hover td.sticky-col { background: #f8fafc; }
         <input type="hidden" name="equipment_id" value="<?= (int)$selectedEq['id'] ?>">
         <input type="hidden" name="year" value="<?= $year ?>">
 
-        <div id="meta-r1" class="round-meta-box" style="<?= $activeRound === 1 ? '' : 'display:none' ?>">
-          <label>1차 점검일자 <input type="date" name="check1_date" value="<?= $h($selectedEq['check1_date']) ?>"></label>
+        <div class="chk-meta-grid">
+          <label>1차(상반기) 점검일자 <input type="date" name="check1_date" value="<?= $h($selectedEq['check1_date']) ?>"></label>
           <label>1차 점검자 <input type="text" name="check1_inspector" value="<?= $h($selectedEq['check1_inspector']) ?>"></label>
           <label>1차 스티커 발부
             <select name="check1_sticker">
@@ -733,9 +709,7 @@ table.hm-tbl tbody tr:hover td.sticky-col { background: #f8fafc; }
               <option value="미발부" <?= $selectedEq['check1_sticker'] !== '발부' ? 'selected' : '' ?>>미발부</option>
             </select>
           </label>
-        </div>
-        <div id="meta-r2" class="round-meta-box" style="<?= $activeRound === 2 ? '' : 'display:none' ?>">
-          <label>2차 점검일자 <input type="date" name="check2_date" value="<?= $h($selectedEq['check2_date']) ?>"></label>
+          <label>2차(하반기) 점검일자 <input type="date" name="check2_date" value="<?= $h($selectedEq['check2_date']) ?>"></label>
           <label>2차 점검자 <input type="text" name="check2_inspector" value="<?= $h($selectedEq['check2_inspector']) ?>"></label>
           <label>2차 스티커 발부
             <select name="check2_sticker">
@@ -745,83 +719,85 @@ table.hm-tbl tbody tr:hover td.sticky-col { background: #f8fafc; }
           </label>
         </div>
 
+        <?php if ($canManage): ?>
         <div class="quick-bar">
-          <div style="font-size:.84rem;color:#475569">💡 <strong>적정 / 부적정</strong>을 터치하면 즉시 서버에 저장되고 <strong>📷 사진 촬영</strong> 버튼이 열립니다.</div>
-        </div>
-
-        <!-- Mobile-Friendly Card Checklist -->
-        <div class="m-chk-list">
-          <?php foreach ($selectedItems as $it):
-            $iid = (int)$it['id'];
-            $r1 = (string)$it['round1_result'];
-            $r2 = (string)$it['round2_result'];
-            $p1 = (string)($it['round1_photo'] ?? '');
-            $p2 = (string)($it['round2_photo'] ?? '');
-            $curRes = $activeRound === 1 ? $r1 : $r2;
-            $curPhoto = $activeRound === 1 ? $p1 : $p2;
-          ?>
-          <div class="m-chk-card <?= $curRes === '적정' ? 'is-ok' : ($curRes === '부적정' ? 'is-bad' : '') ?>"
-               id="card-<?= $iid ?>"
-               data-item-id="<?= $iid ?>"
-               data-r1="<?= $h($r1) ?>" data-r2="<?= $h($r2) ?>"
-               data-p1="<?= $h($p1) ?>" data-p2="<?= $h($p2) ?>">
-            <input type="hidden" name="r1[<?= $iid ?>]" id="hid-r1-<?= $iid ?>" value="<?= $h($r1) ?>">
-            <input type="hidden" name="r2[<?= $iid ?>]" id="hid-r2-<?= $iid ?>" value="<?= $h($r2) ?>">
-
-            <div class="m-chk-top">
-              <span class="m-chk-num"><?= (int)$it['item_no'] ?></span>
-              <div class="m-chk-title">
-                <?php if ($it['category'] !== ''): ?><span class="m-chk-cat"><?= $h($it['category']) ?></span><?php endif; ?>
-                <?= $h($it['content']) ?>
-              </div>
-              <span class="m-save-state" id="state-<?= $iid ?>"></span>
-            </div>
-
-            <div class="m-judge-row">
-              <button type="button" class="m-judge-btn ok <?= $curRes === '적정' ? 'active' : '' ?>" id="btn-ok-<?= $iid ?>" onclick="selectJudge(<?= $iid ?>, '적정')" <?= $canManage ? '' : 'disabled' ?>>✅ 적정</button>
-              <button type="button" class="m-judge-btn bad <?= $curRes === '부적정' ? 'active' : '' ?>" id="btn-bad-<?= $iid ?>" onclick="selectJudge(<?= $iid ?>, '부적정')" <?= $canManage ? '' : 'disabled' ?>>❌ 부적정</button>
-            </div>
-
-            <div class="m-photo-area <?= ($curRes !== '' || $curPhoto !== '') ? 'open' : '' ?>" id="photo-area-<?= $iid ?>">
-              <?php if ($canManage): ?>
-              <div class="m-photo-btns">
-                <label class="m-cam-btn">
-                  📷 사진 촬영
-                  <input type="file" accept="image/*" capture="environment" style="display:none" onchange="handleCheckPhoto(<?= $iid ?>, this)">
-                </label>
-                <label class="m-cam-btn gallery">
-                  🖼️ 앨범
-                  <input type="file" accept="image/*" style="display:none" onchange="handleCheckPhoto(<?= $iid ?>, this)">
-                </label>
-                <span class="m-upload-status" id="upst-<?= $iid ?>"></span>
-              </div>
-              <?php endif; ?>
-              <div id="thumb-slot-<?= $iid ?>">
-                <?php if ($curPhoto !== ''): ?>
-                <div class="m-thumb-wrap">
-                  <img class="m-thumb-img" src="?check_photo=<?= $h($curPhoto) ?>" alt="현장점검 사진" onclick="openPhotoModal(this.src, '항목 <?= (int)$it['item_no'] ?> 점검 사진')">
-                  <?php if ($canManage): ?><button type="button" class="m-thumb-del" title="사진 삭제" onclick="deleteCheckPhoto(<?= $iid ?>)">×</button><?php endif; ?>
-                </div>
-                <?php endif; ?>
-              </div>
-            </div>
+          <div style="font-size:.85rem;color:#475569"><strong>세부 기기 상태 점검 항목 (<?= count($selectedItems) ?>개)</strong> — 모바일에서 촬영한 현장 사진이 실시간 표시됩니다.</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button type="button" class="btn btn-sm" onclick="markAllPcRound(1, '적정')">✅ 1차 전체 적정</button>
+            <button type="button" class="btn btn-sm" onclick="markAllPcRound(2, '적정')">✅ 2차 전체 적정</button>
+            <button type="submit" class="btn btn-sm btn-primary">💾 점검표 저장</button>
           </div>
-          <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+
+        <div class="tbl-wrap">
+          <table class="hm-tbl">
+            <thead>
+              <tr>
+                <th style="width:46px">순번</th>
+                <th style="width:110px">점검부위</th>
+                <th><?= $h($selectedEq['name']) ?> 점검내용</th>
+                <th style="width:155px">1차 점검결과</th>
+                <th style="width:92px">1차 사진</th>
+                <th style="width:155px">2차 점검결과</th>
+                <th style="width:92px">2차 사진</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php foreach ($selectedItems as $it):
+                $iid = (int)$it['id'];
+                $p1 = (string)($it['round1_photo'] ?? '');
+                $p2 = (string)($it['round2_photo'] ?? '');
+              ?>
+              <tr>
+                <td><?= (int)$it['item_no'] ?></td>
+                <td><span class="badge b-gray"><?= $h($it['category'] ?: '-') ?></span></td>
+                <td class="left"><?= $h($it['content']) ?></td>
+                <td>
+                  <div class="radio-pair">
+                    <label><input type="radio" name="r1[<?= $iid ?>]" value="적정" <?= $it['round1_result'] === '적정' ? 'checked' : '' ?>> 적정</label>
+                    <label><input type="radio" name="r1[<?= $iid ?>]" value="부적정" <?= $it['round1_result'] === '부적정' ? 'checked' : '' ?>> 부적정</label>
+                  </div>
+                </td>
+                <td id="pc-ph-1-<?= $iid ?>">
+                  <?php if ($p1 !== ''): ?>
+                    <img class="thumb" src="?check_photo=<?= $h($p1) ?>" alt="1차 사진" onclick="openPhotoModal(this.src, '1차 항목 <?= (int)$it['item_no'] ?> 사진')">
+                  <?php elseif ($canManage): ?>
+                    <label class="btn btn-sm" style="cursor:pointer">📷<input type="file" accept="image/*" style="display:none" onchange="pcUploadPhoto(<?= $iid ?>, 1, this)"></label>
+                  <?php else: ?>
+                    <span style="color:#94a3b8;font-size:.76rem">-</span>
+                  <?php endif; ?>
+                </td>
+                <td>
+                  <div class="radio-pair">
+                    <label><input type="radio" name="r2[<?= $iid ?>]" value="적정" <?= $it['round2_result'] === '적정' ? 'checked' : '' ?>> 적정</label>
+                    <label><input type="radio" name="r2[<?= $iid ?>]" value="부적정" <?= $it['round2_result'] === '부적정' ? 'checked' : '' ?>> 부적정</label>
+                  </div>
+                </td>
+                <td id="pc-ph-2-<?= $iid ?>">
+                  <?php if ($p2 !== ''): ?>
+                    <img class="thumb" src="?check_photo=<?= $h($p2) ?>" alt="2차 사진" onclick="openPhotoModal(this.src, '2차 항목 <?= (int)$it['item_no'] ?> 사진')">
+                  <?php elseif ($canManage): ?>
+                    <label class="btn btn-sm" style="cursor:pointer">📷<input type="file" accept="image/*" style="display:none" onchange="pcUploadPhoto(<?= $iid ?>, 2, this)"></label>
+                  <?php else: ?>
+                    <span style="color:#94a3b8;font-size:.76rem">-</span>
+                  <?php endif; ?>
+                </td>
+              </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
         </div>
 
-        <div style="margin-top:16px">
+        <div style="margin-top:14px">
           <label style="display:grid;gap:6px;font-weight:700;font-size:.88rem">점검결과 주요 조치 및 요구사항
-            <textarea name="action_note" rows="3" style="padding:10px;border:1px solid #cbd5e1;border-radius:10px;font:inherit" placeholder="부적정 항목에 대한 개선조치, 부품 교체, 사용 중지 및 수리 이력 등을 기록하세요."><?= $h($selectedEq['action_note']) ?></textarea>
+            <textarea name="action_note" rows="3" style="padding:10px;border:1px solid #cbd5e1;border-radius:8px;font:inherit" placeholder="부적정 항목에 대한 개선조치, 부품 교체, 사용 중지 및 수리 이력 등을 기록하세요."><?= $h($selectedEq['action_note']) ?></textarea>
           </label>
         </div>
 
         <?php if ($canManage): ?>
-        <div class="sticky-mobile-bar">
-          <div class="prog" id="stickyProg">진행률 계산 중...</div>
-          <div class="btns">
-            <button type="button" class="btn btn-sm" onclick="markAllCurrentRound('적정')">✅ 전체 적정</button>
-            <button type="submit" class="btn btn-sm btn-primary">💾 저장 완료</button>
-          </div>
+        <div style="margin-top:14px;display:flex;justify-content:flex-end">
+          <button type="submit" class="btn btn-primary">💾 안전점검표 저장</button>
         </div>
         <?php endif; ?>
       </form>
@@ -833,7 +809,8 @@ table.hm-tbl tbody tr:hover td.sticky-col { background: #f8fafc; }
         <input type="hidden" name="equipment_id" value="<?= (int)$selectedEq['id'] ?>">
         <input type="hidden" name="year" value="<?= $year ?>">
         <strong style="font-size:.84rem">+ 점검 항목 추가:</strong>
-        <input type="text" name="content" required placeholder="추가할 안전점검 내용을 입력하세요" style="padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;flex:1;min-width:200px">
+        <input type="text" name="category" placeholder="점검부위" style="padding:7px 9px;border:1px solid #cbd5e1;border-radius:6px;width:120px">
+        <input type="text" name="content" required placeholder="추가할 안전점검 내용을 입력하세요" style="padding:7px 9px;border:1px solid #cbd5e1;border-radius:6px;flex:1;min-width:220px">
         <button type="submit" class="btn btn-sm">항목 추가</button>
       </form>
       <?php endif; ?>
@@ -1210,6 +1187,39 @@ function markAllCurrentRound(val) {
     const iid = Number(card.dataset.itemId);
     selectJudge(iid, val);
   });
+}
+
+function markAllPcRound(roundNo, val) {
+  document.querySelectorAll('input[type="radio"][name^="r' + roundNo + '["][value="' + val + '"]').forEach(el => {
+    el.checked = true;
+  });
+}
+
+async function pcUploadPhoto(itemId, roundNo, input) {
+  const rawFile = input.files && input.files[0];
+  input.value = '';
+  if (!rawFile) return;
+  const cell = document.getElementById(`pc-ph-${roundNo}-${itemId}`);
+  if (cell) cell.textContent = '업로드중...';
+  try {
+    const compressed = await compressImage(rawFile);
+    const fd = new FormData();
+    fd.append('csrf', HM_CSRF);
+    fd.append('action', 'ajax_upload_check_photo');
+    fd.append('equipment_id', String(HM_EQ_ID));
+    fd.append('item_id', String(itemId));
+    fd.append('round', String(roundNo));
+    fd.append('photo', compressed);
+    const res = await fetch('hazardous_machinery.php', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message || '업로드 실패');
+    if (cell) {
+      cell.innerHTML = `<img class="thumb" src="${data.url}" alt="점검사진" onclick="openPhotoModal('${data.url}', '${roundNo}차 점검 사진')">`;
+    }
+  } catch (e) {
+    alert(e.message || '사진 업로드 오류');
+    location.reload();
+  }
 }
 
 window.addEventListener('DOMContentLoaded', updateStickyProgress);
