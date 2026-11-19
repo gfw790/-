@@ -1267,9 +1267,9 @@ function renderSideCellsHtml(items, baseCol) {
 }
 
 /**
- * Build Option B (기존 엑셀 PDF 서식 1:1) HTML for both Modal Preview and A4 Print.
+ * Build Header Table HTML (repeated on every page in print mode).
  */
-function buildOptionBSheetHtml(s, forPrint) {
+function buildOptionBHeaderHtml(s, forPrint) {
   const code = s.job_plan_code || s.doc_code || '';
   const isDep = (s.status === '폐지');
   const revLabel = isDep ? '폐지' : String(s.revision_no ?? 0);
@@ -1281,9 +1281,51 @@ function buildOptionBSheetHtml(s, forPrint) {
   const teamLine = authorParts[0] || '공사팀';
   const personLine = authorParts.slice(1).join(' ') || '김남균';
   const logoHtml = COMPANY_LOGO
-    ? `<img src="${COMPANY_LOGO}" alt="현대기전" style="height:${forPrint ? '23px' : '22px'};width:auto;display:block;">`
+    ? `<img src="${COMPANY_LOGO}" alt="현대기전" style="height:${forPrint ? '22px' : '22px'};width:auto;display:block;">`
     : '';
 
+  return `
+    <table class="sop-b-head">
+      <colgroup>
+        <col style="width:7%;">
+        <col style="width:35.5%;">
+        <col style="width:8.5%;">
+        <col style="width:11%;">
+        <col style="width:6.5%;">
+        <col style="width:7.5%;">
+        <col style="width:8.5%;">
+        <col style="width:15.5%;">
+      </colgroup>
+      <tr>
+        <td colspan="2" style="height:${forPrint ? '32px' : '36px'};">
+          <div class="sop-b-title-wrap">
+            ${logoHtml}
+            <span class="sop-b-title-text">안 전 작 업 표 준 서</span>
+          </div>
+        </td>
+        <td style="text-align:center;">NO</td>
+        <td style="text-align:center;font-weight:600;">${escHtml(code)}</td>
+        <td style="text-align:center;line-height:1.15;font-size:11px;">Team/<br>Person</td>
+        <td colspan="3" style="text-align:center;line-height:1.25;">${escHtml(teamLine)}<br>${escHtml(personLine)}</td>
+      </tr>
+      <tr>
+        <td style="text-align:center;height:${forPrint ? '24px' : '26px'};">작업명</td>
+        <td style="font-weight:800;font-size:${forPrint ? '12.5px' : '13px'};">${escHtml(s.title)}</td>
+        <td style="text-align:center;font-size:11px;">${escHtml(dateLabel)}</td>
+        <td style="text-align:center;font-weight:800;font-size:11.5px;">${escHtml(dateDot)}</td>
+        <td style="text-align:center;">Rev'</td>
+        <td style="text-align:center;font-weight:800;">${escHtml(revLabel)}</td>
+        <td style="text-align:center;font-size:11px;">관리이력</td>
+        <td style="text-align:center;font-weight:700;">${escHtml(historyText)}</td>
+      </tr>
+    </table>
+  `;
+}
+
+/**
+ * Extract structured upRows and loRows for Option B (works for both layout_json SOPs and fallback SOPs).
+ */
+function prepareOptionBRows(s, forPrint) {
   const imgs = Array.isArray(s.images) ? s.images : [];
   const usedImgIds = new Set();
 
@@ -1292,64 +1334,40 @@ function buildOptionBSheetHtml(s, forPrint) {
     if (!matched.length) return '';
     return matched.map(im => {
       usedImgIds.add(im.id);
-      const maxH = forPrint ? 195 : 230;
+      const maxH = forPrint ? 190 : 230;
       const wStyle = im.px_w ? `max-width:min(92%, ${Math.round(im.px_w * 0.72)}px);max-height:${maxH}px;` : `max-width:90%;max-height:${maxH}px;`;
       return `<div class="sop-b-img-box"><img src="standard_procedure.php?img_id=${im.id}" alt="SOP 도해" style="${wStyle}"></div>`;
     }).join('');
   }
 
-  let bodyRowsHtml = '';
+  const upList = [];
+  const loList = [];
   const lay = s.layout;
 
   if (lay && Array.isArray(lay.up) && Array.isArray(lay.lo) && (lay.up.length > 0 || lay.lo.length > 0)) {
-    const upRows = lay.up;
-    const loRows = lay.lo;
-    const upSpan = Math.max(1, upRows.length);
-    const loSpan = Math.max(1, loRows.length);
-    const totalRowCount = upSpan + loSpan;
-    const printRowScale = totalRowCount > 44 ? 0.86 : (totalRowCount > 38 ? 0.94 : 1.0);
-
-    upRows.forEach((rObj, idx) => {
+    lay.up.forEach(rObj => {
       const leftHtml = renderSideCellsHtml(rObj.l, 2) + renderImagesAtRow('L', rObj.r);
       const rightHtml = renderSideCellsHtml(rObj.rt, 15) + renderImagesAtRow('R', rObj.r);
-      const hPx = forPrint ? Math.max(12, Math.round((rObj.h || 14.25) * printRowScale)) : Math.max(16, Math.round((rObj.h || 14.25) * 1.15));
-      bodyRowsHtml += `<tr style="min-height:${hPx}px;">`;
-      if (idx === 0) {
-        bodyRowsHtml += `<td rowspan="${upSpan}" class="sop-b-vbar sop-b-vbar-left">①<br>작<br>업<br>준<br>비<br>사<br>항</td>`;
-      }
-      bodyRowsHtml += `<td class="sop-b-cell-left" style="height:${hPx}px;">${leftHtml || '&nbsp;'}</td>`;
-      if (idx === 0) {
-        bodyRowsHtml += `<td rowspan="${upSpan}" class="sop-b-vbar">②<br>안<br>전<br>일<br>반</td>`;
-      }
-      bodyRowsHtml += `<td style="height:${hPx}px;">${rightHtml || '&nbsp;'}</td></tr>`;
+      const hPx = forPrint ? Math.max(13, Math.round(rObj.h || 14.25)) : Math.max(16, Math.round((rObj.h || 14.25) * 1.15));
+      upList.push({ leftHtml, rightHtml, hPx });
     });
 
-    loRows.forEach((rObj, idx) => {
+    lay.lo.forEach((rObj, idx) => {
       let leftHtml = renderSideCellsHtml(rObj.l, 2) + renderImagesAtRow('L', rObj.r);
       let rightHtml = renderSideCellsHtml(rObj.rt, 15) + renderImagesAtRow('R', rObj.r);
-      if (idx === loRows.length - 1) {
-        // append any remaining unanchored images
+      if (idx === lay.lo.length - 1) {
         imgs.forEach(im => {
           if (!usedImgIds.has(im.id)) {
             usedImgIds.add(im.id);
-            const tag = `<div class="sop-b-img-box"><img src="standard_procedure.php?img_id=${im.id}" alt="SOP 도해" style="max-width:90%;max-height:195px;"></div>`;
+            const tag = `<div class="sop-b-img-box"><img src="standard_procedure.php?img_id=${im.id}" alt="SOP 도해" style="max-width:90%;max-height:190px;"></div>`;
             if (im.side === 'L') leftHtml += tag; else rightHtml += tag;
           }
         });
       }
-      const hPx = forPrint ? Math.max(12, Math.round((rObj.h || 14.25) * printRowScale)) : Math.max(16, Math.round((rObj.h || 14.25) * 1.15));
-      bodyRowsHtml += `<tr class="${idx === 0 ? 'sop-b-divider-row' : ''}" style="min-height:${hPx}px;">`;
-      if (idx === 0) {
-        bodyRowsHtml += `<td rowspan="${loSpan}" class="sop-b-vbar sop-b-vbar-left">③<br><br>작<br><br>업<br><br>순<br><br>서</td>`;
-      }
-      bodyRowsHtml += `<td class="sop-b-cell-left" style="height:${hPx}px;">${leftHtml || '&nbsp;'}</td>`;
-      if (idx === 0) {
-        bodyRowsHtml += `<td rowspan="${loSpan}" class="sop-b-vbar">④<br><br>안<br><br>전<br><br>작<br><br>업<br><br>순<br><br>서</td>`;
-      }
-      bodyRowsHtml += `<td style="height:${hPx}px;">${rightHtml || '&nbsp;'}</td></tr>`;
+      const hPx = forPrint ? Math.max(13, Math.round(rObj.h || 14.25)) : Math.max(16, Math.round((rObj.h || 14.25) * 1.15));
+      loList.push({ leftHtml, rightHtml, hPx });
     });
   } else {
-    // Fallback for newly created SOPs without Excel layout_json
     const preLines = String(s.pre_work_safety || '').split(/\r?\n/);
     const genLines = String(s.danger_factors || '').split(/\r?\n/);
     const upMax = Math.max(8, preLines.length, genLines.length);
@@ -1358,70 +1376,82 @@ function buildOptionBSheetHtml(s, forPrint) {
       const rRaw = genLines[i] || '';
       const isRed = /^(1\.|2\.|\*)/.test(rRaw.trim()) || /LOTOTO|위험성\s*평가|전도\s*주의/.test(rRaw);
       const rTxt = isRed ? `<span style="color:#FF0000;font-weight:700;">${escHtml(rRaw)}</span>` : escHtml(rRaw);
-      bodyRowsHtml += `<tr>`;
-      if (i === 0) bodyRowsHtml += `<td rowspan="${upMax}" class="sop-b-vbar sop-b-vbar-left">①<br>작<br>업<br>준<br>비<br>사<br>항</td>`;
-      bodyRowsHtml += `<td class="sop-b-cell-left" style="height:18px;">${lTxt || '&nbsp;'}</td>`;
-      if (i === 0) bodyRowsHtml += `<td rowspan="${upMax}" class="sop-b-vbar">②<br>안<br>전<br>일<br>반</td>`;
-      bodyRowsHtml += `<td style="height:18px;">${rTxt || '&nbsp;'}</td></tr>`;
+      upList.push({ leftHtml: lTxt, rightHtml: rTxt, hPx: 18 });
     }
     const inLines = String(s.in_work_safety || '').split(/\r?\n/);
     const postLines = String(s.post_work_safety || '').split(/\r?\n/);
     const loMax = Math.max(26, inLines.length, postLines.length);
     for (let i = 0; i < loMax; i++) {
-      bodyRowsHtml += `<tr class="${i === 0 ? 'sop-b-divider-row' : ''}">`;
-      if (i === 0) bodyRowsHtml += `<td rowspan="${loMax}" class="sop-b-vbar sop-b-vbar-left">③<br><br>작<br><br>업<br><br>순<br><br>서</td>`;
-      bodyRowsHtml += `<td class="sop-b-cell-left" style="height:18px;">${escHtml(inLines[i] || '') || '&nbsp;'}</td>`;
-      if (i === 0) bodyRowsHtml += `<td rowspan="${loMax}" class="sop-b-vbar">④<br><br>안<br><br>전<br><br>작<br><br>업<br><br>순<br><br>서</td>`;
-      bodyRowsHtml += `<td style="height:18px;">${escHtml(postLines[i] || '') || '&nbsp;'}</td></tr>`;
+      loList.push({
+        leftHtml: escHtml(inLines[i] || ''),
+        rightHtml: escHtml(postLines[i] || ''),
+        hPx: 18
+      });
     }
   }
 
+  return { upList, loList };
+}
+
+/**
+ * Render a single body table slice (with optional ①/② upper rows and a slice of ③/④ lower rows).
+ * Each page's body table gets its own complete 4-sided outer box border and vertical green section bars.
+ */
+function renderOptionBBodyTableHtml(upSlice, loSlice) {
+  let rowsHtml = '';
+  const upSpan = upSlice.length;
+  const loSpan = loSlice.length;
+
+  upSlice.forEach((row, idx) => {
+    rowsHtml += `<tr class="sop-b-up-row" style="min-height:${row.hPx}px;">`;
+    if (idx === 0) {
+      rowsHtml += `<td rowspan="${upSpan}" class="sop-b-vbar sop-b-vbar-left">①<br>작<br>업<br>준<br>비<br>사<br>항</td>`;
+    }
+    rowsHtml += `<td class="sop-b-cell-left" style="height:${row.hPx}px;">${row.leftHtml || '&nbsp;'}</td>`;
+    if (idx === 0) {
+      rowsHtml += `<td rowspan="${upSpan}" class="sop-b-vbar">②<br>안<br>전<br>일<br>반</td>`;
+    }
+    rowsHtml += `<td style="height:${row.hPx}px;">${row.rightHtml || '&nbsp;'}</td></tr>`;
+  });
+
+  loSlice.forEach((row, idx) => {
+    const isDiv = (idx === 0 && upSpan > 0);
+    rowsHtml += `<tr class="sop-b-lo-row ${isDiv ? 'sop-b-divider-row' : ''}" data-lo-idx="${idx}" style="min-height:${row.hPx}px;">`;
+    if (idx === 0) {
+      rowsHtml += `<td rowspan="${loSpan}" class="sop-b-vbar sop-b-vbar-left">③<br><br>작<br><br>업<br><br>순<br><br>서</td>`;
+    }
+    rowsHtml += `<td class="sop-b-cell-left" style="height:${row.hPx}px;">${row.leftHtml || '&nbsp;'}</td>`;
+    if (idx === 0) {
+      rowsHtml += `<td rowspan="${loSpan}" class="sop-b-vbar">④<br><br>안<br><br>전<br><br>작<br><br>업<br><br>순<br><br>서</td>`;
+    }
+    rowsHtml += `<td style="height:${row.hPx}px;">${row.rightHtml || '&nbsp;'}</td></tr>`;
+  });
+
+  return `
+    <table class="sop-b-body">
+      <colgroup>
+        <col style="width:3.6%;">
+        <col style="width:46.4%;">
+        <col style="width:3.6%;">
+        <col style="width:46.4%;">
+      </colgroup>
+      ${rowsHtml}
+    </table>
+  `;
+}
+
+/**
+ * Build Option B (기존 엑셀 PDF 서식 1:1) HTML for Modal Preview.
+ */
+function buildOptionBSheetHtml(s, forPrint) {
+  const headerHtml = buildOptionBHeaderHtml(s, forPrint);
+  const { upList, loList } = prepareOptionBRows(s, forPrint);
+  const bodyTableHtml = renderOptionBBodyTableHtml(upList, loList);
+
   return `
     <div class="sop-b-sheet">
-      <table class="sop-b-head">
-        <colgroup>
-          <col style="width:7%;">
-          <col style="width:35.5%;">
-          <col style="width:8.5%;">
-          <col style="width:11%;">
-          <col style="width:6.5%;">
-          <col style="width:7.5%;">
-          <col style="width:8.5%;">
-          <col style="width:15.5%;">
-        </colgroup>
-        <tr>
-          <td colspan="2" style="height:36px;">
-            <div class="sop-b-title-wrap">
-              ${logoHtml}
-              <span class="sop-b-title-text">안 전 작 업 표 준 서</span>
-            </div>
-          </td>
-          <td style="text-align:center;">NO</td>
-          <td style="text-align:center;font-weight:600;">${escHtml(code)}</td>
-          <td style="text-align:center;line-height:1.15;font-size:11px;">Team/<br>Person</td>
-          <td colspan="3" style="text-align:center;line-height:1.25;">${escHtml(teamLine)}<br>${escHtml(personLine)}</td>
-        </tr>
-        <tr>
-          <td style="text-align:center;height:26px;">작업명</td>
-          <td style="font-weight:800;font-size:13px;">${escHtml(s.title)}</td>
-          <td style="text-align:center;font-size:11px;">${escHtml(dateLabel)}</td>
-          <td style="text-align:center;font-weight:800;font-size:11.5px;">${escHtml(dateDot)}</td>
-          <td style="text-align:center;">Rev'</td>
-          <td style="text-align:center;font-weight:800;">${escHtml(revLabel)}</td>
-          <td style="text-align:center;font-size:11px;">관리이력</td>
-          <td style="text-align:center;font-weight:700;">${escHtml(historyText)}</td>
-        </tr>
-      </table>
-
-      <table class="sop-b-body">
-        <colgroup>
-          <col style="width:3.6%;">
-          <col style="width:46.4%;">
-          <col style="width:3.6%;">
-          <col style="width:46.4%;">
-        </colgroup>
-        ${bodyRowsHtml}
-      </table>
+      ${headerHtml}
+      ${bodyTableHtml}
       <div class="sop-b-footer-sh">1/1,SH</div>
     </div>
   `;
@@ -1476,7 +1506,13 @@ function printSopById(id) {
 function printFromModal() {
   if (!currentViewingSop) return;
   const s = currentViewingSop;
-  const sheetHtml = buildOptionBSheetHtml(s, true);
+  const headerHtml = buildOptionBHeaderHtml(s, true);
+  const rowsData = prepareOptionBRows(s, true);
+  const payloadJson = JSON.stringify({
+    headerHtml: headerHtml,
+    upList: rowsData.upList,
+    loList: rowsData.loList
+  }).replace(/<\//g, '<\\/');
 
   const pw = window.open('', '_blank');
   pw.document.write(`
@@ -1513,6 +1549,8 @@ function printFromModal() {
           align-items: center;
           justify-content: space-between;
           box-shadow: 0 4px 6px -1px rgba(0,0,0,0.07);
+          flex-wrap: wrap;
+          gap: 10px;
         }
         .toolbar-left {
           display: flex;
@@ -1559,6 +1597,15 @@ function printFromModal() {
           color: #fff;
           border-color: #1e3a8a;
         }
+        .page-badge {
+          background: #dcfce7;
+          color: #166534;
+          font-size: 12px;
+          font-weight: 800;
+          padding: 5px 11px;
+          border-radius: 999px;
+          border: 1px solid #86efac;
+        }
         .toolbar-tip {
           font-size: 12px;
           color: #475569;
@@ -1571,6 +1618,9 @@ function printFromModal() {
         .paper-container {
           max-width: 210mm;
           margin: 16px auto 32px auto;
+          display: flex;
+          flex-direction: column;
+          gap: 24px;
         }
         .a4-page {
           width: 210mm;
@@ -1583,6 +1633,7 @@ function printFromModal() {
           display: flex;
           flex-direction: column;
           overflow: hidden;
+          position: relative;
         }
         .sop-b-sheet {
           width: 100%;
@@ -1628,9 +1679,9 @@ function printFromModal() {
         }
         .sop-b-body td {
           vertical-align: top;
-          font-size: 7.9pt;
-          line-height: 1.24;
-          padding: 0.45pt 4pt;
+          font-size: 8pt;
+          line-height: 1.28;
+          padding: 0.6pt 4pt;
           color: #000;
           word-break: keep-all;
           overflow-wrap: break-word;
@@ -1642,9 +1693,9 @@ function printFromModal() {
           text-align: center;
           vertical-align: middle !important;
           font-weight: 800;
-          font-size: 8pt;
-          line-height: 1.25;
-          padding: 2pt 1pt !important;
+          font-size: 8.2pt;
+          line-height: 1.28;
+          padding: 2.5pt 1pt !important;
         }
         .sop-b-vbar-left {
           border-left: none !important;
@@ -1656,7 +1707,7 @@ function printFromModal() {
           border-right: 1.2pt solid #000;
         }
         .sop-b-img-box {
-          margin: 1.5pt 0;
+          margin: 2pt 0;
           text-align: center;
         }
         .sop-b-img-box img {
@@ -1672,19 +1723,27 @@ function printFromModal() {
           color: #000;
           flex-shrink: 0;
         }
+        /* Hidden measurement staging box matching printable width */
+        #measureStage {
+          position: absolute;
+          left: -9999px;
+          top: 0;
+          visibility: hidden;
+          width: calc(210mm - var(--left-pad) - var(--right-pad));
+        }
         @media print {
           html, body {
             background: #ffffff !important;
             margin: 0 !important;
             padding: 0 !important;
             width: 210mm !important;
-            height: 297mm !important;
           }
-          .no-print { display: none !important; }
+          .no-print, #measureStage { display: none !important; }
           .paper-container {
             max-width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
+            gap: 0 !important;
           }
           .a4-page {
             width: 210mm !important;
@@ -1695,7 +1754,13 @@ function printFromModal() {
             padding: var(--top-pad) var(--right-pad) var(--bottom-pad) var(--left-pad) !important;
             box-shadow: none !important;
             border: none !important;
+            page-break-after: always !important;
+            break-after: page !important;
             overflow: hidden !important;
+          }
+          .a4-page:last-child {
+            page-break-after: auto !important;
+            break-after: auto !important;
           }
         }
       </style>
@@ -1705,6 +1770,7 @@ function printFromModal() {
         <div class="toolbar-left">
           <button type="button" onclick="window.print()" class="toolbar-btn btn-print">🖨️ 바로 인쇄하기 (Ctrl+P)</button>
           <button type="button" onclick="window.close()" class="toolbar-btn btn-close">✕ 창 닫기</button>
+          <span id="pageCountBadge" class="page-badge">총 1페이지</span>
           <div class="pad-control-group">
             <span class="pad-label">여백 규정:</span>
             <button type="button" class="pad-btn active" onclick="setPadPreset('20mm','12mm','12mm','12mm',this)">상단 편철 표준 (상 20 / 좌·우·하 12mm)</button>
@@ -1713,15 +1779,131 @@ function printFromModal() {
           </div>
         </div>
         <div class="toolbar-tip">
-          💡 <strong>CSM A4 인쇄 여백 규정(상단 20mm · 좌우하단 12mm)</strong> 적용 &bull; 인쇄 설정에서 <strong>[배경 그래픽]</strong>을 켜주세요.
+          💡 <strong>페이지 초과 시 자동 분할(상단 헤더 반복 · 본문 박스 마감 · 1/N,SH)</strong> &bull; 인쇄 설정에서 <strong>[배경 그래픽]</strong>을 켜주세요.
         </div>
       </aside>
-      <div class="paper-container">
-        <div class="a4-page">
-          ${sheetHtml}
-        </div>
-      </div>
+      <div id="measureStage"></div>
+      <div id="paperContainer" class="paper-container"></div>
       <script>
+        const SOP_DATA = ${payloadJson};
+
+        function buildBodyTableHtml(upSlice, loSlice) {
+          let rowsHtml = '';
+          const upSpan = upSlice.length;
+          const loSpan = loSlice.length;
+
+          upSlice.forEach(function(row, idx) {
+            rowsHtml += '<tr class="sop-b-up-row" style="min-height:' + row.hPx + 'px;">';
+            if (idx === 0) {
+              rowsHtml += '<td rowspan="' + upSpan + '" class="sop-b-vbar sop-b-vbar-left">①<br>작<br>업<br>준<br>비<br>사<br>항</td>';
+            }
+            rowsHtml += '<td class="sop-b-cell-left" style="height:' + row.hPx + 'px;">' + (row.leftHtml || '&nbsp;') + '</td>';
+            if (idx === 0) {
+              rowsHtml += '<td rowspan="' + upSpan + '" class="sop-b-vbar">②<br>안<br>전<br>일<br>반</td>';
+            }
+            rowsHtml += '<td style="height:' + row.hPx + 'px;">' + (row.rightHtml || '&nbsp;') + '</td></tr>';
+          });
+
+          loSlice.forEach(function(row, idx) {
+            const isDiv = (idx === 0 && upSpan > 0);
+            rowsHtml += '<tr class="sop-b-lo-row' + (isDiv ? ' sop-b-divider-row' : '') + '" data-lo-idx="' + idx + '" style="min-height:' + row.hPx + 'px;">';
+            if (idx === 0) {
+              rowsHtml += '<td rowspan="' + loSpan + '" class="sop-b-vbar sop-b-vbar-left">③<br><br>작<br><br>업<br><br>순<br><br>서</td>';
+            }
+            rowsHtml += '<td class="sop-b-cell-left" style="height:' + row.hPx + 'px;">' + (row.leftHtml || '&nbsp;') + '</td>';
+            if (idx === 0) {
+              rowsHtml += '<td rowspan="' + loSpan + '" class="sop-b-vbar">④<br><br>안<br><br>전<br><br>작<br><br>업<br><br>순<br><br>서</td>';
+            }
+            rowsHtml += '<td style="height:' + row.hPx + 'px;">' + (row.rightHtml || '&nbsp;') + '</td></tr>';
+          });
+
+          return '<table class="sop-b-body"><colgroup><col style="width:3.6%;"><col style="width:46.4%;"><col style="width:3.6%;"><col style="width:46.4%;"></colgroup>' + rowsHtml + '</table>';
+        }
+
+        function paginateSopPages() {
+          const stage = document.getElementById('measureStage');
+          const container = document.getElementById('paperContainer');
+
+          // Create a temporary .a4-page inside stage to measure exact available height
+          stage.innerHTML = '<div class="a4-page" id="probePage" style="height:297mm;min-height:297mm;max-height:297mm;">' +
+            '<div class="sop-b-sheet" style="height:auto;flex:0 0 auto;">' +
+              '<div id="probeHead">' + SOP_DATA.headerHtml + '</div>' +
+              '<div id="probeBody">' + buildBodyTableHtml(SOP_DATA.upList, SOP_DATA.loList) + '</div>' +
+              '<div id="probeFoot" class="sop-b-footer-sh">1/1,SH</div>' +
+            '</div></div>';
+
+          const probePage = document.getElementById('probePage');
+          const cs = window.getComputedStyle(probePage);
+          const padTop = parseFloat(cs.paddingTop) || 0;
+          const padBottom = parseFloat(cs.paddingBottom) || 0;
+          const usablePageH = probePage.clientHeight - padTop - padBottom;
+
+          const headH = document.getElementById('probeHead').offsetHeight;
+          const footH = document.getElementById('probeFoot').offsetHeight + 4;
+          const maxBodyH = usablePageH - headH - footH;
+
+          const upTrs = Array.from(stage.querySelectorAll('tr.sop-b-up-row'));
+          const loTrs = Array.from(stage.querySelectorAll('tr.sop-b-lo-row'));
+
+          let upTotalH = 0;
+          upTrs.forEach(function(tr) { upTotalH += tr.getBoundingClientRect().height; });
+
+          const loHeights = loTrs.map(function(tr) {
+            return Math.max(14, tr.getBoundingClientRect().height);
+          });
+
+          const totalLoH = loHeights.reduce(function(a, b) { return a + b; }, 0);
+
+          // Check if everything fits on 1 page (allow tiny 6px tolerance so normal 1-page sheets never split unnecessarily)
+          const pages = [];
+          if (upTotalH + totalLoH <= maxBodyH + 6 || SOP_DATA.loList.length <= 1) {
+            pages.push({ upSlice: SOP_DATA.upList, loSlice: SOP_DATA.loList });
+          } else {
+            // Split lower rows across multiple pages; Page 1 carries ①/② + first slice of ③/④, Page 2+ carries remaining slices of ③/④
+            let curUp = SOP_DATA.upList;
+            let curUsedH = upTotalH + 4;
+            let curLoSlice = [];
+
+            for (let i = 0; i < SOP_DATA.loList.length; i++) {
+              const rh = loHeights[i];
+              if (curLoSlice.length > 0 && (curUsedH + rh > maxBodyH - 4)) {
+                pages.push({ upSlice: curUp, loSlice: curLoSlice });
+                curUp = [];
+                curLoSlice = [];
+                curUsedH = 4;
+              }
+              curLoSlice.push(SOP_DATA.loList[i]);
+              curUsedH += rh;
+            }
+            if (curLoSlice.length > 0 || curUp.length > 0) {
+              pages.push({ upSlice: curUp, loSlice: curLoSlice });
+            }
+          }
+
+          // Pad the last page with blank aligned rows if it has fewer than 18 rows so the vertical green bars and box look well-proportioned
+          if (pages.length > 1) {
+            const lastPage = pages[pages.length - 1];
+            while (lastPage.loSlice.length < 18) {
+              lastPage.loSlice.push({ leftHtml: '', rightHtml: '', hPx: 18 });
+            }
+          }
+
+          const totalPages = pages.length;
+          container.innerHTML = pages.map(function(pg, idx) {
+            const pageNo = idx + 1;
+            return '<div class="a4-page">' +
+              '<div class="sop-b-sheet">' +
+                SOP_DATA.headerHtml +
+                buildBodyTableHtml(pg.upSlice, pg.loSlice) +
+                '<div class="sop-b-footer-sh">' + pageNo + '/' + totalPages + ',SH</div>' +
+              '</div>' +
+            '</div>';
+          }).join('');
+
+          const badge = document.getElementById('pageCountBadge');
+          if (badge) badge.textContent = '총 ' + totalPages + '페이지 (' + (totalPages === 1 ? '1/1,SH' : '1/' + totalPages + '~' + totalPages + '/' + totalPages + ',SH') + ')';
+        }
+
         function setPadPreset(top, right, bottom, left, btn) {
           document.documentElement.style.setProperty('--top-pad', top);
           document.documentElement.style.setProperty('--right-pad', right);
@@ -1729,9 +1911,27 @@ function printFromModal() {
           document.documentElement.style.setProperty('--left-pad', left);
           document.querySelectorAll('.pad-btn').forEach(function(b) { b.classList.remove('active'); });
           if (btn) btn.classList.add('active');
+          paginateSopPages();
         }
+
         window.addEventListener('load', function() {
-          setTimeout(function() { window.print(); }, 220);
+          paginateSopPages();
+          // Re-paginate if any embedded images finish loading after initial layout
+          const imgs = Array.from(document.querySelectorAll('#paperContainer img'));
+          let pending = 0;
+          imgs.forEach(function(im) {
+            if (!im.complete) {
+              pending++;
+              im.addEventListener('load', function() {
+                pending--;
+                if (pending <= 0) paginateSopPages();
+              });
+            }
+          });
+          setTimeout(function() {
+            paginateSopPages();
+            window.print();
+          }, 260);
         });
       <\/script>
     </body>
