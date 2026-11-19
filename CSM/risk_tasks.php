@@ -51,14 +51,14 @@ if ($isSopReview && is_file(__DIR__ . '/standard_procedure_store.php')) {
     '2026년 안전작업표준서(01~05권, 247종) 사내 표준 전환 및 제정 검토',
     '2026-10-21',
     '전권 제정·전환 검토 (01~05권 · 총 247종)',
-    "1. 검토 목적: 한라시멘트 모회사 안전작업표준서 기반 공사팀 작업별 자체 안전작업표준서(SOP) 제정 및 일괄 전환\n2. 검토 대상: 01권(1~50) ~ 05권(201~247) 총 247종 (유효 242종 / 기존 폐지 5종)\n3. 주요 검토 내역:\n - 전 표준서 관리번호(CSM-SOP-001~247) 부여 및 제정일(2026.10.21) 일괄 정비\n - 공사팀 로고, 작업별 위험요인·안전보호구·작업절차 적정성 확인 완료",
+    "1. 검토 목적: 현장 작업별 공사팀 자체 안전작업표준서(SOP) 제정 및 표준 체계 일괄 정비\n2. 검토 대상: 01권(1~50) ~ 05권(201~247) 총 247종 (유효 242종 / 기존 폐지 5종)\n3. 주요 검토 내역:\n - 전 표준서 관리번호(CSM-SOP-001~247) 부여 및 제정일(2026.10.21) 일괄 정비\n - 공사팀 로고, 작업별 위험요인·안전보호구·작업절차 적정성 확인 완료",
     "1. 공사팀 전 작업반 안전작업표준서(01~05권) 현장 비치 및 공용 열람함 배포 완료\n2. 작업 전 안전미팅(TBM) 시 해당 공종 표준서 상시 활용 지침 시달",
     '검토: 공사팀 김남균 / 승인: 정연탁 대표',
     '', '완료', 'system', '2026-10-21 18:00:00'
    ]);
    $seedStmt->execute([
     '2.2', '2.2.1',
-    '2026년 하반기 안전작업표준서 정기 검토 및 모회사 개정사항(신규 5·개정 4·폐지 1) 반영',
+    '2026년 하반기 안전작업표준서 정기 검토 및 제·개정(신규 5·개정 4·폐지 1) 반영',
     '2026-11-19',
     '정기·수시 통합검토 (01~06권 · 총 252종 / 유효 251종)',
     "1. 검토 현황: 총 252종 검토 완료 (유효 251종, 폐지 1종)\n2. 본문 개정 (4건, Rev.1):\n - No.3 고압 MOTOR 교체 (상하역보완): 10번 Motor 상/하역 변경 및 신호수 배치·주변환경 확인·Guide Rope 사용 추가\n - No.20 Gas analyzer probe 청소 (압력주의보완): 4-8 (+)압력 유의 문구 및 4-9 인출 후 입구 덮개 닫음 신설\n - No.63 EP Finger 교체작업 (산소측정추가): 5번 EP 내부 산소농도 측정 및 환기장치 설치 밀폐공간 안전절차 신설\n - No.217 Gas analyzer probe 교체 (덮개개폐보완): 4-1 인입구 덮개 덮음, 4-9 인출구 옆 이동 작업, 5-2 덮개 개방 추가\n3. 신규 제정 (5건, Rev.0):\n - 05권: No.248 철탑 드론 점검, No.249 용접 & 산소절단 작업, No.250 비상발전기 엔진오일 교체 및 동체 절연저항 측정\n - 06권 신설: No.251 WHR Generator PMG 분해 점검, No.252 Kiln Main Motor 교체 시운전\n4. 폐지 처리 (1건):\n - No.186 LAF FLEXIM flowmeter manual calibration (타입변경폐지)",
@@ -189,7 +189,7 @@ $v = static fn(string $key, string $default = ''): string => (string)($_POST[$ke
 
 <?php if ($isSopReview): ?>
 <label class="wide">검토 제목 *
- <input id="sop-title" name="title" required maxlength="200" placeholder="예: 2026년 하반기 안전작업표준서(01~06권) 정기 검토 및 모회사 개정사항 반영" value="<?= $h($v('title')) ?>">
+ <input id="sop-title" name="title" required maxlength="200" placeholder="예: 2026년 하반기 안전작업표준서(01~06권) 정기 검토 및 제·개정 반영" value="<?= $h($v('title')) ?>">
 </label>
 <label>검토 일자 *
  <input type="date" name="record_date" required value="<?= $h($v('record_date', date('Y-m-d'))) ?>">
@@ -205,7 +205,7 @@ $v = static fn(string $key, string $default = ''): string => (string)($_POST[$ke
  <input id="sop-subject" name="subject" maxlength="200" placeholder="예: 정기·수시 통합검토 (01~06권 · 총 252종)" value="<?= $h($v('subject', $sopStats ? '정기·수시 통합검토 (01~06권 · 총 ' . $sopStats['total'] . '종)' : '')) ?>">
  <div class="quick-chips">
   <button type="button" class="chip-btn" onclick="document.getElementById('sop-subject').value='정기검토 (01~06권 전권 · 총 <?= (int)($sopStats['total'] ?? 252) ?>종)'">정기검토 (전권)</button>
-  <button type="button" class="chip-btn" onclick="document.getElementById('sop-subject').value='수시검토 (모회사 제·개정 및 폐지 반영)'">수시검토 (모회사 개정반영)</button>
+  <button type="button" class="chip-btn" onclick="document.getElementById('sop-subject').value='수시검토 (안전절차 제·개정 및 폐지 반영)'">수시검토 (제·개정 반영)</button>
   <button type="button" class="chip-btn" onclick="document.getElementById('sop-subject').value='수시검토 (신규 작업·설비 표준서 제정)'">신규작업 제정검토</button>
   <button type="button" class="chip-btn" onclick="document.getElementById('sop-subject').value='수시검토 (아차사고·위험성평가 후속 절차 보완)'">아차사고·위험성평가 연계</button>
  </div>

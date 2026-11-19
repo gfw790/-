@@ -1136,7 +1136,7 @@ $queryBase = http_build_query(array_filter([
           </div>
           <div class="sop-form-col-full sop-form-group">
             <label>개정 사유 *</label>
-            <input type="text" name="reason" placeholder="예: [개정] 모회사 안전절차 보완 및 위험성평가 연계 반영" required>
+            <input type="text" name="reason" placeholder="예: [개정] 작업 안전절차 보완 및 위험성평가 연계 반영" required>
           </div>
           <div class="sop-form-col-full sop-form-group">
             <label>주요 변경 내용 요약 *</label>
