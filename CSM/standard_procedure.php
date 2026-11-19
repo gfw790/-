@@ -27,8 +27,11 @@ $perPage = (($_GET['show'] ?? '') === 'all') ? 500 : 50;
 $message = '';
 $error = '';
 
-// Logo base64 for A4 print
-$logoPath = __DIR__ . '/assets/policy-logo.png';
+// Logo base64 for A4 print (exact logo from Word SOP template)
+$logoPath = __DIR__ . '/assets/sop-word-logo.png';
+if (!file_exists($logoPath)) {
+    $logoPath = __DIR__ . '/assets/policy-logo.png';
+}
 if (!file_exists($logoPath)) {
     $logoPath = dirname(__DIR__) . '/safety_manual/assets/policy-logo.png';
 }
@@ -1109,11 +1112,41 @@ function printSopById(id) {
   printFromModal();
 }
 
+function formatDotDate(d) {
+  const m = String(d || '').match(/(\d{4})[-./](\d{1,2})[-./](\d{1,2})/);
+  if (!m) return d || '';
+  return m[1] + '. ' + m[2].padStart(2, '0') + '. ' + m[3].padStart(2, '0') + '.';
+}
+
+function formatSafetyGeneralHtml(raw) {
+  const lines = String(raw || '').split(/\r?\n/);
+  return lines.map(line => {
+    const trimmed = line.trim();
+    if (!trimmed) return '';
+    // Highlight key warning lines (LOTOTO, 위험성평가, 주의, 금지, 전도, 감전) in Word template red (#C00000)
+    const isHighlight = /^(1\.|2\.|\*)/.test(trimmed) || /LOTOTO|위험성\s*평가|전도\s*주의|금지|감전|추락/.test(trimmed);
+    return isHighlight
+      ? '<div style="color:#C00000;font-weight:700;">' + escHtml(line) + '</div>'
+      : '<div>' + escHtml(line) + '</div>';
+  }).join('');
+}
+
 function printFromModal() {
   if (!currentViewingSop) return;
   const s = currentViewingSop;
   const code = s.job_plan_code || s.doc_code || '';
-  const logoHtml = COMPANY_LOGO ? `<img src="${COMPANY_LOGO}" alt="로고" style="height:14px;vertical-align:middle;margin-right:4px;">` : '';
+  const isDep = (s.status === '폐지');
+  const revLabel = isDep ? '폐지' : String(s.revision_no ?? 0);
+  const datePrefix = (parseInt(s.revision_no, 10) > 0 || isDep) ? '개정' : '등록';
+  const dateDot = formatDotDate(s.revised_date || s.enact_date);
+  const historyText = s.change_reason || (isDep ? '폐지(타입변경삭제)' : '사내전환');
+  const teamPerson = (s.author_name || '공사팀 김남균').includes('/')
+    ? s.author_name
+    : (s.author_name || '공사팀 김남균').replace(/^공사팀\s+/, '공사팀 / ');
+  const logoHtml = COMPANY_LOGO
+    ? `<img src="${COMPANY_LOGO}" alt="현대기전" style="height:22px;width:auto;vertical-align:middle;margin-right:10px;flex-shrink:0;">`
+    : '';
+
   const pw = window.open('', '_blank');
   pw.document.write(`
     <!doctype html>
@@ -1122,65 +1155,136 @@ function printFromModal() {
       <meta charset="utf-8">
       <title>No.${escHtml(s.sop_no)} ${escHtml(s.title)} · 안전작업표준서</title>
       <style>
-        @page { size: A4 portrait; margin: 16mm 12mm 12mm 12mm; }
-        body { font-family: "Malgun Gothic", sans-serif; color: #000; font-size: 9pt; line-height: 1.45; margin: 0; }
-        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-        th, td { border: 1.2px solid #000; padding: 5px 7px; vertical-align: top; word-break: break-word; }
-        th { background: #f1f5f9; text-align: center; vertical-align: middle; font-weight: 700; }
-        .doc-title { font-size: 16pt; font-weight: 900; letter-spacing: 6px; text-align: center; vertical-align: middle; }
-        .sec-body { white-space: pre-wrap; font-size: 8.8pt; line-height: 1.5; }
-        .footer { margin-top: 8px; text-align: right; font-weight: 900; font-size: 9.5pt; }
+        @page { size: A4 portrait; margin: 12mm 14mm 12mm 22mm; }
+        * { box-sizing: border-box; }
+        body {
+          font-family: "Malgun Gothic", "맑은 고딕", sans-serif;
+          color: #000000;
+          font-size: 8.5pt;
+          line-height: 1.45;
+          margin: 0;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        table.docx-sop {
+          width: 100%;
+          border-collapse: collapse;
+          table-layout: fixed;
+          border: 1.5pt solid #000000;
+        }
+        table.docx-sop th,
+        table.docx-sop td {
+          border: 0.5pt solid #000000;
+          padding: 4.5pt 6pt;
+          vertical-align: middle;
+          word-break: keep-all;
+          overflow-wrap: break-word;
+        }
+        .docx-title-cell {
+          text-align: left;
+          padding: 6pt 8pt !important;
+        }
+        .docx-title-wrap {
+          display: flex;
+          align-items: center;
+          justify-content: flex-start;
+        }
+        .docx-title-text {
+          font-size: 14pt;
+          font-weight: 800;
+          letter-spacing: 3px;
+          color: #000000;
+          white-space: nowrap;
+        }
+        .docx-meta-center {
+          text-align: center;
+          font-size: 9.5pt;
+          font-weight: 700;
+        }
+        .docx-meta-row2 {
+          font-size: 9pt;
+          font-weight: 700;
+        }
+        .docx-sec-head {
+          background-color: #E2EFDA !important;
+          text-align: center;
+          font-size: 9.5pt;
+          font-weight: 800;
+          letter-spacing: 2px;
+          padding: 4.5pt 6pt !important;
+          color: #000000;
+        }
+        .docx-sec-body {
+          vertical-align: top !important;
+          font-size: 8.5pt;
+          line-height: 1.48;
+          white-space: pre-wrap;
+          padding: 6pt 7pt !important;
+        }
       </style>
     </head>
     <body onload="window.print()">
-      <table>
+      <table class="docx-sop">
         <colgroup>
-          <col style="width:12%;"><col style="width:36%;"><col style="width:11%;"><col style="width:13%;"><col style="width:11%;"><col style="width:17%;">
+          <col style="width:16.6667%;">
+          <col style="width:16.6667%;">
+          <col style="width:16.6667%;">
+          <col style="width:16.6667%;">
+          <col style="width:16.6667%;">
+          <col style="width:16.6667%;">
         </colgroup>
+        <!-- Row 1: Logo + Title | NO + Code | Team/Person -->
         <tr>
-          <td colspan="2" rowspan="2" class="doc-title">안 전 작 업 표 준 서</td>
-          <th>NO</th>
-          <td style="text-align:center;vertical-align:middle;font-weight:700;">${escHtml(code)}</td>
-          <th>관리부서</th>
-          <td style="text-align:center;vertical-align:middle;font-weight:700;">공사팀</td>
+          <td colspan="3" class="docx-title-cell">
+            <div class="docx-title-wrap">
+              ${logoHtml}
+              <span class="docx-title-text">안 전 작 업 표 준 서</span>
+            </div>
+          </td>
+          <td colspan="1" class="docx-meta-center">
+            <div style="font-size:8.5pt;line-height:1.2;">NO</div>
+            <div style="font-size:9.5pt;line-height:1.3;">${escHtml(code)}</div>
+          </td>
+          <td colspan="2" class="docx-meta-center">
+            Team/Person: ${escHtml(teamPerson)}
+          </td>
         </tr>
+        <!-- Row 2: 작업명 | 등록/개정일 | Rev' | 이력 -->
         <tr>
-          <th>연번</th>
-          <td style="text-align:center;vertical-align:middle;font-weight:700;">No.${escHtml(s.sop_no)} (${escHtml(s.volume)})</td>
-          <th>담당자</th>
-          <td style="text-align:center;vertical-align:middle;font-weight:700;">${escHtml(s.author_name)}</td>
+          <td colspan="2" class="docx-meta-row2" style="text-align:left;font-size:9.5pt;">
+            작업명: ${escHtml(s.title)}
+          </td>
+          <td colspan="1" class="docx-meta-row2" style="text-align:center;">
+            ${datePrefix}: ${escHtml(dateDot)}
+          </td>
+          <td colspan="1" class="docx-meta-row2" style="text-align:center;">
+            Rev': ${escHtml(revLabel)}
+          </td>
+          <td colspan="2" class="docx-meta-row2" style="text-align:center;">
+            이력: ${escHtml(historyText)}
+          </td>
         </tr>
+        <!-- Row 3: ① 작업준비사항 | ② 안전일반 -->
         <tr>
-          <th>작업명</th>
-          <td style="font-weight:800;font-size:10pt;vertical-align:middle;">${escHtml(s.title)}</td>
-          <th>개정일</th>
-          <td style="text-align:center;vertical-align:middle;">${escHtml(s.revised_date)}</td>
-          <th>Rev. / 이력</th>
-          <td style="text-align:center;vertical-align:middle;font-weight:700;">Rev.${escHtml(s.revision_no)} (${escHtml(s.status || '유효')})</td>
+          <th colspan="3" class="docx-sec-head">① &nbsp;작 업 준 비 사 항</th>
+          <th colspan="3" class="docx-sec-head">② &nbsp;안 전 일 반</th>
+        </tr>
+        <!-- Row 4: ①/② Body -->
+        <tr>
+          <td colspan="3" class="docx-sec-body" style="min-height:38mm;">${escHtml(s.pre_work_safety)}</td>
+          <td colspan="3" class="docx-sec-body" style="min-height:38mm;">${formatSafetyGeneralHtml(s.danger_factors)}</td>
+        </tr>
+        <!-- Row 5: ③ 작업순서 | ④ 안전작업순서 -->
+        <tr>
+          <th colspan="3" class="docx-sec-head">③ &nbsp;작 업 순 서</th>
+          <th colspan="3" class="docx-sec-head">④ &nbsp;안 전 작 업 순 서</th>
+        </tr>
+        <!-- Row 6: ③/④ Body -->
+        <tr>
+          <td colspan="3" class="docx-sec-body" style="min-height:135mm;">${escHtml(s.in_work_safety)}</td>
+          <td colspan="3" class="docx-sec-body" style="min-height:135mm;">${escHtml(s.post_work_safety)}</td>
         </tr>
       </table>
-
-      <table style="margin-top:-1.2px;">
-        <colgroup><col style="width:50%;"><col style="width:50%;"></colgroup>
-        <tr>
-          <th>① 작 업 준 비 사 항</th>
-          <th>② 안 전 일 반</th>
-        </tr>
-        <tr>
-          <td class="sec-body" style="min-height:36mm;">${escHtml(s.pre_work_safety)}</td>
-          <td class="sec-body" style="min-height:36mm;">${escHtml(s.danger_factors)}</td>
-        </tr>
-        <tr>
-          <th>③ 작 업 순 서</th>
-          <th>④ 안 전 작 업 순 서</th>
-        </tr>
-        <tr>
-          <td class="sec-body" style="min-height:110mm;">${escHtml(s.in_work_safety)}</td>
-          <td class="sec-body" style="min-height:110mm;">${escHtml(s.post_work_safety)}</td>
-        </tr>
-      </table>
-
-      <div class="footer">${logoHtml}주식회사 현대기전</div>
     </body>
     </html>
   `);
