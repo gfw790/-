@@ -145,9 +145,14 @@ table.chk-tbl td.c { text-align: center; white-space: nowrap; }
 .sign-row-tbl { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-top: 8px; }
 .sign-row-tbl th, .sign-row-tbl td { border: 0.75pt solid #1e293b; padding: 5px 8px; }
 .sign-row-tbl th { background: #f8fafc; width: 16%; text-align: center; font-weight: 700; }
-.action-box { border: 0.75pt solid #1e293b; margin-top: 8px; flex: 1 1 auto; display: flex; flex-direction: column; min-height: 22mm; }
+.action-box { border: 0.75pt solid #1e293b; margin-top: 8px; flex: 1 1 auto; display: flex; flex-direction: column; min-height: 18mm; }
 .action-box-head { background: #f1f5f9; border-bottom: 0.75pt solid #1e293b; padding: 4px 8px; font-weight: 700; font-size: 8.4pt; }
 .action-box-body { padding: 6px 8px; white-space: pre-wrap; font-size: 8.4pt; flex: 1; }
+.field-photos-wrap { margin-top: 7px; border: 0.75pt solid #1e293b; padding: 5px 7px; }
+.field-photos-title { font-size: 8pt; font-weight: 700; margin-bottom: 4px; color: #1e293b; }
+.field-photos-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.field-photo-card { width: 32mm; text-align: center; font-size: 7pt; color: #334155; }
+.field-photo-card img { width: 32mm; height: 22mm; object-fit: cover; border: 0.5pt solid #64748b; display: block; margin-bottom: 2px; }
 
 /* CSM 표준 하단 푸터 (회사로고 + 주식회사 현대기전) */
 .rpt-footer {
@@ -366,6 +371,27 @@ table.chk-tbl td.c { text-align: center; white-space: nowrap; }
         <div class="action-box-head">점검결과 주요 조치 및 요구사항</div>
         <div class="action-box-body"><?= $h($eq['action_note']) ?></div>
       </div>
+
+      <?php
+        $fieldPhotos = [];
+        foreach ($items as $it) {
+          if (!empty($it['round1_photo'])) $fieldPhotos[] = ['label' => '1차 #' . $it['item_no'], 'file' => $it['round1_photo']];
+          if (!empty($it['round2_photo'])) $fieldPhotos[] = ['label' => '2차 #' . $it['item_no'], 'file' => $it['round2_photo']];
+        }
+        if (!empty($fieldPhotos)):
+      ?>
+      <div class="field-photos-wrap">
+        <div class="field-photos-title">현장 점검 촬영 사진 (<?= count($fieldPhotos) ?>장)</div>
+        <div class="field-photos-grid">
+          <?php foreach ($fieldPhotos as $fp): ?>
+          <div class="field-photo-card">
+            <img src="hazardous_machinery.php?check_photo=<?= $h($fp['file']) ?>" alt="">
+            <div><?= $h($fp['label']) ?></div>
+          </div>
+          <?php endforeach; ?>
+        </div>
+      </div>
+      <?php endif; ?>
     </div>
 
     <footer class="rpt-footer">

@@ -33,6 +33,28 @@ if (isset($_GET['photo'])) {
     exit;
 }
 
+// Serve checklist field inspection photo securely
+if (isset($_GET['check_photo'])) {
+    $file = basename((string)$_GET['check_photo']);
+    if (!preg_match('/^chk_e\d+_i\d+_r[12]_[a-f0-9]+\.(jpg|png|webp)$/i', $file)) {
+        http_response_code(404);
+        exit;
+    }
+    $path = hm_check_photo_dir() . '/' . $file;
+    if (!is_file($path)) {
+        http_response_code(404);
+        exit;
+    }
+    $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+    $mime = $ext === 'png' ? 'image/png' : ($ext === 'webp' ? 'image/webp' : 'image/jpeg');
+    header('X-Content-Type-Options: nosniff');
+    header('Content-Type: ' . $mime);
+    header('Cache-Control: private, max-age=3600');
+    header('Content-Length: ' . filesize($path));
+    readfile($path);
+    exit;
+}
+
 // Serve evidence file securely
 if (isset($_GET['evidence_file'])) {
     $eid = filter_var($_GET['evidence_file'], FILTER_VALIDATE_INT) ?: 0;
@@ -63,6 +85,70 @@ if (!in_array($tab, ['register', 'checklist', 'evidence'], true)) {
 $selectedId = filter_var($_GET['id'] ?? $_POST['equipment_id'] ?? 0, FILTER_VALIDATE_INT) ?: 0;
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+    $action = (string)($_POST['action'] ?? '');
+    if (str_starts_with($action, 'ajax_')) {
+        header('Content-Type: application/json; charset=UTF-8');
+        try {
+            if (!$canManage) {
+                throw new InvalidArgumentException('변경 권한이 없습니다.');
+            }
+            if (!is_string($_POST['csrf'] ?? null) || !hash_equals($_SESSION['csm_hm_csrf'], $_POST['csrf'])) {
+                throw new InvalidArgumentException('세션이 만료되었습니다. 새로고침해 주세요.');
+            }
+            $eqId = filter_var($_POST['equipment_id'] ?? 0, FILTER_VALIDATE_INT) ?: 0;
+            $itemId = filter_var($_POST['item_id'] ?? 0, FILTER_VALIDATE_INT) ?: 0;
+            $round = (int)($_POST['round'] ?? 1);
+            if ($eqId <= 0 || $itemId <= 0 || !in_array($round, [1, 2], true)) {
+                throw new InvalidArgumentException('잘못된 점검 항목 요청입니다.');
+            }
+            $resCol = $round === 1 ? 'round1_result' : 'round2_result';
+            $photoCol = $round === 1 ? 'round1_photo' : 'round2_photo';
+
+            if ($action === 'ajax_set_item_result') {
+                $val = (string)($_POST['result'] ?? '');
+                if (!in_array($val, ['적정', '부적정', ''], true)) {
+                    throw new InvalidArgumentException('판정 값을 확인해 주세요.');
+                }
+                $db->prepare("UPDATE hm_check_items SET {$resCol} = ? WHERE id = ? AND equipment_id = ?")
+                   ->execute([$val, $itemId, $eqId]);
+                $summary = hm_sync_equipment_round_summary($db, $eqId);
+                echo json_encode(['ok' => true, 'result' => $val, 'summary' => $summary], JSON_UNESCAPED_UNICODE);
+                exit;
+            } elseif ($action === 'ajax_upload_check_photo') {
+                $oldStmt = $db->prepare("SELECT {$photoCol} FROM hm_check_items WHERE id = ? AND equipment_id = ?");
+                $oldStmt->execute([$itemId, $eqId]);
+                $oldFile = (string)($oldStmt->fetchColumn() ?: '');
+                $newFile = hm_save_check_photo($_FILES['photo'] ?? [], $eqId, $itemId, $round);
+                $db->prepare("UPDATE hm_check_items SET {$photoCol} = ? WHERE id = ? AND equipment_id = ?")
+                   ->execute([$newFile, $itemId, $eqId]);
+                if ($oldFile !== '' && $oldFile !== $newFile) {
+                    @unlink(hm_check_photo_dir() . '/' . basename($oldFile));
+                }
+                echo json_encode([
+                    'ok' => true,
+                    'photo' => $newFile,
+                    'url' => 'hazardous_machinery.php?check_photo=' . rawurlencode($newFile),
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
+            } elseif ($action === 'ajax_delete_check_photo') {
+                $oldStmt = $db->prepare("SELECT {$photoCol} FROM hm_check_items WHERE id = ? AND equipment_id = ?");
+                $oldStmt->execute([$itemId, $eqId]);
+                $oldFile = (string)($oldStmt->fetchColumn() ?: '');
+                $db->prepare("UPDATE hm_check_items SET {$photoCol} = '' WHERE id = ? AND equipment_id = ?")
+                   ->execute([$itemId, $eqId]);
+                if ($oldFile !== '') {
+                    @unlink(hm_check_photo_dir() . '/' . basename($oldFile));
+                }
+                echo json_encode(['ok' => true], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+            throw new InvalidArgumentException('지원하지 않는 요청입니다.');
+        } catch (Throwable $e) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'message' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+    }
     try {
         if (!$canManage) {
             throw new InvalidArgumentException('변경 권한이 없습니다.');
@@ -70,7 +156,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         if (!is_string($_POST['csrf'] ?? null) || !hash_equals($_SESSION['csm_hm_csrf'], $_POST['csrf'])) {
             throw new InvalidArgumentException('요청이 만료되었습니다. 새로고침해 주세요.');
         }
-        $action = (string)($_POST['action'] ?? '');
 
         if ($action === 'save_equipment') {
             $eqId = filter_var($_POST['id'] ?? 0, FILTER_VALIDATE_INT) ?: 0;
@@ -332,7 +417,61 @@ table.hm-tbl tbody tr:hover td.sticky-col { background: #f8fafc; }
 
 .radio-pair { display: inline-flex; gap: 10px; align-items: center; justify-content: center; }
 .radio-pair label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; font-weight: 600; font-size: .83rem; }
-.quick-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
+.quick-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
+
+/* Mobile-First Field Inspection Checklist UI */
+.mobile-eq-bar { display: none; gap: 8px; align-items: center; margin-bottom: 12px; background: #fff; border: 1px solid #dbe2e8; border-radius: 12px; padding: 10px; }
+.mobile-eq-bar select { flex: 1; min-width: 0; padding: 10px 12px; font-size: .95rem; font-weight: 700; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; }
+.round-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: #f1f5f9; padding: 5px; border-radius: 12px; margin-bottom: 14px; }
+.round-tab-btn { border: 0; background: transparent; padding: 11px 10px; border-radius: 9px; font-weight: 800; font-size: .95rem; color: #475569; cursor: pointer; transition: all .15s; }
+.round-tab-btn.active { background: #176053; color: #fff; box-shadow: 0 2px 6px rgba(23,96,83,.25); }
+.round-meta-box { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; background: #f8fafc; padding: 12px 14px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 14px; }
+.round-meta-box label { display: grid; gap: 4px; font-size: .82rem; font-weight: 700; color: #334155; }
+.round-meta-box input, .round-meta-box select { padding: 9px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-size: .92rem; background: #fff; width: 100%; box-sizing: border-box; }
+
+.m-chk-list { display: flex; flex-direction: column; gap: 12px; }
+.m-chk-card { border: 1.5px solid #dbe2e8; border-radius: 14px; padding: 14px; background: #fff; transition: border-color .15s, background .15s; }
+.m-chk-card.is-ok { border-color: #86efac; background: #f8fffb; }
+.m-chk-card.is-bad { border-color: #fca5a5; background: #fff8f8; }
+.m-chk-top { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; }
+.m-chk-num { flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; background: #0f172a; color: #fff; font-weight: 800; font-size: .84rem; display: inline-flex; align-items: center; justify-content: center; }
+.m-chk-title { flex: 1; font-size: .98rem; line-height: 1.48; color: #0f172a; font-weight: 600; word-break: keep-all; }
+.m-chk-cat { display: inline-block; margin-right: 6px; padding: 2px 8px; border-radius: 6px; background: #e2e8f0; color: #1e293b; font-size: .78rem; font-weight: 800; }
+.m-save-state { font-size: .74rem; font-weight: 700; color: #16a34a; white-space: nowrap; }
+
+.m-judge-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.m-judge-btn { min-height: 46px; border-radius: 10px; border: 2px solid #cbd5e1; background: #fff; color: #334155; font-size: .98rem; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: all .12s; -webkit-tap-highlight-color: transparent; }
+.m-judge-btn.ok.active { background: #16a34a; border-color: #16a34a; color: #fff; box-shadow: 0 3px 8px rgba(22,163,74,.28); }
+.m-judge-btn.bad.active { background: #dc2626; border-color: #dc2626; color: #fff; box-shadow: 0 3px 8px rgba(220,38,38,.28); }
+
+.m-photo-area { display: none; margin-top: 12px; padding-top: 12px; border-top: 1px dashed #cbd5e1; }
+.m-photo-area.open { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.m-photo-btns { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.m-cam-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 8px 14px; border-radius: 9px; background: #0f766e; color: #fff; font-size: .88rem; font-weight: 700; cursor: pointer; border: 0; }
+.m-cam-btn.gallery { background: #fff; color: #1e293b; border: 1.5px solid #cbd5e1; }
+.m-thumb-wrap { display: inline-flex; align-items: center; gap: 8px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 4px 8px 4px 4px; }
+.m-thumb-img { width: 72px; height: 54px; object-fit: cover; border-radius: 7px; cursor: pointer; display: block; border: 1px solid #cbd5e1; }
+.m-thumb-del { border: 0; background: #fee2e2; color: #b91c1c; width: 28px; height: 28px; border-radius: 50%; font-weight: 800; cursor: pointer; font-size: .9rem; }
+.m-upload-status { font-size: .8rem; font-weight: 700; color: #0f766e; }
+
+.sticky-mobile-bar { position: sticky; bottom: 10px; z-index: 40; margin-top: 16px; background: rgba(15,23,42,.95); color: #fff; border-radius: 14px; padding: 12px 16px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; box-shadow: 0 10px 25px rgba(15,23,42,.28); }
+.sticky-mobile-bar .prog { font-size: .88rem; font-weight: 700; }
+.sticky-mobile-bar .btns { display: flex; gap: 8px; }
+
+@media (max-width: 1024px) {
+  .mobile-eq-bar { display: flex; }
+  .eq-sidebar { display: none; }
+}
+@media (max-width: 640px) {
+  main { padding: 12px 10px 80px; }
+  .panel { padding: 14px 12px; }
+  .hm-top h1 { font-size: 1.25rem; }
+  .kpi-grid { display: none; }
+  .round-meta-box { grid-template-columns: 1fr; }
+  .tabs { gap: 4px; }
+  .tab-link { padding: 9px 10px; font-size: .84rem; }
+  .sticky-mobile-bar { bottom: 6px; padding: 10px 12px; }
+}
 
 /* Modal */
 .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, .55); z-index: 200; align-items: center; justify-content: center; padding: 20px; }
@@ -518,12 +657,32 @@ table.hm-tbl tbody tr:hover td.sticky-col { background: #f8fafc; }
     </div>
   </section>
 
-  <?php elseif ($tab === 'checklist' && $selectedEq): ?>
+  <?php elseif ($tab === 'checklist' && $selectedEq):
+    $activeRound = (int)($_GET['round'] ?? ((int)date('n') >= 7 ? 2 : 1));
+    if (!in_array($activeRound, [1, 2], true)) $activeRound = 1;
+    $eqIds = array_map(static fn($e) => (int)$e['id'], $allEquipment);
+    $curPos = array_search((int)$selectedEq['id'], $eqIds, true);
+    $prevEqId = ($curPos !== false && $curPos > 0) ? $eqIds[$curPos - 1] : 0;
+    $nextEqId = ($curPos !== false && $curPos < count($eqIds) - 1) ? $eqIds[$curPos + 1] : 0;
+  ?>
+  <!-- Mobile Quick Equipment Selector -->
+  <div class="mobile-eq-bar">
+    <?php if ($prevEqId): ?><a class="btn btn-sm" href="?tab=checklist&amp;id=<?= $prevEqId ?>&amp;round=<?= $activeRound ?>&amp;year=<?= $year ?>">◀</a><?php endif; ?>
+    <select onchange="location.href='?tab=checklist&id='+this.value+'&round='+activeRound+'&year=<?= $year ?>'">
+      <?php foreach ($allEquipment as $eq): ?>
+      <option value="<?= (int)$eq['id'] ?>" <?= (int)$eq['id'] === (int)$selectedEq['id'] ? 'selected' : '' ?>>
+        <?= $h($eq['code'] . ' · ' . $eq['name'] . ($eq['check' . $activeRound . '_result'] ? ' [' . $eq['check' . $activeRound . '_result'] . ']' : '')) ?>
+      </option>
+      <?php endforeach; ?>
+    </select>
+    <?php if ($nextEqId): ?><a class="btn btn-sm" href="?tab=checklist&amp;id=<?= $nextEqId ?>&amp;round=<?= $activeRound ?>&amp;year=<?= $year ?>">▶</a><?php endif; ?>
+  </div>
+
   <div class="chk-layout">
     <aside class="eq-sidebar">
       <div class="eq-sidebar-head">위험기계·기구 선택 (<?= $totalEq ?>종)</div>
       <?php foreach ($allEquipment as $eq): ?>
-      <a class="eq-nav-item <?= (int)$eq['id'] === (int)$selectedEq['id'] ? 'active' : '' ?>" href="?tab=checklist&amp;id=<?= (int)$eq['id'] ?>&amp;year=<?= $year ?>">
+      <a class="eq-nav-item <?= (int)$eq['id'] === (int)$selectedEq['id'] ? 'active' : '' ?>" href="?tab=checklist&amp;id=<?= (int)$eq['id'] ?>&amp;round=<?= $activeRound ?>&amp;year=<?= $year ?>">
         <div>
           <div><?= $h($eq['code']) ?> · <?= $h($eq['name']) ?></div>
           <div class="eq-nav-meta"><?= $h($eq['spec'] ?: '규격 미기재') ?> · 항목 <?= (int)$eq['item_count'] ?>개</div>
@@ -543,24 +702,30 @@ table.hm-tbl tbody tr:hover td.sticky-col { background: #f8fafc; }
             <img class="chk-eq-photo" src="?photo=<?= $h($selectedEq['photo_file']) ?>" alt="<?= $h($selectedEq['name']) ?>" onclick="openPhotoModal(this.src, '<?= $h($selectedEq['code'] . ' · ' . $selectedEq['name']) ?>')">
           <?php endif; ?>
           <div>
-            <div style="font-size:.8rem;color:#176053;font-weight:700"><?= $h($selectedEq['legal_basis']) ?></div>
-            <h2 style="margin:2px 0 4px"><?= $h($selectedEq['code'] . ' · ' . $selectedEq['name']) ?> 안전점검표</h2>
-            <div style="font-size:.84rem;color:#475569">규격: <?= $h($selectedEq['spec'] ?: '-') ?> · 방호장치: <?= $h($selectedEq['guard_device'] ?: '-') ?> · 재해형태: <?= $h($selectedEq['hazard_type'] ?: '-') ?></div>
+            <div style="font-size:.78rem;color:#176053;font-weight:700"><?= $h($selectedEq['legal_basis']) ?></div>
+            <h2 style="margin:2px 0 4px;font-size:1.2rem"><?= $h($selectedEq['code'] . ' · ' . $selectedEq['name']) ?></h2>
+            <div style="font-size:.82rem;color:#475569">규격: <?= $h($selectedEq['spec'] ?: '-') ?> · 방호장치: <?= $h($selectedEq['guard_device'] ?: '-') ?> · 재해: <?= $h($selectedEq['hazard_type'] ?: '-') ?></div>
           </div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <a class="btn btn-blue" href="hazardous_machinery_print.php?mode=checklist&amp;id=<?= (int)$selectedEq['id'] ?>&amp;year=<?= $year ?>" target="_blank">🖨️ 이 장비 점검표 A4 인쇄</a>
+          <a class="btn btn-sm btn-blue" href="hazardous_machinery_print.php?mode=checklist&amp;id=<?= (int)$selectedEq['id'] ?>&amp;year=<?= $year ?>" target="_blank">🖨️ A4 인쇄</a>
         </div>
       </div>
 
-      <form method="post">
+      <!-- Round Switcher (1차 상반기 / 2차 하반기) -->
+      <div class="round-tabs">
+        <button type="button" id="rtab-1" class="round-tab-btn <?= $activeRound === 1 ? 'active' : '' ?>" onclick="switchRound(1)">1차 점검 (상반기)</button>
+        <button type="button" id="rtab-2" class="round-tab-btn <?= $activeRound === 2 ? 'active' : '' ?>" onclick="switchRound(2)">2차 점검 (하반기)</button>
+      </div>
+
+      <form method="post" id="checklistForm">
         <input type="hidden" name="csrf" value="<?= $h($_SESSION['csm_hm_csrf']) ?>">
         <input type="hidden" name="action" value="save_checklist">
         <input type="hidden" name="equipment_id" value="<?= (int)$selectedEq['id'] ?>">
         <input type="hidden" name="year" value="<?= $year ?>">
 
-        <div class="chk-meta-grid">
-          <label>1차(상반기) 점검일자 <input type="date" name="check1_date" value="<?= $h($selectedEq['check1_date']) ?>"></label>
+        <div id="meta-r1" class="round-meta-box" style="<?= $activeRound === 1 ? '' : 'display:none' ?>">
+          <label>1차 점검일자 <input type="date" name="check1_date" value="<?= $h($selectedEq['check1_date']) ?>"></label>
           <label>1차 점검자 <input type="text" name="check1_inspector" value="<?= $h($selectedEq['check1_inspector']) ?>"></label>
           <label>1차 스티커 발부
             <select name="check1_sticker">
@@ -568,7 +733,9 @@ table.hm-tbl tbody tr:hover td.sticky-col { background: #f8fafc; }
               <option value="미발부" <?= $selectedEq['check1_sticker'] !== '발부' ? 'selected' : '' ?>>미발부</option>
             </select>
           </label>
-          <label>2차(하반기) 점검일자 <input type="date" name="check2_date" value="<?= $h($selectedEq['check2_date']) ?>"></label>
+        </div>
+        <div id="meta-r2" class="round-meta-box" style="<?= $activeRound === 2 ? '' : 'display:none' ?>">
+          <label>2차 점검일자 <input type="date" name="check2_date" value="<?= $h($selectedEq['check2_date']) ?>"></label>
           <label>2차 점검자 <input type="text" name="check2_inspector" value="<?= $h($selectedEq['check2_inspector']) ?>"></label>
           <label>2차 스티커 발부
             <select name="check2_sticker">
@@ -578,62 +745,83 @@ table.hm-tbl tbody tr:hover td.sticky-col { background: #f8fafc; }
           </label>
         </div>
 
-        <?php if ($canManage): ?>
         <div class="quick-bar">
-          <div style="font-size:.85rem;color:#475569"><strong>세부 점검 항목 (<?= count($selectedItems) ?>개)</strong> — 저장 시 총괄표에 자동 반영됩니다.</div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <button type="button" class="btn btn-sm" onclick="markAllRound(1, '적정')">✅ 1차 전체 적정</button>
-            <button type="button" class="btn btn-sm" onclick="markAllRound(2, '적정')">✅ 2차 전체 적정</button>
-            <button type="submit" class="btn btn-sm btn-primary">💾 점검표 저장</button>
+          <div style="font-size:.84rem;color:#475569">💡 <strong>적정 / 부적정</strong>을 터치하면 즉시 서버에 저장되고 <strong>📷 사진 촬영</strong> 버튼이 열립니다.</div>
+        </div>
+
+        <!-- Mobile-Friendly Card Checklist -->
+        <div class="m-chk-list">
+          <?php foreach ($selectedItems as $it):
+            $iid = (int)$it['id'];
+            $r1 = (string)$it['round1_result'];
+            $r2 = (string)$it['round2_result'];
+            $p1 = (string)($it['round1_photo'] ?? '');
+            $p2 = (string)($it['round2_photo'] ?? '');
+            $curRes = $activeRound === 1 ? $r1 : $r2;
+            $curPhoto = $activeRound === 1 ? $p1 : $p2;
+          ?>
+          <div class="m-chk-card <?= $curRes === '적정' ? 'is-ok' : ($curRes === '부적정' ? 'is-bad' : '') ?>"
+               id="card-<?= $iid ?>"
+               data-item-id="<?= $iid ?>"
+               data-r1="<?= $h($r1) ?>" data-r2="<?= $h($r2) ?>"
+               data-p1="<?= $h($p1) ?>" data-p2="<?= $h($p2) ?>">
+            <input type="hidden" name="r1[<?= $iid ?>]" id="hid-r1-<?= $iid ?>" value="<?= $h($r1) ?>">
+            <input type="hidden" name="r2[<?= $iid ?>]" id="hid-r2-<?= $iid ?>" value="<?= $h($r2) ?>">
+
+            <div class="m-chk-top">
+              <span class="m-chk-num"><?= (int)$it['item_no'] ?></span>
+              <div class="m-chk-title">
+                <?php if ($it['category'] !== ''): ?><span class="m-chk-cat"><?= $h($it['category']) ?></span><?php endif; ?>
+                <?= $h($it['content']) ?>
+              </div>
+              <span class="m-save-state" id="state-<?= $iid ?>"></span>
+            </div>
+
+            <div class="m-judge-row">
+              <button type="button" class="m-judge-btn ok <?= $curRes === '적정' ? 'active' : '' ?>" id="btn-ok-<?= $iid ?>" onclick="selectJudge(<?= $iid ?>, '적정')" <?= $canManage ? '' : 'disabled' ?>>✅ 적정</button>
+              <button type="button" class="m-judge-btn bad <?= $curRes === '부적정' ? 'active' : '' ?>" id="btn-bad-<?= $iid ?>" onclick="selectJudge(<?= $iid ?>, '부적정')" <?= $canManage ? '' : 'disabled' ?>>❌ 부적정</button>
+            </div>
+
+            <div class="m-photo-area <?= ($curRes !== '' || $curPhoto !== '') ? 'open' : '' ?>" id="photo-area-<?= $iid ?>">
+              <?php if ($canManage): ?>
+              <div class="m-photo-btns">
+                <label class="m-cam-btn">
+                  📷 사진 촬영
+                  <input type="file" accept="image/*" capture="environment" style="display:none" onchange="handleCheckPhoto(<?= $iid ?>, this)">
+                </label>
+                <label class="m-cam-btn gallery">
+                  🖼️ 앨범
+                  <input type="file" accept="image/*" style="display:none" onchange="handleCheckPhoto(<?= $iid ?>, this)">
+                </label>
+                <span class="m-upload-status" id="upst-<?= $iid ?>"></span>
+              </div>
+              <?php endif; ?>
+              <div id="thumb-slot-<?= $iid ?>">
+                <?php if ($curPhoto !== ''): ?>
+                <div class="m-thumb-wrap">
+                  <img class="m-thumb-img" src="?check_photo=<?= $h($curPhoto) ?>" alt="현장점검 사진" onclick="openPhotoModal(this.src, '항목 <?= (int)$it['item_no'] ?> 점검 사진')">
+                  <?php if ($canManage): ?><button type="button" class="m-thumb-del" title="사진 삭제" onclick="deleteCheckPhoto(<?= $iid ?>)">×</button><?php endif; ?>
+                </div>
+                <?php endif; ?>
+              </div>
+            </div>
           </div>
-        </div>
-        <?php endif; ?>
-
-        <div class="tbl-wrap">
-          <table class="hm-tbl">
-            <thead>
-              <tr>
-                <th style="width:52px">순번</th>
-                <?php $hasCat = false; foreach ($selectedItems as $it) { if ($it['category'] !== '') { $hasCat = true; break; } } ?>
-                <?php if ($hasCat): ?><th style="width:120px">점검항목</th><?php endif; ?>
-                <th><?= $h($selectedEq['name']) ?> 점검내용</th>
-                <th style="width:160px">1차 점검결과</th>
-                <th style="width:160px">2차 점검결과</th>
-              </tr>
-            </thead>
-            <tbody>
-              <?php foreach ($selectedItems as $it): $iid = (int)$it['id']; ?>
-              <tr>
-                <td><?= (int)$it['item_no'] ?></td>
-                <?php if ($hasCat): ?><td><strong><?= $h($it['category']) ?></strong></td><?php endif; ?>
-                <td class="left"><?= $h($it['content']) ?></td>
-                <td>
-                  <div class="radio-pair">
-                    <label><input type="radio" name="r1[<?= $iid ?>]" value="적정" <?= $it['round1_result'] === '적정' ? 'checked' : '' ?>> 적정</label>
-                    <label><input type="radio" name="r1[<?= $iid ?>]" value="부적정" <?= $it['round1_result'] === '부적정' ? 'checked' : '' ?>> 부적정</label>
-                  </div>
-                </td>
-                <td>
-                  <div class="radio-pair">
-                    <label><input type="radio" name="r2[<?= $iid ?>]" value="적정" <?= $it['round2_result'] === '적정' ? 'checked' : '' ?>> 적정</label>
-                    <label><input type="radio" name="r2[<?= $iid ?>]" value="부적정" <?= $it['round2_result'] === '부적정' ? 'checked' : '' ?>> 부적정</label>
-                  </div>
-                </td>
-              </tr>
-              <?php endforeach; ?>
-            </tbody>
-          </table>
+          <?php endforeach; ?>
         </div>
 
-        <div style="margin-top:14px">
+        <div style="margin-top:16px">
           <label style="display:grid;gap:6px;font-weight:700;font-size:.88rem">점검결과 주요 조치 및 요구사항
-            <textarea name="action_note" rows="3" style="padding:10px;border:1px solid #cbd5e1;border-radius:8px;font:inherit" placeholder="부적정 항목에 대한 개선조치, 부품 교체, 사용 중지 및 수리 이력 등을 기록하세요."><?= $h($selectedEq['action_note']) ?></textarea>
+            <textarea name="action_note" rows="3" style="padding:10px;border:1px solid #cbd5e1;border-radius:10px;font:inherit" placeholder="부적정 항목에 대한 개선조치, 부품 교체, 사용 중지 및 수리 이력 등을 기록하세요."><?= $h($selectedEq['action_note']) ?></textarea>
           </label>
         </div>
 
         <?php if ($canManage): ?>
-        <div style="margin-top:14px;display:flex;justify-content:flex-end">
-          <button type="submit" class="btn btn-primary">💾 안전점검표 저장</button>
+        <div class="sticky-mobile-bar">
+          <div class="prog" id="stickyProg">진행률 계산 중...</div>
+          <div class="btns">
+            <button type="button" class="btn btn-sm" onclick="markAllCurrentRound('적정')">✅ 전체 적정</button>
+            <button type="submit" class="btn btn-sm btn-primary">💾 저장 완료</button>
+          </div>
         </div>
         <?php endif; ?>
       </form>
@@ -645,8 +833,7 @@ table.hm-tbl tbody tr:hover td.sticky-col { background: #f8fafc; }
         <input type="hidden" name="equipment_id" value="<?= (int)$selectedEq['id'] ?>">
         <input type="hidden" name="year" value="<?= $year ?>">
         <strong style="font-size:.84rem">+ 점검 항목 추가:</strong>
-        <?php if ($hasCat): ?><input type="text" name="category" placeholder="항목명" style="padding:7px 9px;border:1px solid #cbd5e1;border-radius:6px;width:130px"><?php endif; ?>
-        <input type="text" name="content" required placeholder="추가할 안전점검 내용을 입력하세요" style="padding:7px 9px;border:1px solid #cbd5e1;border-radius:6px;flex:1;min-width:240px">
+        <input type="text" name="content" required placeholder="추가할 안전점검 내용을 입력하세요" style="padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;flex:1;min-width:200px">
         <button type="submit" class="btn btn-sm">항목 추가</button>
       </form>
       <?php endif; ?>
@@ -810,6 +997,11 @@ table.hm-tbl tbody tr:hover td.sticky-col { background: #f8fafc; }
 </div>
 
 <script>
+const HM_CSRF = <?= json_encode($_SESSION['csm_hm_csrf']) ?>;
+const HM_EQ_ID = <?= (int)($selectedEq['id'] ?? 0) ?>;
+const HM_CAN_MANAGE = <?= $canManage ? 'true' : 'false' ?>;
+let activeRound = <?= isset($activeRound) ? (int)$activeRound : ((int)date('n') >= 7 ? 2 : 1) ?>;
+
 function openPhotoModal(src, title) {
   document.getElementById('photoModalTitle').textContent = title;
   document.getElementById('photoModalImg').src = src;
@@ -835,11 +1027,192 @@ function openEqModal(eq) {
   document.getElementById('deleteWrap').innerHTML = '';
   document.getElementById('eqModal').classList.add('open');
 }
-function markAllRound(roundNo, val) {
-  document.querySelectorAll('input[type="radio"][name^="r' + roundNo + '["][value="' + val + '"]').forEach(el => {
-    el.checked = true;
+
+function renderCardState(card) {
+  const iid = card.dataset.itemId;
+  const res = activeRound === 1 ? (card.dataset.r1 || '') : (card.dataset.r2 || '');
+  const photo = activeRound === 1 ? (card.dataset.p1 || '') : (card.dataset.p2 || '');
+  card.classList.toggle('is-ok', res === '적정');
+  card.classList.toggle('is-bad', res === '부적정');
+  const btnOk = document.getElementById('btn-ok-' + iid);
+  const btnBad = document.getElementById('btn-bad-' + iid);
+  if (btnOk) btnOk.classList.toggle('active', res === '적정');
+  if (btnBad) btnBad.classList.toggle('active', res === '부적정');
+  const photoArea = document.getElementById('photo-area-' + iid);
+  if (photoArea) photoArea.classList.toggle('open', res !== '' || photo !== '');
+  const slot = document.getElementById('thumb-slot-' + iid);
+  if (slot) {
+    if (photo) {
+      const url = 'hazardous_machinery.php?check_photo=' + encodeURIComponent(photo);
+      slot.innerHTML = `<div class="m-thumb-wrap">
+        <img class="m-thumb-img" src="${url}" alt="현장점검 사진" onclick="openPhotoModal('${url}', '현장점검 촬영 사진')">
+        ${HM_CAN_MANAGE ? `<button type="button" class="m-thumb-del" title="사진 삭제" onclick="deleteCheckPhoto(${iid})">×</button>` : ''}
+      </div>`;
+    } else {
+      slot.innerHTML = '';
+    }
+  }
+}
+
+function switchRound(r) {
+  activeRound = r;
+  const t1 = document.getElementById('rtab-1');
+  const t2 = document.getElementById('rtab-2');
+  const m1 = document.getElementById('meta-r1');
+  const m2 = document.getElementById('meta-r2');
+  if (t1) t1.classList.toggle('active', r === 1);
+  if (t2) t2.classList.toggle('active', r === 2);
+  if (m1) m1.style.display = r === 1 ? '' : 'none';
+  if (m2) m2.style.display = r === 2 ? '' : 'none';
+  document.querySelectorAll('.m-chk-card').forEach(renderCardState);
+  updateStickyProgress();
+}
+
+function updateStickyProgress() {
+  const prog = document.getElementById('stickyProg');
+  if (!prog) return;
+  const cards = document.querySelectorAll('.m-chk-card');
+  let done = 0, photos = 0;
+  cards.forEach(c => {
+    const res = activeRound === 1 ? (c.dataset.r1 || '') : (c.dataset.r2 || '');
+    const ph = activeRound === 1 ? (c.dataset.p1 || '') : (c.dataset.p2 || '');
+    if (res !== '') done++;
+    if (ph !== '') photos++;
+  });
+  const label = activeRound === 1 ? '1차(상반기)' : '2차(하반기)';
+  prog.textContent = `${label} · 점검 ${done}/${cards.length} · 사진 ${photos}장`;
+}
+
+async function selectJudge(itemId, val) {
+  if (!HM_CAN_MANAGE) return;
+  const card = document.getElementById('card-' + itemId);
+  if (!card) return;
+  if (activeRound === 1) {
+    card.dataset.r1 = val;
+    document.getElementById('hid-r1-' + itemId).value = val;
+  } else {
+    card.dataset.r2 = val;
+    document.getElementById('hid-r2-' + itemId).value = val;
+  }
+  renderCardState(card);
+  updateStickyProgress();
+
+  const st = document.getElementById('state-' + itemId);
+  if (st) st.textContent = '저장중...';
+  try {
+    const fd = new FormData();
+    fd.append('csrf', HM_CSRF);
+    fd.append('action', 'ajax_set_item_result');
+    fd.append('equipment_id', String(HM_EQ_ID));
+    fd.append('item_id', String(itemId));
+    fd.append('round', String(activeRound));
+    fd.append('result', val);
+    const res = await fetch('hazardous_machinery.php', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message || '저장 실패');
+    if (st) {
+      st.textContent = '✓ 저장됨';
+      setTimeout(() => { if (st.textContent === '✓ 저장됨') st.textContent = ''; }, 1800);
+    }
+  } catch (e) {
+    if (st) st.textContent = '⚠ 오류';
+    alert(e.message || '점검 결과 저장 중 오류가 발생했습니다.');
+  }
+}
+
+function compressImage(file, maxSide = 1280, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let w = img.naturalWidth, h = img.naturalHeight;
+      if (w > maxSide || h > maxSide) {
+        if (w >= h) { h = Math.round(h * maxSide / w); w = maxSide; }
+        else { w = Math.round(w * maxSide / h); h = maxSide; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      canvas.toBlob(blob => {
+        if (!blob) return reject(new Error('이미지 압축 실패'));
+        resolve(new File([blob], 'inspection.jpg', { type: 'image/jpeg' }));
+      }, 'image/jpeg', quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
   });
 }
+
+async function handleCheckPhoto(itemId, input) {
+  const rawFile = input.files && input.files[0];
+  input.value = '';
+  if (!rawFile) return;
+  const upst = document.getElementById('upst-' + itemId);
+  if (upst) upst.textContent = '⏳ 사진 업로드 중...';
+  try {
+    const compressed = await compressImage(rawFile);
+    const fd = new FormData();
+    fd.append('csrf', HM_CSRF);
+    fd.append('action', 'ajax_upload_check_photo');
+    fd.append('equipment_id', String(HM_EQ_ID));
+    fd.append('item_id', String(itemId));
+    fd.append('round', String(activeRound));
+    fd.append('photo', compressed);
+    const res = await fetch('hazardous_machinery.php', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message || '업로드 실패');
+    const card = document.getElementById('card-' + itemId);
+    if (card) {
+      if (activeRound === 1) card.dataset.p1 = data.photo;
+      else card.dataset.p2 = data.photo;
+      renderCardState(card);
+    }
+    updateStickyProgress();
+    if (upst) {
+      upst.textContent = '✅ 서버 저장 완료';
+      setTimeout(() => { if (upst.textContent === '✅ 서버 저장 완료') upst.textContent = ''; }, 2000);
+    }
+  } catch (e) {
+    if (upst) upst.textContent = '';
+    alert(e.message || '사진 업로드 중 오류가 발생했습니다.');
+  }
+}
+
+async function deleteCheckPhoto(itemId) {
+  if (!confirm('이 점검 사진을 삭제할까요?')) return;
+  try {
+    const fd = new FormData();
+    fd.append('csrf', HM_CSRF);
+    fd.append('action', 'ajax_delete_check_photo');
+    fd.append('equipment_id', String(HM_EQ_ID));
+    fd.append('item_id', String(itemId));
+    fd.append('round', String(activeRound));
+    const res = await fetch('hazardous_machinery.php', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message || '삭제 실패');
+    const card = document.getElementById('card-' + itemId);
+    if (card) {
+      if (activeRound === 1) card.dataset.p1 = '';
+      else card.dataset.p2 = '';
+      renderCardState(card);
+    }
+    updateStickyProgress();
+  } catch (e) {
+    alert(e.message || '사진 삭제 중 오류가 발생했습니다.');
+  }
+}
+
+function markAllCurrentRound(val) {
+  document.querySelectorAll('.m-chk-card').forEach(card => {
+    const iid = Number(card.dataset.itemId);
+    selectJudge(iid, val);
+  });
+}
+
+window.addEventListener('DOMContentLoaded', updateStickyProgress);
 </script>
 </body>
 </html>

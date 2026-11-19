@@ -54,8 +54,17 @@ function hm_db(): PDO
         content TEXT NOT NULL,
         round1_result TEXT NOT NULL DEFAULT "",
         round2_result TEXT NOT NULL DEFAULT "",
+        round1_photo TEXT NOT NULL DEFAULT "",
+        round2_photo TEXT NOT NULL DEFAULT "",
         FOREIGN KEY (equipment_id) REFERENCES hm_equipment(id) ON DELETE CASCADE
     )');
+    $ciCols = array_column($db->query('PRAGMA table_info(hm_check_items)')->fetchAll(), 'name');
+    if (!in_array('round1_photo', $ciCols, true)) {
+        $db->exec('ALTER TABLE hm_check_items ADD COLUMN round1_photo TEXT NOT NULL DEFAULT ""');
+    }
+    if (!in_array('round2_photo', $ciCols, true)) {
+        $db->exec('ALTER TABLE hm_check_items ADD COLUMN round2_photo TEXT NOT NULL DEFAULT ""');
+    }
     $db->exec('CREATE TABLE IF NOT EXISTS hm_evidence (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         year INTEGER NOT NULL,
@@ -81,6 +90,61 @@ function hm_db(): PDO
 function hm_photo_dir(): string
 {
     return __DIR__ . '/storage/hazardous_machinery_photos';
+}
+
+function hm_check_photo_dir(): string
+{
+    return __DIR__ . '/storage/hazardous_machinery_check_photos';
+}
+
+function hm_save_check_photo(array $file, int $equipmentId, int $itemId, int $round): string
+{
+    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_uploaded_file((string)($file['tmp_name'] ?? ''))) {
+        throw new InvalidArgumentException('사진 파일 업로드에 실패했습니다.');
+    }
+    if ((int)($file['size'] ?? 0) < 1 || (int)($file['size'] ?? 0) > 15 * 1024 * 1024) {
+        throw new InvalidArgumentException('15MB 이하의 사진만 업로드할 수 있습니다.');
+    }
+    $mime = (new finfo(FILEINFO_MIME_TYPE))->file((string)$file['tmp_name']);
+    $extMap = [
+        'image/jpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/webp' => 'webp',
+    ];
+    if (!isset($extMap[$mime]) || @getimagesize((string)$file['tmp_name']) === false) {
+        throw new InvalidArgumentException('JPG, PNG, WEBP 이미지 파일만 업로드할 수 있습니다.');
+    }
+    $dir = hm_check_photo_dir();
+    if (!is_dir($dir) && !mkdir($dir, 0750, true) && !is_dir($dir)) {
+        throw new RuntimeException('점검 사진 저장소를 만들 수 없습니다.');
+    }
+    $fileName = sprintf('chk_e%d_i%d_r%d_%s.%s', $equipmentId, $itemId, $round, bin2hex(random_bytes(5)), $extMap[$mime]);
+    if (!move_uploaded_file((string)$file['tmp_name'], $dir . '/' . $fileName)) {
+        throw new RuntimeException('점검 사진 저장에 실패했습니다.');
+    }
+    return $fileName;
+}
+
+function hm_sync_equipment_round_summary(PDO $db, int $equipmentId): array
+{
+    $items = hm_fetch_check_items($db, $equipmentId);
+    $r1Total = 0; $r1Fail = 0;
+    $r2Total = 0; $r2Fail = 0;
+    foreach ($items as $it) {
+        if ($it['round1_result'] !== '') {
+            $r1Total++;
+            if ($it['round1_result'] === '부적정') $r1Fail++;
+        }
+        if ($it['round2_result'] !== '') {
+            $r2Total++;
+            if ($it['round2_result'] === '부적정') $r2Fail++;
+        }
+    }
+    $c1Result = $r1Total === 0 ? '' : ($r1Fail > 0 ? '부적정(' . $r1Fail . '건)' : '적정');
+    $c2Result = $r2Total === 0 ? '' : ($r2Fail > 0 ? '부적정(' . $r2Fail . '건)' : '적정');
+    $db->prepare('UPDATE hm_equipment SET check1_result = ?, check2_result = ?, updated_at = ? WHERE id = ?')
+       ->execute([$c1Result, $c2Result, date('Y-m-d H:i:s'), $equipmentId]);
+    return ['check1_result' => $c1Result, 'check2_result' => $c2Result, 'r1_done' => $r1Total, 'r2_done' => $r2Total];
 }
 
 function hm_evidence_dir(): string
