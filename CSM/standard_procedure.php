@@ -463,12 +463,85 @@ $queryBase = http_build_query(array_filter([
     }
     .sop-page-btn.active { background: #1e3a8a; color: #fff; border-color: #1e3a8a; }
 
-    /* Option B (기존 엑셀 PDF 서식 1:1) Preview & Print Shared Styles */
+    /* Option A (Word 6열 가로형 통합표 서식) & Option B (엑셀 세로바 서식) Preview Styles */
+    .sop-a-sheet,
     .sop-b-sheet {
       font-family: "Malgun Gothic", "맑은 고딕", Dotum, sans-serif;
       color: #000;
       background: #fff;
       width: 100%;
+    }
+    .sop-a-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      border: 2pt solid #000;
+    }
+    .sop-a-table th,
+    .sop-a-table td {
+      border: 0.6pt solid #000;
+      padding: 6px 9px;
+      font-size: 12.5px;
+      line-height: 1.5;
+      vertical-align: middle;
+      color: #000;
+      word-break: keep-all;
+      overflow-wrap: break-word;
+    }
+    .sop-a-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding-left: 4px;
+    }
+    .sop-a-title-text {
+      font-size: 19px;
+      font-weight: 800;
+      letter-spacing: 3px;
+      white-space: nowrap;
+    }
+    .sop-a-meta-center {
+      text-align: center;
+      font-weight: 700;
+      font-size: 12.5px;
+    }
+    .sop-a-sec-head {
+      background-color: #E2EFDA !important;
+      text-align: center;
+      font-size: 13px !important;
+      font-weight: 800;
+      letter-spacing: 2px;
+      padding: 6px 8px !important;
+      color: #000;
+    }
+    .sop-a-body-cell {
+      vertical-align: top !important;
+      padding: 8px 10px !important;
+      font-size: 12.5px;
+      line-height: 1.55;
+    }
+    .sop-a-line {
+      margin-bottom: 2px;
+    }
+    .sop-tpl-switch {
+      display: inline-flex;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #f1f5f9;
+    }
+    .sop-tpl-btn {
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      border: none;
+      background: transparent;
+      color: #475569;
+      cursor: pointer;
+    }
+    .sop-tpl-btn.active {
+      background: #1e3a8a;
+      color: #fff;
     }
     .sop-b-head {
       width: 100%;
@@ -1136,17 +1209,21 @@ $queryBase = http_build_query(array_filter([
   </div>
 </div>
 
-<!-- MODAL: VIEW SOP DETAIL (Option B Form Preview) -->
+<!-- MODAL: VIEW SOP DETAIL (Option A Default + Option B Switchable) -->
 <div id="modalView" class="sop-modal-backdrop" style="display:none;" onclick="closeViewModal()">
   <div class="sop-modal" style="max-width:980px;width:96%;" onclick="event.stopPropagation()">
-    <div class="sop-modal-header">
-      <h3 id="view_title">표준작업절차서 상세조회</h3>
+    <div class="sop-modal-header" style="gap:12px;flex-wrap:wrap;">
+      <h3 id="view_title" style="margin-right:auto;">표준작업절차서 상세조회</h3>
+      <div class="sop-tpl-switch" title="표준서 서식 타입 전환">
+        <button type="button" id="tplBtnA" class="sop-tpl-btn active" onclick="setTemplateType('A')">A타입 (Word 가로형 표준)</button>
+        <button type="button" id="tplBtnB" class="sop-tpl-btn" onclick="setTemplateType('B')">B타입 (Excel 세로형)</button>
+      </div>
       <button type="button" class="sop-modal-close" onclick="closeViewModal()">&times;</button>
     </div>
     <div class="sop-modal-body" id="view_body" style="font-size:13px;line-height:1.5;max-height:78vh;overflow-y:auto;"></div>
     <div class="sop-modal-footer" style="justify-content:space-between;">
       <div style="display:flex;gap:8px;">
-        <button type="button" class="sop-btn sop-btn-primary" onclick="printFromModal()">🖨️ A4 표준서 인쇄 (원본 서식)</button>
+        <button type="button" class="sop-btn sop-btn-primary" onclick="printFromModal()">🖨️ A4 표준서 인쇄</button>
         <button type="button" class="sop-btn sop-btn-outline" onclick="openRevFromView()">+ 개정 등록</button>
         <button type="button" class="sop-btn sop-btn-outline" onclick="openDistFromView()">📢 배포 기록</button>
       </div>
@@ -1161,6 +1238,7 @@ $queryBase = http_build_query(array_filter([
 <script>
 const COMPANY_LOGO = <?= json_encode($logoBase64) ?>;
 let currentViewingSop = null;
+let currentTemplateType = 'A';
 
 function escHtml(s) {
   return String(s ?? '')
@@ -1462,6 +1540,119 @@ function renderOptionBBodyTableHtml(upSlice, loSlice) {
 }
 
 /**
+ * Build Option A (Word 6열 가로형 통합표 서식) Header Rows (Rows 1 & 2)
+ */
+function buildOptionAHeaderRowsHtml(s, forPrint) {
+  const code = s.job_plan_code || s.doc_code || '';
+  const isDep = (s.status === '폐지');
+  const revLabel = isDep ? '폐지' : String(s.revision_no ?? 0);
+  const datePrefix = (parseInt(s.revision_no, 10) > 0 || isDep) ? '개정' : '등록';
+  const dateDot = formatDotDate(s.revised_date || s.enact_date);
+  const historyText = s.change_reason || (isDep ? '폐지(타입변경삭제)' : '사내전환');
+  const rawAuthor = String(s.author_name || '공사팀 김남균').trim();
+  const teamPerson = rawAuthor.includes('/')
+    ? rawAuthor
+    : rawAuthor.replace(/^공사팀\s+/, '공사팀 / ');
+  const logoHtml = COMPANY_LOGO
+    ? `<img src="${COMPANY_LOGO}" alt="현대기전" style="height:${forPrint ? '26px' : '24px'};width:auto;display:block;flex-shrink:0;">`
+    : '';
+
+  return `
+    <tr>
+      <td colspan="3" style="text-align:left;padding:${forPrint ? '6pt 8pt' : '8px 10px'};">
+        <div class="sop-a-title-wrap">
+          ${logoHtml}
+          <span class="sop-a-title-text">안 전 작 업 표 준 서</span>
+        </div>
+      </td>
+      <td colspan="1" class="sop-a-meta-center">
+        <div style="line-height:1.25;">NO</div>
+        <div style="line-height:1.35;margin-top:2px;">${escHtml(code)}</div>
+      </td>
+      <td colspan="2" class="sop-a-meta-center">
+        Team/Person: ${escHtml(teamPerson)}
+      </td>
+    </tr>
+    <tr>
+      <td colspan="2" style="text-align:left;font-weight:700;">
+        작업명: ${escHtml(s.title)}
+      </td>
+      <td colspan="1" class="sop-a-meta-center">
+        ${escHtml(datePrefix)}: ${escHtml(dateDot)}
+      </td>
+      <td colspan="1" class="sop-a-meta-center">
+        Rev': ${escHtml(revLabel)}
+      </td>
+      <td colspan="2" class="sop-a-meta-center">
+        이력: ${escHtml(historyText)}
+      </td>
+    </tr>
+  `;
+}
+
+/**
+ * Extract clean sequential content blocks for Option A (Word flow layout: left & right flow independently without artificial blank spacer rows).
+ */
+function prepareOptionAColumns(s, forPrint) {
+  const { upList, loList } = prepareOptionBRows(s, forPrint);
+
+  const upLeft = upList.map(r => r.leftHtml).filter(h => h && h.trim() !== '');
+  const upRight = upList.map(r => r.rightHtml).filter(h => h && h.trim() !== '');
+  const loLeft = loList.map(r => r.leftHtml).filter(h => h && h.trim() !== '');
+  const loRight = loList.map(r => r.rightHtml).filter(h => h && h.trim() !== '');
+
+  return { upLeft, upRight, loLeft, loRight };
+}
+
+/**
+ * Build Option A (Word 6열 가로형 통합표 서식) HTML for Modal Preview.
+ */
+function buildOptionASheetHtml(s, forPrint) {
+  const headerRowsHtml = buildOptionAHeaderRowsHtml(s, forPrint);
+  const { upLeft, upRight, loLeft, loRight } = prepareOptionAColumns(s, forPrint);
+  const pgCnt = Math.max(1, parseInt(s.page_count, 10) || 1);
+  const shLabel = pgCnt > 1 ? `총 ${pgCnt}페이지 (1/${pgCnt},SH ~ ${pgCnt}/${pgCnt},SH)` : '1/1,SH';
+
+  const upLeftHtml = upLeft.map(h => `<div class="sop-a-line">${h}</div>`).join('');
+  const upRightHtml = upRight.map(h => `<div class="sop-a-line">${h}</div>`).join('');
+  const loLeftHtml = loLeft.map(h => `<div class="sop-a-line">${h}</div>`).join('');
+  const loRightHtml = loRight.map(h => `<div class="sop-a-line">${h}</div>`).join('');
+
+  return `
+    <div class="sop-a-sheet">
+      <table class="sop-a-table">
+        <colgroup>
+          <col style="width:16.6667%;">
+          <col style="width:16.6667%;">
+          <col style="width:16.6667%;">
+          <col style="width:16.6667%;">
+          <col style="width:16.6667%;">
+          <col style="width:16.6667%;">
+        </colgroup>
+        ${headerRowsHtml}
+        <tr>
+          <th colspan="3" class="sop-a-sec-head">① &nbsp;작 업 준 비 사 항</th>
+          <th colspan="3" class="sop-a-sec-head">② &nbsp;안 전 일 반</th>
+        </tr>
+        <tr>
+          <td colspan="3" class="sop-a-body-cell">${upLeftHtml || '&nbsp;'}</td>
+          <td colspan="3" class="sop-a-body-cell">${upRightHtml || '&nbsp;'}</td>
+        </tr>
+        <tr>
+          <th colspan="3" class="sop-a-sec-head">③ &nbsp;작 업 순 서</th>
+          <th colspan="3" class="sop-a-sec-head">④ &nbsp;안 전 작 업 순 서</th>
+        </tr>
+        <tr>
+          <td colspan="3" class="sop-a-body-cell">${loLeftHtml || '&nbsp;'}</td>
+          <td colspan="3" class="sop-a-body-cell">${loRightHtml || '&nbsp;'}</td>
+        </tr>
+      </table>
+      <div class="sop-b-footer-sh">${shLabel}</div>
+    </div>
+  `;
+}
+
+/**
  * Build Option B (기존 엑셀 PDF 서식 1:1) HTML for Modal Preview.
  */
 function buildOptionBSheetHtml(s, forPrint) {
@@ -1480,11 +1671,27 @@ function buildOptionBSheetHtml(s, forPrint) {
   `;
 }
 
+function setTemplateType(tpl) {
+  currentTemplateType = (tpl === 'B') ? 'B' : 'A';
+  const btnA = document.getElementById('tplBtnA');
+  const btnB = document.getElementById('tplBtnB');
+  if (btnA) btnA.classList.toggle('active', currentTemplateType === 'A');
+  if (btnB) btnB.classList.toggle('active', currentTemplateType === 'B');
+  if (currentViewingSop) {
+    viewSop(currentViewingSop);
+  }
+}
+
 function viewSop(s) {
   currentViewingSop = s;
   const code = s.job_plan_code || s.doc_code || '';
   const pgCnt = Math.max(1, parseInt(s.page_count, 10) || 1);
   document.getElementById('view_title').innerText = 'No.' + (s.sop_no || '') + ' · ' + (s.title || '') + (code ? ' [' + code + ']' : '') + ' (' + pgCnt + '페이지)';
+
+  const btnA = document.getElementById('tplBtnA');
+  const btnB = document.getElementById('tplBtnB');
+  if (btnA) btnA.classList.toggle('active', currentTemplateType === 'A');
+  if (btnB) btnB.classList.toggle('active', currentTemplateType === 'B');
 
   let revHtml = '';
   if (s.revisions && s.revisions.length > 0) {
@@ -1498,7 +1705,11 @@ function viewSop(s) {
     revHtml += '</div>';
   }
 
-  document.getElementById('view_body').innerHTML = revHtml + buildOptionBSheetHtml(s, false);
+  const sheetHtml = (currentTemplateType === 'B')
+    ? buildOptionBSheetHtml(s, false)
+    : buildOptionASheetHtml(s, false);
+
+  document.getElementById('view_body').innerHTML = revHtml + sheetHtml;
   document.getElementById('modalView').style.display = 'flex';
 }
 function closeViewModal() {
@@ -1530,12 +1741,20 @@ function printSopById(id) {
 function printFromModal() {
   if (!currentViewingSop) return;
   const s = currentViewingSop;
-  const headerHtml = buildOptionBHeaderHtml(s, true);
+  const headerBHtml = buildOptionBHeaderHtml(s, true);
+  const headerARowsHtml = buildOptionAHeaderRowsHtml(s, true);
   const rowsData = prepareOptionBRows(s, true);
+  const colsA = prepareOptionAColumns(s, true);
   const payloadJson = JSON.stringify({
-    headerHtml: headerHtml,
+    tpl: currentTemplateType || 'A',
+    headerBHtml: headerBHtml,
+    headerARowsHtml: headerARowsHtml,
     upList: rowsData.upList,
-    loList: rowsData.loList
+    loList: rowsData.loList,
+    upLeft: colsA.upLeft,
+    upRight: colsA.upRight,
+    loLeft: colsA.loLeft,
+    loRight: colsA.loRight
   }).replace(/<\//g, '<\\/');
 
   const pw = window.open('', '_blank');
@@ -1659,6 +1878,72 @@ function printFromModal() {
           overflow: hidden;
           position: relative;
         }
+        /* Option A (Word 6열 가로형 통합표 서식) Print Styles */
+        .sop-a-sheet {
+          width: 100%;
+          height: 100%;
+          flex: 1 1 auto;
+          display: flex;
+          flex-direction: column;
+        }
+        .sop-a-table {
+          width: 100%;
+          flex: 1 1 auto;
+          border-collapse: collapse;
+          table-layout: fixed;
+          border: 1.8pt solid #000;
+        }
+        .sop-a-table-compact {
+          flex: 0 0 auto !important;
+        }
+        .sop-a-table th,
+        .sop-a-table td {
+          border: 0.6pt solid #000;
+          padding: 4pt 6pt;
+          font-size: 8.8pt;
+          line-height: 1.42;
+          vertical-align: middle;
+          color: #000;
+          word-break: keep-all;
+          overflow-wrap: break-word;
+        }
+        .sop-a-title-wrap {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding-left: 2px;
+        }
+        .sop-a-title-text {
+          font-size: 14.5pt;
+          font-weight: 800;
+          letter-spacing: 3px;
+          white-space: nowrap;
+        }
+        .sop-a-meta-center {
+          text-align: center;
+          font-weight: 700;
+          font-size: 9pt;
+        }
+        .sop-a-sec-head {
+          background-color: #E2EFDA !important;
+          text-align: center;
+          font-size: 9.5pt !important;
+          font-weight: 800;
+          letter-spacing: 2px;
+          padding: 4.5pt 6pt !important;
+          color: #000;
+          height: 28px;
+        }
+        .sop-a-body-cell {
+          vertical-align: top !important;
+          padding: 5.5pt 7pt !important;
+          font-size: 8.6pt;
+          line-height: 1.44;
+        }
+        .sop-a-line {
+          margin-bottom: 1.5pt;
+        }
+        /* Option B (Excel 세로바 서식) Print Styles */
         .sop-b-sheet {
           width: 100%;
           height: 100%;
@@ -1799,20 +2084,146 @@ function printFromModal() {
           <button type="button" onclick="window.close()" class="toolbar-btn btn-close">✕ 창 닫기</button>
           <span id="pageCountBadge" class="page-badge">총 1페이지</span>
           <div class="pad-control-group">
+            <span class="pad-label">서식 타입:</span>
+            <button type="button" id="pTplA" class="pad-btn" onclick="switchPrintTemplate('A')">A타입 (Word 가로형 표준)</button>
+            <button type="button" id="pTplB" class="pad-btn" onclick="switchPrintTemplate('B')">B타입 (Excel 세로형)</button>
+          </div>
+          <div class="pad-control-group">
             <span class="pad-label">여백 규정:</span>
-            <button type="button" class="pad-btn active" onclick="setPadPreset('20mm','12mm','12mm','12mm',this)">상단 편철 표준 (상 20 / 좌·우·하 12mm)</button>
-            <button type="button" class="pad-btn" onclick="setPadPreset('12mm','12mm','12mm','20mm',this)">좌측 편철 (좌 20 / 상·우·하 12mm)</button>
-            <button type="button" class="pad-btn" onclick="setPadPreset('25mm','12mm','12mm','12mm',this)">여유 편철 (상 25 / 좌·우·하 12mm)</button>
+            <button type="button" class="pad-btn pad-margin-btn active" onclick="setPadPreset('20mm','12mm','12mm','12mm',this)">상단 편철 (상 20 / 좌·우·하 12mm)</button>
+            <button type="button" class="pad-btn pad-margin-btn" onclick="setPadPreset('12mm','12mm','12mm','20mm',this)">좌측 편철 (좌 20 / 상·우·하 12mm)</button>
+            <button type="button" class="pad-btn pad-margin-btn" onclick="setPadPreset('25mm','12mm','12mm','12mm',this)">여유 편철 (상 25 / 좌·우·하 12mm)</button>
           </div>
         </div>
         <div class="toolbar-tip">
-          💡 <strong>페이지 초과 시 자동 분할(상단 헤더 반복 · 본문 박스 마감 · 1/N,SH)</strong> &bull; 인쇄 설정에서 <strong>[배경 그래픽]</strong>을 켜주세요.
+          💡 <strong>A타입(Word 가로형 통합표) / B타입(Excel 세로형)</strong> 실시간 전환 가능 &bull; 인쇄 설정에서 <strong>[배경 그래픽]</strong>을 켜주세요.
         </div>
       </aside>
       <div id="measureStage"></div>
       <div id="paperContainer" class="paper-container"></div>
       <script>
         const SOP_DATA = ${payloadJson};
+        let activeTpl = SOP_DATA.tpl || 'A';
+
+        function buildOptionATableHtml(upLeftSlice, upRightSlice, loLeftSlice, loRightSlice, includeUpper, isCompactHeight) {
+          const colgroup = '<colgroup><col style="width:16.6667%;"><col style="width:16.6667%;"><col style="width:16.6667%;"><col style="width:16.6667%;"><col style="width:16.6667%;"><col style="width:16.6667%;"></colgroup>';
+          let rows = SOP_DATA.headerARowsHtml;
+          if (includeUpper) {
+            const uL = upLeftSlice.map(function(h) { return '<div class="sop-a-line">' + h + '</div>'; }).join('');
+            const uR = upRightSlice.map(function(h) { return '<div class="sop-a-line">' + h + '</div>'; }).join('');
+            rows += '<tr class="sop-a-up-head"><th colspan="3" class="sop-a-sec-head">① &nbsp;작 업 준 비 사 항</th><th colspan="3" class="sop-a-sec-head">② &nbsp;안 전 일 반</th></tr>';
+            rows += '<tr class="sop-a-up-body"><td colspan="3" class="sop-a-body-cell" style="height:1%;">' + (uL || '&nbsp;') + '</td><td colspan="3" class="sop-a-body-cell" style="height:1%;">' + (uR || '&nbsp;') + '</td></tr>';
+          }
+          const lL = loLeftSlice.map(function(h, idx) { return '<div class="sop-a-line sop-a-lo-left-item" data-idx="' + idx + '">' + h + '</div>'; }).join('');
+          const lR = loRightSlice.map(function(h, idx) { return '<div class="sop-a-line sop-a-lo-right-item" data-idx="' + idx + '">' + h + '</div>'; }).join('');
+          rows += '<tr class="sop-a-lo-head"><th colspan="3" class="sop-a-sec-head">③ &nbsp;작 업 순 서</th><th colspan="3" class="sop-a-sec-head">④ &nbsp;안 전 작 업 순 서</th></tr>';
+          rows += '<tr class="sop-a-lo-body"><td colspan="3" class="sop-a-body-cell">' + (lL || '&nbsp;') + '</td><td colspan="3" class="sop-a-body-cell">' + (lR || '&nbsp;') + '</td></tr>';
+          const cls = isCompactHeight ? 'sop-a-table sop-a-table-compact' : 'sop-a-table';
+          return '<table class="' + cls + '">' + colgroup + rows + '</table>';
+        }
+
+        function paginateOptionA() {
+          const stage = document.getElementById('measureStage');
+          const container = document.getElementById('paperContainer');
+
+          stage.innerHTML = '<div class="a4-page" id="probePageA" style="height:297mm;min-height:297mm;max-height:297mm;">' +
+            '<div class="sop-a-sheet" style="height:auto;flex:0 0 auto;">' +
+              buildOptionATableHtml(SOP_DATA.upLeft, SOP_DATA.upRight, SOP_DATA.loLeft, SOP_DATA.loRight, true, true) +
+              '<div id="probeFootA" class="sop-b-footer-sh">1/1,SH</div>' +
+            '</div></div>';
+
+          const probePage = document.getElementById('probePageA');
+          const cs = window.getComputedStyle(probePage);
+          const usablePageH = probePage.clientHeight - (parseFloat(cs.paddingTop) || 0) - (parseFloat(cs.paddingBottom) || 0);
+          const footH = document.getElementById('probeFootA').offsetHeight + 4;
+          const tableEl = stage.querySelector('table.sop-a-table');
+          const allTrs = Array.from(tableEl.querySelectorAll('tr'));
+          // Rows 0 & 1 are header rows
+          const headerH = (allTrs[0] ? allTrs[0].getBoundingClientRect().height : 36) + (allTrs[1] ? allTrs[1].getBoundingClientRect().height : 28);
+          const upHeadTr = stage.querySelector('tr.sop-a-up-head');
+          const upBodyTr = stage.querySelector('tr.sop-a-up-body');
+          const loHeadTr = stage.querySelector('tr.sop-a-lo-head');
+          const upH = (upHeadTr ? upHeadTr.getBoundingClientRect().height : 28) + (upBodyTr ? upBodyTr.getBoundingClientRect().height : 80);
+          const loHeadH = loHeadTr ? loHeadTr.getBoundingClientRect().height : 28;
+
+          const leftItems = Array.from(stage.querySelectorAll('.sop-a-lo-left-item'));
+          const rightItems = Array.from(stage.querySelectorAll('.sop-a-lo-right-item'));
+          const leftHeights = leftItems.map(function(el) { return el.getBoundingClientRect().height + 2; });
+          const rightHeights = rightItems.map(function(el) { return el.getBoundingClientRect().height + 2; });
+          const totalLeftH = leftHeights.reduce(function(a, b) { return a + b; }, 0) + 16;
+          const totalRightH = rightHeights.reduce(function(a, b) { return a + b; }, 0) + 16;
+          const maxLoH = Math.max(totalLeftH, totalRightH);
+
+          const availPage1LoH = usablePageH - footH - headerH - upH - loHeadH - 6;
+          const availPageNLoH = usablePageH - footH - headerH - loHeadH - 6;
+
+          const pages = [];
+          let isCompactSingle = false;
+
+          if (maxLoH <= availPage1LoH + 95) {
+            if (maxLoH > availPage1LoH) {
+              isCompactSingle = true;
+            }
+            pages.push({
+              includeUpper: true,
+              upLeft: SOP_DATA.upLeft,
+              upRight: SOP_DATA.upRight,
+              loLeft: SOP_DATA.loLeft,
+              loRight: SOP_DATA.loRight
+            });
+          } else {
+            // Slice left and right columns independently across pages so each page fills cleanly without overflow
+            let lIdx = 0;
+            let rIdx = 0;
+            let pageIdx = 0;
+            while (lIdx < SOP_DATA.loLeft.length || rIdx < SOP_DATA.loRight.length) {
+              const isFirst = (pageIdx === 0);
+              const budget = isFirst ? availPage1LoH - 14 : availPageNLoH - 14;
+              const lSlice = [];
+              let lUsed = 0;
+              while (lIdx < SOP_DATA.loLeft.length) {
+                const h = leftHeights[lIdx] || 18;
+                if (lSlice.length > 0 && lUsed + h > budget) break;
+                lSlice.push(SOP_DATA.loLeft[lIdx]);
+                lUsed += h;
+                lIdx++;
+              }
+              const rSlice = [];
+              let rUsed = 0;
+              while (rIdx < SOP_DATA.loRight.length) {
+                const h = rightHeights[rIdx] || 18;
+                if (rSlice.length > 0 && rUsed + h > budget) break;
+                rSlice.push(SOP_DATA.loRight[rIdx]);
+                rUsed += h;
+                rIdx++;
+              }
+              pages.push({
+                includeUpper: isFirst,
+                upLeft: isFirst ? SOP_DATA.upLeft : [],
+                upRight: isFirst ? SOP_DATA.upRight : [],
+                loLeft: lSlice,
+                loRight: rSlice
+              });
+              pageIdx++;
+              if (pageIdx > 10) break;
+            }
+          }
+
+          const totalPages = pages.length;
+          container.innerHTML = pages.map(function(pg, idx) {
+            const pageNo = idx + 1;
+            const compactStyle = isCompactSingle ? ' style="font-size:8pt;line-height:1.3;"' : '';
+            return '<div class="a4-page">' +
+              '<div class="sop-a-sheet"' + compactStyle + '>' +
+                buildOptionATableHtml(pg.upLeft, pg.upRight, pg.loLeft, pg.loRight, pg.includeUpper, false) +
+                '<div class="sop-b-footer-sh">' + pageNo + '/' + totalPages + ',SH</div>' +
+              '</div>' +
+            '</div>';
+          }).join('');
+
+          const badge = document.getElementById('pageCountBadge');
+          if (badge) badge.textContent = '총 ' + totalPages + '페이지 (' + (totalPages === 1 ? '1/1,SH' : '1/' + totalPages + '~' + totalPages + '/' + totalPages + ',SH') + ')';
+        }
 
         function buildBodyTableHtml(upSlice, loSlice, isCompactHeight) {
           let rowsHtml = '';
@@ -1848,14 +2259,13 @@ function printFromModal() {
           return '<table class="' + cls + '"><colgroup><col style="width:3.6%;"><col style="width:46.4%;"><col style="width:3.6%;"><col style="width:46.4%;"></colgroup>' + rowsHtml + '</table>';
         }
 
-        function paginateSopPages() {
+        function paginateOptionB() {
           const stage = document.getElementById('measureStage');
           const container = document.getElementById('paperContainer');
 
-          // Create a temporary .a4-page inside stage to measure exact available height
           stage.innerHTML = '<div class="a4-page" id="probePage" style="height:297mm;min-height:297mm;max-height:297mm;">' +
             '<div class="sop-b-sheet" style="height:auto;flex:0 0 auto;">' +
-              '<div id="probeHead">' + SOP_DATA.headerHtml + '</div>' +
+              '<div id="probeHead">' + SOP_DATA.headerBHtml + '</div>' +
               '<div id="probeBody">' + buildBodyTableHtml(SOP_DATA.upList, SOP_DATA.loList) + '</div>' +
               '<div id="probeFoot" class="sop-b-footer-sh">1/1,SH</div>' +
             '</div></div>';
@@ -1883,8 +2293,6 @@ function printFromModal() {
           const totalLoH = loHeights.reduce(function(a, b) { return a + b; }, 0);
           const totalRowsCount = SOP_DATA.upList.length + SOP_DATA.loList.length;
 
-          // Standard 1-page sheets in Excel (<= 61 rows and within compact threshold) fit on 1 A4 page;
-          // If slightly taller than maxBodyH (up to +135px), compact row heights and font-size slightly so 1-page SOPs stay 1/1,SH.
           let isCompactSingle = false;
           const pages = [];
           if ((upTotalH + totalLoH <= maxBodyH + 135 && totalRowsCount <= 61) || SOP_DATA.loList.length <= 1) {
@@ -1893,7 +2301,6 @@ function printFromModal() {
             }
             pages.push({ upSlice: SOP_DATA.upList, loSlice: SOP_DATA.loList });
           } else {
-            // Split lower rows across multiple pages; Page 1 carries ①/② + first slice of ③/④, Page 2+ carries remaining slices of ③/④
             let curUp = SOP_DATA.upList;
             let curUsedH = upTotalH + 4;
             let curLoSlice = [];
@@ -1914,7 +2321,6 @@ function printFromModal() {
             }
           }
 
-          // Ensure the last page of a multi-page SOP has at least 9 rows so the vertical title '④ 안전작업순서' fits cleanly without stretching to the bottom of A4
           if (pages.length > 1) {
             const lastPage = pages[pages.length - 1];
             while (lastPage.loSlice.length < 9) {
@@ -1931,7 +2337,7 @@ function printFromModal() {
             const loCompact = isCompactSingle ? pg.loSlice.map(function(r) { return Object.assign({}, r, { hPx: Math.max(11, Math.round(r.hPx * 0.85)) }); }) : pg.loSlice;
             return '<div class="a4-page">' +
               '<div class="sop-b-sheet"' + compactStyle + '>' +
-                SOP_DATA.headerHtml +
+                SOP_DATA.headerBHtml +
                 buildBodyTableHtml(upCompact, loCompact, isTrailingMultiPage) +
                 '<div class="sop-b-footer-sh">' + pageNo + '/' + totalPages + ',SH</div>' +
               '</div>' +
@@ -1942,19 +2348,35 @@ function printFromModal() {
           if (badge) badge.textContent = '총 ' + totalPages + '페이지 (' + (totalPages === 1 ? '1/1,SH' : '1/' + totalPages + '~' + totalPages + '/' + totalPages + ',SH') + ')';
         }
 
+        function paginateSopPages() {
+          const btnA = document.getElementById('pTplA');
+          const btnB = document.getElementById('pTplB');
+          if (btnA) btnA.classList.toggle('active', activeTpl === 'A');
+          if (btnB) btnB.classList.toggle('active', activeTpl === 'B');
+          if (activeTpl === 'B') {
+            paginateOptionB();
+          } else {
+            paginateOptionA();
+          }
+        }
+
+        function switchPrintTemplate(tpl) {
+          activeTpl = (tpl === 'B') ? 'B' : 'A';
+          paginateSopPages();
+        }
+
         function setPadPreset(top, right, bottom, left, btn) {
           document.documentElement.style.setProperty('--top-pad', top);
           document.documentElement.style.setProperty('--right-pad', right);
           document.documentElement.style.setProperty('--bottom-pad', bottom);
           document.documentElement.style.setProperty('--left-pad', left);
-          document.querySelectorAll('.pad-btn').forEach(function(b) { b.classList.remove('active'); });
+          document.querySelectorAll('.pad-margin-btn').forEach(function(b) { b.classList.remove('active'); });
           if (btn) btn.classList.add('active');
           paginateSopPages();
         }
 
         window.addEventListener('load', function() {
           paginateSopPages();
-          // Re-paginate if any embedded images finish loading after initial layout
           const imgs = Array.from(document.querySelectorAll('#paperContainer img'));
           let pending = 0;
           imgs.forEach(function(im) {
