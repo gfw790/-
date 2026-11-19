@@ -42,7 +42,6 @@ if (!auth_can_manage($user)) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>보호구 지급관리</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.7.2/css/all.min.css">
     <style>
         :root {
             --bg: #edf3f8;
@@ -388,12 +387,28 @@ if (!auth_can_manage($user)) {
 
         .gear-icon {
             display: inline-flex;
-            width: 28px;
+            align-items: center;
             justify-content: center;
-            margin-right: 3px;
+            width: 30px;
+            height: 30px;
+            margin-right: 4px;
+            border-radius: 8px;
+            background: #f0fdfa;
+            border: 1px solid #ccfbf1;
             color: #0f766e;
-            font-size: 22px;
-            line-height: 1;
+            flex-shrink: 0;
+        }
+
+        .gear-icon svg {
+            width: 22px;
+            height: 22px;
+            display: block;
+        }
+
+        .check-option:has(input:checked) .gear-icon {
+            background: #0f766e;
+            border-color: #0f766e;
+            color: #ffffff;
         }
 
         .check-option:has(input:checked) {
@@ -1055,9 +1070,10 @@ if (!auth_can_manage($user)) {
                 const typeName = String(type.name || '');
                 const label = document.createElement('label');
                 label.className = 'check-option';
-                const icon = document.createElement('i');
-                icon.className = 'gear-icon ' + gearTypeIcon(typeName);
+                const icon = document.createElement('span');
+                icon.className = 'gear-icon';
                 icon.setAttribute('aria-hidden', 'true');
+                icon.innerHTML = gearTypeSvg(typeName);
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
                 checkbox.value = typeName;
@@ -1078,18 +1094,137 @@ if (!auth_can_manage($user)) {
             updateGearSelectAllState();
         }
 
-        function gearTypeIcon(typeName) {
+        function gearTypeSvg(typeName) {
             const name = String(typeName || '').replace(/\s+/g, '');
-            if (name.includes('안전모') || name.includes('헬멧')) return 'fa-solid fa-helmet-safety';
-            if (name.includes('조끼') || name.includes('안전대')) return 'fa-solid fa-vest';
-            if (name.includes('안전화') || name.includes('장화') || name.includes('신발')) return 'fa-solid fa-shoe-prints';
-            if (name.includes('보안경') || name.includes('고글') || name.includes('안면')) return 'fa-solid fa-glasses';
-            if (name.includes('마스크') || name.includes('방독') || name.includes('호흡')) return 'fa-solid fa-mask-face';
-            if (name.includes('장갑')) return 'fa-solid fa-mitten';
-            if (name.includes('귀마개') || name.includes('귀덮개')) return 'fa-solid fa-headphones';
-            if (name.includes('용접')) return 'fa-solid fa-fire-flame-curved';
-            if (name.includes('우의') || name.includes('방수')) return 'fa-solid fa-umbrella';
-            return 'fa-solid fa-shield-halved';
+            const wrap = function (body) {
+                return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + body + '</svg>';
+            };
+            // 안전모 / 헬멧
+            if (name.includes('안전모') || name.includes('헬멧')) {
+                return wrap(
+                    '<path d="M4 15a8 8 0 0 1 16 0v1H4v-1z" fill="currentColor" fill-opacity="0.14"/>' +
+                    '<path d="M10 7.2V5.5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.7"/>' +
+                    '<path d="M12 7v8"/>' +
+                    '<path d="M2.5 16.5h19a1 1 0 0 1 0 2h-19a1 1 0 0 1 0-2z"/>'
+                );
+            }
+            // 절연장화 (높은 장화 + 번개 표시)
+            if (name.includes('절연') && name.includes('장화')) {
+                return wrap(
+                    '<path d="M7 3h6v10.5l4.2 1.8A2 2 0 0 1 18.5 17v2H6.5a1 1 0 0 1-1-1V4a1 1 0 0 1 1.5-1z" fill="currentColor" fill-opacity="0.14"/>' +
+                    '<path d="M5.5 19h13v2h-13z"/>' +
+                    '<path d="M10.8 6.2l-1.8 3.2h2l-1.3 2.8"/>'
+                );
+            }
+            // 안전화 / 작업화 / 장화
+            if (name.includes('안전화') || name.includes('장화') || name.includes('신발')) {
+                return wrap(
+                    '<path d="M5 7h5.5l1 4.5 5.2 1.8A2.8 2.8 0 0 1 19 16v2H5V7z" fill="currentColor" fill-opacity="0.14"/>' +
+                    '<path d="M4.5 18h15v2.2h-15z"/>' +
+                    '<path d="M14.5 13.5v4.5"/>' +
+                    '<path d="M7.5 10h2.5M7.5 12.5h2.5"/>'
+                );
+            }
+            // 안전대 (그네식 하네스 + 허리벨트 + D링 고리)
+            if (name.includes('안전대') || name.includes('하네스')) {
+                return wrap(
+                    '<path d="M7 3v18M17 3v18"/>' +
+                    '<path d="M7 6l10 7M17 6l-10 7"/>' +
+                    '<rect x="5" y="13" width="14" height="3" rx="1" fill="currentColor" fill-opacity="0.18"/>' +
+                    '<circle cx="12" cy="14.5" r="1.2"/>' +
+                    '<path d="M12 16v3.5a1.5 1.5 0 0 0 3 0V18"/>'
+                );
+            }
+            // 신호수조끼 (X자 반사띠 조끼)
+            if (name.includes('신호수') && name.includes('조끼')) {
+                return wrap(
+                    '<path d="M8 3l2 3h4l2-3 3 2-1.5 4.5V20h-11V9.5L5 5l3-2z" fill="currentColor" fill-opacity="0.14"/>' +
+                    '<path d="M7.5 10l9 7M16.5 10l-9 7"/>' +
+                    '<path d="M6.5 17.5h11"/>'
+                );
+            }
+            // 안전조끼 (수평 반사띠 2줄 조끼)
+            if (name.includes('조끼')) {
+                return wrap(
+                    '<path d="M8 3l2 3.5h4L16 3l3 2-1.5 4.5V20h-11V9.5L5 5l3-2z" fill="currentColor" fill-opacity="0.14"/>' +
+                    '<path d="M12 6.5V20"/>' +
+                    '<path d="M6.5 13h11M6.5 16.5h11"/>'
+                );
+            }
+            // 방진마스크 / 방독마스크
+            if (name.includes('마스크') || name.includes('방독') || name.includes('호흡')) {
+                return wrap(
+                    '<path d="M6.5 9.5C6.5 7.5 9 6 12 6s5.5 1.5 5.5 3.5v4c0 3-2.5 5-5.5 5s-5.5-2-5.5-5v-4z" fill="currentColor" fill-opacity="0.14"/>' +
+                    '<circle cx="12" cy="12.5" r="2.2"/>' +
+                    '<path d="M6.5 9.5C4 9.5 3 10.8 3 12.2s1 2.5 3.5 2.5M17.5 9.5c2.5 0 3.5 1.3 3.5 2.7s-1 2.5-3.5 2.5"/>'
+                );
+            }
+            // 보안면 (헤드기어 + 투명 안면 쉴드)
+            if (name.includes('보안면') || name.includes('안면')) {
+                return wrap(
+                    '<path d="M5 7a7 7 0 0 1 14 0H5z" fill="currentColor" fill-opacity="0.22"/>' +
+                    '<path d="M6 7h12l-1 10.5A5 5 0 0 1 12 21a5 5 0 0 1-5-3.5L6 7z" fill="currentColor" fill-opacity="0.1"/>' +
+                    '<path d="M9 11.5l1.5-1.5M9.5 14.5l3-3"/>'
+                );
+            }
+            // 보안경 / 고글
+            if (name.includes('보안경') || name.includes('고글')) {
+                return wrap(
+                    '<path d="M3 10.5A2.5 2.5 0 0 1 5.5 8h13A2.5 2.5 0 0 1 21 10.5v2.8a3.2 3.2 0 0 1-3.2 3.2h-2.3a2.2 2.2 0 0 1-2-1.3l-.6-1.3a1 1 0 0 0-1.8 0l-.6 1.3a2.2 2.2 0 0 1-2 1.3H6.2A3.2 3.2 0 0 1 3 13.3v-2.8z" fill="currentColor" fill-opacity="0.14"/>' +
+                    '<path d="M6.5 11.5l1.5-1.5M15 11.5l1.5-1.5"/>'
+                );
+            }
+            // 작업장갑 (5지 안전장갑)
+            if (name.includes('장갑')) {
+                return wrap(
+                    '<path d="M8 11V5.5a1 1 0 0 1 2 0V10m0-5.5a1 1 0 0 1 2 0V10m0-4.5a1 1 0 0 1 2 0V10m0-3.5a1 1 0 0 1 2 0V14a5 5 0 0 1-5 5H9.5A4.5 4.5 0 0 1 5 14.5v-2a1.2 1.2 0 0 1 2.4 0V13" fill="currentColor" fill-opacity="0.14"/>' +
+                    '<path d="M7.5 19h8v2h-8z"/>'
+                );
+            }
+            // 귀마개 / 귀덮개 (코드 연결형 차음 귀마개)
+            if (name.includes('귀마개') || name.includes('귀덮개')) {
+                return wrap(
+                    '<path d="M6 6.5a2 2 0 0 1 4 0L9.2 11a1.2 1.2 0 0 1-2.4 0L6 6.5z" fill="currentColor" fill-opacity="0.22"/>' +
+                    '<path d="M14 6.5a2 2 0 0 1 4 0L17.2 11a1.2 1.2 0 0 1-2.4 0L14 6.5z" fill="currentColor" fill-opacity="0.22"/>' +
+                    '<path d="M8 12v3a4 4 0 0 0 8 0v-3"/>'
+                );
+            }
+            // 경광봉 (손잡이 + 발광부 + 빛 방사)
+            if (name.includes('경광봉') || name.includes('신호봉')) {
+                return wrap(
+                    '<rect x="10" y="5" width="4" height="10" rx="2" fill="currentColor" fill-opacity="0.22"/>' +
+                    '<rect x="10.4" y="15" width="3.2" height="5.5" rx="0.8"/>' +
+                    '<path d="M6 7l1.8 1M5.5 11H7.5M18 7l-1.8 1M18.5 11h-2M12 2.2v1.5"/>'
+                );
+            }
+            // 안전각반 (정강이·발목 보호대)
+            if (name.includes('각반')) {
+                return wrap(
+                    '<path d="M8 4h8l-1 12.5 2.5 2.5H6.5L9 16.5 8 4z" fill="currentColor" fill-opacity="0.14"/>' +
+                    '<path d="M8.5 8.5h7M8.8 12.5h6.4"/>'
+                );
+            }
+            // 헤드랜턴 (밴드 + LED 램프 + 빛줄기)
+            if (name.includes('랜턴') || name.includes('라이트') || name.includes('전등')) {
+                return wrap(
+                    '<path d="M4 12a6.5 6.5 0 0 1 11-4.6" />' +
+                    '<rect x="13" y="8" width="4.5" height="6" rx="1.2" fill="currentColor" fill-opacity="0.22"/>' +
+                    '<path d="M4 12v1.5a2 2 0 0 0 2 2h7"/>' +
+                    '<path d="M19.5 8.5l2-1M19.5 11h2.2M19.5 13.5l2 1"/>'
+                );
+            }
+            // 용접 보호구
+            if (name.includes('용접')) {
+                return wrap(
+                    '<path d="M6 5h12v10a6 6 0 0 1-12 0V5z" fill="currentColor" fill-opacity="0.14"/>' +
+                    '<rect x="8.5" y="8.5" width="7" height="3.2" rx="0.8"/>'
+                );
+            }
+            // 기본 보호구 방패
+            return wrap(
+                '<path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6l7-3z" fill="currentColor" fill-opacity="0.14"/>' +
+                '<path d="M9.5 12l1.8 1.8 3.5-3.8"/>'
+            );
         }
 
         function updateGearSelectAllState() {
