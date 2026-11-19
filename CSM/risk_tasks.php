@@ -102,9 +102,15 @@ if ($isSopReview && isset($_GET['print']) && $record) {
   }
  }
  $showRevTable = count($revsForPrint) > 0;
+ $logoPath = __DIR__ . '/assets/policy-logo.png';
+ if (!file_exists($logoPath)) {
+  $logoPath = dirname(__DIR__) . '/safety_manual/assets/policy-logo.png';
+ }
+ $logoBase64 = file_exists($logoPath) ? ('data:image/png;base64,' . base64_encode((string)file_get_contents($logoPath))) : '';
  $printPayload = [
   'docNo' => $docNo,
   'rptYear' => $rptYear,
+  'logoBase64' => $logoBase64,
   'title' => (string)$record['title'],
   'recordDate' => (string)$record['record_date'],
   'status' => $record['status'] === '완료' ? '검토·개정 및 배포 완료' : (string)$record['status'],
@@ -316,15 +322,32 @@ table.rev-tbl td.c { text-align: center; white-space: nowrap; }
 .rpt-footer {
   flex: 0 0 auto;
   margin-top: auto;
-  padding-top: 7px;
-  border-top: 1px solid #94a3b8;
+  padding-top: 6px;
+  border-top: 1px solid #cbd5e1;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
   font-size: 8.2pt;
   color: #334155;
 }
-.rpt-company { font-weight: 800; font-size: 9.5pt; color: #000; }
+.rpt-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.doc-footer-logo {
+  height: 6mm;
+  width: auto;
+  object-fit: contain;
+}
+.doc-footer-company {
+  font-size: 10pt;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #1e293b;
+}
 .rpt-pageno { font-weight: 700; font-size: 8.5pt; color: #1e293b; }
 #measureStage {
   position: fixed;
@@ -395,7 +418,7 @@ function setPadPreset(top, right, bottom, left, btn) {
 function buildFirstHeader() {
   return `<div class="rpt-header">
     <div class="rpt-title-box">
-      <div class="rpt-kicker">CSM 안전보건활동평가 2.2.1 · 안전작업절차(표준서) 정기·수시 검토</div>
+      <div class="rpt-kicker">(주)현대기전 안전보건경영체계 · CSM 2.2.1 안전작업절차(표준서) 검토</div>
       <h1 class="rpt-title">안전작업표준서(SOP) 검토·개정 결과 보고서</h1>
       <div class="rpt-docno">문서번호: ${esc(RPT.docNo)} &nbsp;|&nbsp; 검토일자: ${esc(RPT.recordDate)}</div>
     </div>
@@ -412,11 +435,14 @@ function buildContHeader() {
   </div>`;
 }
 function buildFooter(pageNo, totalPages) {
-  return `<div class="rpt-footer">
-    <div>※ 본 보고서는 결재(서명) 후 PDF 스캔하여 CSM 2.2.1 증빙으로 첨부·보관합니다.</div>
+  const logoHtml = RPT.logoBase64
+    ? `<img src="${RPT.logoBase64}" alt="현대기전 로고" class="doc-footer-logo">`
+    : '';
+  return `<footer class="rpt-footer">
+    <div>※ 결재(서명) 후 PDF 스캔하여 CSM 2.2.1 증빙으로 첨부·보관합니다.</div>
     <div class="rpt-pageno">${pageNo} / ${totalPages}</div>
-    <div class="rpt-company">주식회사 성호이앤씨 (공사팀)</div>
-  </div>`;
+    <div class="rpt-brand">${logoHtml}<span class="doc-footer-company">주식회사 현대기전</span></div>
+  </footer>`;
 }
 function buildMetaBlock() {
   const sopRow = RPT.sopStats
