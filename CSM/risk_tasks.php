@@ -292,7 +292,7 @@ body {
 .rpt-kicker { font-size: 8pt; color: #334155; font-weight: 700; margin-bottom: 3px; }
 .rpt-title { font-size: 15.5pt; font-weight: 800; margin: 0 0 3px; letter-spacing: -.3px; }
 .rpt-docno { font-size: 8.3pt; color: #334155; }
-.approval { border-collapse: collapse; width: 48mm; font-size: 8.2pt; text-align: center; }
+.approval { border-collapse: collapse; table-layout: fixed; width: 48mm; font-size: 8.2pt; text-align: center; flex-shrink: 0; }
 .approval th, .approval td { border: 1px solid #000; padding: 3px 4px; }
 .approval th { background: #f1f5f9; font-weight: 700; }
 .approval .sign-cell { height: 14mm; }
@@ -423,7 +423,8 @@ function buildFirstHeader() {
       <div class="rpt-docno">문서번호: ${esc(RPT.docNo)} &nbsp;|&nbsp; 검토일자: ${esc(RPT.recordDate)}</div>
     </div>
     <table class="approval">
-      <tr><th rowspan="2" style="width:18%">결<br>재</th><th style="width:41%">작성</th><th style="width:41%">승인</th></tr>
+      <colgroup><col style="width:8mm"><col style="width:20mm"><col style="width:20mm"></colgroup>
+      <tr><th rowspan="2">결<br>재</th><th>작성</th><th>승인</th></tr>
       <tr><td class="sign-cell"></td><td class="sign-cell"></td></tr>
     </table>
   </div>`;
