@@ -461,6 +461,115 @@ function csm_new_hire_edu_summary(int $year, float $points = 2.0): array
     ];
 }
 
+function csm_experience_edu_summary(?PDO $db, int $year, float $points = 2.0, ?DateTimeImmutable $asOf = null): array
+{
+    $asOf ??= new DateTimeImmutable('now', new DateTimeZone('Asia/Seoul'));
+    $currentYear = (int)$asOf->format('Y');
+    $currentMonth = (int)$asOf->format('n');
+    $todayStr = $asOf->format('Y-m-d');
+
+    $h1Due = ($year < $currentYear) || ($year === $currentYear);
+    $h2Due = ($year < $currentYear) || ($year === $currentYear && $currentMonth >= 7);
+    $dueHalves = ($h1Due ? 1 : 0) + ($h2Due ? 1 : 0);
+
+    $halves = [
+        1 => ['label' => '상반기 (1~6월)', 'due' => $h1Due, 'completed' => false, 'evidence_count' => 0, 'sessions' => []],
+        2 => ['label' => '하반기 (7~12월)', 'due' => $h2Due, 'completed' => false, 'evidence_count' => 0, 'sessions' => []],
+    ];
+
+    $csmDbPath = __DIR__ . '/education/storage/db/csm.db';
+    if (is_file($csmDbPath)) {
+        try {
+            $pdo = new PDO('sqlite:' . $csmDbPath, null, null, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            ]);
+            $stmt = $pdo->prepare("
+                SELECT id, training_no, training_date, subject, status, sub_type,
+                       scanned_doc_filename, cert_doc_filename
+                FROM csm_trainings
+                WHERE csm_item_code = '5.2.2'
+                  AND strftime('%Y', training_date) = :year
+                  AND (sub_type = 'EXPERIENCE_TRAINING' OR subject LIKE '%안전체험%')
+                ORDER BY training_date ASC, id ASC
+            ");
+            $stmt->execute([':year' => (string)$year]);
+            foreach ($stmt->fetchAll() as $row) {
+                $m = (int)substr((string)$row['training_date'], 5, 2);
+                $half = ($m <= 6) ? 1 : 2;
+                $hasDoc = (!empty($row['scanned_doc_filename']) || !empty($row['cert_doc_filename']));
+                $isPastOrToday = ((string)$row['training_date'] <= $todayStr);
+                $isDone = $hasDoc && $isPastOrToday;
+                $halves[$half]['sessions'][] = [
+                    'id' => (int)$row['id'],
+                    'training_no' => (string)$row['training_no'],
+                    'training_date' => (string)$row['training_date'],
+                    'subject' => (string)$row['subject'],
+                    'status' => (string)$row['status'],
+                    'has_doc' => $hasDoc,
+                    'is_done' => $isDone,
+                ];
+                if ($isDone) {
+                    $halves[$half]['completed'] = true;
+                    $halves[$half]['evidence_count']++;
+                }
+            }
+        } catch (Throwable $e) {
+            error_log('csm_experience_edu_summary csm.db error: ' . $e->getMessage());
+        }
+    }
+
+    // Also accept valid leadership_files uploaded directly to 5.2.2 (excluding 항만안전)
+    if ($db !== null && $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='leadership_files'")->fetch()) {
+        try {
+            $q = $db->prepare("
+                SELECT r.activity_date, r.title, f.stored_name
+                FROM leadership_files f
+                JOIN leadership_records r ON r.id = f.record_id
+                WHERE r.year = ? AND r.item = '5.2.2' AND f.deleted_at IS NULL
+                  AND r.title LIKE '%안전체험%'
+            ");
+            $q->execute([$year]);
+            foreach ($q->fetchAll() as $f) {
+                if (!preg_match('/^[a-f0-9]{40}\.(pdf|jpg|png)$/D', (string)$f['stored_name'])) continue;
+                if (!is_file(__DIR__ . '/storage/leadership_evidence/' . $f['stored_name'])) continue;
+                if ((string)$f['activity_date'] > $todayStr) continue;
+                $m = (int)substr((string)$f['activity_date'], 5, 2);
+                $half = ($m <= 6) ? 1 : 2;
+                $halves[$half]['completed'] = true;
+                $halves[$half]['evidence_count']++;
+            }
+        } catch (Throwable $e) {
+            error_log('csm_experience_edu_summary leadership error: ' . $e->getMessage());
+        }
+    }
+
+    $completedHalves = 0;
+    $evidenceCount = 0;
+    foreach ([1, 2] as $h) {
+        if ($halves[$h]['due'] && $halves[$h]['completed']) {
+            $completedHalves++;
+        }
+        $evidenceCount += $halves[$h]['evidence_count'];
+    }
+
+    $multiplier = $dueHalves > 0 ? round($completedHalves / (float)$dueHalves, 2) : 0.0;
+    $earned = round($points * $multiplier, 2);
+
+    return [
+        'halves' => $halves,
+        'due_halves' => $dueHalves,
+        'completed_halves' => $completedHalves,
+        'evidence_count' => $evidenceCount,
+        'multiplier' => $multiplier,
+        'earned' => $earned,
+        'state' => $evidenceCount === 0 ? 'no_evidence' : 'assessed',
+        'revision' => 0,
+        'automatic' => true,
+        'as_of' => $todayStr,
+    ];
+}
+
 function csm_bonus_certification_summary(?PDO $db, int $year): array
 {
     $counts = ['iso' => 0, 'risk_recognition' => 0];
@@ -761,6 +870,13 @@ function csm_score_summary(?PDO $db, array $catalog, int $year): array
                 $earned = $items[$code]['earned'];
                 $hasEvidence = $items[$code]['evidence_count'] > 0;
                 $assessment = $hasEvidence ? $items[$code] : null;
+            }
+            if ($code === '5.2.2') {
+                $expSummary = csm_experience_edu_summary($db, $year, (float)$criterion['points']);
+                $items[$code] = $expSummary;
+                $earned = $expSummary['earned'];
+                $hasEvidence = $expSummary['evidence_count'] > 0;
+                $assessment = $expSummary['completed_halves'] > 0 ? $expSummary : null;
             }
             $groups[$module['group']]['earned'] += $earned;
             if ($hasEvidence) $groups[$module['group']]['evidence_items']++;

@@ -121,8 +121,8 @@ try {
 
         // Assessment level save
         if ($formAction === 'assess') {
-            if ($item === '5.1.2' || $item === '5.1.3') {
-                throw new InvalidArgumentException('5.1.2 및 5.1.3 항목은 실적 기반 실시간 자동 평가 항목이므로 수동 평가를 저장할 수 없습니다.');
+            if ($item === '5.1.2' || $item === '5.1.3' || $item === '5.2.2') {
+                throw new InvalidArgumentException('5.1.2, 5.1.3 및 5.2.2 항목은 실적 기반 실시간 자동 평가 항목이므로 수동 평가를 저장할 수 없습니다.');
             }
             $assessmentRevision = filter_var($_POST['assessment_revision'] ?? -1, FILTER_VALIDATE_INT);
             if ($assessmentRevision === false || $assessmentRevision < 0) {
@@ -224,6 +224,7 @@ $monthlyStats = [];
 $regMonthly = null;
 $nhSummary = null;
 $nhList = [];
+$expSummary = null;
 if ($item === '5.1.2') {
     require_once __DIR__ . '/scoring.php';
     $regMonthly = csm_regular_edu_monthly_summary($year, 2.0);
@@ -275,6 +276,9 @@ if ($item === '5.1.2') {
             $nhList[] = $row;
         }
     }
+} elseif ($item === '5.2.2') {
+    require_once __DIR__ . '/scoring.php';
+    $expSummary = csm_experience_edu_summary($db, $year, 2.0);
 }
 
 // Filter trainings & records if a month is selected
@@ -412,6 +416,10 @@ $openForm = $id > 0 || $error !== '' || (count($records) === 0 && count($trainin
           ✓ <strong>교육 메트릭스 연동:</strong> <?= $item === '5.1.4' ? '5.1.4 특별안전교육은 법정 10대 위험작업별 실제 수행자(80명) 매핑 및 교육일정이 수립되어 1.0점 만점 평가 기준을 100% 충족합니다.' : '5.1.5 MSDS 교육은 9종 유해화학물질별 실제 취급자(76명) 매핑 및 반기별 정기 교육일정이 수립되어 1.0점 만점 평가 기준을 100% 충족합니다.' ?>
           <br><a href="education_matrix.php?year=<?= $year ?>&amp;tab=<?= $item === '5.1.4' ? 'special' : 'msds' ?>" style="display: inline-block; margin-top: 6px; font-weight: bold; color: #1e3a8a; text-decoration: underline;">👉 교육 메트릭스(작업내용/물질·교육일·교육받는사람) 상세 관리 바로가기</a>
         </p>
+      <?php elseif ($item === '5.2.2' && $expSummary !== null): ?>
+        <p class="hint" style="margin-top: 12px; padding: 8px 12px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; color: #166534; font-size: 11.5px;">
+          ✓ <strong>실시간 자동 집계 (상·하반기):</strong> 현재 날짜(<?= $escape($expSummary['as_of']) ?>) 기준 평가 대상 <?= $expSummary['due_halves'] ?>개 반기 중 <strong><?= $expSummary['completed_halves'] ?>/<?= $expSummary['due_halves'] ?>개 반기</strong> 안전체험교육장 이수·증빙 완료로 <strong><?= number_format($expSummary['earned'], 1) ?> / 2.0점</strong>이 자동 반영됩니다.
+        </p>
       <?php elseif ($canManage): ?>
         <form method="post" action="<?= $escape($base) ?>" style="margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line);">
           <input type="hidden" name="csrf" value="<?= $escape($_SESSION['education_activity_csrf']) ?>">
@@ -536,6 +544,61 @@ $openForm = $id > 0 || $error !== '' || (count($records) === 0 && count($trainin
       <p class="hint" style="margin-top: 10px;">
         ※ 각 신규 입사자 교육일지의 서명 스캔본 등록 시 자동으로 실시완료 및 점수가 실시간 갱신됩니다. 카드를 클릭하면 해당 일지 상세 페이지로 이동합니다.
       </p>
+    </section>
+  <?php endif; ?>
+
+  <!-- Panel 1.5c: 5.2.2 Half-Year Experience Training Board -->
+  <?php if ($item === '5.2.2' && $expSummary !== null): ?>
+    <section class="panel" id="experience-edu">
+      <div class="section-title">
+        <h2>안전체험교육장 상·하반기 이수 현황</h2>
+        <span>현재 날짜 기준 상반기·하반기 완료 실적 자동 점수 반영</span>
+      </div>
+
+      <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px 16px; margin: 10px 0 16px;">
+        <div style="font-size: 15px; font-weight: bold; color: #1e3a8a;">
+          기준일(<?= $escape($expSummary['as_of']) ?>) 대상 <?= $expSummary['due_halves'] ?>개 반기 중 완료 <?= $expSummary['completed_halves'] ?>개 반기 =
+          <span style="color: #2563eb; font-size: 17px;"><?= number_format($expSummary['earned'], 1) ?>점</span>
+          <span style="font-size: 12px; font-weight: normal; color: #3b82f6; margin-left: 8px;">(반영률 <?= round($expSummary['multiplier'] * 100) ?>% · 2.0점 만점)</span>
+        </div>
+        <p class="hint" style="margin: 6px 0 0; color: #475569; font-size: 11.5px;">
+          상반기(1~6월)에는 상반기 완료 시 2.0점(100%), 하반기(7~12월)에는 상·하반기 각 1.0점씩 합산하여 2.0점 만점으로 자동 산정됩니다. (교육일지 스캔본/수료증 등록 및 교육일자 경과 기준)
+        </p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
+        <?php foreach ([1, 2] as $h):
+          $hf = $expSummary['halves'][$h];
+          $perHalfPts = $expSummary['due_halves'] > 0 ? round(2.0 / $expSummary['due_halves'], 1) : 1.0;
+          $earnedHalf = ($hf['due'] && $hf['completed']) ? $perHalfPts : 0.0;
+          $stateLabel = !$hf['due'] ? '평가 전 (예정)' : ($hf['completed'] ? '이수·증빙 완료' : '미완료 (증빙 없음)');
+          $stateColor = !$hf['due'] ? '#64748b' : ($hf['completed'] ? '#059669' : '#dc2626');
+          $borderColor = !$hf['due'] ? 'var(--line)' : ($hf['completed'] ? '#86efac' : '#fecaca');
+        ?>
+          <div style="background: #fff; border: 1.5px solid <?= $borderColor ?>; border-radius: 10px; padding: 14px 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <strong style="font-size: 15px;"><?= $escape($hf['label']) ?></strong>
+              <span style="font-size: 12.5px; font-weight: bold; color: <?= $stateColor ?>;"><?= $stateLabel ?></span>
+            </div>
+            <div style="font-size: 13px; margin-bottom: 10px; color: #334155;">
+              반영 점수: <strong><?= number_format($earnedHalf, 1) ?> / <?= number_format($hf['due'] ? $perHalfPts : 0.0, 1) ?>점</strong>
+              (증빙 <?= (int)$hf['evidence_count'] ?>건)
+            </div>
+            <?php if (!empty($hf['sessions'])): ?>
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <?php foreach ($hf['sessions'] as $sess): ?>
+                  <a href="education/view.php?id=<?= (int)$sess['id'] ?>" style="display: flex; justify-content: space-between; align-items: center; padding: 7px 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px; text-decoration: none; color: inherit;">
+                    <span><strong><?= $escape($sess['training_date']) ?></strong> · <?= $escape($sess['subject']) ?></span>
+                    <span style="font-weight: bold; color: <?= $sess['is_done'] ? '#059669' : '#d97706' ?>; white-space: nowrap; margin-left: 8px;"><?= $sess['is_done'] ? '✓ 완료' : '증빙 대기' ?></span>
+                  </a>
+                <?php endforeach; ?>
+              </div>
+            <?php else: ?>
+              <div style="font-size: 12px; color: #64748b; padding: 8px; background: #f8fafc; border-radius: 6px;">등록된 안전체험교육장 이수 실적이 없습니다.</div>
+            <?php endif; ?>
+          </div>
+        <?php endforeach; ?>
+      </div>
     </section>
   <?php endif; ?>
 
