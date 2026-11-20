@@ -1,0 +1,684 @@
+<?php
+declare(strict_types=1);
+
+require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/health_management_store.php';
+
+$user = csm_require_auth();
+$canManage = auth_can_manage($user);
+$actor = (string)($user['name'] ?? '담당자');
+
+$db = hmg_db();
+
+if (isset($_GET['view_photo'])) {
+    $fn = basename((string)$_GET['view_photo']);
+    if (!preg_match('/^[a-zA-Z0-9_]+\.(?:jpg|jpeg|png|webp)$/D', $fn)) { http_response_code(400); exit('잘못된 요청'); }
+    $path = hmg_photo_dir() . '/' . $fn;
+    if (!is_file($path)) { http_response_code(404); exit('사진 없음'); }
+    header('Content-Type: ' . ((new finfo(FILEINFO_MIME_TYPE))->file($path) ?: 'image/jpeg'));
+    header('Cache-Control: private, max-age=86400');
+    readfile($path);
+    exit;
+}
+
+if (isset($_GET['download_evidence'])) {
+    $evId = (int)$_GET['download_evidence'];
+    $stmt = $db->prepare('SELECT * FROM hmg_evidence WHERE id = ? AND deleted_at IS NULL');
+    $stmt->execute([$evId]);
+    $ev = $stmt->fetch();
+    if (!$ev) { http_response_code(404); exit('증빙 없음'); }
+    $path = hmg_evidence_dir() . '/' . basename((string)$ev['stored_name']);
+    if (!is_file($path)) { http_response_code(404); exit('파일 없음'); }
+    $inline = isset($_GET['inline']) && in_array($ev['mime'], ['application/pdf', 'image/jpeg', 'image/png'], true);
+    header('Content-Type: ' . $ev['mime']);
+    header('Content-Disposition: ' . ($inline ? 'inline' : 'attachment') . '; filename*=UTF-8\'\'' . rawurlencode((string)$ev['original_name']));
+    header('Content-Length: ' . (string)filesize($path));
+    readfile($path);
+    exit;
+}
+
+header('Cache-Control: no-store');
+
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
+if (empty($_SESSION['hmg_csrf'])) $_SESSION['hmg_csrf'] = bin2hex(random_bytes(24));
+$csrf = (string)$_SESSION['hmg_csrf'];
+
+$nowYear = (int)(new DateTimeImmutable('now', new DateTimeZone('Asia/Seoul')))->format('Y');
+$year = isset($_GET['year']) ? (int)$_GET['year'] : $nowYear;
+if ($year < 2020 || $year > 2035) $year = $nowYear;
+
+$validTabs = ['checkup', 'env', 'msds', 'chem_check', 'first_aid', 'evidence'];
+$tab = (string)($_GET['tab'] ?? 'checkup');
+if (!in_array($tab, $validTabs, true)) $tab = 'checkup';
+
+$flashSuccess = '';
+$flashError = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!hash_equals($csrf, (string)($_POST['csrf'] ?? ''))) {
+        $flashError = '보안 토큰이 만료되었습니다. 새로고침 후 다시 시도해 주세요.';
+    } elseif (!$canManage) {
+        $flashError = '관리 권한이 필요합니다.';
+    } else {
+        $action = (string)($_POST['action'] ?? '');
+        $postTab = (string)($_POST['tab'] ?? $tab);
+        if (in_array($postTab, $validTabs, true)) $tab = $postTab;
+        $now = date('Y-m-d H:i:s');
+        try {
+            if ($action === 'save_checkup') {
+                $name = trim((string)($_POST['worker_name'] ?? ''));
+                if ($name === '') throw new InvalidArgumentException('근로자 성명을 입력해 주세요.');
+                $db->prepare('INSERT INTO hmg_checkups (year, worker_name, job_type, exam_type, hazard_factors, exam_date, hospital, result_grade, followup_note, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                   ->execute([
+                       $year, $name, trim((string)($_POST['job_type'] ?? '비사무직')),
+                       trim((string)($_POST['exam_type'] ?? '일반+특수')),
+                       trim((string)($_POST['hazard_factors'] ?? '')),
+                       trim((string)($_POST['exam_date'] ?? '')),
+                       trim((string)($_POST['hospital'] ?? '')),
+                       trim((string)($_POST['result_grade'] ?? '정상(A/B)')),
+                       trim((string)($_POST['followup_note'] ?? '')),
+                       $actor, $now, $now,
+                   ]);
+                $flashSuccess = '건강검진 기록이 등록되었습니다.';
+            } elseif ($action === 'delete_checkup') {
+                $db->prepare('DELETE FROM hmg_checkups WHERE id=? AND year=?')->execute([(int)($_POST['id'] ?? 0), $year]);
+                $flashSuccess = '건강검진 기록이 삭제되었습니다.';
+            } elseif ($action === 'save_env') {
+                $mDate = trim((string)($_POST['measure_date'] ?? ''));
+                if ($mDate === '') throw new InvalidArgumentException('측정일자를 입력해 주세요.');
+                $db->prepare('INSERT INTO hmg_env_measurements (year, half_label, measure_date, agency, work_area, hazard_factors, result_status, action_note, action_done_date, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                   ->execute([
+                       $year, trim((string)($_POST['half_label'] ?? '상반기')), $mDate,
+                       trim((string)($_POST['agency'] ?? '')),
+                       trim((string)($_POST['work_area'] ?? '')),
+                       trim((string)($_POST['hazard_factors'] ?? '')),
+                       trim((string)($_POST['result_status'] ?? '적합(노출기준 미만)')),
+                       trim((string)($_POST['action_note'] ?? '')),
+                       trim((string)($_POST['action_done_date'] ?? '')),
+                       $actor, $now, $now,
+                   ]);
+                $flashSuccess = '작업환경측정 기록이 등록되었습니다.';
+            } elseif ($action === 'delete_env') {
+                $db->prepare('DELETE FROM hmg_env_measurements WHERE id=? AND year=?')->execute([(int)($_POST['id'] ?? 0), $year]);
+                $flashSuccess = '작업환경측정 기록이 삭제되었습니다.';
+            } elseif ($action === 'save_chemical') {
+                $cName = trim((string)($_POST['chem_name'] ?? ''));
+                if ($cName === '') throw new InvalidArgumentException('화학물질명을 입력해 주세요.');
+                $db->prepare('INSERT INTO hmg_chemicals (sort_order, chem_name, manufacturer, usage_process, storage_place, msds_rev_date, msds_placed, ghs_labeled, hazard_class, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)')
+                   ->execute([
+                       (int)($_POST['sort_order'] ?? 10), $cName,
+                       trim((string)($_POST['manufacturer'] ?? '')),
+                       trim((string)($_POST['usage_process'] ?? '')),
+                       trim((string)($_POST['storage_place'] ?? '')),
+                       trim((string)($_POST['msds_rev_date'] ?? '')),
+                       trim((string)($_POST['msds_placed'] ?? '비치완료')),
+                       trim((string)($_POST['ghs_labeled'] ?? '부착완료')),
+                       trim((string)($_POST['hazard_class'] ?? '')),
+                       $now, $now,
+                   ]);
+                $flashSuccess = '화학물질·MSDS 항목이 등록되었습니다.';
+            } elseif ($action === 'delete_chemical') {
+                $db->prepare('UPDATE hmg_chemicals SET active=0, updated_at=? WHERE id=?')->execute([$now, (int)($_POST['id'] ?? 0)]);
+                $flashSuccess = '화학물질 항목이 목록에서 제외되었습니다.';
+            } elseif ($action === 'save_chem_check') {
+                $vals = [
+                    (string)($_POST['chk_msds_latest'] ?? '적합'),
+                    (string)($_POST['chk_ghs_label'] ?? '적합'),
+                    (string)($_POST['chk_small_container'] ?? '적합'),
+                    (string)($_POST['chk_vent_lock'] ?? '적합'),
+                    (string)($_POST['chk_spill_kit'] ?? '적합'),
+                    (string)($_POST['chk_segregation'] ?? '적합'),
+                ];
+                $overall = in_array('보완필요', $vals, true) ? '보완필요' : '적합';
+                $p1 = hmg_save_photo_file($_FILES['photo1'] ?? null, (string)($_POST['photo1_base64'] ?? ''), 'chem_p1');
+                $p2 = hmg_save_photo_file($_FILES['photo2'] ?? null, (string)($_POST['photo2_base64'] ?? ''), 'chem_p2');
+                $db->prepare('INSERT INTO hmg_chem_checks (year, check_date, inspector, location, chk_msds_latest, chk_ghs_label, chk_small_container, chk_vent_lock, chk_spill_kit, chk_segregation, overall_result, issue_note, action_note, photo1, photo2, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                   ->execute([
+                       $year, trim((string)($_POST['check_date'] ?? date('Y-m-d'))),
+                       trim((string)($_POST['inspector'] ?? $actor)),
+                       trim((string)($_POST['location'] ?? '현대기전 자재창고 화학물질 보관함')),
+                       ...$vals, $overall,
+                       trim((string)($_POST['issue_note'] ?? '')),
+                       trim((string)($_POST['action_note'] ?? '')),
+                       $p1, $p2, $actor, $now, $now,
+                   ]);
+                $flashSuccess = '2.8.4 화학물질 보관·GHS 경고표지 점검이 등록되었습니다.';
+            } elseif ($action === 'delete_chem_check') {
+                $db->prepare('DELETE FROM hmg_chem_checks WHERE id=? AND year=?')->execute([(int)($_POST['id'] ?? 0), $year]);
+                $flashSuccess = '화학물질 보관 점검 기록이 삭제되었습니다.';
+            } elseif ($action === 'save_first_aid') {
+                $vals = [
+                    (string)($_POST['chk_med_stock'] ?? '적합'),
+                    (string)($_POST['chk_expiry'] ?? '적합'),
+                    (string)($_POST['chk_equip_state'] ?? '적합'),
+                    (string)($_POST['chk_ledger'] ?? '적합'),
+                ];
+                $overall = in_array('보완필요', $vals, true) ? '보완필요' : '적합';
+                $p1 = hmg_save_photo_file($_FILES['photo1'] ?? null, (string)($_POST['photo1_base64'] ?? ''), 'aid_p1');
+                $p2 = hmg_save_photo_file($_FILES['photo2'] ?? null, (string)($_POST['photo2_base64'] ?? ''), 'aid_p2');
+                $db->prepare('INSERT INTO hmg_first_aid_checks (year, check_date, inspector, location, set_count, chk_med_stock, chk_expiry, chk_equip_state, chk_ledger, overall_result, refill_note, photo1, photo2, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                   ->execute([
+                       $year, trim((string)($_POST['check_date'] ?? date('Y-m-d'))),
+                       trim((string)($_POST['inspector'] ?? $actor)),
+                       trim((string)($_POST['location'] ?? '본사사무실 / 현장사무실 / 가스사무실 (3SET)')),
+                       trim((string)($_POST['set_count'] ?? '3 SET')),
+                       ...$vals, $overall,
+                       trim((string)($_POST['refill_note'] ?? '')),
+                       $p1, $p2, $actor, $now, $now,
+                   ]);
+                $flashSuccess = '2.8.5 응급처치 장비·의약품 점검이 등록되었습니다.';
+            } elseif ($action === 'delete_first_aid') {
+                $db->prepare('DELETE FROM hmg_first_aid_checks WHERE id=? AND year=?')->execute([(int)($_POST['id'] ?? 0), $year]);
+                $flashSuccess = '응급처치 점검 기록이 삭제되었습니다.';
+            } elseif ($action === 'upload_evidence') {
+                hmg_upload_evidence($db, $year, (string)($_POST['item_code'] ?? ''), (string)($_POST['kind'] ?? ''), $_FILES['evidence_file'] ?? null, (string)($_POST['evidence_base64'] ?? ''), trim((string)($_POST['note'] ?? '')), $actor);
+                $flashSuccess = (string)($_POST['item_code'] ?? '') . ' 증빙 자료가 등록되었습니다.';
+            } elseif ($action === 'delete_evidence') {
+                $db->prepare('UPDATE hmg_evidence SET deleted_at=? WHERE id=? AND year=?')->execute([$now, (int)($_POST['id'] ?? 0), $year]);
+                $flashSuccess = '증빙 파일이 삭제되었습니다.';
+            } elseif ($action === 'save_assessment') {
+                $ic = (string)($_POST['item_code'] ?? '');
+                if (!isset(hmg_item_meta()[$ic])) throw new InvalidArgumentException('항목 확인 필요');
+                $mv = (string)($_POST['multiplier'] ?? 'auto');
+                if ($mv === 'auto') {
+                    $db->prepare('DELETE FROM hmg_assessments WHERE year=? AND item_code=?')->execute([$year, $ic]);
+                } else {
+                    $m = (float)$mv;
+                    if (!in_array($m, [1.0, 0.9, 0.8, 0.5, 0.0], true)) throw new InvalidArgumentException('평가 수준 오류');
+                    $db->prepare('INSERT INTO hmg_assessments (year, item_code, multiplier, note, updated_by, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(year, item_code) DO UPDATE SET multiplier=excluded.multiplier, note=excluded.note, updated_by=excluded.updated_by, updated_at=excluded.updated_at')
+                       ->execute([$year, $ic, $m, trim((string)($_POST['note'] ?? '')), $actor, $now]);
+                }
+                $flashSuccess = $ic . ' 평가 수준이 저장되었습니다.';
+            }
+        } catch (Throwable $ex) {
+            $flashError = $ex->getMessage();
+        }
+    }
+}
+
+$checkups = $db->prepare('SELECT * FROM hmg_checkups WHERE year=? ORDER BY exam_date DESC, id DESC');
+$checkups->execute([$year]);
+$checkups = $checkups->fetchAll();
+
+$envRows = $db->prepare('SELECT * FROM hmg_env_measurements WHERE year=? ORDER BY measure_date DESC, id DESC');
+$envRows->execute([$year]);
+$envRows = $envRows->fetchAll();
+
+$chemicals = $db->query('SELECT * FROM hmg_chemicals WHERE active=1 ORDER BY sort_order ASC, id ASC')->fetchAll();
+
+$chemChecks = $db->prepare('SELECT * FROM hmg_chem_checks WHERE year=? ORDER BY check_date DESC, id DESC');
+$chemChecks->execute([$year]);
+$chemChecks = $chemChecks->fetchAll();
+
+$aidChecks = $db->prepare('SELECT * FROM hmg_first_aid_checks WHERE year=? ORDER BY check_date DESC, id DESC');
+$aidChecks->execute([$year]);
+$aidChecks = $aidChecks->fetchAll();
+
+$evStmt = $db->prepare('SELECT * FROM hmg_evidence WHERE year=? AND deleted_at IS NULL ORDER BY item_code ASC, id DESC');
+$evStmt->execute([$year]);
+$evByItem = ['2.8.1' => [], '2.8.2' => [], '2.8.3' => [], '2.8.4' => [], '2.8.5' => []];
+foreach ($evStmt->fetchAll() as $row) {
+    if (isset($evByItem[$row['item_code']])) $evByItem[$row['item_code']][] = $row;
+}
+
+$itemMeta = hmg_item_meta();
+$evKinds = hmg_evidence_kinds();
+$scores = [];
+$totalEarned = 0.0;
+foreach (array_keys($itemMeta) as $code) {
+    $scores[$code] = csm_hmg_score_summary($year, $code, 2.0);
+    $totalEarned += $scores[$code]['earned'];
+}
+$totalEarned = round($totalEarned, 2);
+
+$e = static fn($v): string => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+function hmg_fmt_size(int $b): string { return $b >= 1048576 ? number_format($b / 1048576, 1) . 'MB' : ($b >= 1024 ? number_format($b / 1024, 1) . 'KB' : $b . 'B'); }
+
+function hmg_render_ev(string $code, string $tabName, int $year, array $items, array $score, array $kinds, array $meta, bool $canManage, string $csrf, callable $e): void
+{
+    $curM = $score['assessment'] !== null ? (string)$score['assessment']['multiplier'] : 'auto';
+    $curN = $score['assessment']['note'] ?? '';
+    ?>
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <h3>📎 <?= $e($code) ?> 증빙 자료 및 점수 관리</h3>
+          <p class="sub">필요 증빙: <?= $e($meta['evidence_guide']) ?></p>
+        </div>
+        <div class="score-pill <?= $score['earned'] >= 2.0 ? 'ok' : ($score['evidence_count'] > 0 ? 'warn' : 'empty') ?>">
+          현재 점수 <strong><?= number_format($score['earned'], 1) ?> / 2.0점</strong> (증빙·사진 <?= (int)$score['evidence_count'] ?>건)
+        </div>
+      </div>
+      <div class="ev-grid">
+        <div>
+          <?php if ($canManage): ?>
+          <form method="post" enctype="multipart/form-data" class="ev-upload-form">
+            <input type="hidden" name="csrf" value="<?= $e($csrf) ?>">
+            <input type="hidden" name="action" value="upload_evidence">
+            <input type="hidden" name="tab" value="<?= $e($tabName) ?>">
+            <input type="hidden" name="item_code" value="<?= $e($code) ?>">
+            <input type="hidden" name="evidence_base64" class="js-paste-b64" value="">
+            <div class="form-row">
+              <div class="field"><label>증빙 구분</label><select name="kind"><?php foreach ($kinds as $k => $l): ?><option value="<?= $e($k) ?>"><?= $e($l) ?></option><?php endforeach; ?></select></div>
+              <div class="field"><label>파일 선택 (최대 20MB)</label><input type="file" name="evidence_file" accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.docx"></div>
+            </div>
+            <div class="paste-zone js-paste-zone" tabindex="0">
+              <span class="js-paste-label">📋 클릭 후 <strong>Ctrl+V</strong> 로 스크린샷 붙여넣기</span>
+              <button type="button" class="btn sm ghost js-paste-btn">📋 붙여넣기</button>
+              <img class="paste-preview js-paste-preview" alt="미리보기" style="display:none;">
+            </div>
+            <div class="form-row" style="margin-top:8px;">
+              <div class="field" style="flex:1;"><input type="text" name="note" placeholder="증빙 설명 (선택)"></div>
+              <button type="submit" class="btn primary">증빙 등록</button>
+            </div>
+          </form>
+          <?php endif; ?>
+          <div class="ev-list">
+            <?php if (!$items): ?><div class="empty-msg">등록된 증빙 파일이 없습니다.</div><?php else: foreach ($items as $ev): ?>
+              <div class="ev-item">
+                <div class="ev-info">
+                  <span class="badge"><?= $e($kinds[$ev['kind']] ?? $ev['kind']) ?></span>
+                  <a href="?download_evidence=<?= (int)$ev['id'] ?>&amp;inline=1" target="_blank" class="ev-name"><?= $e($ev['original_name']) ?></a>
+                  <span class="ev-meta"><?= hmg_fmt_size((int)$ev['size']) ?> · <?= $e($ev['uploaded_by']) ?> · <?= $e(substr((string)$ev['uploaded_at'], 0, 10)) ?></span>
+                  <?php if ($ev['note'] !== ''): ?><div class="ev-note"><?= $e($ev['note']) ?></div><?php endif; ?>
+                </div>
+                <div style="display:flex;gap:6px;">
+                  <a href="?download_evidence=<?= (int)$ev['id'] ?>" class="btn sm ghost">다운로드</a>
+                  <?php if ($canManage): ?>
+                  <form method="post" onsubmit="return confirm('삭제할까요?');" style="display:inline;">
+                    <input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="action" value="delete_evidence"><input type="hidden" name="tab" value="<?= $e($tabName) ?>"><input type="hidden" name="id" value="<?= (int)$ev['id'] ?>">
+                    <button type="submit" class="btn sm danger">삭제</button>
+                  </form>
+                  <?php endif; ?>
+                </div>
+              </div>
+            <?php endforeach; endif; ?>
+          </div>
+        </div>
+        <div class="assess-box">
+          <h4>평가 수준 설정 (<?= $e($code) ?>)</h4>
+          <?php if ($canManage): ?>
+          <form method="post">
+            <input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="action" value="save_assessment"><input type="hidden" name="tab" value="<?= $e($tabName) ?>"><input type="hidden" name="item_code" value="<?= $e($code) ?>">
+            <div class="field"><label>평가 수준</label>
+              <select name="multiplier">
+                <option value="auto" <?= $curM === 'auto' ? 'selected' : '' ?>>자동 (증빙 등록 시 100% · 2.0점)</option>
+                <option value="1" <?= $curM === '1' || $curM === '1.0' ? 'selected' : '' ?>>100% (2.0점) — 충족</option>
+                <option value="0.9" <?= $curM === '0.9' ? 'selected' : '' ?>>90% (1.8점) — 우수</option>
+                <option value="0.8" <?= $curM === '0.8' ? 'selected' : '' ?>>80% (1.6점) — 미흡</option>
+                <option value="0.5" <?= $curM === '0.5' ? 'selected' : '' ?>>50% (1.0점)</option>
+                <option value="0" <?= $curM === '0' || $curM === '0.0' ? 'selected' : '' ?>>0% (0.0점)</option>
+              </select>
+            </div>
+            <div class="field" style="margin-top:8px;"><label>검토 메모</label><textarea name="note" rows="2"><?= $e($curN) ?></textarea></div>
+            <button type="submit" class="btn primary" style="margin-top:8px;width:100%;">평가 저장</button>
+          </form>
+          <?php endif; ?>
+        </div>
+      </div>
+    </section>
+    <?php
+}
+?>
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>2.8 보건·건강·작업환경·화학물질 관리 · CSM</title>
+<style>
+  :root { --bg:#f4f7f8; --card:#fff; --line:#d8e2e7; --ink:#152530; --muted:#5a6c77; --brand:#0369a1; --brand-dark:#075985; --ok:#15803d; --ok-bg:#dcfce7; --warn:#b45309; --warn-bg:#fef3c7; --danger:#b91c1c; --danger-bg:#fee2e2; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Malgun Gothic","Apple SD Gothic Neo",sans-serif; background:var(--bg); color:var(--ink); font-size:14px; line-height:1.5; }
+  a { color:inherit; text-decoration:none; }
+  .topbar { background:#0c354c; color:#fff; padding:0 20px; height:54px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:50; }
+  .topbar-left { display:flex; align-items:center; gap:12px; }
+  .topbar-back { color:#bae6fd; font-size:13px; padding:5px 10px; border-radius:6px; background:rgba(255,255,255,0.1); }
+  .topbar-title { font-size:16px; font-weight:800; }
+  .year-select { background:rgba(255,255,255,0.14); color:#fff; border:1px solid rgba(255,255,255,0.28); border-radius:6px; padding:5px 10px; font-weight:700; }
+  .year-select option { color:#111; }
+  .wrap { max-width:1440px; margin:0 auto; padding:20px 20px 60px; }
+  .hero { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:flex-end; gap:14px; margin-bottom:18px; }
+  .hero small { color:var(--brand); font-weight:800; font-size:12px; }
+  .hero h1 { margin:4px 0; font-size:24px; font-weight:900; }
+  .hero p { margin:0; color:var(--muted); font-size:13px; }
+  .print-bar { display:flex; flex-wrap:wrap; gap:8px; }
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:8px 13px; border-radius:8px; border:1px solid var(--line); background:#fff; color:var(--ink); font-weight:700; font-size:12.5px; cursor:pointer; white-space:nowrap; }
+  .btn.primary { background:var(--brand); border-color:var(--brand); color:#fff; }
+  .btn.danger { border-color:#fecaca; color:var(--danger); }
+  .btn.ghost { background:#f8fafc; }
+  .btn.sm { padding:5px 10px; font-size:12px; border-radius:6px; }
+  .flash { padding:12px 16px; border-radius:10px; margin-bottom:14px; font-weight:700; font-size:13px; }
+  .flash.ok { background:var(--ok-bg); color:var(--ok); }
+  .flash.err { background:var(--danger-bg); color:var(--danger); }
+  .kpi-grid { display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); gap:10px; margin-bottom:18px; }
+  .kpi { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px; display:flex; flex-direction:column; gap:3px; }
+  .kpi.total { background:linear-gradient(135deg,#0369a1,#0c4a6e); color:#fff; border-color:#0369a1; }
+  .kpi-code { font-size:11.5px; font-weight:800; color:var(--brand); }
+  .kpi.total .kpi-code { color:#bae6fd; }
+  .kpi-title { font-size:12.5px; font-weight:700; }
+  .kpi-val { font-size:19px; font-weight:900; }
+  .kpi-sub { font-size:11.5px; color:var(--muted); }
+  .kpi.total .kpi-sub { color:#e0f2fe; }
+  .tabs { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:18px; border-bottom:2px solid var(--line); }
+  .tab-link { padding:10px 15px; font-weight:800; font-size:13.5px; color:var(--muted); border-bottom:3px solid transparent; margin-bottom:-2px; }
+  .tab-link.active { color:var(--brand); border-bottom-color:var(--brand); background:#fff; border-radius:8px 8px 0 0; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px 20px; margin-bottom:18px; }
+  .card-head { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; margin-bottom:14px; padding-bottom:10px; border-bottom:1px solid #edf2f5; }
+  .card-head h2, .card-head h3 { margin:0; font-size:16px; font-weight:900; }
+  .sub { margin:2px 0 0; font-size:12.5px; color:var(--muted); }
+  .tbl-wrap { overflow-x:auto; border:1px solid var(--line); border-radius:10px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { padding:8px 10px; border-bottom:1px solid #e9eff2; text-align:left; vertical-align:middle; }
+  th { background:#f1f6f9; font-weight:800; white-space:nowrap; }
+  .ctr { text-align:center; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11.5px; font-weight:800; background:#e0f2fe; color:#0369a1; }
+  .badge.ok { background:var(--ok-bg); color:var(--ok); }
+  .badge.warn { background:var(--warn-bg); color:var(--warn); }
+  .form-grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; }
+  .form-grid.cols-2 { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .form-grid.cols-4 { grid-template-columns:repeat(4, minmax(0, 1fr)); }
+  .form-row { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; }
+  .field { display:flex; flex-direction:column; gap:4px; }
+  .field.span-2 { grid-column:span 2; }
+  .field label { font-size:12px; font-weight:800; color:#334e5c; }
+  .field input[type="text"], .field input[type="date"], .field input[type="number"], .field select, .field textarea { width:100%; padding:8px 10px; border:1px solid #c7d5de; border-radius:8px; font-family:inherit; font-size:13px; background:#fff; }
+  .paste-zone { margin-top:8px; padding:10px 12px; border:2px dashed #7dd3fc; border-radius:10px; background:#f0f9ff; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; font-size:12.5px; color:#075985; cursor:pointer; }
+  .paste-preview { max-height:110px; border-radius:6px; border:1px solid #c7d5de; margin-top:6px; }
+  .score-pill { padding:6px 12px; border-radius:999px; font-size:13px; font-weight:700; }
+  .score-pill.ok { background:var(--ok-bg); color:var(--ok); }
+  .score-pill.warn { background:var(--warn-bg); color:var(--warn); }
+  .score-pill.empty { background:#eef2f5; color:var(--muted); }
+  .ev-grid { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:18px; align-items:start; }
+  .ev-upload-form { background:#f8fbfc; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:12px; }
+  .ev-list { display:flex; flex-direction:column; gap:8px; }
+  .ev-item { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--line); border-radius:9px; background:#fff; }
+  .ev-info { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+  .ev-name { font-weight:800; color:var(--brand-dark); }
+  .ev-meta { font-size:12px; color:var(--muted); }
+  .ev-note { width:100%; font-size:12px; color:#475569; }
+  .assess-box { background:#f8fbfc; border:1px solid var(--line); border-radius:10px; padding:14px; }
+  .empty-msg { padding:16px; text-align:center; color:var(--muted); background:#f9fbfc; border:1px dashed var(--line); border-radius:10px; }
+  .radio-grp { display:flex; gap:10px; }
+  .radio-grp label { display:inline-flex; align-items:center; gap:4px; font-weight:700; font-size:12.5px; cursor:pointer; }
+  .photo-thumbs { display:flex; gap:8px; }
+  .photo-thumb { width:72px; height:54px; object-fit:cover; border-radius:6px; border:1px solid #c7d5de; }
+  @media (max-width:1200px) { .kpi-grid { grid-template-columns:repeat(3,1fr); } .ev-grid { grid-template-columns:1fr; } }
+  @media (max-width:720px) { .kpi-grid, .form-grid, .form-grid.cols-2, .form-grid.cols-4 { grid-template-columns:1fr; } .field.span-2 { grid-column:span 1; } }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-left">
+    <a class="topbar-back" href="/CSM/area.php?group=2&amp;section=2.8">← 2.8 영역</a>
+    <a class="topbar-back" href="/CSM/">CSM 포털</a>
+    <span class="topbar-title">2.8 보건·건강·작업환경·화학물질 관리</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <form method="get" style="display:inline;">
+      <input type="hidden" name="tab" value="<?= $e($tab) ?>">
+      <select name="year" class="year-select" onchange="this.form.submit()">
+        <?php for ($y = $nowYear + 1; $y >= 2024; $y--): ?><option value="<?= $y ?>" <?= $y === $year ? 'selected' : '' ?>><?= $y ?>년</option><?php endfor; ?>
+      </select>
+    </form>
+    <span><?= $e($actor) ?></span>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="hero">
+    <div>
+      <small>CSM 평가 영역 2 · 2.8 보건 · 2.8.1 ~ 2.8.5 (총 10.0점)</small>
+      <h1><?= $year ?>년 건강검진·작업환경측정·화학물질·구급용품 관리</h1>
+      <p>주식회사 현대기전의 건강검진(2.8.1), 작업환경측정(2.8.2), 화학물질·MSDS(2.8.3), 보관·GHS표지(2.8.4), 응급처치장비·의약품(2.8.5)을 통합 관리합니다.</p>
+    </div>
+    <div class="print-bar">
+      <a class="btn" href="health_management_print.php?mode=checkup&amp;year=<?= $year ?>" target="_blank">🖨️ 2.8.1 검진대장</a>
+      <a class="btn" href="health_management_print.php?mode=env&amp;year=<?= $year ?>" target="_blank">🖨️ 2.8.2 환경측정</a>
+      <a class="btn" href="health_management_print.php?mode=msds&amp;year=<?= $year ?>" target="_blank">🖨️ 2.8.3 MSDS대장</a>
+      <a class="btn" href="health_management_print.php?mode=chem_check&amp;year=<?= $year ?>" target="_blank">🖨️ 2.8.4 보관점검표</a>
+      <a class="btn" href="health_management_print.php?mode=first_aid&amp;year=<?= $year ?>" target="_blank">🖨️ 2.8.5 구급용품점검</a>
+    </div>
+  </div>
+
+  <?php if ($flashSuccess !== ''): ?><div class="flash ok">✅ <?= $e($flashSuccess) ?></div><?php endif; ?>
+  <?php if ($flashError !== ''): ?><div class="flash err">⚠️ <?= $e($flashError) ?></div><?php endif; ?>
+
+  <section class="kpi-grid">
+    <?php foreach ($itemMeta as $code => $m): ?>
+    <a class="kpi" href="?year=<?= $year ?>&amp;tab=<?= $e($m['tab']) ?>">
+      <span class="kpi-code"><?= $e($code) ?> (2.0점)</span>
+      <span class="kpi-title"><?= $e($m['short']) ?></span>
+      <span class="kpi-val"><?= number_format($scores[$code]['earned'], 1) ?> / 2.0점</span>
+      <span class="kpi-sub">증빙·사진 <?= (int)$scores[$code]['evidence_count'] ?>건</span>
+    </a>
+    <?php endforeach; ?>
+    <a class="kpi total" href="?year=<?= $year ?>&amp;tab=evidence">
+      <span class="kpi-code">2.8 보건 합계</span>
+      <span class="kpi-title">포털 실시간 반영</span>
+      <span class="kpi-val"><?= number_format($totalEarned, 1) ?> / 10.0점</span>
+      <span class="kpi-sub">달성률 <?= number_format(($totalEarned / 10.0) * 100, 1) ?>%</span>
+    </a>
+  </section>
+
+  <nav class="tabs">
+    <a class="tab-link <?= $tab === 'checkup' ? 'active' : '' ?>" href="?year=<?= $year ?>&amp;tab=checkup">2.8.1 건강검진</a>
+    <a class="tab-link <?= $tab === 'env' ? 'active' : '' ?>" href="?year=<?= $year ?>&amp;tab=env">2.8.2 작업환경측정</a>
+    <a class="tab-link <?= $tab === 'msds' ? 'active' : '' ?>" href="?year=<?= $year ?>&amp;tab=msds">2.8.3 화학물질·MSDS</a>
+    <a class="tab-link <?= $tab === 'chem_check' ? 'active' : '' ?>" href="?year=<?= $year ?>&amp;tab=chem_check">2.8.4 보관·GHS 점검</a>
+    <a class="tab-link <?= $tab === 'first_aid' ? 'active' : '' ?>" href="?year=<?= $year ?>&amp;tab=first_aid">2.8.5 응급장비·의약품</a>
+    <a class="tab-link <?= $tab === 'evidence' ? 'active' : '' ?>" href="?year=<?= $year ?>&amp;tab=evidence">📎 2.8 통합 증빙·점수</a>
+  </nav>
+
+  <?php if ($tab === 'checkup'): ?>
+    <?php if ($canManage): ?>
+    <section class="card">
+      <div class="card-head"><div><h2>2.8.1 일반·특수 건강검진 실시 등록</h2><p class="sub">근로자별 검진일, 검진구분(일반/특수), 유해인자, 판정결과 및 사후관리를 기록합니다.</p></div></div>
+      <form method="post">
+        <input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="action" value="save_checkup"><input type="hidden" name="tab" value="checkup">
+        <div class="form-grid cols-4">
+          <div class="field"><label>성명 *</label><input type="text" name="worker_name" required placeholder="예: 김남균"></div>
+          <div class="field"><label>근무구분</label><select name="job_type"><option value="비사무직">비사무직 (매년)</option><option value="사무직">사무직 (격년)</option></select></div>
+          <div class="field"><label>검진구분</label><select name="exam_type"><option value="일반+특수">일반+특수 건강검진</option><option value="일반건강검진">일반건강검진</option><option value="특수건강검진">특수건강검진</option><option value="배치전건강검진">배치전건강검진</option></select></div>
+          <div class="field"><label>검진일자</label><input type="date" name="exam_date" value="<?= date('Y-m-d') ?>"></div>
+          <div class="field"><label>특수검진 유해인자</label><input type="text" name="hazard_factors" value="소음, 분진, 용접흄"></div>
+          <div class="field"><label>검진기관</label><input type="text" name="hospital" placeholder="예: 동해동인병원"></div>
+          <div class="field"><label>판정결과</label><select name="result_grade"><option value="정상(A/B)">정상 (A/B)</option><option value="관찰(C1/C2)">요관찰 (C1/C2)</option><option value="유소견(D1/D2)">유소견 (D1/D2)</option></select></div>
+          <div class="field"><label>사후관리 조치</label><input type="text" name="followup_note" placeholder="특이사항 없음 / 건강상담 등"></div>
+        </div>
+        <div style="margin-top:10px;text-align:right;"><button type="submit" class="btn primary">건강검진 등록</button></div>
+      </form>
+    </section>
+    <?php endif; ?>
+    <section class="card">
+      <div class="card-head"><div><h2><?= $year ?>년 건강검진 관리대장 (<?= count($checkups) ?>명)</h2></div><a class="btn sm primary" href="health_management_print.php?mode=checkup&amp;year=<?= $year ?>" target="_blank">🖨️ 대장 A4 출력</a></div>
+      <div class="tbl-wrap"><table><thead><tr><th class="ctr">No</th><th>성명</th><th class="ctr">근무구분</th><th class="ctr">검진구분</th><th>유해인자</th><th class="ctr">검진일</th><th>검진기관</th><th class="ctr">판정</th><th>사후관리</th><th class="ctr">관리</th></tr></thead><tbody>
+        <?php if (!$checkups): ?><tr><td colspan="10" class="ctr" style="padding:20px;color:var(--muted);">등록된 <?= $year ?>년 건강검진 기록이 없습니다.</td></tr>
+        <?php else: foreach ($checkups as $i => $r): ?>
+          <tr><td class="ctr"><?= $i + 1 ?></td><td><strong><?= $e($r['worker_name']) ?></strong></td><td class="ctr"><?= $e($r['job_type']) ?></td><td class="ctr"><?= $e($r['exam_type']) ?></td><td><?= $e($r['hazard_factors']) ?></td><td class="ctr"><?= $e($r['exam_date']) ?></td><td><?= $e($r['hospital']) ?></td><td class="ctr"><span class="badge <?= str_contains($r['result_grade'],'정상') ? 'ok' : 'warn' ?>"><?= $e($r['result_grade']) ?></span></td><td><?= $e($r['followup_note']) ?></td><td class="ctr"><?php if ($canManage): ?><form method="post" onsubmit="return confirm('삭제할까요?');" style="display:inline;"><input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="action" value="delete_checkup"><input type="hidden" name="tab" value="checkup"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>"><button class="btn sm danger">삭제</button></form><?php endif; ?></td></tr>
+        <?php endforeach; endif; ?>
+      </tbody></table></div>
+    </section>
+    <?php hmg_render_ev('2.8.1', 'checkup', $year, $evByItem['2.8.1'], $scores['2.8.1'], $evKinds['2.8.1'], $itemMeta['2.8.1'], $canManage, $csrf, $e); ?>
+
+  <?php elseif ($tab === 'env'): ?>
+    <?php if ($canManage): ?>
+    <section class="card">
+      <div class="card-head"><div><h2>2.8.2 작업환경측정 결과 및 개선조치 등록</h2></div></div>
+      <form method="post">
+        <input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="action" value="save_env"><input type="hidden" name="tab" value="env">
+        <div class="form-grid cols-4">
+          <div class="field"><label>구분</label><select name="half_label"><option value="상반기">상반기</option><option value="하반기">하반기</option><option value="수시">수시</option></select></div>
+          <div class="field"><label>측정일자 *</label><input type="date" name="measure_date" value="<?= date('Y-m-d') ?>" required></div>
+          <div class="field"><label>측정기관</label><input type="text" name="agency" placeholder="예: 대한산업보건협회"></div>
+          <div class="field"><label>측정 구역 / 공정</label><input type="text" name="work_area" placeholder="예: 옥계공장 전기·기계 보수작업"></div>
+          <div class="field"><label>측정 유해인자</label><input type="text" name="hazard_factors" placeholder="예: 소음, 분진, 용접흄"></div>
+          <div class="field"><label>측정 결과</label><select name="result_status"><option value="적합(노출기준 미만)">적합 (노출기준 미만)</option><option value="개선필요(기준 초과)">개선필요 (기준 초과)</option></select></div>
+          <div class="field"><label>개선 조치 내용</label><input type="text" name="action_note" placeholder="환기강화·보호구 착용 등"></div>
+          <div class="field"><label>개선 완료일</label><input type="date" name="action_done_date"></div>
+        </div>
+        <div style="margin-top:10px;text-align:right;"><button type="submit" class="btn primary">측정 결과 등록</button></div>
+      </form>
+    </section>
+    <?php endif; ?>
+    <section class="card">
+      <div class="card-head"><div><h2><?= $year ?>년 작업환경측정 이력 (<?= count($envRows) ?>건)</h2></div><a class="btn sm primary" href="health_management_print.php?mode=env&amp;year=<?= $year ?>" target="_blank">🖨️ 대장 A4 출력</a></div>
+      <div class="tbl-wrap"><table><thead><tr><th class="ctr">구분</th><th class="ctr">측정일</th><th>측정기관</th><th>측정 구역/공정</th><th>유해인자</th><th class="ctr">결과</th><th>개선조치</th><th class="ctr">관리</th></tr></thead><tbody>
+        <?php if (!$envRows): ?><tr><td colspan="8" class="ctr" style="padding:20px;color:var(--muted);">등록된 <?= $year ?>년 작업환경측정 기록이 없습니다.</td></tr>
+        <?php else: foreach ($envRows as $r): ?>
+          <tr><td class="ctr"><?= $e($r['half_label']) ?></td><td class="ctr"><strong><?= $e($r['measure_date']) ?></strong></td><td><?= $e($r['agency']) ?></td><td><?= $e($r['work_area']) ?></td><td><?= $e($r['hazard_factors']) ?></td><td class="ctr"><span class="badge <?= str_contains($r['result_status'],'적합') ? 'ok' : 'warn' ?>"><?= $e($r['result_status']) ?></span></td><td><?= $e($r['action_note']) ?><?= $r['action_done_date'] ? ' (' . $e($r['action_done_date']) . ')' : '' ?></td><td class="ctr"><?php if ($canManage): ?><form method="post" onsubmit="return confirm('삭제할까요?');" style="display:inline;"><input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="action" value="delete_env"><input type="hidden" name="tab" value="env"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>"><button class="btn sm danger">삭제</button></form><?php endif; ?></td></tr>
+        <?php endforeach; endif; ?>
+      </tbody></table></div>
+    </section>
+    <?php hmg_render_ev('2.8.2', 'env', $year, $evByItem['2.8.2'], $scores['2.8.2'], $evKinds['2.8.2'], $itemMeta['2.8.2'], $canManage, $csrf, $e); ?>
+
+  <?php elseif ($tab === 'msds'): ?>
+    <section class="card">
+      <div class="card-head">
+        <div><h2>2.8.3 취급 화학물질 및 MSDS 최신본 관리대장 (<?= count($chemicals) ?>종)</h2><p class="sub">기존 MSDS 원문 보관함과 연계하여 현장 취급 화학물질 목록 및 최신 개정일을 관리합니다.</p></div>
+        <div style="display:flex;gap:8px;">
+          <a class="btn sm ghost" href="../risk_assessment/msds_list.php" target="_blank">📂 기존 MSDS 자료실 열기 ↗</a>
+          <a class="btn sm primary" href="health_management_print.php?mode=msds&amp;year=<?= $year ?>" target="_blank">🖨️ MSDS 대장 A4 출력</a>
+        </div>
+      </div>
+      <?php if ($canManage): ?>
+      <form method="post" style="margin-bottom:14px;padding:12px;background:#f8fbfc;border:1px solid var(--line);border-radius:10px;">
+        <input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="action" value="save_chemical"><input type="hidden" name="tab" value="msds">
+        <div class="form-grid cols-4">
+          <div class="field"><label>화학물질명 *</label><input type="text" name="chem_name" required placeholder="예: 방청유(WD-40)"></div>
+          <div class="field"><label>제조사/공급사</label><input type="text" name="manufacturer"></div>
+          <div class="field"><label>사용 공정</label><input type="text" name="usage_process"></div>
+          <div class="field"><label>보관 장소</label><input type="text" name="storage_place" value="자재창고 화학물질 보관함"></div>
+          <div class="field"><label>MSDS 최신 개정일</label><input type="date" name="msds_rev_date" value="<?= date('Y-m-d') ?>"></div>
+          <div class="field"><label>유해성 분류</label><input type="text" name="hazard_class" placeholder="예: 인화성 액체"></div>
+          <div class="field"><label>MSDS 비치 / GHS 표지</label><div style="display:flex;gap:6px;"><select name="msds_placed"><option value="비치완료">비치완료</option><option value="보완필요">보완필요</option></select><select name="ghs_labeled"><option value="부착완료">부착완료</option><option value="보완필요">보완필요</option></select></div></div>
+          <div class="field" style="justify-content:flex-end;"><button type="submit" class="btn primary">+ 화학물질 추가</button></div>
+        </div>
+      </form>
+      <?php endif; ?>
+      <div class="tbl-wrap"><table><thead><tr><th class="ctr">No</th><th>화학물질명</th><th>제조사</th><th>사용 공정</th><th>보관장소</th><th class="ctr">MSDS 개정일</th><th class="ctr">MSDS 비치</th><th class="ctr">GHS 표지</th><th class="ctr">관리</th></tr></thead><tbody>
+        <?php foreach ($chemicals as $i => $c): ?>
+          <tr><td class="ctr"><?= $i + 1 ?></td><td><strong><?= $e($c['chem_name']) ?></strong><div class="sub"><?= $e($c['hazard_class']) ?></div></td><td><?= $e($c['manufacturer']) ?></td><td><?= $e($c['usage_process']) ?></td><td><?= $e($c['storage_place']) ?></td><td class="ctr"><?= $e($c['msds_rev_date']) ?></td><td class="ctr"><span class="badge ok"><?= $e($c['msds_placed']) ?></span></td><td class="ctr"><span class="badge ok"><?= $e($c['ghs_labeled']) ?></span></td><td class="ctr"><?php if ($canManage): ?><form method="post" onsubmit="return confirm('제외할까요?');" style="display:inline;"><input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="action" value="delete_chemical"><input type="hidden" name="tab" value="msds"><input type="hidden" name="id" value="<?= (int)$c['id'] ?>"><button class="btn sm danger">삭제</button></form><?php endif; ?></td></tr>
+        <?php endforeach; ?>
+      </tbody></table></div>
+    </section>
+    <?php hmg_render_ev('2.8.3', 'msds', $year, $evByItem['2.8.3'], $scores['2.8.3'], $evKinds['2.8.3'], $itemMeta['2.8.3'], $canManage, $csrf, $e); ?>
+
+  <?php elseif ($tab === 'chem_check'): ?>
+    <?php if ($canManage): ?>
+    <section class="card">
+      <div class="card-head"><div><h2>2.8.4 화학물질 보관 및 경고표지(MSDS-GHS) 현장점검 등록</h2><p class="sub">현장 사진을 첨부(파일/카메라/Ctrl+V)하면 2.8.4 증빙으로도 자동 반영됩니다.</p></div></div>
+      <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="action" value="save_chem_check"><input type="hidden" name="tab" value="chem_check">
+        <div class="form-grid" style="margin-bottom:12px;">
+          <div class="field"><label>점검일</label><input type="date" name="check_date" value="<?= date('Y-m-d') ?>" required></div>
+          <div class="field"><label>점검자</label><input type="text" name="inspector" value="<?= $e($actor) ?>" required></div>
+          <div class="field"><label>점검장소</label><input type="text" name="location" value="현대기전 자재창고 화학물질 보관함" required></div>
+        </div>
+        <div class="tbl-wrap" style="margin-bottom:12px;"><table><thead><tr><th class="ctr" style="width:40px;">No</th><th>점검 항목</th><th style="width:230px;">결과</th></tr></thead><tbody>
+          <?php $cDefs = ['chk_msds_latest'=>'MSDS 최신본 현장 비치 및 근로자 열람 가능 여부','chk_ghs_label'=>'화학물질 용기·보관함 MSDS-GHS 경고표지 부착 및 시인성','chk_small_container'=>'소분 용기 사용 시 경고표지 부착 및 내용물 명칭 표기','chk_vent_lock'=>'전용 보관함 시건장치, 환기 상태 및 화기 엄금 표지','chk_spill_kit'=>'누출방지 트레이(방유턱), 흡착포 등 방제용품 비치 상태','chk_segregation'=>'인화성·산화성·부식성 등 성상별 분리 보관 여부'];
+          $n = 1; foreach ($cDefs as $k => $l): ?>
+            <tr><td class="ctr"><?= $n++ ?></td><td><?= $e($l) ?></td><td><div class="radio-grp"><label><input type="radio" name="<?= $k ?>" value="적합" checked> 적합</label><label><input type="radio" name="<?= $k ?>" value="보완필요"> 보완필요</label><label><input type="radio" name="<?= $k ?>" value="해당없음"> 해당없음</label></div></td></tr>
+          <?php endforeach; ?>
+        </tbody></table></div>
+        <div class="form-grid cols-2" style="margin-bottom:12px;">
+          <div class="field"><label>📷 현장 사진 1 (화학물질 보관함 상태)</label><input type="file" name="photo1" accept="image/*" capture="environment"><input type="hidden" name="photo1_base64" class="js-paste-b64" value=""><div class="paste-zone js-paste-zone" tabindex="0"><span class="js-paste-label">클릭 후 <strong>Ctrl+V</strong> 붙여넣기</span><button type="button" class="btn sm ghost js-paste-btn">📋 붙여넣기</button><img class="paste-preview js-paste-preview" style="display:none;"></div></div>
+          <div class="field"><label>📷 현장 사진 2 (MSDS-GHS 경고표지 부착)</label><input type="file" name="photo2" accept="image/*" capture="environment"><input type="hidden" name="photo2_base64" class="js-paste-b64" value=""><div class="paste-zone js-paste-zone" tabindex="0"><span class="js-paste-label">클릭 후 <strong>Ctrl+V</strong> 붙여넣기</span><button type="button" class="btn sm ghost js-paste-btn">📋 붙여넣기</button><img class="paste-preview js-paste-preview" style="display:none;"></div></div>
+          <div class="field"><label>지적 사항</label><textarea name="issue_note" rows="2"></textarea></div>
+          <div class="field"><label>개선 조치</label><textarea name="action_note" rows="2"></textarea></div>
+        </div>
+        <div style="text-align:right;"><button type="submit" class="btn primary">보관·GHS 점검 저장</button></div>
+      </form>
+    </section>
+    <?php endif; ?>
+    <section class="card">
+      <div class="card-head"><div><h2><?= $year ?>년 화학물질 보관·GHS 점검 이력 (<?= count($chemChecks) ?>건)</h2></div><a class="btn sm primary" href="health_management_print.php?mode=chem_check&amp;year=<?= $year ?>" target="_blank">🖨️ 점검표 A4 출력</a></div>
+      <div class="tbl-wrap"><table><thead><tr><th class="ctr">점검일</th><th class="ctr">점검자</th><th>점검장소</th><th class="ctr">종합결과</th><th>현장사진</th><th>지적·조치</th><th class="ctr">관리</th></tr></thead><tbody>
+        <?php if (!$chemChecks): ?><tr><td colspan="7" class="ctr" style="padding:20px;color:var(--muted);">등록된 점검 기록이 없습니다.</td></tr>
+        <?php else: foreach ($chemChecks as $r): ?>
+          <tr><td class="ctr"><strong><?= $e($r['check_date']) ?></strong></td><td class="ctr"><?= $e($r['inspector']) ?></td><td><?= $e($r['location']) ?></td><td class="ctr"><span class="badge <?= $r['overall_result']==='적합'?'ok':'warn' ?>"><?= $e($r['overall_result']) ?></span></td><td><div class="photo-thumbs"><?php if ($r['photo1']): ?><a href="?view_photo=<?= urlencode($r['photo1']) ?>" target="_blank"><img class="photo-thumb" src="?view_photo=<?= urlencode($r['photo1']) ?>"></a><?php endif; ?><?php if ($r['photo2']): ?><a href="?view_photo=<?= urlencode($r['photo2']) ?>" target="_blank"><img class="photo-thumb" src="?view_photo=<?= urlencode($r['photo2']) ?>"></a><?php endif; ?></div></td><td><?= $e($r['issue_note'] ?: '양호') ?></td><td class="ctr"><a class="btn sm ghost" href="health_management_print.php?mode=chem_check&amp;year=<?= $year ?>&amp;id=<?= (int)$r['id'] ?>" target="_blank">🖨️</a> <?php if ($canManage): ?><form method="post" onsubmit="return confirm('삭제할까요?');" style="display:inline;"><input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="action" value="delete_chem_check"><input type="hidden" name="tab" value="chem_check"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>"><button class="btn sm danger">삭제</button></form><?php endif; ?></td></tr>
+        <?php endforeach; endif; ?>
+      </tbody></table></div>
+    </section>
+    <?php hmg_render_ev('2.8.4', 'chem_check', $year, $evByItem['2.8.4'], $scores['2.8.4'], $evKinds['2.8.4'], $itemMeta['2.8.4'], $canManage, $csrf, $e); ?>
+
+  <?php elseif ($tab === 'first_aid'): ?>
+    <?php if ($canManage): ?>
+    <section class="card">
+      <div class="card-head"><div><h2>2.8.5 응급처치 장비(구호용품) 및 의약품 월간점검 등록</h2><p class="sub">현대기전 3개소(본사·현장·가스사무실 3SET) 구급함 및 응급장비 상태를 점검하고 현장 사진을 첨부합니다.</p></div></div>
+      <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="action" value="save_first_aid"><input type="hidden" name="tab" value="first_aid">
+        <div class="form-grid cols-4" style="margin-bottom:12px;">
+          <div class="field"><label>점검일</label><input type="date" name="check_date" value="<?= date('Y-m-d') ?>" required></div>
+          <div class="field"><label>점검자</label><input type="text" name="inspector" value="<?= $e($actor) ?>" required></div>
+          <div class="field"><label>비치 위치</label><input type="text" name="location" value="본사사무실 / 현장사무실 / 가스사무실" required></div>
+          <div class="field"><label>비치 수량</label><input type="text" name="set_count" value="3 SET"></div>
+        </div>
+        <div class="tbl-wrap" style="margin-bottom:12px;"><table><thead><tr><th class="ctr" style="width:40px;">No</th><th>점검 항목</th><th style="width:230px;">결과</th></tr></thead><tbody>
+          <?php $aDefs = ['chk_med_stock'=>'필수 의약품(소독약·거즈·붕대·연고·지혈대 등) 비치 수량 적정 여부','chk_expiry'=>'비치 의약품 유효기간 경과 여부 (유효기간 만료품 즉시 교체)','chk_equip_state'=>'응급구조장비(들것·부목·안구세척기 등) 파손·분실 없이 사용가능 상태','chk_ledger'=>'의약품·응급장비 관리대장 비치 및 월간 점검 기록 상태'];
+          $n = 1; foreach ($aDefs as $k => $l): ?>
+            <tr><td class="ctr"><?= $n++ ?></td><td><?= $e($l) ?></td><td><div class="radio-grp"><label><input type="radio" name="<?= $k ?>" value="적합" checked> 적합</label><label><input type="radio" name="<?= $k ?>" value="보완필요"> 보완필요</label><label><input type="radio" name="<?= $k ?>" value="해당없음"> 해당없음</label></div></td></tr>
+          <?php endforeach; ?>
+        </tbody></table></div>
+        <div class="form-grid cols-2" style="margin-bottom:12px;">
+          <div class="field"><label>📷 현장 사진 1 (구급함·의약품 비치 상태)</label><input type="file" name="photo1" accept="image/*" capture="environment"><input type="hidden" name="photo1_base64" class="js-paste-b64" value=""><div class="paste-zone js-paste-zone" tabindex="0"><span class="js-paste-label">클릭 후 <strong>Ctrl+V</strong> 붙여넣기</span><button type="button" class="btn sm ghost js-paste-btn">📋 붙여넣기</button><img class="paste-preview js-paste-preview" style="display:none;"></div></div>
+          <div class="field"><label>📷 현장 사진 2 (응급구조장비 비치 상태)</label><input type="file" name="photo2" accept="image/*" capture="environment"><input type="hidden" name="photo2_base64" class="js-paste-b64" value=""><div class="paste-zone js-paste-zone" tabindex="0"><span class="js-paste-label">클릭 후 <strong>Ctrl+V</strong> 붙여넣기</span><button type="button" class="btn sm ghost js-paste-btn">📋 붙여넣기</button><img class="paste-preview js-paste-preview" style="display:none;"></div></div>
+          <div class="field span-2"><label>보충 / 교체 / 비고 사항</label><textarea name="refill_note" rows="2" placeholder="예: 유효기간 도래 소독약·밴드 보충 완료"></textarea></div>
+        </div>
+        <div style="text-align:right;"><button type="submit" class="btn primary">구급용품 점검 저장</button></div>
+      </form>
+    </section>
+    <?php endif; ?>
+    <section class="card">
+      <div class="card-head"><div><h2><?= $year ?>년 응급처치 장비·의약품 점검 이력 (<?= count($aidChecks) ?>건)</h2></div><a class="btn sm primary" href="health_management_print.php?mode=first_aid&amp;year=<?= $year ?>" target="_blank">🖨️ 점검표 A4 출력</a></div>
+      <div class="tbl-wrap"><table><thead><tr><th class="ctr">점검일</th><th class="ctr">점검자</th><th>비치 위치 (수량)</th><th class="ctr">종합결과</th><th>현장사진</th><th>보충·비고</th><th class="ctr">관리</th></tr></thead><tbody>
+        <?php if (!$aidChecks): ?><tr><td colspan="7" class="ctr" style="padding:20px;color:var(--muted);">등록된 점검 기록이 없습니다.</td></tr>
+        <?php else: foreach ($aidChecks as $r): ?>
+          <tr><td class="ctr"><strong><?= $e($r['check_date']) ?></strong></td><td class="ctr"><?= $e($r['inspector']) ?></td><td><?= $e($r['location']) ?> (<?= $e($r['set_count']) ?>)</td><td class="ctr"><span class="badge <?= $r['overall_result']==='적합'?'ok':'warn' ?>"><?= $e($r['overall_result']) ?></span></td><td><div class="photo-thumbs"><?php if ($r['photo1']): ?><a href="?view_photo=<?= urlencode($r['photo1']) ?>" target="_blank"><img class="photo-thumb" src="?view_photo=<?= urlencode($r['photo1']) ?>"></a><?php endif; ?><?php if ($r['photo2']): ?><a href="?view_photo=<?= urlencode($r['photo2']) ?>" target="_blank"><img class="photo-thumb" src="?view_photo=<?= urlencode($r['photo2']) ?>"></a><?php endif; ?></div></td><td><?= $e($r['refill_note'] ?: '양호') ?></td><td class="ctr"><a class="btn sm ghost" href="health_management_print.php?mode=first_aid&amp;year=<?= $year ?>&amp;id=<?= (int)$r['id'] ?>" target="_blank">🖨️</a> <?php if ($canManage): ?><form method="post" onsubmit="return confirm('삭제할까요?');" style="display:inline;"><input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="action" value="delete_first_aid"><input type="hidden" name="tab" value="first_aid"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>"><button class="btn sm danger">삭제</button></form><?php endif; ?></td></tr>
+        <?php endforeach; endif; ?>
+      </tbody></table></div>
+    </section>
+    <?php hmg_render_ev('2.8.5', 'first_aid', $year, $evByItem['2.8.5'], $scores['2.8.5'], $evKinds['2.8.5'], $itemMeta['2.8.5'], $canManage, $csrf, $e); ?>
+
+  <?php else: ?>
+    <?php foreach (array_keys($itemMeta) as $code): ?>
+      <?php hmg_render_ev($code, 'evidence', $year, $evByItem[$code], $scores[$code], $evKinds[$code], $itemMeta[$code], $canManage, $csrf, $e); ?>
+    <?php endforeach; ?>
+  <?php endif; ?>
+</main>
+
+<script>
+function applyPastedImage(zone, blob) {
+  const b64 = (zone.previousElementSibling && zone.previousElementSibling.classList.contains('js-paste-b64'))
+    ? zone.previousElementSibling : (zone.closest('form') || zone.parentElement).querySelector('.js-paste-b64');
+  const prev = zone.querySelector('.js-paste-preview');
+  const lbl = zone.querySelector('.js-paste-label');
+  const r = new FileReader();
+  r.onload = () => {
+    if (b64) b64.value = r.result;
+    if (prev) { prev.src = r.result; prev.style.display = 'block'; }
+    if (lbl) lbl.innerHTML = '✅ <strong>스크린샷 준비 완료</strong>';
+  };
+  r.readAsDataURL(blob);
+}
+document.querySelectorAll('.js-paste-zone').forEach(zone => {
+  zone.addEventListener('paste', e => {
+    for (const it of (e.clipboardData || window.clipboardData)?.items || []) {
+      if (it.type && it.type.startsWith('image/')) { e.preventDefault(); applyPastedImage(zone, it.getAsFile()); return; }
+    }
+  });
+  zone.querySelector('.js-paste-btn')?.addEventListener('click', async e => {
+    e.stopPropagation();
+    if (!navigator.clipboard || !navigator.clipboard.read) { zone.focus(); alert('클릭 후 Ctrl+V 를 눌러주세요.'); return; }
+    try {
+      for (const ci of await navigator.clipboard.read()) {
+        const t = ci.types.find(x => x.startsWith('image/'));
+        if (t) { applyPastedImage(zone, await ci.getType(t)); return; }
+      }
+      alert('클립보드에 이미지가 없습니다.');
+    } catch { zone.focus(); alert('클릭 후 Ctrl+V 를 눌러주세요.'); }
+  });
+});
+</script>
+</body>
+</html>

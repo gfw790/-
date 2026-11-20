@@ -864,6 +864,13 @@ function csm_score_summary(?PDO $db, array $catalog, int $year): array
                 $hasEvidence = $items[$code]['evidence_count'] > 0;
                 $assessment = $items[$code]['state'] === 'assessed' ? $items[$code] : null;
             }
+            if (in_array($code, ['2.8.1', '2.8.2', '2.8.3', '2.8.4', '2.8.5'], true)) {
+                require_once __DIR__ . '/health_management_store.php';
+                $items[$code] = csm_hmg_score_summary($year, $code, (float)$criterion['points']);
+                $earned = $items[$code]['earned'];
+                $hasEvidence = $items[$code]['evidence_count'] > 0;
+                $assessment = $items[$code]['state'] === 'assessed' ? $items[$code] : null;
+            }
             if (in_array($code, ['3.1.1', '3.1.2', '3.1.3', '3.1.4'], true)) {
                 require_once __DIR__ . '/workplace_inspection_store.php';
                 $items[$code] = csm_wi_score_summary($year, $code, (float)$criterion['points']);
