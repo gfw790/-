@@ -954,6 +954,13 @@ function csm_score_summary(?PDO $db, array $catalog, int $year): array
                 $hasEvidence = $expSummary['evidence_count'] > 0;
                 $assessment = $expSummary['completed_halves'] > 0 ? $expSummary : null;
             }
+            if (in_array($code, ['6.2.1', '6.2.2', '6.2.3'], true)) {
+                require_once __DIR__ . '/penalty_history_store.php';
+                $items[$code] = csm_penalty_score_summary($year, $code);
+                $earned = $items[$code]['earned'];
+                $hasEvidence = $items[$code]['evidence_count'] > 0 || $items[$code]['incident_count'] > 0;
+                $assessment = $items[$code];
+            }
             $groups[$module['group']]['earned'] += $earned;
             if ($hasEvidence) $groups[$module['group']]['evidence_items']++;
             if ($hasEvidence && $assessment !== null) $groups[$module['group']]['assessed_items']++;
