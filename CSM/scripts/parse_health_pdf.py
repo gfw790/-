@@ -283,17 +283,19 @@ def parse_exam_report(pages: list[dict], doc_type: str) -> dict:
         for nm, y0, y1, is_start in bands:
             band_words = [w for w in body_words if y0 <= w["y"] < y1]
             if nm not in merged:
-                merged[nm] = {"worker_name": nm, "dept_words": [], "grade_words": [], "fit_words": [], "body_words": []}
+                merged[nm] = {"worker_name": nm, "dept_words": [], "grade_words": [], "fit_words": [], "body_words": [], "action_words": []}
                 order.append(nm)
             if is_start:
                 merged[nm]["dept_words"].extend([w for w in band_words if 0.04 <= w["x"] < 0.128 and abs(w["y"] - (y0 + 0.015)) < 0.06])
-            gx0, gx1 = (0.50, 0.56) if is_special else (0.245, 0.273)
+            gx0, gx1 = (0.485, 0.565) if is_special else (0.242, 0.275)
+            ax0 = 0.74 if is_special else 0.45
             merged[nm]["grade_words"].extend([w for w in band_words if gx0 <= w["x"] <= gx1])
             merged[nm]["fit_words"].extend([w for w in band_words if w["x"] >= 0.90])
-            merged[nm]["body_words"].extend([w for w in band_words if w["x"] >= 0.24])
+            merged[nm]["body_words"].extend([w for w in band_words if gx0 <= w["x"] < ax0])
+            merged[nm]["action_words"].extend([w for w in band_words if ax0 <= w["x"] < 0.90])
 
-    grade_re = re.compile(r"\b(D1|D2|DN|C1|C2|CN|R|D|C|A|B)\b")
-    priority = ["D1", "DN", "D2", "D", "C1", "CN", "C2", "C", "R", "A", "B"]
+    grade_re = re.compile(r"\b(D1|D2|DN|C1|C2|CN|D|C|A|B)\b")
+    priority = ["D1", "DN", "D2", "D", "C1", "CN", "C2", "C", "A", "B"]
     kw_list = [
         "소음성난청주의", "소음성난청", "당뇨병의심", "당뇨유질환", "고혈압의심", "고혈압유질환",
         "간장질환주의", "간장질환", "국소 폐섬유화", "무기폐", "심장 비대증", "만성기관지염",
@@ -308,6 +310,9 @@ def parse_exam_report(pages: list[dict], doc_type: str) -> dict:
         dept = dept_raw[:16] if dept_raw else "공사부"
 
         g_text = join_words(info["grade_words"]).upper()
+        # Normalize common OCR confusions: C1->CI/CL, D1->DI/DL
+        g_text = re.sub(r"\bC[IL|]\b", "C1", g_text)
+        g_text = re.sub(r"\bD[IL|]\b", "D1", g_text)
         found_g = []
         for g in grade_re.findall(g_text):
             if g not in found_g:
@@ -336,7 +341,7 @@ def parse_exam_report(pages: list[dict], doc_type: str) -> dict:
             res_grade = "판정확인필요"
 
         fit_text = join_words(info["fit_words"])
-        fitness = "나" if "나" in fit_text else ("다" if "다" in fit_text else ("라" if "라" in fit_text else ("가" if top in ("A", "B") else "")))
+        fitness = "나" if "나" in fit_text else ("다" if "다" in fit_text else ("라" if "라" in fit_text else ("가" if top in ("A", "B") else "나")))
 
         body_compact = join_words(info["body_words"]).replace(" ", "")
         found_kw = []
@@ -348,7 +353,32 @@ def parse_exam_report(pages: list[dict], doc_type: str) -> dict:
                     break
         prefix = "특수: " if is_special else "일반: "
         finding = prefix + (", ".join(found_kw) if found_kw else ("전 항목 정상" if top in ("A", "B") else "OCR 판독 확인 필요"))
-        followup = "정상 (사후관리 불필요)" if top in ("A", "B") else ("보호구 착용 지도 및 추적검사 안내" if top != "" else "검진 판정 확인 후 사후관리 입력")
+
+        # Build tailored followup recommendation from actual right-column OCR text
+        act_text = join_words(info["action_words"])
+        act_ns = act_text.replace(" ", "")
+        if top in ("A", "B"):
+            followup = "정상 (사후관리 불필요)"
+        else:
+            acts = []
+            if "근무중치료" in act_ns:
+                acts.append("근무중치료")
+            if "내과진" in act_ns or "병/의원" in act_ns or "병원" in act_ns:
+                acts.append("내과 진료 권고")
+            if "청력보호구" in act_ns:
+                acts.append("청력보호구 착용 철저")
+            elif "호흡보호구" in act_ns:
+                acts.append("호흡기 보호구 착용")
+            elif "보호구착용" in act_ns:
+                acts.append("보호구 착용")
+            if "추적검사" in act_ns:
+                dm_f = re.search(r"(202\d[-./]\d{2}[-./]\d{2})", act_text)
+                acts.append(f"추적검사({dm_f.group(1)})" if dm_f else "추적검사")
+            elif "추적관찰" in act_ns:
+                acts.append("정기 추적관찰")
+            if "건강상담" in act_ns and not acts:
+                acts.append("건강상담")
+            followup = " · ".join(acts) if acts else "사후관리 소견 확인 및 추적관리"
 
         records.append({
             "worker_name": nm,
