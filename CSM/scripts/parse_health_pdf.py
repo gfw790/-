@@ -7,7 +7,7 @@ Local PDF parser for CSM 2.8.1 (일반/특수 건강진단 사후관리 소견�
   Automatically falls back to Windows native Korean OcrEngine if RapidOCR is unavailable.
 """
 import argparse
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 import json
 import logging
 import os
@@ -93,9 +93,23 @@ $jsonOut = $pagesOut | ConvertTo-Json -Depth 5 -Compress
 """
 
 
-def _rapidocr_worker_chunk(args: tuple) -> list[tuple[int, dict]]:
-    """Run RapidOCR PP-OCRv5 Korean on a subset of PDF pages inside a worker process."""
-    pdf_path, page_indices, dpi, threads = args
+def write_status(status_path: str, payload: dict) -> None:
+    if not status_path:
+        return
+    try:
+        tmp = status_path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False)
+        os.replace(tmp, status_path)
+    except Exception:
+        pass
+
+
+_WORKER_STATE = {}
+
+
+def _rapidocr_worker_init(pdf_path: str, dpi: int, threads: int) -> None:
+    """Initialize RapidOCR PP-OCRv5 Korean engine once per worker process."""
     for _sp in [
         r"C:\Users\gfw79\AppData\Roaming\Python\Python314\site-packages",
         os.path.expandvars(r"%APPDATA%\Python\Python314\site-packages"),
@@ -103,7 +117,6 @@ def _rapidocr_worker_chunk(args: tuple) -> list[tuple[int, dict]]:
         if os.path.isdir(_sp) and _sp not in sys.path:
             sys.path.append(_sp)
 
-    import numpy as np
     import pymupdf as _fitz
     import rapidocr as _rapidocr
     from rapidocr import RapidOCR, LangRec, OCRVersion, ModelType
@@ -129,66 +142,88 @@ def _rapidocr_worker_chunk(args: tuple) -> list[tuple[int, dict]]:
     if os.path.isfile(rec_path):
         params["Rec.model_path"] = rec_path
 
-    engine = RapidOCR(params=params)
-    doc = _fitz.open(pdf_path)
-    results = []
-    try:
-        for idx in page_indices:
-            pix = doc[idx].get_pixmap(dpi=dpi)
-            pw = float(pix.width) or 1.0
-            ph = float(pix.height) or 1.0
-            img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
-            if pix.n == 4:
-                img = img[:, :, :3]
-            res = engine(img)
-            words = []
-            lines = []
-            if res is not None and getattr(res, "txts", None):
-                for box, txt in zip(res.boxes, res.txts):
-                    t_clean = (txt or "").strip()
-                    if not t_clean:
-                        continue
-                    xs = [float(pt[0]) for pt in box]
-                    ys = [float(pt[1]) for pt in box]
-                    x0, x1 = min(xs), max(xs)
-                    y0, y1 = min(ys), max(ys)
-                    lines.append(t_clean)
-                    words.append({
-                        "t": t_clean,
-                        "x": round(x0 / pw, 4),
-                        "y": round(y0 / ph, 4),
-                        "w": round((x1 - x0) / pw, 4),
-                        "h": round((y1 - y0) / ph, 4),
-                    })
-            results.append((idx, {"text": "\n".join(lines), "words": words}))
-    finally:
-        doc.close()
-    return results
+    _WORKER_STATE["engine"] = RapidOCR(params=params)
+    _WORKER_STATE["doc"] = _fitz.open(pdf_path)
+    _WORKER_STATE["dpi"] = dpi
 
 
-def ocr_pages_rapidocr(pdf_path: str, scan_indices: list[int], dpi: int = 130) -> dict[int, dict]:
+def _rapidocr_worker_page(idx: int) -> tuple[int, dict]:
+    """OCR a single PDF page using the initialized worker engine."""
+    import numpy as np
+
+    engine = _WORKER_STATE["engine"]
+    doc = _WORKER_STATE["doc"]
+    dpi = _WORKER_STATE["dpi"]
+
+    pix = doc[idx].get_pixmap(dpi=dpi)
+    pw = float(pix.width) or 1.0
+    ph = float(pix.height) or 1.0
+    img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
+    if pix.n == 4:
+        img = img[:, :, :3]
+    res = engine(img)
+    words = []
+    lines = []
+    if res is not None and getattr(res, "txts", None):
+        for box, txt in zip(res.boxes, res.txts):
+            t_clean = (txt or "").strip()
+            if not t_clean:
+                continue
+            xs = [float(pt[0]) for pt in box]
+            ys = [float(pt[1]) for pt in box]
+            x0, x1 = min(xs), max(xs)
+            y0, y1 = min(ys), max(ys)
+            lines.append(t_clean)
+            words.append({
+                "t": t_clean,
+                "x": round(x0 / pw, 4),
+                "y": round(y0 / ph, 4),
+                "w": round((x1 - x0) / pw, 4),
+                "h": round((y1 - y0) / ph, 4),
+            })
+    return idx, {"text": "\n".join(lines), "words": words}
+
+
+def ocr_pages_rapidocr(pdf_path: str, scan_indices: list[int], dpi: int = 130, status_path: str = "", total_pages: int = 0) -> dict[int, dict]:
     """OCR scanned pages locally with RapidOCR (PaddleOCR PP-OCRv5 Korean ONNX)."""
     # Verify importable before spawning worker processes
     import rapidocr  # noqa: F401
 
     cpu = os.cpu_count() or 4
     n_pages = len(scan_indices)
+    total = total_pages or n_pages
     max_workers = min(2, max(1, cpu // 4), n_pages)
     threads_per_worker = max(2, min(4, cpu // max_workers))
 
     out: dict[int, dict] = {}
+    done_count = total - n_pages
+    write_status(status_path, {"status": "running", "done": done_count, "total": total, "message": f"로컬 OCR 엔진 준비 완료 ({done_count}/{total}페이지)"})
+
     if max_workers <= 1 or n_pages <= 2:
-        for idx, page_data in _rapidocr_worker_chunk((pdf_path, scan_indices, dpi, min(4, cpu))):
-            out[idx] = page_data
+        _rapidocr_worker_init(pdf_path, dpi, min(4, cpu))
+        try:
+            for idx in scan_indices:
+                p_idx, page_data = _rapidocr_worker_page(idx)
+                out[p_idx] = page_data
+                done_count += 1
+                write_status(status_path, {"status": "running", "done": done_count, "total": total, "message": f"로컬 OCR 판독 중 ({done_count}/{total}페이지)"})
+        finally:
+            if "doc" in _WORKER_STATE:
+                _WORKER_STATE["doc"].close()
+                _WORKER_STATE.clear()
         return out
 
-    # Round-robin split so dense and sparse pages are balanced across workers
-    chunks = [scan_indices[i::max_workers] for i in range(max_workers)]
-    tasks = [(pdf_path, ch, dpi, threads_per_worker) for ch in chunks if ch]
-    with ProcessPoolExecutor(max_workers=len(tasks)) as ex:
-        for chunk_res in ex.map(_rapidocr_worker_chunk, tasks):
-            for idx, page_data in chunk_res:
-                out[idx] = page_data
+    with ProcessPoolExecutor(
+        max_workers=max_workers,
+        initializer=_rapidocr_worker_init,
+        initargs=(pdf_path, dpi, threads_per_worker),
+    ) as ex:
+        futs = [ex.submit(_rapidocr_worker_page, idx) for idx in scan_indices]
+        for fut in as_completed(futs):
+            p_idx, page_data = fut.result()
+            out[p_idx] = page_data
+            done_count += 1
+            write_status(status_path, {"status": "running", "done": done_count, "total": total, "message": f"로컬 OCR 판독 중 ({done_count}/{total}페이지)"})
     return out
 
 
@@ -240,8 +275,10 @@ def ocr_pages_windows(pdf_path: str, scan_indices: list[int]) -> dict[int, dict]
     return out
 
 
-def extract_pages(pdf_path: str) -> list[dict]:
+def extract_pages(pdf_path: str, status_path: str = "") -> list[dict]:
     doc = pymupdf.open(pdf_path)
+    total_pages = len(doc)
+    write_status(status_path, {"status": "running", "done": 0, "total": total_pages, "message": f"총 {total_pages}페이지 분석 시작..."})
     pages = []
     scan_indices = []
     for i, page in enumerate(doc):
@@ -265,11 +302,13 @@ def extract_pages(pdf_path: str) -> list[dict]:
     doc.close()
 
     if not scan_indices:
+        write_status(status_path, {"status": "running", "done": total_pages, "total": total_pages, "message": "텍스트 추출 완료, 결과 정리 중..."})
         return pages
 
     try:
-        ocr_map = ocr_pages_rapidocr(pdf_path, scan_indices)
+        ocr_map = ocr_pages_rapidocr(pdf_path, scan_indices, status_path=status_path, total_pages=total_pages)
     except Exception:
+        write_status(status_path, {"status": "running", "done": 0, "total": total_pages, "message": "Windows OCR로 전환하여 분석 중..."})
         ocr_map = ocr_pages_windows(pdf_path, scan_indices)
 
     for idx, item in ocr_map.items():
@@ -534,24 +573,39 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True)
     parser.add_argument("--output", default="")
+    parser.add_argument("--status", default="")
     args = parser.parse_args()
 
-    pages = extract_pages(args.input)
-    full_text = "\n".join(p["text"] for p in pages)
-    doc_type = detect_doc_type(full_text)
+    try:
+        pages = extract_pages(args.input, status_path=args.status)
+        full_text = "\n".join(p["text"] for p in pages)
+        doc_type = detect_doc_type(full_text)
 
-    if doc_type == "followup_cert":
-        result = parse_followup_cert(full_text)
-    else:
-        result = parse_exam_report(pages, doc_type)
+        if doc_type == "followup_cert":
+            result = parse_followup_cert(full_text)
+        else:
+            result = parse_exam_report(pages, doc_type)
 
-    result["page_count"] = len(pages)
-    payload = json.dumps(result, ensure_ascii=False, indent=2)
-    if args.output:
-        with open(args.output, "w", encoding="utf-8") as f:
-            f.write(payload)
-    else:
-        sys.stdout.buffer.write(payload.encode("utf-8"))
+        result["page_count"] = len(pages)
+        payload = json.dumps(result, ensure_ascii=False, indent=2)
+        if args.output:
+            tmp_out = args.output + ".tmp"
+            with open(tmp_out, "w", encoding="utf-8") as f:
+                f.write(payload)
+            os.replace(tmp_out, args.output)
+        else:
+            sys.stdout.buffer.write(payload.encode("utf-8"))
+
+        write_status(args.status, {
+            "status": "done",
+            "done": len(pages),
+            "total": len(pages),
+            "count": len(result.get("records", [])),
+            "message": "분석 완료",
+        })
+    except Exception as exc:
+        write_status(args.status, {"status": "error", "error": str(exc)})
+        raise
 
 
 if __name__ == "__main__":

@@ -54,6 +54,71 @@ if (!in_array($tab, $validTabs, true)) $tab = 'checkup';
 $flashSuccess = '';
 $flashError = '';
 $pdfPreview = $_SESSION['hmg_pdf_preview'] ?? null;
+$pdfJob = $_SESSION['hmg_pdf_job'] ?? null;
+
+if (isset($_GET['pdf_job_status']) && $canManage) {
+    header('Content-Type: application/json; charset=utf-8');
+    $reqToken = (string)($_GET['token'] ?? '');
+    if (!is_array($pdfJob) || $reqToken === '' || !hash_equals((string)($pdfJob['token'] ?? ''), $reqToken)) {
+        echo json_encode(['status' => 'expired', 'error' => '진행 중인 PDF 분석 작업이 없습니다.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    $statusFile = (string)($pdfJob['tmp_status'] ?? '');
+    $jsonFile = (string)($pdfJob['tmp_json'] ?? '');
+    $st = is_file($statusFile) ? json_decode((string)@file_get_contents($statusFile), true) : null;
+    if (!is_array($st)) {
+        $st = ['status' => 'running', 'done' => 0, 'total' => 0, 'message' => '로컬 OCR 엔진 시작 중...'];
+    }
+    $state = (string)($st['status'] ?? 'running');
+    if ($state === 'done' && is_file($jsonFile)) {
+        $parsed = json_decode((string)@file_get_contents($jsonFile), true);
+        @unlink($jsonFile);
+        @unlink($statusFile);
+        unset($_SESSION['hmg_pdf_job']);
+        if (!is_array($parsed)) {
+            if (!empty($pdfJob['tmp_pdf']) && is_file((string)$pdfJob['tmp_pdf'])) @unlink((string)$pdfJob['tmp_pdf']);
+            echo json_encode(['status' => 'error', 'error' => 'PDF 분석 결과 파싱에 실패했습니다.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        $_SESSION['hmg_pdf_preview'] = [
+            'token' => (string)$pdfJob['token'],
+            'tmp_pdf' => (string)$pdfJob['tmp_pdf'],
+            'orig_name' => (string)$pdfJob['orig_name'],
+            'year' => (int)$pdfJob['year'],
+            'doc_type' => (string)($parsed['doc_type'] ?? 'general_report'),
+            'doc_label' => (string)($parsed['doc_label'] ?? '건강검진 PDF'),
+            'exam_date' => (string)($parsed['exam_date'] ?? ''),
+            'hospital' => (string)($parsed['hospital'] ?? ''),
+            'page_count' => (int)($parsed['page_count'] ?? 0),
+            'records' => is_array($parsed['records'] ?? null) ? $parsed['records'] : [],
+        ];
+        echo json_encode(['status' => 'done', 'count' => count($_SESSION['hmg_pdf_preview']['records'])], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    if ($state === 'error') {
+        @unlink($jsonFile);
+        @unlink($statusFile);
+        if (!empty($pdfJob['tmp_pdf']) && is_file((string)$pdfJob['tmp_pdf'])) @unlink((string)$pdfJob['tmp_pdf']);
+        unset($_SESSION['hmg_pdf_job']);
+        echo json_encode(['status' => 'error', 'error' => (string)($st['error'] ?? 'PDF 분석 중 오류가 발생했습니다.')], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    $elapsed = max(0, time() - (int)($pdfJob['started_at'] ?? time()));
+    if ($elapsed > 480) {
+        @unlink($statusFile);
+        unset($_SESSION['hmg_pdf_job']);
+        echo json_encode(['status' => 'error', 'error' => 'PDF 분석 시간이 초과되었습니다. 다시 시도해 주세요.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    echo json_encode([
+        'status' => 'running',
+        'done' => (int)($st['done'] ?? 0),
+        'total' => (int)($st['total'] ?? 0),
+        'message' => (string)($st['message'] ?? '로컬 OCR 분석 중...'),
+        'elapsed' => $elapsed,
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!hash_equals($csrf, (string)($_POST['csrf'] ?? ''))) {
@@ -112,6 +177,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $token = bin2hex(random_bytes(12));
                 $tmpPdf = $tmpDir . '/' . $token . '.pdf';
                 $tmpJson = $tmpDir . '/' . $token . '.json';
+                $tmpStatus = $tmpDir . '/' . $token . '.status.json';
                 if (!move_uploaded_file((string)$f['tmp_name'], $tmpPdf)) {
                     throw new RuntimeException('임시 PDF 저장에 실패했습니다.');
                 }
@@ -123,39 +189,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         break;
                     }
                 }
-                $cmd = escapeshellarg($pyBin) . ' ' . escapeshellarg($script) . ' --input ' . escapeshellarg($tmpPdf) . ' --output ' . escapeshellarg($tmpJson) . ' 2>&1';
-                $outLines = [];
-                $exitCode = 0;
-                @set_time_limit(360);
-                exec($cmd, $outLines, $exitCode);
-                if ($exitCode !== 0 || !is_file($tmpJson)) {
-                    @unlink($tmpPdf);
-                    $tail = array_slice($outLines, -4);
-                    $errRaw = implode(' | ', $tail ?: $outLines);
-                    $errUtf8 = @mb_convert_encoding($errRaw, 'UTF-8', 'UTF-8,CP949,EUC-KR') ?: $errRaw;
-                    throw new RuntimeException('PDF 자동 분석에 실패했습니다: ' . mb_substr($errUtf8, 0, 320));
-                }
-                $parsed = json_decode((string)file_get_contents($tmpJson), true);
-                @unlink($tmpJson);
-                if (!is_array($parsed)) {
-                    @unlink($tmpPdf);
-                    throw new RuntimeException('PDF 분석 결과 파싱에 실패했습니다.');
-                }
+                file_put_contents($tmpStatus, json_encode([
+                    'status' => 'running',
+                    'done' => 0,
+                    'total' => 0,
+                    'message' => '로컬 OCR 분석 시작 중...',
+                ], JSON_UNESCAPED_UNICODE));
+
                 $origName = mb_substr(basename(str_replace('\\', '/', (string)$f['name'])), 0, 180);
-                $pdfPreview = [
+                if (DIRECTORY_SEPARATOR === '\\') {
+                    $psExe = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
+                    if (!is_file($psExe)) $psExe = 'powershell';
+                    $pyArgs = [$script, '--input', $tmpPdf, '--output', $tmpJson, '--status', $tmpStatus];
+                    $psArgList = implode(',', array_map(static fn($a) => "'" . str_replace("'", "''", str_replace('/', '\\', $a)) . "'", $pyArgs));
+                    $psCmd = "Start-Process -WindowStyle Hidden -FilePath '" . str_replace("'", "''", $pyBin) . "' -ArgumentList @($psArgList)";
+                    $launchCmd = escapeshellarg($psExe) . ' -NoProfile -Command ' . escapeshellarg($psCmd) . ' 2>&1';
+                    $launchOut = [];
+                    $launchRc = 0;
+                    exec($launchCmd, $launchOut, $launchRc);
+                    if ($launchRc !== 0) {
+                        @unlink($tmpPdf);
+                        @unlink($tmpStatus);
+                        throw new RuntimeException('백그라운드 PDF 분석 실행에 실패했습니다.');
+                    }
+                } else {
+                    $bgCmd = escapeshellarg($pyBin) . ' ' . escapeshellarg($script) . ' --input ' . escapeshellarg($tmpPdf) . ' --output ' . escapeshellarg($tmpJson) . ' --status ' . escapeshellarg($tmpStatus) . ' > /dev/null 2>&1 &';
+                    exec($bgCmd);
+                }
+
+                if (is_array($pdfPreview) && !empty($pdfPreview['tmp_pdf']) && is_file((string)$pdfPreview['tmp_pdf'])) {
+                    @unlink((string)$pdfPreview['tmp_pdf']);
+                }
+                unset($_SESSION['hmg_pdf_preview']);
+                $pdfPreview = null;
+                $pdfJob = [
                     'token' => $token,
                     'tmp_pdf' => $tmpPdf,
+                    'tmp_json' => $tmpJson,
+                    'tmp_status' => $tmpStatus,
                     'orig_name' => $origName,
                     'year' => $year,
-                    'doc_type' => (string)($parsed['doc_type'] ?? 'general_report'),
-                    'doc_label' => (string)($parsed['doc_label'] ?? '건강검진 PDF'),
-                    'exam_date' => (string)($parsed['exam_date'] ?? ''),
-                    'hospital' => (string)($parsed['hospital'] ?? ''),
-                    'page_count' => (int)($parsed['page_count'] ?? 0),
-                    'records' => is_array($parsed['records'] ?? null) ? $parsed['records'] : [],
+                    'started_at' => time(),
                 ];
-                $_SESSION['hmg_pdf_preview'] = $pdfPreview;
-                $flashSuccess = sprintf('[%s] %d페이지 분석 완료 — %d명 추출되었습니다. 아래 미리보기를 확인 후 [일괄 반영]을 눌러주세요.', $pdfPreview['doc_label'], $pdfPreview['page_count'], count($pdfPreview['records']));
+                $_SESSION['hmg_pdf_job'] = $pdfJob;
+                $flashSuccess = sprintf('[%s] 백그라운드 로컬 OCR 분석을 시작했습니다. 완료되면 미리보기가 자동으로 표시됩니다.', $origName);
             } elseif ($action === 'apply_checkup_pdf') {
                 $preview = $_SESSION['hmg_pdf_preview'] ?? null;
                 $postToken = (string)($_POST['preview_token'] ?? '');
@@ -245,9 +322,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (is_array($pdfPreview) && !empty($pdfPreview['tmp_pdf']) && is_file((string)$pdfPreview['tmp_pdf'])) {
                     @unlink((string)$pdfPreview['tmp_pdf']);
                 }
-                unset($_SESSION['hmg_pdf_preview']);
+                if (is_array($pdfJob)) {
+                    foreach (['tmp_pdf', 'tmp_json', 'tmp_status'] as $jk) {
+                        if (!empty($pdfJob[$jk]) && is_file((string)$pdfJob[$jk])) @unlink((string)$pdfJob[$jk]);
+                    }
+                }
+                unset($_SESSION['hmg_pdf_preview'], $_SESSION['hmg_pdf_job']);
                 $pdfPreview = null;
-                $flashSuccess = 'PDF 분석 미리보기를 취소했습니다.';
+                $pdfJob = null;
+                $flashSuccess = 'PDF 분석 작업을 취소했습니다.';
             } elseif ($action === 'delete_checkup') {
                 $db->prepare('DELETE FROM hmg_checkups WHERE id=? AND year=?')->execute([(int)($_POST['id'] ?? 0), $year]);
                 $flashSuccess = '건강검진 기록이 삭제되었습니다.';
@@ -679,13 +762,68 @@ function hmg_render_ev(string $code, string $tabName, int $year, array $items, a
           <p class="sub">병원에서 받은 <strong>사후관리 소견서(일반/특수 PDF)</strong> 또는 <strong>사후관리 조치 확인서 PDF</strong>를 올리면 서버 내부에서 자동 판독하여 미리보기 후 한 번에 반영합니다.</p>
         </div>
       </div>
-      <form method="post" enctype="multipart/form-data" class="form-row" onsubmit="this.querySelector('button[type=submit]').textContent='⏳ 로컬 OCR 분석 중... (10~30초 소요)';">
+      <form method="post" enctype="multipart/form-data" class="form-row" onsubmit="this.querySelector('button[type=submit]').textContent='⏳ 업로드 및 분석 시작 중...';">
         <input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="action" value="parse_checkup_pdf"><input type="hidden" name="tab" value="checkup">
         <div class="field" style="flex:1;min-width:260px;">
           <input type="file" name="checkup_pdf" accept=".pdf,application/pdf" required>
         </div>
         <button type="submit" class="btn primary">🔍 PDF 자동 분석 (미리보기)</button>
       </form>
+
+      <?php if (is_array($pdfJob) && (int)($pdfJob['year'] ?? 0) === $year): ?>
+      <div id="pdfJobBox" style="margin-top:14px;padding:14px;border:1px solid #93c5fd;border-radius:10px;background:#eff6ff;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+          <div>
+            <strong>⏳ 로컬 OCR 분석 진행 중: <?= $e($pdfJob['orig_name']) ?></strong>
+            <span id="pdfJobMsg" class="sub" style="margin-left:8px;">진행 상태 확인 중...</span>
+          </div>
+          <form method="post" style="display:inline;">
+            <input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="action" value="cancel_checkup_pdf"><input type="hidden" name="tab" value="checkup">
+            <button type="submit" class="btn sm ghost">취소</button>
+          </form>
+        </div>
+        <div style="height:10px;background:#dbeafe;border-radius:999px;overflow:hidden;">
+          <div id="pdfJobBar" style="height:100%;width:5%;background:var(--brand);transition:width .4s ease;"></div>
+        </div>
+        <div id="pdfJobErr" style="display:none;margin-top:8px;color:var(--danger);font-size:13px;font-weight:700;"></div>
+      </div>
+      <script>
+      (function(){
+        const token = <?= json_encode((string)$pdfJob['token']) ?>;
+        const statusUrl = '?tab=checkup&year=<?= $year ?>&pdf_job_status=1&token=' + encodeURIComponent(token);
+        const msgEl = document.getElementById('pdfJobMsg');
+        const barEl = document.getElementById('pdfJobBar');
+        const errEl = document.getElementById('pdfJobErr');
+        async function poll() {
+          try {
+            const res = await fetch(statusUrl, {cache: 'no-store'});
+            const d = await res.json();
+            if (d.status === 'done') {
+              barEl.style.width = '100%';
+              msgEl.textContent = '분석 완료! 미리보기를 불러오는 중...';
+              window.location.href = '?tab=checkup&year=<?= $year ?>';
+              return;
+            }
+            if (d.status === 'error' || d.status === 'expired') {
+              errEl.style.display = 'block';
+              errEl.textContent = '⚠️ ' + (d.error || '분석 중 오류가 발생했습니다.');
+              msgEl.textContent = '중단됨';
+              return;
+            }
+            const total = d.total || 0;
+            const done = d.done || 0;
+            const pct = total > 0 ? Math.max(5, Math.min(98, Math.round((done / total) * 100))) : 10;
+            barEl.style.width = pct + '%';
+            msgEl.textContent = (d.message || '로컬 OCR 분석 중...') + (d.elapsed ? ' · ' + d.elapsed + '초 경과' : '');
+          } catch (e) {
+            msgEl.textContent = '상태 확인 재시도 중...';
+          }
+          setTimeout(poll, 2000);
+        }
+        setTimeout(poll, 1000);
+      })();
+      </script>
+      <?php endif; ?>
 
       <?php if (is_array($pdfPreview) && (int)($pdfPreview['year'] ?? 0) === $year): ?>
       <div style="margin-top:14px;padding-top:14px;border-top:2px dashed #93c5fd;">
