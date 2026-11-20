@@ -408,14 +408,14 @@ table.hm-tbl tbody tr:hover td.sticky-col { background: #f8fafc; }
       <span>사용 가능 <?= $totalEq - $unsafeCount ?>종 · 중지/수리 <?= $unsafeCount ?>종</span>
     </div>
     <div class="kpi-card">
-      <small>1차(상반기) 점검 · 스티커</small>
+      <small><?= $year ?>년 정기점검 (연 1회 · 11월)</small>
       <strong><?= $r1DoneCount ?> / <?= $totalEq ?></strong>
-      <span>스티커 발부 <?= $r1StickerCount ?>건</span>
+      <span>정기점검 완료 <?= $r1DoneCount ?>종</span>
     </div>
     <div class="kpi-card">
-      <small>2차(하반기) 점검 · 스티커</small>
-      <strong><?= $r2DoneCount ?> / <?= $totalEq ?></strong>
-      <span>스티커 발부 <?= $r2StickerCount ?>건</span>
+      <small>점검필증 (스티커) 발부</small>
+      <strong><?= $r1StickerCount ?> / <?= $totalEq ?></strong>
+      <span>현장 부착 확인 기준</span>
     </div>
     <div class="kpi-card <?= $score262['evidence_count'] > 0 ? 'accent' : 'warn' ?>">
       <small>CSM 2.6.2 평가 점수 (<?= $year ?>년)</small>
@@ -464,8 +464,7 @@ table.hm-tbl tbody tr:hover td.sticky-col { background: #f8fafc; }
             <th>소켓/플러그</th>
             <th>옥내·외</th>
             <th>수량</th>
-            <th>1차 점검</th>
-            <th>2차 점검</th>
+            <th><?= $year ?>년 정기점검 (11월)</th>
             <th>상태</th>
             <th class="sticky-col">관리</th>
           </tr>
@@ -496,12 +495,6 @@ table.hm-tbl tbody tr:hover td.sticky-col { background: #f8fafc; }
                 <span class="badge <?= $eq['check1_sticker'] === '발부' ? 'b-ok' : 'b-gray' ?>" style="font-size:.69rem">스티커: <?= $h($eq['check1_sticker']) ?></span>
               </div>
             </td>
-            <td class="nowrap">
-              <div class="round-cell">
-                <span class="badge <?= $eq['check2_result'] === '적정' ? 'b-ok' : ($eq['check2_result'] !== '' ? 'b-bad' : 'b-gray') ?>"><?= $h($eq['check2_result'] ?: '미점검') ?></span>
-                <span class="badge <?= $eq['check2_sticker'] === '발부' ? 'b-ok' : 'b-gray' ?>" style="font-size:.69rem">스티커: <?= $h($eq['check2_sticker']) ?></span>
-              </div>
-            </td>
             <td class="nowrap"><span class="badge <?= $eq['status'] === '사용 가능' ? 'b-ok' : ($eq['status'] === '수리 중' ? 'b-warn' : 'b-bad') ?>"><?= $h($eq['status']) ?></span></td>
             <td class="nowrap sticky-col">
               <a class="btn btn-sm btn-primary" href="?tab=checklist&amp;id=<?= (int)$eq['id'] ?>&amp;year=<?= $year ?>">점검표</a>
@@ -527,8 +520,7 @@ table.hm-tbl tbody tr:hover td.sticky-col { background: #f8fafc; }
           <div class="eq-nav-meta"><?= $h($eq['spec'] ?: '-') ?> · <?= $h($eq['voltage']) ?>V</div>
         </div>
         <div style="display:flex;gap:3px;flex-shrink:0">
-          <span class="badge <?= $eq['check1_result'] === '적정' ? 'b-ok' : ($eq['check1_result'] !== '' ? 'b-bad' : 'b-gray') ?>">1차</span>
-          <span class="badge <?= $eq['check2_result'] === '적정' ? 'b-ok' : ($eq['check2_result'] !== '' ? 'b-bad' : 'b-gray') ?>">2차</span>
+          <span class="badge <?= $eq['check1_result'] === '적정' ? 'b-ok' : ($eq['check1_result'] !== '' ? 'b-bad' : 'b-gray') ?>"><?= $h($eq['check1_result'] ?: '미점검') ?></span>
         </div>
       </a>
       <?php endforeach; ?>
@@ -541,7 +533,7 @@ table.hm-tbl tbody tr:hover td.sticky-col { background: #f8fafc; }
             <img class="chk-eq-photo" src="?photo=<?= $h($selectedEq['photo_file']) ?>" alt="<?= $h($selectedEq['name']) ?>" onclick="openPhotoModal(this.src, '<?= $h($selectedEq['code'] . ' · ' . $selectedEq['name']) ?>')">
           <?php endif; ?>
           <div>
-            <div style="font-size:.8rem;color:#176053;font-weight:700">Check Sheet (휴대용 공구와 기구) · CSM 2.6.2</div>
+            <div style="font-size:.8rem;color:#176053;font-weight:700">Check Sheet (휴대용 공구와 기구 · 연 1회 11월 정기점검) · CSM 2.6.2</div>
             <h2 style="margin:2px 0 4px"><?= $h($selectedEq['code'] . ' · ' . $selectedEq['name']) ?> 안전점검표</h2>
             <div style="font-size:.84rem;color:#475569">정격: <?= $h($selectedEq['voltage']) ?>V / <?= $h($selectedEq['current_amp'] ?: '-') ?> · 규격: <?= $h($selectedEq['spec'] ?: '-') ?> · 케이블: <?= $h($selectedEq['cable_len'] ? $selectedEq['cable_len'] . 'm' : '-') ?> · <?= $h($selectedEq['socket_type']) ?> (<?= $h($selectedEq['indoor_outdoor']) ?>)</div>
           </div>
@@ -559,30 +551,21 @@ table.hm-tbl tbody tr:hover td.sticky-col { background: #f8fafc; }
         <input type="hidden" name="year" value="<?= $year ?>">
 
         <div class="chk-meta-grid">
-          <label>1차(상반기) 점검일자 <input type="date" name="check1_date" value="<?= $h($selectedEq['check1_date']) ?>"></label>
-          <label>1차 점검자 <input type="text" name="check1_inspector" value="<?= $h($selectedEq['check1_inspector']) ?>"></label>
-          <label>1차 스티커 발부
+          <label><?= $year ?>년 정기점검일자 (11월) <input type="date" name="check1_date" value="<?= $h($selectedEq['check1_date']) ?>"></label>
+          <label>점검자 <input type="text" name="check1_inspector" value="<?= $h($selectedEq['check1_inspector']) ?>"></label>
+          <label>점검필증 (스티커) 발부
             <select name="check1_sticker">
               <option value="발부" <?= $selectedEq['check1_sticker'] === '발부' ? 'selected' : '' ?>>발부 완료</option>
               <option value="미발부" <?= $selectedEq['check1_sticker'] !== '발부' ? 'selected' : '' ?>>미발부</option>
-            </select>
-          </label>
-          <label>2차(하반기) 점검일자 <input type="date" name="check2_date" value="<?= $h($selectedEq['check2_date']) ?>"></label>
-          <label>2차 점검자 <input type="text" name="check2_inspector" value="<?= $h($selectedEq['check2_inspector']) ?>"></label>
-          <label>2차 스티커 발부
-            <select name="check2_sticker">
-              <option value="발부" <?= $selectedEq['check2_sticker'] === '발부' ? 'selected' : '' ?>>발부 완료</option>
-              <option value="미발부" <?= $selectedEq['check2_sticker'] !== '발부' ? 'selected' : '' ?>>미발부</option>
             </select>
           </label>
         </div>
 
         <?php if ($canManage): ?>
         <div class="quick-bar">
-          <div style="font-size:.85rem;color:#475569"><strong>세부 기기 상태 점검 항목 (<?= count($selectedItems) ?>개)</strong> — 모바일 촬영 사진이 실시간 표시됩니다.</div>
+          <div style="font-size:.85rem;color:#475569"><strong>세부 기기 상태 점검 항목 (<?= count($selectedItems) ?>개 · 연 1회)</strong> — 모바일 촬영 사진이 실시간 표시됩니다.</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <button type="button" class="btn btn-sm" onclick="markAllPcRound(1, '적정')">✅ 1차 전체 적정</button>
-            <button type="button" class="btn btn-sm" onclick="markAllPcRound(2, '적정')">✅ 2차 전체 적정</button>
+            <button type="button" class="btn btn-sm" onclick="markAllPcRound(1, '적정')">✅ 전체 적정</button>
             <button type="submit" class="btn btn-sm btn-primary">💾 점검표 저장</button>
           </div>
         </div>
@@ -592,20 +575,17 @@ table.hm-tbl tbody tr:hover td.sticky-col { background: #f8fafc; }
           <table class="hm-tbl">
             <thead>
               <tr>
-                <th style="width:46px">순번</th>
-                <th style="width:110px">점검부위</th>
+                <th style="width:52px">순번</th>
+                <th style="width:120px">점검부위</th>
                 <th><?= $h($selectedEq['name']) ?> 점검내용</th>
-                <th style="width:155px">1차 점검결과</th>
-                <th style="width:92px">1차 사진</th>
-                <th style="width:155px">2차 점검결과</th>
-                <th style="width:92px">2차 사진</th>
+                <th style="width:170px"><?= $year ?>년 점검결과</th>
+                <th style="width:110px">현장 사진</th>
               </tr>
             </thead>
             <tbody>
               <?php foreach ($selectedItems as $it):
                 $iid = (int)$it['id'];
                 $p1 = (string)($it['round1_photo'] ?? '');
-                $p2 = (string)($it['round2_photo'] ?? '');
               ?>
               <tr>
                 <td><?= (int)$it['item_no'] ?></td>
@@ -619,24 +599,9 @@ table.hm-tbl tbody tr:hover td.sticky-col { background: #f8fafc; }
                 </td>
                 <td id="pc-ph-1-<?= $iid ?>">
                   <?php if ($p1 !== ''): ?>
-                    <img class="thumb" src="?check_photo=<?= $h($p1) ?>" alt="1차 사진" onclick="openPhotoModal(this.src, '1차 항목 <?= (int)$it['item_no'] ?> 사진')">
+                    <img class="thumb" src="?check_photo=<?= $h($p1) ?>" alt="현장 사진" onclick="openPhotoModal(this.src, '항목 <?= (int)$it['item_no'] ?> 점검 사진')">
                   <?php elseif ($canManage): ?>
                     <label class="btn btn-sm" style="cursor:pointer">📷<input type="file" accept="image/*" style="display:none" onchange="pcUploadPhoto(<?= $iid ?>, 1, this)"></label>
-                  <?php else: ?>
-                    <span style="color:#94a3b8;font-size:.76rem">-</span>
-                  <?php endif; ?>
-                </td>
-                <td>
-                  <div class="radio-pair">
-                    <label><input type="radio" name="r2[<?= $iid ?>]" value="적정" <?= $it['round2_result'] === '적정' ? 'checked' : '' ?>> 적정</label>
-                    <label><input type="radio" name="r2[<?= $iid ?>]" value="부적정" <?= $it['round2_result'] === '부적정' ? 'checked' : '' ?>> 부적정</label>
-                  </div>
-                </td>
-                <td id="pc-ph-2-<?= $iid ?>">
-                  <?php if ($p2 !== ''): ?>
-                    <img class="thumb" src="?check_photo=<?= $h($p2) ?>" alt="2차 사진" onclick="openPhotoModal(this.src, '2차 항목 <?= (int)$it['item_no'] ?> 사진')">
-                  <?php elseif ($canManage): ?>
-                    <label class="btn btn-sm" style="cursor:pointer">📷<input type="file" accept="image/*" style="display:none" onchange="pcUploadPhoto(<?= $iid ?>, 2, this)"></label>
                   <?php else: ?>
                     <span style="color:#94a3b8;font-size:.76rem">-</span>
                   <?php endif; ?>

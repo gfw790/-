@@ -9,8 +9,7 @@ $h = static fn($v): string => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 $canManage = auth_can_manage($user);
 $db = pt_db();
 $year = filter_var($_GET['year'] ?? date('Y'), FILTER_VALIDATE_INT) ?: (int)date('Y');
-$round = (int)($_GET['round'] ?? ((int)date('n') >= 7 ? 2 : 1));
-if (!in_array($round, [1, 2], true)) $round = 1;
+$round = 1; // 휴대용 공구·기구는 연 1회(11월) 정기점검
 $eqId = filter_var($_GET['id'] ?? 0, FILTER_VALIDATE_INT) ?: 0;
 $_SESSION['csm_pt_csrf'] ??= bin2hex(random_bytes(32));
 
@@ -110,9 +109,8 @@ details.meta-acc summary { font-weight: 800; font-size: .88rem; color: #334155; 
 </header>
 
 <div class="wrap">
-  <div class="round-switch">
-    <a class="<?= $round === 1 ? 'active' : '' ?>" href="?round=1&amp;year=<?= $year ?>">1차 점검 (상반기)</a>
-    <a class="<?= $round === 2 ? 'active' : '' ?>" href="?round=2&amp;year=<?= $year ?>">2차 점검 (하반기)</a>
+  <div style="background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;border-radius:10px;padding:9px 12px;font-size:.84rem;font-weight:700;margin-bottom:10px">
+    📅 <?= $year ?>년 정기점검 (연 1회 · 11월 실시)
   </div>
   <input type="search" class="search-box" placeholder="관리번호 또는 공구명 검색 (예: 그라인더, E-HD-07)" oninput="filterCards(this.value)">
   <div class="eq-list" id="eqList">
@@ -160,38 +158,26 @@ function filterCards(q) {
     </div>
   </div>
 
-  <div class="round-switch">
-    <a class="<?= $round === 1 ? 'active' : '' ?>" href="?id=<?= (int)$selectedEq['id'] ?>&amp;round=1&amp;year=<?= $year ?>">1차 점검 (상반기)</a>
-    <a class="<?= $round === 2 ? 'active' : '' ?>" href="?id=<?= (int)$selectedEq['id'] ?>&amp;round=2&amp;year=<?= $year ?>">2차 점검 (하반기)</a>
-  </div>
-
   <details class="meta-acc">
-    <summary>📅 점검일자 · 점검자 · 스티커 · 조치사항 설정 (터치)</summary>
+    <summary>📅 <?= $year ?>년 정기점검일자 · 점검자 · 스티커 · 조치사항 설정</summary>
     <form method="post" action="portable_tools.php">
       <input type="hidden" name="csrf" value="<?= $h($_SESSION['csm_pt_csrf']) ?>">
       <input type="hidden" name="action" value="save_checklist">
       <input type="hidden" name="equipment_id" value="<?= (int)$selectedEq['id'] ?>">
       <input type="hidden" name="year" value="<?= $year ?>">
-      <input type="hidden" name="check1_date" value="<?= $h($selectedEq['check1_date']) ?>" id="h_c1_date">
-      <input type="hidden" name="check1_inspector" value="<?= $h($selectedEq['check1_inspector']) ?>" id="h_c1_insp">
-      <input type="hidden" name="check1_sticker" value="<?= $h($selectedEq['check1_sticker']) ?>" id="h_c1_stk">
-      <input type="hidden" name="check2_date" value="<?= $h($selectedEq['check2_date']) ?>" id="h_c2_date">
-      <input type="hidden" name="check2_inspector" value="<?= $h($selectedEq['check2_inspector']) ?>" id="h_c2_insp">
-      <input type="hidden" name="check2_sticker" value="<?= $h($selectedEq['check2_sticker']) ?>" id="h_c2_stk">
       <div class="meta-fields">
-        <label><?= $round ?>차 점검일자 <input type="date" value="<?= $h($selectedEq['check' . $round . '_date']) ?>" onchange="document.getElementById('h_c<?= $round ?>_date').value=this.value"></label>
-        <label><?= $round ?>차 점검자 <input type="text" value="<?= $h($selectedEq['check' . $round . '_inspector']) ?>" onchange="document.getElementById('h_c<?= $round ?>_insp').value=this.value"></label>
-        <label class="full"><?= $round ?>차 스티커 발부 여부
-          <select onchange="document.getElementById('h_c<?= $round ?>_stk').value=this.value">
-            <option value="발부" <?= $selectedEq['check' . $round . '_sticker'] === '발부' ? 'selected' : '' ?>>발부 완료</option>
-            <option value="미발부" <?= $selectedEq['check' . $round . '_sticker'] !== '발부' ? 'selected' : '' ?>>미발부</option>
+        <label>점검일자 (11월) <input type="date" name="check1_date" value="<?= $h($selectedEq['check1_date']) ?>"></label>
+        <label>점검자 <input type="text" name="check1_inspector" value="<?= $h($selectedEq['check1_inspector']) ?>"></label>
+        <label class="full">점검필증 (스티커) 발부 여부
+          <select name="check1_sticker">
+            <option value="발부" <?= $selectedEq['check1_sticker'] === '발부' ? 'selected' : '' ?>>발부 완료</option>
+            <option value="미발부" <?= $selectedEq['check1_sticker'] !== '발부' ? 'selected' : '' ?>>미발부</option>
           </select>
         </label>
         <label class="full">주요 조치사항 <textarea name="action_note" rows="2"><?= $h($selectedEq['action_note']) ?></textarea></label>
       </div>
       <?php foreach ($selectedItems as $it): $iid = (int)$it['id']; ?>
         <input type="hidden" name="r1[<?= $iid ?>]" id="f_r1_<?= $iid ?>" value="<?= $h($it['round1_result']) ?>">
-        <input type="hidden" name="r2[<?= $iid ?>]" id="f_r2_<?= $iid ?>" value="<?= $h($it['round2_result']) ?>">
       <?php endforeach; ?>
       <?php if ($canManage): ?><button type="submit" class="b-btn green" style="width:100%;justify-content:center;margin-top:10px">설정·조치사항 저장</button><?php endif; ?>
     </form>
@@ -259,7 +245,7 @@ function updateProg() {
   const cards = document.querySelectorAll('.chk-card');
   let done = 0, ph = 0;
   cards.forEach(c => { if (c.dataset.res) done++; if (c.dataset.photo) ph++; });
-  document.getElementById('bProg').textContent = `${ROUND}차 · ${done}/${cards.length} 완료 · 사진 ${ph}장`;
+  document.getElementById('bProg').textContent = `정기점검 · ${done}/${cards.length} 완료 · 사진 ${ph}장`;
 }
 async function setJudge(iid, val) {
   if (!CAN_MANAGE) return;

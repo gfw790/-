@@ -158,8 +158,8 @@ table.chk-tbl td.c { text-align: center; white-space: nowrap; }
             <th style="width:5%">옥내·외</th>
             <th style="width:5%">이중절연</th>
             <th style="width:4%">수량</th>
-            <th style="width:8%">1차 점검/스티커</th>
-            <th style="width:8%">2차 점검/스티커</th>
+            <th style="width:8%"><?= $year ?>년 점검결과</th>
+            <th style="width:8%">스티커 발부</th>
             <th style="width:9%">사진</th>
             <th style="width:7%">비고</th>
           </tr>
@@ -177,8 +177,8 @@ table.chk-tbl td.c { text-align: center; white-space: nowrap; }
             <td><?= $h($eq['indoor_outdoor'] ?: '-') ?></td>
             <td><?= $h($eq['double_insulated'] ?: '-') ?></td>
             <td><?= (int)$eq['qty'] ?></td>
-            <td><?= $h($eq['check1_result'] ?: '-') ?> / <?= $h($eq['check1_sticker']) ?></td>
-            <td><?= $h($eq['check2_result'] ?: '-') ?> / <?= $h($eq['check2_sticker']) ?></td>
+            <td><?= $h($eq['check1_result'] ?: '-') ?></td>
+            <td><?= $h($eq['check1_sticker']) ?></td>
             <td><?php if ($eq['photo_file'] !== ''): ?><img class="reg-photo" src="portable_tools.php?photo=<?= $h($eq['photo_file']) ?>" alt=""><?php else: ?>-<?php endif; ?></td>
             <td><?= $h($eq['remarks'] ?: '') ?></td>
           </tr>
@@ -230,26 +230,19 @@ table.chk-tbl td.c { text-align: center; white-space: nowrap; }
         <thead>
           <tr>
             <th style="width:6%">순번</th>
-            <th style="width:15%">점검부위</th>
-            <th><?= $h($eq['name']) ?> 점검내용</th>
-            <th style="width:7%">구분</th>
-            <th colspan="2" style="width:22%">점 검 결 과</th>
+            <th style="width:16%">점검부위</th>
+            <th><?= $h($eq['name']) ?> 점검내용 (연 1회 정기점검)</th>
+            <th colspan="2" style="width:24%">점 검 결 과</th>
           </tr>
         </thead>
         <tbody>
           <?php foreach ($items as $it): ?>
           <tr>
-            <td class="c" rowspan="2"><?= (int)$it['item_no'] ?></td>
-            <td class="c" rowspan="2"><strong><?= $h($it['category']) ?></strong></td>
-            <td rowspan="2"><?= $h($it['content']) ?></td>
-            <td class="c">1차</td>
+            <td class="c"><?= (int)$it['item_no'] ?></td>
+            <td class="c"><strong><?= $h($it['category']) ?></strong></td>
+            <td><?= $h($it['content']) ?></td>
             <td class="c"><?= $it['round1_result'] === '적정' ? '☑ 적정' : '□ 적정' ?></td>
             <td class="c"><?= $it['round1_result'] === '부적정' ? '☑ 부적정' : '□ 부적정' ?></td>
-          </tr>
-          <tr>
-            <td class="c">2차</td>
-            <td class="c"><?= $it['round2_result'] === '적정' ? '☑ 적정' : '□ 적정' ?></td>
-            <td class="c"><?= $it['round2_result'] === '부적정' ? '☑ 부적정' : '□ 부적정' ?></td>
           </tr>
           <?php endforeach; ?>
         </tbody>
@@ -257,14 +250,9 @@ table.chk-tbl td.c { text-align: center; white-space: nowrap; }
 
       <table class="sign-row-tbl">
         <tr>
-          <th>1차 점검일자</th><td><?= $h($eq['check1_date']) ?></td>
-          <th>1차 점검자</th><td><?= $h($eq['check1_inspector']) ?> &nbsp;&nbsp;&nbsp;&nbsp;(서명)</td>
+          <th>정기점검일자</th><td><?= $h($eq['check1_date']) ?></td>
+          <th>점검자</th><td><?= $h($eq['check1_inspector']) ?> &nbsp;&nbsp;&nbsp;&nbsp;(서명)</td>
           <th>스티커</th><td style="text-align:center"><?= $h($eq['check1_sticker']) ?></td>
-        </tr>
-        <tr>
-          <th>2차 점검일자</th><td><?= $h($eq['check2_date']) ?></td>
-          <th>2차 점검자</th><td><?= $h($eq['check2_inspector']) ?> &nbsp;&nbsp;&nbsp;&nbsp;(서명)</td>
-          <th>스티커</th><td style="text-align:center"><?= $h($eq['check2_sticker']) ?></td>
         </tr>
       </table>
 
@@ -276,8 +264,7 @@ table.chk-tbl td.c { text-align: center; white-space: nowrap; }
       <?php
         $fieldPhotos = [];
         foreach ($items as $it) {
-          if (!empty($it['round1_photo'])) $fieldPhotos[] = ['label' => '1차 #' . $it['item_no'], 'file' => $it['round1_photo']];
-          if (!empty($it['round2_photo'])) $fieldPhotos[] = ['label' => '2차 #' . $it['item_no'], 'file' => $it['round2_photo']];
+          if (!empty($it['round1_photo'])) $fieldPhotos[] = ['label' => '#' . $it['item_no'] . ' ' . $it['category'], 'file' => $it['round1_photo']];
         }
         if (!empty($fieldPhotos)):
       ?>

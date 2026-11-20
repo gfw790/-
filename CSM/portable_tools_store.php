@@ -33,7 +33,7 @@ function pt_db(): PDO
         prev_result TEXT NOT NULL DEFAULT "합격",
         status TEXT NOT NULL DEFAULT "사용 가능",
         photo_file TEXT NOT NULL DEFAULT "",
-        check1_date TEXT NOT NULL DEFAULT "2026-05-07",
+        check1_date TEXT NOT NULL DEFAULT "2026-11-07",
         check1_result TEXT NOT NULL DEFAULT "",
         check1_sticker TEXT NOT NULL DEFAULT "미발부",
         check1_inspector TEXT NOT NULL DEFAULT "김남균",
