@@ -298,7 +298,7 @@ def parse_exam_report(pages: list[dict], doc_type: str) -> dict:
         "소음성난청주의", "소음성난청", "당뇨병의심", "당뇨유질환", "고혈압의심", "고혈압유질환",
         "간장질환주의", "간장질환", "국소 폐섬유화", "무기폐", "심장 비대증", "만성기관지염",
         "폐쇄성 환기장애", "제한성 환기장애", "이상지질혈증주의", "비만질환의심", "복부비만의심",
-        "망상적혈구수 증가", "청력저하", "콜레스테롤", "당뇨전단계", "고혈압관리", "비만관리", "정상",
+        "망상적혈구수 증가", "청력저하", "콜레스테롤", "당뇨전단계", "고혈압관리", "비만관리",
     ]
 
     records = []
@@ -341,12 +341,13 @@ def parse_exam_report(pages: list[dict], doc_type: str) -> dict:
         body_compact = join_words(info["body_words"]).replace(" ", "")
         found_kw = []
         for kw in kw_list:
-            if kw.replace(" ", "") in body_compact and kw not in found_kw:
+            kw_ns = kw.replace(" ", "")
+            if kw_ns in body_compact and not any(kw_ns in prev.replace(" ", "") for prev in found_kw):
                 found_kw.append(kw)
                 if len(found_kw) >= 4:
                     break
         prefix = "특수: " if is_special else "일반: "
-        finding = prefix + (", ".join(found_kw) if found_kw else ("특이소견 없음" if top in ("A", "B") else "OCR 판독 확인 필요"))
+        finding = prefix + (", ".join(found_kw) if found_kw else ("전 항목 정상" if top in ("A", "B") else "OCR 판독 확인 필요"))
         followup = "정상 (사후관리 불필요)" if top in ("A", "B") else ("보호구 착용 지도 및 추적검사 안내" if top != "" else "검진 판정 확인 후 사후관리 입력")
 
         records.append({

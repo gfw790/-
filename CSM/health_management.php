@@ -212,7 +212,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $mFDone = $docType === 'followup_cert' ? ($fDone === 1 ? 1 : (int)$ex['followup_done']) : ($hasNewAbnormal ? $fDone : (($fDone === 1 || (int)$ex['followup_done'] === 1) ? 1 : 0));
                             $updStmt->execute([$mDept, $mDate, $mHosp, $mGen, $mSpec, $mFit, $mRes, $mFind, $mFNote, $mFDone, $now, (int)$ex['id']]);
                         } else {
-                            $insStmt->execute([$year, $wName, $dept ?: '공사부', '비사무직', '일반+특수', '', $eDate ?: date('Y-m-d'), $hosp ?: '근로복지공단 동해병원', $genG ?: '확인필요', $specG ?: '확인필요', $fit ?: '나', $resG ?: '판정확인필요', $find, $fNote, $fDone, $actor, $now, $now]);
+                            $insStmt->execute([$year, $wName, $dept ?: '공사부', '비사무직', '일반+특수', '', $eDate ?: date('Y-m-d'), $hosp ?: '근로복지공단 동해병원', $genG, $specG, $fit ?: '나', $resG ?: '판정확인필요', $find, $fNote, $fDone, $actor, $now, $now]);
                         }
                         $applied++;
                     }
