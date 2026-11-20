@@ -669,6 +669,13 @@ function csm_score_summary(?PDO $db, array $catalog, int $year): array
                 $hasEvidence = $items[$code]['evidence_count'] > 0;
                 $assessment = $items[$code]['state'] === 'assessed' ? $items[$code] : null;
             }
+            if ($code === '2.6.2') {
+                require_once __DIR__ . '/portable_tools_store.php';
+                $items[$code] = csm_pt_score_summary($year, (float)$criterion['points']);
+                $earned = $items[$code]['earned'];
+                $hasEvidence = $items[$code]['evidence_count'] > 0;
+                $assessment = $items[$code]['state'] === 'assessed' ? $items[$code] : null;
+            }
             if ($code === '2.6.3') {
                 require_once __DIR__ . '/hazardous_machinery_store.php';
                 $items[$code] = csm_hm_score_summary($year, (float)$criterion['points']);
