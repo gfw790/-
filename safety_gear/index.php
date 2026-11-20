@@ -70,9 +70,9 @@ if (!auth_can_manage($user)) {
         a { color: inherit; }
 
         .page {
-            width: calc(100vw - 28px);
-            max-width: none;
-            margin: 14px auto 28px;
+            max-width: 1380px;
+            width: calc(100vw - 32px);
+            margin: 18px auto 36px;
             display: block;
         }
 
@@ -80,8 +80,43 @@ if (!auth_can_manage($user)) {
             background: var(--panel);
             border: 1px solid var(--line);
             border-radius: 18px;
-            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
-            padding: 18px;
+            box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+            padding: 24px 26px;
+        }
+
+        .sg-header {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 14px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #e2e8f0;
+            margin-bottom: 16px;
+        }
+        .sg-header-kicker {
+            font-size: 12px;
+            font-weight: 800;
+            color: var(--accent);
+            letter-spacing: 0.2px;
+            margin-bottom: 4px;
+        }
+        .sg-header h1 {
+            font-size: 24px;
+            font-weight: 800;
+            letter-spacing: -0.3px;
+        }
+        .sg-nav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 7px;
+            align-items: center;
+        }
+        .sg-nav .button, .sg-nav button {
+            padding: 8px 13px;
+            font-size: 13px;
+            font-weight: 700;
+            border-radius: 10px;
         }
 
         h1, h2, h3 { margin: 0; }
@@ -366,33 +401,48 @@ if (!auth_can_manage($user)) {
         .check-options {
             display: flex;
             flex-wrap: wrap;
-            gap: 8px 18px;
+            gap: 10px;
             min-height: 28px;
-            padding: 4px 0;
+            padding: 6px 0 2px;
         }
 
         .check-option {
             display: inline-flex;
             align-items: center;
-            gap: 2px;
-            padding: 2px 0;
-            font-size: 20px;
-            line-height: 1.5;
+            gap: 7px;
+            padding: 7px 12px 7px 8px;
+            border: 1.5px solid #dbe2e8;
+            border-radius: 11px;
+            background: #ffffff;
+            font-size: 15px;
+            font-weight: 600;
+            line-height: 1.3;
+            color: #1e293b;
             cursor: pointer;
+            transition: all 0.14s ease;
+            user-select: none;
+        }
+
+        .check-option:hover {
+            border-color: #5eead4;
+            background: #f0fdfa;
         }
 
         .check-option input[type="checkbox"] {
             margin: 0;
+            width: 16px;
+            height: 16px;
+            accent-color: #0f766e;
+            cursor: pointer;
         }
 
         .gear-icon {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: 30px;
-            height: 30px;
-            margin-right: 4px;
-            border-radius: 8px;
+            width: 28px;
+            height: 28px;
+            border-radius: 7px;
             background: #f0fdfa;
             border: 1px solid #ccfbf1;
             color: #0f766e;
@@ -400,9 +450,17 @@ if (!auth_can_manage($user)) {
         }
 
         .gear-icon svg {
-            width: 22px;
-            height: 22px;
+            width: 20px;
+            height: 20px;
             display: block;
+        }
+
+        .check-option:has(input:checked) {
+            border-color: #0f766e;
+            background: #ecfdf5;
+            color: #0f4c43;
+            font-weight: 800;
+            box-shadow: 0 2px 6px rgba(15, 118, 110, 0.12);
         }
 
         .check-option:has(input:checked) .gear-icon {
@@ -411,51 +469,59 @@ if (!auth_can_manage($user)) {
             color: #ffffff;
         }
 
-        .check-option:has(input:checked) {
-            color: #115e59;
-            font-weight: 700;
-        }
-
         .employee-group {
             width: 100%;
-            padding: 3px 0 7px;
+            padding: 6px 0 8px;
+            border-bottom: 1px dashed #e2e8f0;
+        }
+        .employee-group:last-child {
+            border-bottom: 0;
+            padding-bottom: 0;
         }
 
         .employee-group-title {
-            margin-bottom: 4px;
-            color: #475569;
-            font-size: 20px;
+            margin-bottom: 8px;
+            color: #334155;
+            font-size: 13px;
             font-weight: 800;
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 10px;
+            border-radius: 999px;
+            background: #e2e8f0;
         }
 
         .employee-group-options {
             display: flex;
             flex-wrap: wrap;
-            gap: 10px 30px;
+            gap: 8px;
         }
 
         .selection-card {
             padding: 16px 18px;
-            border: 1px solid #cbd5e1;
+            border: 1px solid #dbe2e8;
             border-radius: 14px;
             background: #f8fafc;
         }
 
         .selection-card > .row:first-child {
-            padding-bottom: 8px;
+            padding-bottom: 10px;
+            margin-bottom: 6px;
             border-bottom: 1px solid #e2e8f0;
         }
 
         .selection-card > .row:first-child > label:first-child {
-            font-size: 20px;
+            font-size: 16px;
             font-weight: 800;
+            color: #0f172a;
         }
 
         .compact-button {
             min-height: 0;
-            padding: 4px 8px;
-            border-radius: 7px;
+            padding: 5px 10px;
+            border-radius: 8px;
             font-size: 12px;
+            font-weight: 700;
             line-height: 1.2;
         }
 
@@ -467,19 +533,22 @@ if (!auth_can_manage($user)) {
             width: 100%;
             border-collapse: collapse;
             background: #fff;
+            border-radius: 10px;
+            overflow: hidden;
         }
 
         .assignment-preview th,
         .assignment-preview td {
-            padding: 11px 12px;
-            border: 1px solid #cbd5e1;
+            padding: 10px 12px;
+            border: 1px solid #dbe2e8;
             text-align: left;
-            font-size: 16px;
+            font-size: 14px;
         }
 
         .assignment-preview th {
-            background: #e2e8f0;
+            background: #f1f5f9;
             font-weight: 800;
+            color: #1e293b;
         }
 
         .advanced-row {
@@ -521,25 +590,27 @@ if (!auth_can_manage($user)) {
 <body>
     <div class="page">
         <section class="panel">
-            <div class="row" style="justify-content:flex-end; margin-bottom:8px;">
-                <a class="button secondary" href="/CSM/area.php?group=2&amp;section=2.6">위험관리 2.6</a>
-                <a class="button secondary" href="/safety_gear/monthly_receipt_print.php">월별 일괄출력</a>
+            <div class="sg-header">
+                <div>
+                    <div class="sg-header-kicker">CSM 2.6.1 · 개인 안전보호구 지급·관리</div>
+                    <h1>보호구 지급관리</h1>
+                    <p class="lead">보호구와 지급 대상자를 선택한 뒤 <strong>선택 적용 → 저장</strong>하세요. 내부 관리번호는 자동 생성됩니다.</p>
+                </div>
+                <nav class="sg-nav">
+                    <a class="button" href="/safety_gear/mobile.php">📱 모바일 지급 화면</a>
+                    <a class="button ghost" href="/safety_gear/status.php">보호구 현황</a>
+                    <a class="button secondary" href="/safety_gear/report.php">이력 조회</a>
+                    <a class="button secondary" href="/safety_gear/receipt_batch_print.php">수령 확인서</a>
+                    <a class="button secondary" href="/safety_gear/monthly_receipt_print.php">월별 일괄출력</a>
+                    <button id="showAdvancedButton" type="button" class="secondary" aria-expanded="false">상세 기능 열기</button>
+                    <a class="button secondary" href="/CSM/area.php?group=2&amp;section=2.6">← 위험관리 2.6</a>
+                </nav>
             </div>
-
-            <h1>보호구 지급관리</h1>
-            <p class="lead">보호구와 지급 대상자를 선택한 뒤 저장하세요. 내부 관리번호는 저장할 때 자동으로 생성됩니다.</p>
 
             <div class="workflow" aria-label="보호구 지급 순서">
-                <div class="workflow-step"><strong>1. 보호구 선택</strong><span>종류와 품명을 입력합니다.</span></div>
-                <div class="workflow-step"><strong>2. 지급 대상 선택</strong><span>직원과 지급일을 선택합니다.</span></div>
-                <div class="workflow-step"><strong>3. 저장</strong><span>저장 버튼으로 지급 내역을 등록합니다.</span></div>
-            </div>
-
-            <div class="row" style="margin-top:14px;">
-                <a class="button ghost" href="/safety_gear/status.php">보호구 현황</a>
-                <a class="button secondary" href="/safety_gear/report.php">이력 조회</a>
-                <a class="button secondary" href="/safety_gear/receipt_batch_print.php">수령 확인서 출력</a>
-                <button id="showAdvancedButton" type="button" class="secondary" aria-expanded="false">상세 기능 열기</button>
+                <div class="workflow-step"><strong>1. 보호구 선택</strong><span>지급할 보호구 종류를 선택합니다.</span></div>
+                <div class="workflow-step"><strong>2. 지급 대상 선택</strong><span>수령할 직원과 지급일을 선택합니다.</span></div>
+                <div class="workflow-step"><strong>3. 선택 적용 · 저장</strong><span>예정 목록 확인 후 저장합니다.</span></div>
             </div>
 
             <div class="grid" style="margin-top:16px;">
