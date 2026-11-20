@@ -683,6 +683,13 @@ function csm_score_summary(?PDO $db, array $catalog, int $year): array
                 $hasEvidence = $items[$code]['evidence_count'] > 0;
                 $assessment = $items[$code]['state'] === 'assessed' ? $items[$code] : null;
             }
+            if (in_array($code, ['3.1.1', '3.1.2', '3.1.3', '3.1.4'], true)) {
+                require_once __DIR__ . '/workplace_inspection_store.php';
+                $items[$code] = csm_wi_score_summary($year, $code, (float)$criterion['points']);
+                $earned = $items[$code]['earned'];
+                $hasEvidence = $items[$code]['evidence_count'] > 0;
+                $assessment = $items[$code]['state'] === 'assessed' ? $items[$code] : null;
+            }
             if (in_array($code, ['4.1.1', '4.1.2', '4.1.3'], true)) {
                 require_once __DIR__ . '/waste_management_store.php';
                 $items[$code] = csm_wm_score_summary($year, $code, (float)$criterion['points']);
