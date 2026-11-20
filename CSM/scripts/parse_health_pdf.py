@@ -24,8 +24,9 @@ import pymupdf
 
 
 PS_OCR_SCRIPT = r"""
-param([string]$ListFile)
+param([string]$ListFile, [string]$OutFile)
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
 $null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType=WindowsRuntime]
 $null = [Windows.Globalization.Language, Windows.Globalization, ContentType=WindowsRuntime]
@@ -84,7 +85,8 @@ foreach ($imgPath in $paths) {
     $pagesOut += @{ text = ($lines -join "`n"); w = $pw; h = $ph; words = $words }
     $stream.Dispose()
 }
-$pagesOut | ConvertTo-Json -Depth 5 -Compress
+$jsonOut = $pagesOut | ConvertTo-Json -Depth 5 -Compress
+[System.IO.File]::WriteAllText($OutFile, $jsonOut, [System.Text.UTF8Encoding]::new($false))
 """
 
 
@@ -94,7 +96,20 @@ def extract_pages(pdf_path: str) -> list[dict]:
     scan_indices = []
     for i, page in enumerate(doc):
         t = (page.get_text("text") or "").strip()
-        pages.append({"text": t, "words": []})
+        w_list = []
+        if len(t) >= 30:
+            rect = page.rect
+            pw = float(rect.width) or 1.0
+            ph = float(rect.height) or 1.0
+            for x0, y0, x1, y1, wt, *_ in page.get_text("words"):
+                w_list.append({
+                    "t": wt,
+                    "x": round(x0 / pw, 4),
+                    "y": round(y0 / ph, 4),
+                    "w": round((x1 - x0) / pw, 4),
+                    "h": round((y1 - y0) / ph, 4),
+                })
+        pages.append({"text": t, "words": w_list})
         if len(t) < 30:
             scan_indices.append(i)
 
@@ -105,7 +120,7 @@ def extract_pages(pdf_path: str) -> list[dict]:
     with tempfile.TemporaryDirectory(prefix="hmg_ocr_") as tmp:
         img_paths = []
         for idx in scan_indices:
-            pix = doc[idx].get_pixmap(dpi=180)
+            pix = doc[idx].get_pixmap(dpi=160)
             p = os.path.join(tmp, f"page_{idx:03d}.png")
             pix.save(p)
             img_paths.append(p)
@@ -113,6 +128,7 @@ def extract_pages(pdf_path: str) -> list[dict]:
 
         list_file = os.path.join(tmp, "files.txt")
         ps_file = os.path.join(tmp, "ocr.ps1")
+        out_file = os.path.join(tmp, "ocr_out.json")
         with open(list_file, "w", encoding="utf-8") as f:
             f.write("\n".join(img_paths))
         with open(ps_file, "w", encoding="utf-8") as f:
@@ -122,16 +138,17 @@ def extract_pages(pdf_path: str) -> list[dict]:
         if not os.path.isfile(ps_exe):
             ps_exe = "powershell"
         proc = subprocess.run(
-            [ps_exe, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps_file, "-ListFile", list_file],
+            [ps_exe, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps_file, "-ListFile", list_file, "-OutFile", out_file],
             capture_output=True,
             text=True,
             encoding="utf-8",
             errors="replace",
             timeout=240,
         )
-        if proc.returncode != 0:
+        if proc.returncode != 0 or not os.path.isfile(out_file):
             raise RuntimeError(f"Windows OCR failed: {proc.stderr.strip()}")
-        raw_out = proc.stdout.strip()
+        with open(out_file, "r", encoding="utf-8") as f:
+            raw_out = f.read().strip()
         if raw_out:
             ocr_list = json.loads(raw_out)
             if isinstance(ocr_list, dict):
