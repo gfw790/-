@@ -53,6 +53,7 @@ if (!in_array($tab, $validTabs, true)) $tab = 'checkup';
 
 $flashSuccess = '';
 $flashError = '';
+$pdfPreview = $_SESSION['hmg_pdf_preview'] ?? null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!hash_equals($csrf, (string)($_POST['csrf'] ?? ''))) {
@@ -94,6 +95,136 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                        ->execute([trim((string)($_POST['followup_note'] ?? '')), isset($_POST['followup_done']) ? 1 : 0, $now, $cid, $year]);
                     $flashSuccess = '사후관리 조치 이행 내역이 저장되었습니다.';
                 }
+            } elseif ($action === 'parse_checkup_pdf') {
+                $f = $_FILES['checkup_pdf'] ?? null;
+                if (!$f || ($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_uploaded_file((string)($f['tmp_name'] ?? ''))) {
+                    throw new InvalidArgumentException('분석할 건강검진/사후관리 PDF 파일을 선택해 주세요.');
+                }
+                if ((int)($f['size'] ?? 0) > 25 * 1024 * 1024) {
+                    throw new InvalidArgumentException('25MB 이하의 PDF 파일만 분석할 수 있습니다.');
+                }
+                $mime = (new finfo(FILEINFO_MIME_TYPE))->file((string)$f['tmp_name']);
+                if ($mime !== 'application/pdf') {
+                    throw new InvalidArgumentException('PDF 파일만 업로드할 수 있습니다.');
+                }
+                $tmpDir = __DIR__ . '/storage/tmp_pdf_parse';
+                if (!is_dir($tmpDir)) mkdir($tmpDir, 0750, true);
+                $token = bin2hex(random_bytes(12));
+                $tmpPdf = $tmpDir . '/' . $token . '.pdf';
+                $tmpJson = $tmpDir . '/' . $token . '.json';
+                if (!move_uploaded_file((string)$f['tmp_name'], $tmpPdf)) {
+                    throw new RuntimeException('임시 PDF 저장에 실패했습니다.');
+                }
+                $script = __DIR__ . '/scripts/parse_health_pdf.py';
+                $cmd = 'python ' . escapeshellarg($script) . ' --input ' . escapeshellarg($tmpPdf) . ' --output ' . escapeshellarg($tmpJson) . ' 2>&1';
+                $outLines = [];
+                $exitCode = 0;
+                @set_time_limit(240);
+                exec($cmd, $outLines, $exitCode);
+                if ($exitCode !== 0 || !is_file($tmpJson)) {
+                    @unlink($tmpPdf);
+                    throw new RuntimeException('PDF 자동 분석에 실패했습니다: ' . mb_substr(implode(' ', $outLines), 0, 220));
+                }
+                $parsed = json_decode((string)file_get_contents($tmpJson), true);
+                @unlink($tmpJson);
+                if (!is_array($parsed)) {
+                    @unlink($tmpPdf);
+                    throw new RuntimeException('PDF 분석 결과 파싱에 실패했습니다.');
+                }
+                $origName = mb_substr(basename(str_replace('\\', '/', (string)$f['name'])), 0, 180);
+                $pdfPreview = [
+                    'token' => $token,
+                    'tmp_pdf' => $tmpPdf,
+                    'orig_name' => $origName,
+                    'year' => $year,
+                    'doc_type' => (string)($parsed['doc_type'] ?? 'general_report'),
+                    'doc_label' => (string)($parsed['doc_label'] ?? '건강검진 PDF'),
+                    'exam_date' => (string)($parsed['exam_date'] ?? ''),
+                    'hospital' => (string)($parsed['hospital'] ?? ''),
+                    'page_count' => (int)($parsed['page_count'] ?? 0),
+                    'records' => is_array($parsed['records'] ?? null) ? $parsed['records'] : [],
+                ];
+                $_SESSION['hmg_pdf_preview'] = $pdfPreview;
+                $flashSuccess = sprintf('[%s] %d페이지 분석 완료 — %d명 추출되었습니다. 아래 미리보기를 확인 후 [일괄 반영]을 눌러주세요.', $pdfPreview['doc_label'], $pdfPreview['page_count'], count($pdfPreview['records']));
+            } elseif ($action === 'apply_checkup_pdf') {
+                $preview = $_SESSION['hmg_pdf_preview'] ?? null;
+                $rowsIn = $_POST['rows'] ?? [];
+                $attachEv = isset($_POST['attach_evidence']);
+                if (!is_array($rowsIn) || !$rowsIn) {
+                    throw new InvalidArgumentException('반영할 행이 없습니다.');
+                }
+                $docType = (string)($_POST['doc_type'] ?? ($preview['doc_type'] ?? 'general_report'));
+                $applied = 0;
+                $db->beginTransaction();
+                $findStmt = $db->prepare('SELECT * FROM hmg_checkups WHERE year=? AND worker_name=? LIMIT 1');
+                $updStmt = $db->prepare('UPDATE hmg_checkups SET dept_name=?, exam_date=?, hospital=?, general_grade=?, special_grade=?, work_fitness=?, result_grade=?, finding_summary=?, followup_note=?, followup_done=?, updated_at=? WHERE id=?');
+                $insStmt = $db->prepare('INSERT INTO hmg_checkups (year, worker_name, dept_name, job_type, exam_type, hazard_factors, exam_date, hospital, general_grade, special_grade, work_fitness, result_grade, finding_summary, followup_note, followup_done, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                foreach ($rowsIn as $r) {
+                    if (empty($r['include'])) continue;
+                    $wName = trim((string)($r['worker_name'] ?? ''));
+                    if ($wName === '') continue;
+                    $dept = trim((string)($r['dept_name'] ?? ''));
+                    $genG = trim((string)($r['general_grade'] ?? ''));
+                    $specG = trim((string)($r['special_grade'] ?? ''));
+                    $fit = trim((string)($r['work_fitness'] ?? ''));
+                    $resG = trim((string)($r['result_grade'] ?? ''));
+                    $eDate = trim((string)($r['exam_date'] ?? ''));
+                    $hosp = trim((string)($r['hospital'] ?? ''));
+                    $find = trim((string)($r['finding_summary'] ?? ''));
+                    $fNote = trim((string)($r['followup_note'] ?? ''));
+                    $fDone = !empty($r['followup_done']) ? 1 : 0;
+
+                    $findStmt->execute([$year, $wName]);
+                    $ex = $findStmt->fetch();
+                    if ($ex) {
+                        $mDept = $dept !== '' ? $dept : (string)$ex['dept_name'];
+                        $mDate = ($docType !== 'followup_cert' && $eDate !== '') ? $eDate : (string)$ex['exam_date'];
+                        $mHosp = ($docType !== 'followup_cert' && $hosp !== '') ? $hosp : (string)$ex['hospital'];
+                        $mGen = $genG !== '' ? $genG : (string)$ex['general_grade'];
+                        $mSpec = $specG !== '' ? $specG : (string)$ex['special_grade'];
+                        $mFit = ($fit === '나' || $fit === '다' || $fit === '라' || (string)$ex['work_fitness'] === '') ? ($fit ?: (string)$ex['work_fitness']) : (string)$ex['work_fitness'];
+                        $mRes = $resG !== '' ? $resG : (string)$ex['result_grade'];
+                        $mFind = (string)$ex['finding_summary'];
+                        if ($find !== '' && !str_contains($mFind, $find)) {
+                            $mFind = $mFind !== '' ? ($mFind . ' / ' . $find) : $find;
+                        }
+                        $mFNote = (string)$ex['followup_note'];
+                        if ($fNote !== '' && !str_contains($mFNote, $fNote)) {
+                            $mFNote = ($docType === 'followup_cert' || $mFNote === '') ? ($mFNote !== '' ? $fNote . ' / ' . $mFNote : $fNote) : $mFNote;
+                        }
+                        $mFDone = ($fDone === 1 || (int)$ex['followup_done'] === 1) ? 1 : 0;
+                        $updStmt->execute([$mDept, $mDate, $mHosp, $mGen, $mSpec, $mFit, $mRes, $mFind, $mFNote, $mFDone, $now, (int)$ex['id']]);
+                    } else {
+                        $insStmt->execute([$year, $wName, $dept ?: '공사부', '비사무직', '일반+특수', '', $eDate ?: date('Y-m-d'), $hosp ?: '근로복지공단 동해병원', $genG ?: 'A', $specG ?: 'A', $fit ?: '가', $resG ?: '정상(A/B)', $find, $fNote, $fDone, $actor, $now, $now]);
+                    }
+                    $applied++;
+                }
+                $db->commit();
+
+                if ($attachEv && is_array($preview) && !empty($preview['tmp_pdf']) && is_file((string)$preview['tmp_pdf'])) {
+                    $evDir = hmg_evidence_dir();
+                    if (!is_dir($evDir)) mkdir($evDir, 0750, true);
+                    $stored = bin2hex(random_bytes(20)) . '.pdf';
+                    $dest = $evDir . '/' . $stored;
+                    $fSize = (int)filesize((string)$preview['tmp_pdf']);
+                    if (@rename((string)$preview['tmp_pdf'], $dest) || (@copy((string)$preview['tmp_pdf'], $dest) && @unlink((string)$preview['tmp_pdf']))) {
+                        $evKind = $docType === 'followup_cert' ? 'followup' : 'checkup_result';
+                        $db->prepare('INSERT INTO hmg_evidence (year, item_code, kind, original_name, stored_name, mime, size, note, uploaded_by, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                           ->execute([$year, '2.8.1', $evKind, (string)$preview['orig_name'], $stored, 'application/pdf', $fSize, 'PDF 자동분석 업로드 (' . $applied . '명 반영)', $actor, $now]);
+                    }
+                } elseif (is_array($preview) && !empty($preview['tmp_pdf']) && is_file((string)$preview['tmp_pdf'])) {
+                    @unlink((string)$preview['tmp_pdf']);
+                }
+                unset($_SESSION['hmg_pdf_preview']);
+                $pdfPreview = null;
+                $flashSuccess = sprintf('총 %d명의 건강검진·사후관리 내역이 일괄 반영되었습니다.%s', $applied, $attachEv ? ' (원본 PDF도 2.8.1 증빙에 자동 첨부 완료)' : '');
+            } elseif ($action === 'cancel_checkup_pdf') {
+                if (is_array($pdfPreview) && !empty($pdfPreview['tmp_pdf']) && is_file((string)$pdfPreview['tmp_pdf'])) {
+                    @unlink((string)$pdfPreview['tmp_pdf']);
+                }
+                unset($_SESSION['hmg_pdf_preview']);
+                $pdfPreview = null;
+                $flashSuccess = 'PDF 분석 미리보기를 취소했습니다.';
             } elseif ($action === 'delete_checkup') {
                 $db->prepare('DELETE FROM hmg_checkups WHERE id=? AND year=?')->execute([(int)($_POST['id'] ?? 0), $year]);
                 $flashSuccess = '건강검진 기록이 삭제되었습니다.';
@@ -505,6 +636,73 @@ function hmg_render_ev(string $code, string $tabName, int $year, array $items, a
         <span>✅ 사후관리 조치·상담 완료: <strong style="color:var(--ok);"><?= $cntDone ?> / <?= count($checkups) ?>명</strong></span>
       </div>
     </section>
+
+    <?php if ($canManage): ?>
+    <section class="card" style="border-color:#93c5fd;">
+      <div class="card-head" style="margin-bottom:10px;padding-bottom:8px;">
+        <div>
+          <h3>📄 건강검진·사후관리 PDF 자동 분석 및 일괄 반영 (로컬 OCR · 외부 전송 없음)</h3>
+          <p class="sub">병원에서 받은 <strong>사후관리 소견서(일반/특수 PDF)</strong> 또는 <strong>사후관리 조치 확인서 PDF</strong>를 올리면 서버 내부에서 자동 판독하여 미리보기 후 한 번에 반영합니다.</p>
+        </div>
+      </div>
+      <form method="post" enctype="multipart/form-data" class="form-row" onsubmit="this.querySelector('button[type=submit]').textContent='⏳ 로컬 OCR 분석 중... (10~30초 소요)';">
+        <input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="action" value="parse_checkup_pdf"><input type="hidden" name="tab" value="checkup">
+        <div class="field" style="flex:1;min-width:260px;">
+          <input type="file" name="checkup_pdf" accept=".pdf,application/pdf" required>
+        </div>
+        <button type="submit" class="btn primary">🔍 PDF 자동 분석 (미리보기)</button>
+      </form>
+
+      <?php if (is_array($pdfPreview) && (int)($pdfPreview['year'] ?? 0) === $year): ?>
+      <div style="margin-top:14px;padding-top:14px;border-top:2px dashed #93c5fd;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+          <div>
+            <strong>✅ 분석 완료: <?= $e($pdfPreview['orig_name']) ?></strong>
+            <span class="badge"><?= $e($pdfPreview['doc_label']) ?></span>
+            <span class="sub">추출 인원 <?= count($pdfPreview['records']) ?>명 · 오인식된 글자가 있으면 아래에서 바로 수정 후 [일괄 반영]을 누르세요.</span>
+          </div>
+          <form method="post" style="display:inline;">
+            <input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="action" value="cancel_checkup_pdf"><input type="hidden" name="tab" value="checkup">
+            <button type="submit" class="btn sm ghost">취소</button>
+          </form>
+        </div>
+        <form method="post">
+          <input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="action" value="apply_checkup_pdf"><input type="hidden" name="tab" value="checkup">
+          <input type="hidden" name="doc_type" value="<?= $e($pdfPreview['doc_type']) ?>">
+          <div class="tbl-wrap" style="max-height:420px;overflow:auto;">
+            <table>
+              <thead><tr><th class="ctr">반영</th><th>성명</th><th>부서</th><th>일반</th><th>특수</th><th>적합</th><th>주요 소견</th><th>사후관리 조치</th><th class="ctr">완료</th></tr></thead>
+              <tbody>
+                <?php foreach ($pdfPreview['records'] as $idx => $pr): ?>
+                <tr>
+                  <td class="ctr"><input type="checkbox" name="rows[<?= $idx ?>][include]" value="1" checked></td>
+                  <td><input type="text" name="rows[<?= $idx ?>][worker_name]" value="<?= $e($pr['worker_name']) ?>" style="width:76px;padding:4px 6px;"></td>
+                  <td><input type="text" name="rows[<?= $idx ?>][dept_name]" value="<?= $e($pr['dept_name']) ?>" style="width:100px;padding:4px 6px;"></td>
+                  <td><input type="text" name="rows[<?= $idx ?>][general_grade]" value="<?= $e($pr['general_grade']) ?>" style="width:52px;padding:4px 6px;"></td>
+                  <td><input type="text" name="rows[<?= $idx ?>][special_grade]" value="<?= $e($pr['special_grade']) ?>" style="width:70px;padding:4px 6px;"></td>
+                  <td><input type="text" name="rows[<?= $idx ?>][work_fitness]" value="<?= $e($pr['work_fitness']) ?>" style="width:36px;padding:4px 6px;"></td>
+                  <td>
+                    <input type="hidden" name="rows[<?= $idx ?>][result_grade]" value="<?= $e($pr['result_grade']) ?>">
+                    <input type="hidden" name="rows[<?= $idx ?>][exam_date]" value="<?= $e($pr['exam_date']) ?>">
+                    <input type="hidden" name="rows[<?= $idx ?>][hospital]" value="<?= $e($pr['hospital']) ?>">
+                    <input type="text" name="rows[<?= $idx ?>][finding_summary]" value="<?= $e($pr['finding_summary']) ?>" style="width:220px;padding:4px 6px;">
+                  </td>
+                  <td><input type="text" name="rows[<?= $idx ?>][followup_note]" value="<?= $e($pr['followup_note']) ?>" style="width:220px;padding:4px 6px;"></td>
+                  <td class="ctr"><input type="checkbox" name="rows[<?= $idx ?>][followup_done]" value="1" <?= !empty($pr['followup_done']) ? 'checked' : '' ?>></td>
+                </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+          <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+            <label style="font-size:13px;font-weight:700;"><input type="checkbox" name="attach_evidence" value="1" checked> 이 PDF 원본 파일도 2.8.1 증빙 자료에 자동 첨부하기</label>
+            <button type="submit" class="btn primary">✅ 선택한 인원 관리대장에 일괄 반영</button>
+          </div>
+        </form>
+      </div>
+      <?php endif; ?>
+    </section>
+    <?php endif; ?>
 
     <section class="card">
       <div class="card-head">
