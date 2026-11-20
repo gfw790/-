@@ -117,10 +117,10 @@ if ($mode === 'checkup') {
     </div>
 
     <?php if ($mode === 'checkup'): ?>
-      <table class="data-tbl"><thead><tr><th>No</th><th>성명</th><th>근무구분</th><th>검진구분</th><th>유해인자</th><th>검진일</th><th>검진기관</th><th>판정</th><th>사후관리</th></tr></thead><tbody>
+      <table class="data-tbl"><thead><tr><th style="width:24px;">No</th><th style="width:70px;">부서/공정</th><th style="width:48px;">성명</th><th style="width:44px;">일반</th><th style="width:62px;">특수</th><th style="width:32px;">적합</th><th>주요 검진소견 및 권고</th><th style="width:220px;">사후관리 조치 이행</th><th style="width:44px;">상태</th></tr></thead><tbody>
         <?php if (!$rows): ?><tr><td colspan="9" class="ctr" style="padding:24px;">등록된 건강검진 기록이 없습니다.</td></tr>
         <?php else: foreach ($rows as $i => $r): ?>
-          <tr><td class="ctr"><?= $i+1 ?></td><td class="ctr"><strong><?= $e($r['worker_name']) ?></strong></td><td class="ctr"><?= $e($r['job_type']) ?></td><td class="ctr"><?= $e($r['exam_type']) ?></td><td><?= $e($r['hazard_factors']) ?></td><td class="ctr"><?= $e($r['exam_date']) ?></td><td><?= $e($r['hospital']) ?></td><td class="ctr"><?= $e($r['result_grade']) ?></td><td><?= $e($r['followup_note']) ?></td></tr>
+          <tr><td class="ctr"><?= $i+1 ?></td><td><?= $e($r['dept_name'] ?? '') ?></td><td class="ctr"><strong><?= $e($r['worker_name']) ?></strong></td><td class="ctr"><?= $e($r['general_grade'] ?? '') ?></td><td class="ctr"><?= $e($r['special_grade'] ?? '') ?></td><td class="ctr"><?= $e($r['work_fitness'] ?? '가') ?></td><td><?= $e(($r['finding_summary'] ?? '') ?: $r['hazard_factors']) ?></td><td><?= $e($r['followup_note']) ?></td><td class="ctr"><?= !empty($r['followup_done']) ? '완료' : '추적' ?></td></tr>
         <?php endforeach; endif; ?>
       </tbody></table>
     <?php elseif ($mode === 'env'): ?>

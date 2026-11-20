@@ -68,18 +68,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($action === 'save_checkup') {
                 $name = trim((string)($_POST['worker_name'] ?? ''));
                 if ($name === '') throw new InvalidArgumentException('근로자 성명을 입력해 주세요.');
-                $db->prepare('INSERT INTO hmg_checkups (year, worker_name, job_type, exam_type, hazard_factors, exam_date, hospital, result_grade, followup_note, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                $db->prepare('INSERT INTO hmg_checkups (year, worker_name, dept_name, job_type, exam_type, hazard_factors, exam_date, hospital, general_grade, special_grade, work_fitness, result_grade, finding_summary, followup_note, followup_done, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
                    ->execute([
-                       $year, $name, trim((string)($_POST['job_type'] ?? '비사무직')),
+                       $year, $name,
+                       trim((string)($_POST['dept_name'] ?? '공사부')),
+                       trim((string)($_POST['job_type'] ?? '비사무직')),
                        trim((string)($_POST['exam_type'] ?? '일반+특수')),
                        trim((string)($_POST['hazard_factors'] ?? '')),
                        trim((string)($_POST['exam_date'] ?? '')),
-                       trim((string)($_POST['hospital'] ?? '')),
+                       trim((string)($_POST['hospital'] ?? '근로복지공단 동해병원')),
+                       trim((string)($_POST['general_grade'] ?? 'A')),
+                       trim((string)($_POST['special_grade'] ?? 'A')),
+                       trim((string)($_POST['work_fitness'] ?? '가')),
                        trim((string)($_POST['result_grade'] ?? '정상(A/B)')),
+                       trim((string)($_POST['finding_summary'] ?? '')),
                        trim((string)($_POST['followup_note'] ?? '')),
+                       isset($_POST['followup_done']) ? 1 : 0,
                        $actor, $now, $now,
                    ]);
-                $flashSuccess = '건강검진 기록이 등록되었습니다.';
+                $flashSuccess = '건강검진·사후관리 기록이 등록되었습니다.';
+            } elseif ($action === 'update_followup') {
+                $cid = (int)($_POST['id'] ?? 0);
+                if ($cid > 0) {
+                    $db->prepare('UPDATE hmg_checkups SET followup_note=?, followup_done=?, updated_at=? WHERE id=? AND year=?')
+                       ->execute([trim((string)($_POST['followup_note'] ?? '')), isset($_POST['followup_done']) ? 1 : 0, $now, $cid, $year]);
+                    $flashSuccess = '사후관리 조치 이행 내역이 저장되었습니다.';
+                }
             } elseif ($action === 'delete_checkup') {
                 $db->prepare('DELETE FROM hmg_checkups WHERE id=? AND year=?')->execute([(int)($_POST['id'] ?? 0), $year]);
                 $flashSuccess = '건강검진 기록이 삭제되었습니다.';
@@ -196,7 +210,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$checkups = $db->prepare('SELECT * FROM hmg_checkups WHERE year=? ORDER BY exam_date DESC, id DESC');
+$checkups = $db->prepare('SELECT * FROM hmg_checkups WHERE year=? ORDER BY id ASC');
 $checkups->execute([$year]);
 $checkups = $checkups->fetchAll();
 
@@ -470,35 +484,111 @@ function hmg_render_ev(string $code, string $tabName, int $year, array $items, a
     <a class="tab-link <?= $tab === 'evidence' ? 'active' : '' ?>" href="?year=<?= $year ?>&amp;tab=evidence">📎 2.8 통합 증빙·점수</a>
   </nav>
 
-  <?php if ($tab === 'checkup'): ?>
-    <?php if ($canManage): ?>
+  <?php if ($tab === 'checkup'):
+    $cntD = count(array_filter($checkups, static fn($r) => str_contains((string)$r['result_grade'], '유소견')));
+    $cntC = count(array_filter($checkups, static fn($r) => str_contains((string)$r['result_grade'], '요관찰')));
+    $cntDone = count(array_filter($checkups, static fn($r) => (int)($r['followup_done'] ?? 0) === 1));
+  ?>
+    <section class="card" style="background:#f0f9ff;border-color:#bae6fd;">
+      <div class="card-head" style="margin-bottom:8px;padding-bottom:8px;">
+        <div>
+          <h2><?= $year ?>년 일반·특수 건강진단 결과표 및 사후관리 총괄</h2>
+          <p class="sub">검진기관: 근로복지공단 동해병원 (일반 3/9~3/12 · 특수 1차 3/9~3/12, 2차 3/18~3/20) · 사후관리: 강원근로자건강센터 (9/17 상담 8명)</p>
+        </div>
+        <a class="btn sm primary" href="health_management_print.php?mode=checkup&amp;year=<?= $year ?>" target="_blank">🖨️ 사후관리 대장 A4 가로 출력</a>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:14px;font-size:13px;">
+        <span>📋 수검 인원: <strong><?= count($checkups) ?>명</strong></span>
+        <span>🔴 유소견(D1/D2/DN): <strong style="color:var(--danger);"><?= $cntD ?>명</strong></span>
+        <span>🟠 요관찰(C1/C2): <strong style="color:var(--warn);"><?= $cntC ?>명</strong></span>
+        <span>✅ 사후관리 조치·상담 완료: <strong style="color:var(--ok);"><?= $cntDone ?> / <?= count($checkups) ?>명</strong></span>
+      </div>
+    </section>
+
     <section class="card">
-      <div class="card-head"><div><h2>2.8.1 일반·특수 건강검진 실시 등록</h2><p class="sub">근로자별 검진일, 검진구분(일반/특수), 유해인자, 판정결과 및 사후관리를 기록합니다.</p></div></div>
-      <form method="post">
+      <div class="card-head">
+        <div>
+          <h2><?= $year ?>년 근로자 건강진단 및 사후관리 관리대장 (<?= count($checkups) ?>명)</h2>
+          <p class="sub">질병유소견자(D1/D2/DN) 및 요관찰자(C1/C2)의 검진소견·업무적합성(가/나)·사후관리 조치 이행을 개별 추적 관리합니다.</p>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+          <button type="button" class="btn sm ghost" onclick="filterCheckups('all')">전체</button>
+          <button type="button" class="btn sm ghost" onclick="filterCheckups('d')">유소견(D)</button>
+          <button type="button" class="btn sm ghost" onclick="filterCheckups('c')">요관찰(C)</button>
+          <button type="button" class="btn sm ghost" onclick="filterCheckups('pending')">조치 필요</button>
+          <?php if ($canManage): ?>
+            <button type="button" class="btn sm primary" onclick="document.getElementById('addCheckupBox').style.display=document.getElementById('addCheckupBox').style.display==='none'?'block':'none';">+ 대상자 추가</button>
+          <?php endif; ?>
+        </div>
+      </div>
+
+      <?php if ($canManage): ?>
+      <form method="post" id="addCheckupBox" style="display:none;margin-bottom:14px;padding:12px;background:#f8fbfc;border:1px solid var(--line);border-radius:10px;">
         <input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="action" value="save_checkup"><input type="hidden" name="tab" value="checkup">
         <div class="form-grid cols-4">
-          <div class="field"><label>성명 *</label><input type="text" name="worker_name" required placeholder="예: 김남균"></div>
-          <div class="field"><label>근무구분</label><select name="job_type"><option value="비사무직">비사무직 (매년)</option><option value="사무직">사무직 (격년)</option></select></div>
-          <div class="field"><label>검진구분</label><select name="exam_type"><option value="일반+특수">일반+특수 건강검진</option><option value="일반건강검진">일반건강검진</option><option value="특수건강검진">특수건강검진</option><option value="배치전건강검진">배치전건강검진</option></select></div>
+          <div class="field"><label>성명 *</label><input type="text" name="worker_name" required></div>
+          <div class="field"><label>부서/공정</label><input type="text" name="dept_name" value="공사부"></div>
+          <div class="field"><label>일반 판정</label><input type="text" name="general_grade" value="A" placeholder="예: A, C, D2"></div>
+          <div class="field"><label>특수 판정</label><input type="text" name="special_grade" value="A" placeholder="예: A, C1, C2, D1, DN"></div>
+          <div class="field"><label>업무적합성</label><select name="work_fitness"><option value="가">가 (현재작업 가능)</option><option value="나">나 (조건부 가능)</option><option value="다">다 (한시적 불가)</option><option value="라">라 (작업 불가)</option></select></div>
+          <div class="field"><label>종합 구분</label><select name="result_grade"><option value="정상(A/B)">정상(A/B)</option><option value="요관찰(C1)">요관찰(C1)</option><option value="요관찰(C2)">요관찰(C2)</option><option value="유소견(D2)">유소견(D2)</option><option value="유소견(DN)">유소견(DN)</option><option value="직업병유소견(D1)">직업병유소견(D1)</option></select></div>
           <div class="field"><label>검진일자</label><input type="date" name="exam_date" value="<?= date('Y-m-d') ?>"></div>
-          <div class="field"><label>특수검진 유해인자</label><input type="text" name="hazard_factors" value="소음, 분진, 용접흄"></div>
-          <div class="field"><label>검진기관</label><input type="text" name="hospital" placeholder="예: 동해동인병원"></div>
-          <div class="field"><label>판정결과</label><select name="result_grade"><option value="정상(A/B)">정상 (A/B)</option><option value="관찰(C1/C2)">요관찰 (C1/C2)</option><option value="유소견(D1/D2)">유소견 (D1/D2)</option></select></div>
-          <div class="field"><label>사후관리 조치</label><input type="text" name="followup_note" placeholder="특이사항 없음 / 건강상담 등"></div>
+          <div class="field"><label>검진기관</label><input type="text" name="hospital" value="근로복지공단 동해병원"></div>
+          <div class="field span-2"><label>주요 검진소견·권고</label><input type="text" name="finding_summary" placeholder="예: 소음성난청주의(C1), 고혈압 관리필요 등"></div>
+          <div class="field span-2"><label>사후관리 조치 내용</label><input type="text" name="followup_note" placeholder="예: 청력보호구 착용 지도, 건강센터 상담 완료"></div>
         </div>
-        <div style="margin-top:10px;text-align:right;"><button type="submit" class="btn primary">건강검진 등록</button></div>
+        <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;">
+          <label style="font-size:12.5px;font-weight:700;"><input type="checkbox" name="followup_done" value="1"> 사후관리 조치 완료</label>
+          <button type="submit" class="btn primary">등록</button>
+        </div>
       </form>
-    </section>
-    <?php endif; ?>
-    <section class="card">
-      <div class="card-head"><div><h2><?= $year ?>년 건강검진 관리대장 (<?= count($checkups) ?>명)</h2></div><a class="btn sm primary" href="health_management_print.php?mode=checkup&amp;year=<?= $year ?>" target="_blank">🖨️ 대장 A4 출력</a></div>
-      <div class="tbl-wrap"><table><thead><tr><th class="ctr">No</th><th>성명</th><th class="ctr">근무구분</th><th class="ctr">검진구분</th><th>유해인자</th><th class="ctr">검진일</th><th>검진기관</th><th class="ctr">판정</th><th>사후관리</th><th class="ctr">관리</th></tr></thead><tbody>
-        <?php if (!$checkups): ?><tr><td colspan="10" class="ctr" style="padding:20px;color:var(--muted);">등록된 <?= $year ?>년 건강검진 기록이 없습니다.</td></tr>
-        <?php else: foreach ($checkups as $i => $r): ?>
-          <tr><td class="ctr"><?= $i + 1 ?></td><td><strong><?= $e($r['worker_name']) ?></strong></td><td class="ctr"><?= $e($r['job_type']) ?></td><td class="ctr"><?= $e($r['exam_type']) ?></td><td><?= $e($r['hazard_factors']) ?></td><td class="ctr"><?= $e($r['exam_date']) ?></td><td><?= $e($r['hospital']) ?></td><td class="ctr"><span class="badge <?= str_contains($r['result_grade'],'정상') ? 'ok' : 'warn' ?>"><?= $e($r['result_grade']) ?></span></td><td><?= $e($r['followup_note']) ?></td><td class="ctr"><?php if ($canManage): ?><form method="post" onsubmit="return confirm('삭제할까요?');" style="display:inline;"><input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="action" value="delete_checkup"><input type="hidden" name="tab" value="checkup"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>"><button class="btn sm danger">삭제</button></form><?php endif; ?></td></tr>
+      <?php endif; ?>
+
+      <div class="tbl-wrap"><table id="checkupTable"><thead><tr><th class="ctr">No</th><th>부서</th><th>성명</th><th class="ctr">일반</th><th class="ctr">특수</th><th class="ctr">업무<br>적합</th><th>주요 검진소견 및 권고</th><th style="min-width:250px;">사후관리 조치 이행</th><th class="ctr">관리</th></tr></thead><tbody>
+        <?php if (!$checkups): ?><tr><td colspan="9" class="ctr" style="padding:20px;color:var(--muted);">등록된 <?= $year ?>년 건강검진 기록이 없습니다.</td></tr>
+        <?php else: foreach ($checkups as $i => $r):
+          $rg = (string)$r['result_grade'];
+          $isD = str_contains($rg, '유소견');
+          $isC = str_contains($rg, '요관찰');
+          $done = (int)($r['followup_done'] ?? 0) === 1;
+          $rowTag = ($isD ? 'd' : ($isC ? 'c' : 'a')) . ($done ? ' done' : ' pending');
+        ?>
+          <tr data-tag="<?= $e($rowTag) ?>">
+            <td class="ctr"><?= $i + 1 ?></td>
+            <td><?= $e($r['dept_name'] ?? '') ?></td>
+            <td><strong><?= $e($r['worker_name']) ?></strong><div class="sub"><?= $e($r['exam_date']) ?></div></td>
+            <td class="ctr"><span class="badge <?= str_contains((string)$r['general_grade'],'D') ? 'warn' : '' ?>"><?= $e($r['general_grade'] ?: '-') ?></span></td>
+            <td class="ctr"><span class="badge <?= str_contains((string)$r['special_grade'],'D') ? 'warn' : (str_contains((string)$r['special_grade'],'C') ? '' : 'ok') ?>"><?= $e($r['special_grade'] ?: '-') ?></span></td>
+            <td class="ctr"><strong><?= $e($r['work_fitness'] ?: '가') ?></strong></td>
+            <td style="font-size:12.5px;"><?= $e($r['finding_summary'] ?: $r['hazard_factors']) ?></td>
+            <td>
+              <?php if ($canManage): ?>
+              <form method="post" style="display:flex;flex-direction:column;gap:4px;">
+                <input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="action" value="update_followup"><input type="hidden" name="tab" value="checkup"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
+                <input type="text" name="followup_note" value="<?= $e($r['followup_note']) ?>" style="padding:5px 7px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                  <label style="font-size:11.5px;font-weight:700;color:<?= $done ? 'var(--ok)' : 'var(--warn)' ?>;"><input type="checkbox" name="followup_done" value="1" <?= $done ? 'checked' : '' ?>> <?= $done ? '조치·상담 완료' : '추적관리 중' ?></label>
+                  <button type="submit" class="btn sm ghost">저장</button>
+                </div>
+              </form>
+              <?php else: ?>
+                <div><?= $e($r['followup_note']) ?></div>
+                <span class="badge <?= $done ? 'ok' : 'warn' ?>"><?= $done ? '조치 완료' : '추적관리 중' ?></span>
+              <?php endif; ?>
+            </td>
+            <td class="ctr"><?php if ($canManage): ?><form method="post" onsubmit="return confirm('삭제할까요?');" style="display:inline;"><input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="action" value="delete_checkup"><input type="hidden" name="tab" value="checkup"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>"><button class="btn sm danger">삭제</button></form><?php endif; ?></td>
+          </tr>
         <?php endforeach; endif; ?>
       </tbody></table></div>
     </section>
+    <script>
+    function filterCheckups(type) {
+      document.querySelectorAll('#checkupTable tbody tr[data-tag]').forEach(tr => {
+        const t = tr.dataset.tag || '';
+        tr.style.display = (type === 'all' || t.split(' ').includes(type)) ? '' : 'none';
+      });
+    }
+    </script>
     <?php hmg_render_ev('2.8.1', 'checkup', $year, $evByItem['2.8.1'], $scores['2.8.1'], $evKinds['2.8.1'], $itemMeta['2.8.1'], $canManage, $csrf, $e); ?>
 
   <?php elseif ($tab === 'env'): ?>
