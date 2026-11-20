@@ -640,9 +640,19 @@ function hmg_render_ev(string $code, string $tabName, int $year, array $items, a
   </nav>
 
   <?php if ($tab === 'checkup'):
-    $cntD = count(array_filter($checkups, static fn($r) => str_contains((string)$r['result_grade'], '유소견')));
-    $cntC = count(array_filter($checkups, static fn($r) => str_contains((string)$r['result_grade'], '요관찰')));
-    $cntDone = count(array_filter($checkups, static fn($r) => (int)($r['followup_done'] ?? 0) === 1));
+    $isNormalRow = static function (array $r): bool {
+        $g = strtoupper(trim((string)($r['general_grade'] ?? '')));
+        $s = strtoupper(trim((string)($r['special_grade'] ?? '')));
+        $rg = (string)($r['result_grade'] ?? '');
+        $hasAbn = str_contains($g, 'D') || str_contains($g, 'C') || str_contains($s, 'D') || str_contains($s, 'C')
+            || str_contains($rg, '유소견') || str_contains($rg, '요관찰') || str_contains($rg, '확인');
+        return !$hasAbn && ($g !== '' || $s !== '');
+    };
+    $cntD = count(array_filter($checkups, static fn($r) => str_contains(strtoupper((string)$r['general_grade'] . ' ' . (string)$r['special_grade']), 'D') || str_contains((string)$r['result_grade'], '유소견')));
+    $cntC = count(array_filter($checkups, static fn($r) => !str_contains(strtoupper((string)$r['general_grade'] . ' ' . (string)$r['special_grade']), 'D') && (str_contains(strtoupper((string)$r['general_grade'] . ' ' . (string)$r['special_grade']), 'C') || str_contains((string)$r['result_grade'], '요관찰'))));
+    $cntNormal = count(array_filter($checkups, $isNormalRow));
+    $followupTargets = array_filter($checkups, static fn($r) => !$isNormalRow($r));
+    $cntDone = count(array_filter($followupTargets, static fn($r) => (int)($r['followup_done'] ?? 0) === 1));
   ?>
     <section class="card" style="background:#f0f9ff;border-color:#bae6fd;">
       <div class="card-head" style="margin-bottom:8px;padding-bottom:8px;">
@@ -654,9 +664,10 @@ function hmg_render_ev(string $code, string $tabName, int $year, array $items, a
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:14px;font-size:13px;">
         <span>📋 수검 인원: <strong><?= count($checkups) ?>명</strong></span>
+        <span>🟢 정상(조치불필요): <strong style="color:var(--ok);"><?= $cntNormal ?>명</strong></span>
         <span>🔴 유소견(D1/D2/DN): <strong style="color:var(--danger);"><?= $cntD ?>명</strong></span>
         <span>🟠 요관찰(C1/C2): <strong style="color:var(--warn);"><?= $cntC ?>명</strong></span>
-        <span>✅ 사후관리 조치·상담 완료: <strong style="color:var(--ok);"><?= $cntDone ?> / <?= count($checkups) ?>명</strong></span>
+        <span>✅ 사후관리 조치·상담 완료: <strong style="color:var(--ok);"><?= $cntDone ?> / <?= count($followupTargets) ?>명</strong></span>
       </div>
     </section>
 
@@ -770,11 +781,12 @@ function hmg_render_ev(string $code, string $tabName, int $year, array $items, a
       <div class="tbl-wrap"><table id="checkupTable"><thead><tr><th class="ctr">No</th><th>부서</th><th>성명</th><th class="ctr">일반</th><th class="ctr">특수</th><th class="ctr">업무<br>적합</th><th>주요 검진소견 및 권고</th><th style="min-width:250px;">사후관리 조치 이행</th><th class="ctr">관리</th></tr></thead><tbody>
         <?php if (!$checkups): ?><tr><td colspan="9" class="ctr" style="padding:20px;color:var(--muted);">등록된 <?= $year ?>년 건강검진 기록이 없습니다.</td></tr>
         <?php else: foreach ($checkups as $i => $r):
-          $rg = (string)$r['result_grade'];
-          $isD = str_contains($rg, '유소견');
-          $isC = str_contains($rg, '요관찰');
+          $norm = $isNormalRow($r);
+          $gsUpper = strtoupper((string)$r['general_grade'] . ' ' . (string)$r['special_grade']);
+          $isD = str_contains($gsUpper, 'D') || str_contains((string)$r['result_grade'], '유소견');
+          $isC = !$isD && (str_contains($gsUpper, 'C') || str_contains((string)$r['result_grade'], '요관찰'));
           $done = (int)($r['followup_done'] ?? 0) === 1;
-          $rowTag = ($isD ? 'd' : ($isC ? 'c' : 'a')) . ($done ? ' done' : ' pending');
+          $rowTag = ($isD ? 'd' : ($isC ? 'c' : 'a')) . ($norm ? ' normal' : ($done ? ' done' : ' pending'));
         ?>
           <tr data-tag="<?= $e($rowTag) ?>">
             <td class="ctr"><?= $i + 1 ?></td>
@@ -785,7 +797,9 @@ function hmg_render_ev(string $code, string $tabName, int $year, array $items, a
             <td class="ctr"><strong><?= $e($r['work_fitness'] ?: '가') ?></strong></td>
             <td style="font-size:12.5px;"><?= $e($r['finding_summary'] ?: $r['hazard_factors']) ?></td>
             <td>
-              <?php if ($canManage): ?>
+              <?php if ($norm): ?>
+                <span class="badge ok">정상 (조치 불필요)</span>
+              <?php elseif ($canManage): ?>
               <form method="post" style="display:flex;flex-direction:column;gap:4px;">
                 <input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="action" value="update_followup"><input type="hidden" name="tab" value="checkup"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
                 <input type="text" name="followup_note" value="<?= $e($r['followup_note']) ?>" style="padding:5px 7px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;">

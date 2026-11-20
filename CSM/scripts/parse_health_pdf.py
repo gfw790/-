@@ -347,7 +347,7 @@ def parse_exam_report(pages: list[dict], doc_type: str) -> dict:
                     break
         prefix = "특수: " if is_special else "일반: "
         finding = prefix + (", ".join(found_kw) if found_kw else ("특이소견 없음" if top in ("A", "B") else "OCR 판독 확인 필요"))
-        followup = "특이사항 없음 (정상)" if top in ("A", "B") else ("보호구 착용 지도 및 추적검사 안내" if top != "" else "검진 판정 확인 후 사후관리 입력")
+        followup = "정상 (사후관리 불필요)" if top in ("A", "B") else ("보호구 착용 지도 및 추적검사 안내" if top != "" else "검진 판정 확인 후 사후관리 입력")
 
         records.append({
             "worker_name": nm,
@@ -360,7 +360,7 @@ def parse_exam_report(pages: list[dict], doc_type: str) -> dict:
             "hospital": hospital,
             "finding_summary": finding,
             "followup_note": followup,
-            "followup_done": 1 if top in ("A", "B") else 0,
+            "followup_done": 0,
         })
 
     return {

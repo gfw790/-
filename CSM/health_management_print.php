@@ -119,8 +119,12 @@ if ($mode === 'checkup') {
     <?php if ($mode === 'checkup'): ?>
       <table class="data-tbl"><thead><tr><th style="width:24px;">No</th><th style="width:70px;">부서/공정</th><th style="width:48px;">성명</th><th style="width:44px;">일반</th><th style="width:62px;">특수</th><th style="width:32px;">적합</th><th>주요 검진소견 및 권고</th><th style="width:220px;">사후관리 조치 이행</th><th style="width:44px;">상태</th></tr></thead><tbody>
         <?php if (!$rows): ?><tr><td colspan="9" class="ctr" style="padding:24px;">등록된 건강검진 기록이 없습니다.</td></tr>
-        <?php else: foreach ($rows as $i => $r): ?>
-          <tr><td class="ctr"><?= $i+1 ?></td><td><?= $e($r['dept_name'] ?? '') ?></td><td class="ctr"><strong><?= $e($r['worker_name']) ?></strong></td><td class="ctr"><?= $e($r['general_grade'] ?? '') ?></td><td class="ctr"><?= $e($r['special_grade'] ?? '') ?></td><td class="ctr"><?= $e($r['work_fitness'] ?? '가') ?></td><td><?= $e(($r['finding_summary'] ?? '') ?: $r['hazard_factors']) ?></td><td><?= $e($r['followup_note']) ?></td><td class="ctr"><?= !empty($r['followup_done']) ? '완료' : '추적' ?></td></tr>
+        <?php else: foreach ($rows as $i => $r):
+          $gs = strtoupper((string)($r['general_grade'] ?? '') . ' ' . (string)($r['special_grade'] ?? ''));
+          $isNorm = !str_contains($gs, 'D') && !str_contains($gs, 'C') && !str_contains((string)($r['result_grade'] ?? ''), '유소견') && !str_contains((string)($r['result_grade'] ?? ''), '요관찰');
+          $stLabel = $isNorm ? '정상' : (!empty($r['followup_done']) ? '완료' : '추적');
+        ?>
+          <tr><td class="ctr"><?= $i+1 ?></td><td><?= $e($r['dept_name'] ?? '') ?></td><td class="ctr"><strong><?= $e($r['worker_name']) ?></strong></td><td class="ctr"><?= $e($r['general_grade'] ?? '') ?></td><td class="ctr"><?= $e($r['special_grade'] ?? '') ?></td><td class="ctr"><?= $e($r['work_fitness'] ?? '가') ?></td><td><?= $e(($r['finding_summary'] ?? '') ?: $r['hazard_factors']) ?></td><td><?= $isNorm ? '정상 (조치 불필요)' : $e($r['followup_note']) ?></td><td class="ctr"><?= $stLabel ?></td></tr>
         <?php endforeach; endif; ?>
       </tbody></table>
     <?php elseif ($mode === 'env'): ?>
