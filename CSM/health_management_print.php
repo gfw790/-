@@ -51,10 +51,8 @@ if ($mode === 'checkup') {
 <head>
 <meta charset="utf-8">
 <title><?= $e($titles[$mode]) ?> · 주식회사 현대기전</title>
-<style id="pageMarginStyle">
-  @page { size: A4 <?= $isLandscape ? 'landscape' : 'portrait' ?>; margin: 20mm 12mm 12mm 12mm; }
-</style>
 <style>
+  @page { size: A4 <?= $isLandscape ? 'landscape' : 'portrait' ?>; margin: 0; }
   * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
   body { margin: 0; background: #e5e9ec; color: #111; font-family: "Malgun Gothic","Apple SD Gothic Neo",sans-serif; font-size: 9pt; line-height: 1.45; }
   .toolbar { position: sticky; top: 0; z-index: 100; background: #0c354c; color: #fff; padding: 10px 20px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
@@ -93,10 +91,25 @@ if ($mode === 'checkup') {
   .doc-footer { margin-top: auto; padding-top: 8px; border-top: 0.75pt solid #cbd5e1; display: flex; align-items: center; justify-content: center; gap: 8px; break-inside: avoid; page-break-inside: avoid; }
   .doc-footer-logo { height: 6mm; width: auto; object-fit: contain; }
   .doc-footer-company { font-size: 10pt; font-weight: 800; letter-spacing: 2px; color: #111; }
+  table.print-frame { width: 100%; border-collapse: collapse; border: none; }
+  table.print-frame > thead, table.print-frame > tfoot { display: none; }
+  table.print-frame > tbody > tr > td.pf-body { padding: 0; border: none; vertical-align: top; }
+  .pf-top { height: 20mm; }
+  .pf-bot { height: 12mm; }
   @media print {
     body { background: #fff; }
     .toolbar { display: none !important; }
-    .sheet, body.margin-left .sheet, body.margin-wide .sheet { width: auto; min-height: auto; margin: 0; padding: 0; box-shadow: none; display: block; }
+    .sheet, body.margin-left .sheet, body.margin-wide .sheet { width: 100%; min-height: auto; margin: 0; padding: 0; box-shadow: none; display: block; }
+    table.print-frame > thead { display: table-header-group; }
+    table.print-frame > tfoot { display: table-footer-group; }
+    table.print-frame > thead > tr > td, table.print-frame > tfoot > tr > td { padding: 0; border: none; }
+    table.print-frame > tbody > tr > td.pf-body { padding: 0 12mm; }
+    body.margin-left .pf-top { height: 14mm; }
+    body.margin-left .pf-bot { height: 12mm; }
+    body.margin-left table.print-frame > tbody > tr > td.pf-body { padding: 0 12mm 0 20mm; }
+    body.margin-wide .pf-top { height: 18mm; }
+    body.margin-wide .pf-bot { height: 16mm; }
+    body.margin-wide table.print-frame > tbody > tr > td.pf-body { padding: 0 16mm; }
     .doc-footer { margin-top: 14px; }
   }
 </style>
@@ -116,6 +129,7 @@ if ($mode === 'checkup') {
 
 <?php if ($mode === 'checkup' || $mode === 'env' || $mode === 'msds'): ?>
   <section class="sheet">
+    <table class="print-frame"><thead><tr><td><div class="pf-top"></div></td></tr></thead><tfoot><tr><td><div class="pf-bot"></div></td></tr></tfoot><tbody><tr><td class="pf-body">
     <div class="doc-head">
       <div class="doc-title-area">
         <small>CSM 2.8 보건 · 주식회사 현대기전</small>
@@ -152,17 +166,21 @@ if ($mode === 'checkup') {
     <?php endif; ?>
 
     <div class="doc-footer"><?php if ($logoSrc !== ''): ?><img class="doc-footer-logo" src="<?= $e($logoSrc) ?>" alt="로고"><?php endif; ?><span class="doc-footer-company">주식회사 현대기전</span></div>
+    </td></tr></tbody></table>
   </section>
 
 <?php else: ?>
   <?php if (!$rows): ?>
     <section class="sheet">
+      <table class="print-frame"><thead><tr><td><div class="pf-top"></div></td></tr></thead><tfoot><tr><td><div class="pf-bot"></div></td></tr></tfoot><tbody><tr><td class="pf-body">
       <div class="doc-head"><div class="doc-title-area"><small>CSM 2.8 보건</small><h1><?= $e($titles[$mode]) ?></h1></div><div class="approval-wrap"><div class="ap-side">결<br>재</div><table class="ap-tbl"><tr><th>작 성</th><th>승 인</th></tr><tr><td>&nbsp;</td><td>&nbsp;</td></tr></table></div></div>
       <p style="padding:36px;text-align:center;color:#64748b;">등록된 <?= $year ?>년 점검 기록이 없습니다.</p>
       <div class="doc-footer"><?php if ($logoSrc !== ''): ?><img class="doc-footer-logo" src="<?= $e($logoSrc) ?>" alt="로고"><?php endif; ?><span class="doc-footer-company">주식회사 현대기전</span></div>
+      </td></tr></tbody></table>
     </section>
   <?php else: foreach ($rows as $r): ?>
     <section class="sheet">
+      <table class="print-frame"><thead><tr><td><div class="pf-top"></div></td></tr></thead><tfoot><tr><td><div class="pf-bot"></div></td></tr></tfoot><tbody><tr><td class="pf-body">
       <div class="doc-head">
         <div class="doc-title-area">
           <small>CSM <?= $mode === 'chem_check' ? '2.8.4' : '2.8.5' ?> 보건 · 현장 정기점검표</small>
@@ -200,23 +218,16 @@ if ($mode === 'checkup') {
       </div>
 
       <div class="doc-footer"><?php if ($logoSrc !== ''): ?><img class="doc-footer-logo" src="<?= $e($logoSrc) ?>" alt="로고"><?php endif; ?><span class="doc-footer-company">주식회사 현대기전</span></div>
+      </td></tr></tbody></table>
     </section>
   <?php endforeach; endif; ?>
 <?php endif; ?>
 
 <script>
-const PAGE_ORIENT = <?= json_encode($isLandscape ? 'landscape' : 'portrait') ?>;
-const PAGE_MARGINS = {
-  '': '20mm 12mm 12mm 12mm',
-  'margin-left': '14mm 12mm 12mm 20mm',
-  'margin-wide': '18mm 16mm 16mm 16mm'
-};
 function setMargin(c){
   document.body.classList.remove('margin-left','margin-wide');
   if(c) document.body.classList.add(c);
   ['mTop','mLeft','mWide'].forEach((id,i)=>document.getElementById(id)?.classList.toggle('active', c===['','margin-left','margin-wide'][i]));
-  const st = document.getElementById('pageMarginStyle');
-  if (st) st.textContent = `@page { size: A4 ${PAGE_ORIENT}; margin: ${PAGE_MARGINS[c] || PAGE_MARGINS['']}; }`;
 }
 function toggleApproval(){ const h=document.body.classList.toggle('hide-approval'); const b=document.getElementById('btnApproval'); if(b){ b.classList.toggle('active',!h); b.textContent=h?'결재란 OFF':'결재란 ON'; } }
 </script>
