@@ -13,6 +13,13 @@ import subprocess
 import sys
 import tempfile
 
+for _sp in [
+    r"C:\Users\gfw79\AppData\Roaming\Python\Python314\site-packages",
+    os.path.expandvars(r"%APPDATA%\Python\Python314\site-packages"),
+]:
+    if os.path.isdir(_sp) and _sp not in sys.path:
+        sys.path.append(_sp)
+
 import pymupdf
 
 

@@ -116,14 +116,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new RuntimeException('임시 PDF 저장에 실패했습니다.');
                 }
                 $script = __DIR__ . '/scripts/parse_health_pdf.py';
-                $cmd = 'python ' . escapeshellarg($script) . ' --input ' . escapeshellarg($tmpPdf) . ' --output ' . escapeshellarg($tmpJson) . ' 2>&1';
+                $pyBin = 'python';
+                foreach (['C:\\Python314\\python.exe', 'C:\\Python313\\python.exe', 'C:\\Python312\\python.exe', 'C:\\WINDOWS\\py.exe'] as $cand) {
+                    if (is_file($cand)) {
+                        $pyBin = $cand;
+                        break;
+                    }
+                }
+                $cmd = escapeshellarg($pyBin) . ' ' . escapeshellarg($script) . ' --input ' . escapeshellarg($tmpPdf) . ' --output ' . escapeshellarg($tmpJson) . ' 2>&1';
                 $outLines = [];
                 $exitCode = 0;
                 @set_time_limit(240);
                 exec($cmd, $outLines, $exitCode);
                 if ($exitCode !== 0 || !is_file($tmpJson)) {
                     @unlink($tmpPdf);
-                    throw new RuntimeException('PDF 자동 분석에 실패했습니다: ' . mb_substr(implode(' ', $outLines), 0, 220));
+                    $errRaw = implode(' ', $outLines);
+                    $errUtf8 = @mb_convert_encoding($errRaw, 'UTF-8', 'UTF-8,CP949,EUC-KR') ?: $errRaw;
+                    throw new RuntimeException('PDF 자동 분석에 실패했습니다: ' . mb_substr($errUtf8, 0, 260));
                 }
                 $parsed = json_decode((string)file_get_contents($tmpJson), true);
                 @unlink($tmpJson);
