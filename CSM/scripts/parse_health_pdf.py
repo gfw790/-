@@ -2,11 +2,14 @@
 """
 Local PDF parser for CSM 2.8.1 (일반/특수 건강진단 사후관리 소견서 & 사후관리 조치 확인서).
 - Text PDFs: extracted directly with PyMuPDF.
-- Scanned image PDFs: rendered with PyMuPDF and OCR'd locally via Windows native Korean OcrEngine
-  with word-level (x, y) bounding boxes for accurate table column reconstruction (zero external API).
+- Scanned image PDFs: rendered with PyMuPDF and OCR'd locally via RapidOCR (PaddleOCR PP-OCRv5 Korean ONNX)
+  with word/box-level (x, y) bounding boxes for accurate table column reconstruction (zero external API).
+  Automatically falls back to Windows native Korean OcrEngine if RapidOCR is unavailable.
 """
 import argparse
+from concurrent.futures import ProcessPoolExecutor
 import json
+import logging
 import os
 import re
 import subprocess
@@ -90,33 +93,109 @@ $jsonOut = $pagesOut | ConvertTo-Json -Depth 5 -Compress
 """
 
 
-def extract_pages(pdf_path: str) -> list[dict]:
-    doc = pymupdf.open(pdf_path)
-    pages = []
-    scan_indices = []
-    for i, page in enumerate(doc):
-        t = (page.get_text("text") or "").strip()
-        w_list = []
-        if len(t) >= 30:
-            rect = page.rect
-            pw = float(rect.width) or 1.0
-            ph = float(rect.height) or 1.0
-            for x0, y0, x1, y1, wt, *_ in page.get_text("words"):
-                w_list.append({
-                    "t": wt,
-                    "x": round(x0 / pw, 4),
-                    "y": round(y0 / ph, 4),
-                    "w": round((x1 - x0) / pw, 4),
-                    "h": round((y1 - y0) / ph, 4),
-                })
-        pages.append({"text": t, "words": w_list})
-        if len(t) < 30:
-            scan_indices.append(i)
+def _rapidocr_worker_chunk(args: tuple) -> list[tuple[int, dict]]:
+    """Run RapidOCR PP-OCRv5 Korean on a subset of PDF pages inside a worker process."""
+    pdf_path, page_indices, dpi, threads = args
+    for _sp in [
+        r"C:\Users\gfw79\AppData\Roaming\Python\Python314\site-packages",
+        os.path.expandvars(r"%APPDATA%\Python\Python314\site-packages"),
+    ]:
+        if os.path.isdir(_sp) and _sp not in sys.path:
+            sys.path.append(_sp)
 
-    if not scan_indices:
+    import numpy as np
+    import pymupdf as _fitz
+    import rapidocr as _rapidocr
+    from rapidocr import RapidOCR, LangRec, OCRVersion, ModelType
+
+    logging.getLogger("RapidOCR").setLevel(logging.ERROR)
+
+    models_dir = os.path.join(os.path.dirname(_rapidocr.__file__), "models")
+    det_path = os.path.join(models_dir, "ch_PP-OCRv5_det_mobile.onnx")
+    rec_path = os.path.join(models_dir, "korean_PP-OCRv5_rec_mobile.onnx")
+
+    params = {
+        "Global.use_cls": False,
+        "Global.log_level": "error",
+        "Det.ocr_version": OCRVersion.PPOCRV5,
+        "Det.model_type": ModelType.MOBILE,
+        "Rec.ocr_version": OCRVersion.PPOCRV5,
+        "Rec.model_type": ModelType.MOBILE,
+        "Rec.lang_type": LangRec.KOREAN,
+        "EngineConfig.onnxruntime.intra_op_num_threads": threads,
+    }
+    if os.path.isfile(det_path):
+        params["Det.model_path"] = det_path
+    if os.path.isfile(rec_path):
+        params["Rec.model_path"] = rec_path
+
+    engine = RapidOCR(params=params)
+    doc = _fitz.open(pdf_path)
+    results = []
+    try:
+        for idx in page_indices:
+            pix = doc[idx].get_pixmap(dpi=dpi)
+            pw = float(pix.width) or 1.0
+            ph = float(pix.height) or 1.0
+            img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
+            if pix.n == 4:
+                img = img[:, :, :3]
+            res = engine(img)
+            words = []
+            lines = []
+            if res is not None and getattr(res, "txts", None):
+                for box, txt in zip(res.boxes, res.txts):
+                    t_clean = (txt or "").strip()
+                    if not t_clean:
+                        continue
+                    xs = [float(pt[0]) for pt in box]
+                    ys = [float(pt[1]) for pt in box]
+                    x0, x1 = min(xs), max(xs)
+                    y0, y1 = min(ys), max(ys)
+                    lines.append(t_clean)
+                    words.append({
+                        "t": t_clean,
+                        "x": round(x0 / pw, 4),
+                        "y": round(y0 / ph, 4),
+                        "w": round((x1 - x0) / pw, 4),
+                        "h": round((y1 - y0) / ph, 4),
+                    })
+            results.append((idx, {"text": "\n".join(lines), "words": words}))
+    finally:
         doc.close()
-        return pages
+    return results
 
+
+def ocr_pages_rapidocr(pdf_path: str, scan_indices: list[int], dpi: int = 130) -> dict[int, dict]:
+    """OCR scanned pages locally with RapidOCR (PaddleOCR PP-OCRv5 Korean ONNX)."""
+    # Verify importable before spawning worker processes
+    import rapidocr  # noqa: F401
+
+    cpu = os.cpu_count() or 4
+    n_pages = len(scan_indices)
+    max_workers = min(2, max(1, cpu // 4), n_pages)
+    threads_per_worker = max(2, min(4, cpu // max_workers))
+
+    out: dict[int, dict] = {}
+    if max_workers <= 1 or n_pages <= 2:
+        for idx, page_data in _rapidocr_worker_chunk((pdf_path, scan_indices, dpi, min(4, cpu))):
+            out[idx] = page_data
+        return out
+
+    # Round-robin split so dense and sparse pages are balanced across workers
+    chunks = [scan_indices[i::max_workers] for i in range(max_workers)]
+    tasks = [(pdf_path, ch, dpi, threads_per_worker) for ch in chunks if ch]
+    with ProcessPoolExecutor(max_workers=len(tasks)) as ex:
+        for chunk_res in ex.map(_rapidocr_worker_chunk, tasks):
+            for idx, page_data in chunk_res:
+                out[idx] = page_data
+    return out
+
+
+def ocr_pages_windows(pdf_path: str, scan_indices: list[int]) -> dict[int, dict]:
+    """Fallback: OCR scanned pages locally with Windows native Korean OcrEngine."""
+    doc = pymupdf.open(pdf_path)
+    out: dict[int, dict] = {}
     with tempfile.TemporaryDirectory(prefix="hmg_ocr_") as tmp:
         img_paths = []
         for idx in scan_indices:
@@ -154,10 +233,47 @@ def extract_pages(pdf_path: str) -> list[dict]:
             if isinstance(ocr_list, dict):
                 ocr_list = [ocr_list]
             for idx, item in zip(scan_indices, ocr_list):
-                pages[idx] = {
+                out[idx] = {
                     "text": (item.get("text") or "").strip(),
                     "words": item.get("words") or [],
                 }
+    return out
+
+
+def extract_pages(pdf_path: str) -> list[dict]:
+    doc = pymupdf.open(pdf_path)
+    pages = []
+    scan_indices = []
+    for i, page in enumerate(doc):
+        t = (page.get_text("text") or "").strip()
+        w_list = []
+        if len(t) >= 30:
+            rect = page.rect
+            pw = float(rect.width) or 1.0
+            ph = float(rect.height) or 1.0
+            for x0, y0, x1, y1, wt, *_ in page.get_text("words"):
+                w_list.append({
+                    "t": wt,
+                    "x": round(x0 / pw, 4),
+                    "y": round(y0 / ph, 4),
+                    "w": round((x1 - x0) / pw, 4),
+                    "h": round((y1 - y0) / ph, 4),
+                })
+        pages.append({"text": t, "words": w_list})
+        if len(t) < 30:
+            scan_indices.append(i)
+    doc.close()
+
+    if not scan_indices:
+        return pages
+
+    try:
+        ocr_map = ocr_pages_rapidocr(pdf_path, scan_indices)
+    except Exception:
+        ocr_map = ocr_pages_windows(pdf_path, scan_indices)
+
+    for idx, item in ocr_map.items():
+        pages[idx] = item
 
     return pages
 
@@ -247,11 +363,16 @@ def parse_exam_report(pages: list[dict], doc_type: str) -> dict:
             if w["y"] > 0.40 and any(k in w["t"] for k in ("총인원", "총건수", "건강관리상", "인원:", "건수:")):
                 y_max = min(y_max, w["y"] - 0.015)
 
-        # Find table body y-range (below header ~0.20, above footer)
-        body_words = [w for w in words if 0.20 <= w["y"] <= y_max]
+        # Find table body y-range (below header ~0.225, above footer)
+        body_words = [w for w in words if 0.226 <= w["y"] <= y_max]
 
-        # Detect worker anchors in the name column (x in [0.125, 0.185))
-        name_words = sorted([w for w in body_words if 0.125 <= w["x"] <= 0.185], key=lambda w: (w["y"], w["x"]))
+        # Detect worker anchors in the name column (x in [0.130, 0.185))
+        name_words = sorted([
+            w for w in body_words
+            if 0.130 <= w["x"] <= 0.185
+            and not re.search(r"\d", w["t"])
+            and re.sub(r"[^가-힣]", "", w["t"]) not in ("", "년", "개월", "월", "일")
+        ], key=lambda w: (w["y"], w["x"]))
         # Group name tokens on the same y-line (e.g., "김" + "남균")
         anchors = []
         for nw in name_words:
@@ -264,21 +385,23 @@ def parse_exam_report(pages: list[dict], doc_type: str) -> dict:
         valid_anchors = []
         for a in anchors:
             nm = re.sub(r"[^가-힣]", "", a["name"])
+            if len(nm) == 4 and nm.startswith("년"):
+                nm = nm[1:]
             if 2 <= len(nm) <= 4 and nm not in skip_names:
                 valid_anchors.append({"y": a["y"], "name": nm})
 
         # Assign page y-bands to workers (including continuation from previous page)
         bands = []
         if valid_anchors:
-            if active_name is not None and valid_anchors[0]["y"] > 0.24:
-                bands.append((active_name, 0.20, valid_anchors[0]["y"] - 0.01, False))
+            if active_name is not None and valid_anchors[0]["y"] > 0.26:
+                bands.append((active_name, 0.226, valid_anchors[0]["y"] - 0.01, False))
             for idx, anc in enumerate(valid_anchors):
                 y_start = anc["y"] - 0.015
                 y_end = (valid_anchors[idx + 1]["y"] - 0.015) if idx + 1 < len(valid_anchors) else 0.90
                 bands.append((anc["name"], y_start, y_end, True))
                 active_name = anc["name"]
         elif active_name is not None:
-            bands.append((active_name, 0.20, 0.90, False))
+            bands.append((active_name, 0.226, 0.90, False))
 
         for nm, y0, y1, is_start in bands:
             band_words = [w for w in body_words if y0 <= w["y"] < y1]
@@ -286,21 +409,25 @@ def parse_exam_report(pages: list[dict], doc_type: str) -> dict:
                 merged[nm] = {"worker_name": nm, "dept_words": [], "grade_words": [], "fit_words": [], "body_words": [], "action_words": []}
                 order.append(nm)
             if is_start:
-                merged[nm]["dept_words"].extend([w for w in band_words if 0.04 <= w["x"] < 0.128 and abs(w["y"] - (y0 + 0.015)) < 0.06])
-            gx0, gx1 = (0.485, 0.565) if is_special else (0.242, 0.275)
-            ax0 = 0.74 if is_special else 0.45
-            merged[nm]["grade_words"].extend([w for w in band_words if gx0 <= w["x"] <= gx1])
+                merged[nm]["dept_words"].extend([w for w in band_words if 0.04 <= w["x"] < 0.132 and abs(w["y"] - (y0 + 0.015)) < 0.06])
+            gx0, gx1 = (0.500, 0.545) if is_special else (0.242, 0.280)
+            bx0 = 0.545 if is_special else 0.280
+            ax0 = 0.745 if is_special else 0.45
+            merged[nm]["grade_words"].extend([w for w in band_words if gx0 <= w["x"] < gx1])
             merged[nm]["fit_words"].extend([w for w in band_words if w["x"] >= 0.90])
-            merged[nm]["body_words"].extend([w for w in band_words if gx0 <= w["x"] < ax0])
+            merged[nm]["body_words"].extend([w for w in band_words if bx0 <= w["x"] < ax0])
             merged[nm]["action_words"].extend([w for w in band_words if ax0 <= w["x"] < 0.90])
 
     grade_re = re.compile(r"\b(D1|D2|DN|C1|C2|CN|D|C|A|B)\b")
     priority = ["D1", "DN", "D2", "D", "C1", "CN", "C2", "C", "A", "B"]
     kw_list = [
-        "소음성난청주의", "소음성난청", "당뇨병의심", "당뇨유질환", "고혈압의심", "고혈압유질환",
+        "소음성난청주의", "소음성난청", "2-부톡시에탄올", "망상적혈구수 증가",
+        "당뇨병의심", "당뇨 관리필요", "당뇨 관리적절", "당뇨유질환", "당뇨전단계",
+        "고혈압의심", "고혈압 관리필요", "고혈압 관리적절", "고혈압유질환", "고혈압관리",
         "간장질환주의", "간장질환", "국소 폐섬유화", "무기폐", "심장 비대증", "만성기관지염",
-        "폐쇄성 환기장애", "제한성 환기장애", "이상지질혈증주의", "비만질환의심", "복부비만의심",
-        "망상적혈구수 증가", "청력저하", "콜레스테롤", "당뇨전단계", "고혈압관리", "비만관리",
+        "폐쇄성 환기장애", "제한성 환기장애", "폐기능이상",
+        "이상지질혈증주의", "이상지질혈증", "비만질환의심", "복부비만의심", "복부비만", "비만관리", "비만",
+        "청력저하", "콜레스테롤",
     ]
 
     records = []

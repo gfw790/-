@@ -126,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $cmd = escapeshellarg($pyBin) . ' ' . escapeshellarg($script) . ' --input ' . escapeshellarg($tmpPdf) . ' --output ' . escapeshellarg($tmpJson) . ' 2>&1';
                 $outLines = [];
                 $exitCode = 0;
-                @set_time_limit(240);
+                @set_time_limit(360);
                 exec($cmd, $outLines, $exitCode);
                 if ($exitCode !== 0 || !is_file($tmpJson)) {
                     @unlink($tmpPdf);
