@@ -225,6 +225,33 @@ function hm_upload_photo(array $file, string $code): string
     return $fileName;
 }
 
+function hm_save_photo_base64(string $dataUrl, string $code): string
+{
+    $dataUrl = trim($dataUrl);
+    if ($dataUrl === '') return '';
+    if (!preg_match('/^data:image\/(png|jpeg|jpg|webp);base64,(.+)$/s', $dataUrl, $m)) {
+        throw new InvalidArgumentException('올바른 이미지 데이터가 아닙니다.');
+    }
+    $raw = base64_decode($m[2], true);
+    if ($raw === false || strlen($raw) < 10 || strlen($raw) > 10 * 1024 * 1024) {
+        throw new InvalidArgumentException('10MB 이하의 유효한 이미지를 붙여넣어 주세요.');
+    }
+    if (@getimagesizefromstring($raw) === false) {
+        throw new InvalidArgumentException('유효한 이미지 형식이 아닙니다.');
+    }
+    $ext = $m[1] === 'png' ? 'png' : 'jpg';
+    $dir = hm_photo_dir();
+    if (!is_dir($dir) && !mkdir($dir, 0750, true) && !is_dir($dir)) {
+        throw new RuntimeException('사진 저장소를 만들 수 없습니다.');
+    }
+    $safe = preg_replace('/[^a-z0-9_-]/', '', strtolower($code)) ?: 'eq';
+    $fileName = $safe . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+    if (file_put_contents($dir . '/' . $fileName, $raw) === false) {
+        throw new RuntimeException('장비 사진 저장에 실패했습니다.');
+    }
+    return $fileName;
+}
+
 function hm_upload_evidence(PDO $db, int $year, string $kind, array $file, string $actor): void
 {
     if (!isset(hm_evidence_kinds()[$kind])) {

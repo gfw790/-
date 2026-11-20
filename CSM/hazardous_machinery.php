@@ -175,7 +175,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $hazard = trim((string)($_POST['hazard_type'] ?? ''));
             $status = trim((string)($_POST['status'] ?? '사용 가능'));
             $remarks = trim((string)($_POST['remarks'] ?? ''));
-            $uploadedPhoto = hm_upload_photo($_FILES['photo'] ?? ['error' => UPLOAD_ERR_NO_FILE], $code);
+            $uploadedPhoto = '';
+            if (!empty($_POST['photo_base64']) && is_string($_POST['photo_base64'])) {
+                $uploadedPhoto = hm_save_photo_base64($_POST['photo_base64'], $code);
+            } else {
+                $uploadedPhoto = hm_upload_photo($_FILES['photo'] ?? ['error' => UPLOAD_ERR_NO_FILE], $code);
+            }
 
             if ($eqId > 0) {
                 $old = $db->prepare('SELECT photo_file FROM hm_equipment WHERE id = ?');
@@ -951,12 +956,16 @@ table.hm-tbl tbody tr:hover td.sticky-col { background: #f8fafc; }
         </label>
         <label>방호장치 <input type="text" name="guard_device" id="f_guard_device" placeholder="예: 회전부 방호덮개, 과부하방지장치"></label>
         <label>발생가능 재해형태 <input type="text" name="hazard_type" id="f_hazard_type" placeholder="예: 끼임, 절단, 떨어짐, 감전"></label>
-        <label class="wide">장비 실물 사진 (파일 선택 · 드래그 · <strong>Ctrl+V 붙여넣기</strong> 지원 · 10MB 이하)
-          <div id="photoPasteZone" style="border:2px dashed #94a3b8;border-radius:10px;padding:12px;background:#f8fafc;display:flex;align-items:center;gap:12px;flex-wrap:wrap;cursor:pointer" onclick="document.getElementById('f_photo').click()">
-            <img id="photoPreview" src="" alt="" style="display:none;width:72px;height:56px;object-fit:cover;border-radius:7px;border:1px solid #cbd5e1">
+        <label class="wide">장비 실물 사진 (<strong>스크린샷 Ctrl+V 붙여넣기</strong> · 파일 선택 · 드래그 지원)
+          <input type="hidden" name="photo_base64" id="f_photo_base64" value="">
+          <div id="photoPasteZone" tabindex="0" style="border:2px dashed #0f766e;border-radius:10px;padding:12px;background:#f0fdfa;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <img id="photoPreview" src="" alt="" style="display:none;width:80px;height:62px;object-fit:cover;border-radius:7px;border:1px solid #cbd5e1;background:#fff">
             <div style="flex:1;min-width:180px">
-              <div id="photoPasteText" style="font-size:.86rem;font-weight:700;color:#334155">📋 여기서 <strong>Ctrl+V</strong>로 캡처/사진을 바로 붙여넣거나 클릭해 파일을 선택하세요</div>
-              <div style="font-size:.76rem;color:#64748b;margin-top:2px">JPG, PNG 지원 · 드래그 앤 드롭 가능</div>
+              <div id="photoPasteText" style="font-size:.86rem;font-weight:700;color:#0f4c43">📋 스크린샷(Win+Shift+S) 복사 후 여기서 <strong>Ctrl+V</strong>를 누르세요</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+                <button type="button" class="btn btn-sm btn-primary" onclick="pasteFromClipboardBtn()">📋 스크린샷 바로 붙여넣기</button>
+                <button type="button" class="btn btn-sm" onclick="document.getElementById('f_photo').click()">📁 파일 선택</button>
+              </div>
             </div>
             <input type="file" name="photo" id="f_photo" accept=".jpg,.jpeg,.png" style="display:none">
           </div>
@@ -1011,54 +1020,90 @@ function openEqModal(eq) {
   document.getElementById('f_hazard_type').value = isEdit ? eq.hazard_type : '';
   document.getElementById('f_remarks').value = isEdit ? eq.remarks : '';
   document.getElementById('f_photo').value = '';
+  document.getElementById('f_photo_base64').value = '';
   const prev = document.getElementById('photoPreview');
   const txt = document.getElementById('photoPasteText');
   if (isEdit && eq.photo_file) {
     prev.src = '?photo=' + encodeURIComponent(eq.photo_file);
     prev.style.display = 'block';
-    txt.innerHTML = '현재 사진 등록됨 · <strong>Ctrl+V</strong> 붙여넣기 또는 클릭으로 교체';
+    txt.innerHTML = '현재 사진 등록됨 · 스크린샷 <strong>Ctrl+V</strong> 또는 버튼으로 교체';
   } else {
     prev.src = '';
     prev.style.display = 'none';
-    txt.innerHTML = '📋 여기서 <strong>Ctrl+V</strong>로 캡처/사진을 바로 붙여넣거나 클릭해 파일을 선택하세요';
+    txt.innerHTML = '📋 스크린샷(Win+Shift+S) 복사 후 여기서 <strong>Ctrl+V</strong>를 누르세요';
   }
   document.getElementById('deleteWrap').innerHTML = '';
   document.getElementById('eqModal').classList.add('open');
+  setTimeout(() => { document.getElementById('photoPasteZone').focus(); }, 50);
 }
-function applyPhotoFile(file) {
-  if (!file || !file.type.startsWith('image/')) return;
-  const input = document.getElementById('f_photo');
-  const dt = new DataTransfer();
-  const ext = file.type === 'image/png' ? 'png' : 'jpg';
-  const named = new File([file], file.name && /\.(png|jpe?g)$/i.test(file.name) ? file.name : ('pasted_photo.' + ext), { type: file.type === 'image/png' ? 'image/png' : 'image/jpeg' });
-  dt.items.add(named);
-  input.files = dt.files;
-  const prev = document.getElementById('photoPreview');
-  prev.src = URL.createObjectURL(named);
-  prev.style.display = 'block';
-  document.getElementById('photoPasteText').innerHTML = '✅ <strong>' + named.name + '</strong> 준비됨 (저장 버튼을 누르세요)';
+function applyPhotoBlob(blob, label) {
+  if (!blob) return;
+  const reader = new FileReader();
+  reader.onload = function (ev) {
+    const dataUrl = String(ev.target.result || '');
+    if (!dataUrl.startsWith('data:image/')) return;
+    document.getElementById('f_photo_base64').value = dataUrl;
+    document.getElementById('f_photo').value = '';
+    const prev = document.getElementById('photoPreview');
+    prev.src = dataUrl;
+    prev.style.display = 'block';
+    document.getElementById('photoPasteText').innerHTML = '✅ <strong>' + label + '</strong> 붙여넣기 완료! 아래 [저장]을 누르세요';
+  };
+  reader.readAsDataURL(blob);
+}
+async function pasteFromClipboardBtn() {
+  try {
+    if (!navigator.clipboard || !navigator.clipboard.read) {
+      alert('이 브라우저에서는 버튼 읽기가 제한됩니다. 이 박스를 클릭한 뒤 Ctrl+V를 눌러주세요.');
+      return;
+    }
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      const imgType = item.types.find(t => t.startsWith('image/'));
+      if (imgType) {
+        const blob = await item.getType(imgType);
+        applyPhotoBlob(blob, '클립보드 스크린샷');
+        return;
+      }
+    }
+    alert('클립보드에 복사된 스크린샷/이미지가 없습니다. Win+Shift+S로 먼저 캡처해 주세요.');
+  } catch (err) {
+    alert('클립보드 접근이 차단되었습니다. 이 점선 박스를 클릭하고 Ctrl+V를 눌러주세요.');
+  }
 }
 document.getElementById('f_photo').addEventListener('change', function () {
-  if (this.files && this.files[0]) applyPhotoFile(this.files[0]);
+  if (this.files && this.files[0]) applyPhotoBlob(this.files[0], this.files[0].name);
 });
 document.addEventListener('paste', function (e) {
   if (!document.getElementById('eqModal').classList.contains('open')) return;
-  const items = (e.clipboardData || window.clipboardData)?.items || [];
-  for (const it of items) {
-    if (it.type && it.type.startsWith('image/')) {
-      e.preventDefault();
-      applyPhotoFile(it.getAsFile());
-      break;
+  const cd = e.clipboardData || window.clipboardData;
+  if (!cd) return;
+  if (cd.files && cd.files.length) {
+    for (const f of cd.files) {
+      if (f.type && f.type.startsWith('image/')) {
+        e.preventDefault();
+        applyPhotoBlob(f, '스크린샷');
+        return;
+      }
+    }
+  }
+  if (cd.items && cd.items.length) {
+    for (const it of cd.items) {
+      if (it.type && it.type.startsWith('image/')) {
+        e.preventDefault();
+        applyPhotoBlob(it.getAsFile(), '스크린샷');
+        return;
+      }
     }
   }
 });
 const pz = document.getElementById('photoPasteZone');
-pz.addEventListener('dragover', e => { e.preventDefault(); pz.style.borderColor = '#0f766e'; pz.style.background = '#f0fdfa'; });
-pz.addEventListener('dragleave', () => { pz.style.borderColor = '#94a3b8'; pz.style.background = '#f8fafc'; });
+pz.addEventListener('dragover', e => { e.preventDefault(); pz.style.borderColor = '#1e3a8a'; pz.style.background = '#eff6ff'; });
+pz.addEventListener('dragleave', () => { pz.style.borderColor = '#0f766e'; pz.style.background = '#f0fdfa'; });
 pz.addEventListener('drop', e => {
   e.preventDefault();
-  pz.style.borderColor = '#94a3b8'; pz.style.background = '#f8fafc';
-  if (e.dataTransfer.files && e.dataTransfer.files[0]) applyPhotoFile(e.dataTransfer.files[0]);
+  pz.style.borderColor = '#0f766e'; pz.style.background = '#f0fdfa';
+  if (e.dataTransfer.files && e.dataTransfer.files[0]) applyPhotoBlob(e.dataTransfer.files[0], e.dataTransfer.files[0].name);
 });
 
 function renderCardState(card) {
