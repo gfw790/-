@@ -142,47 +142,109 @@ function csm_activity_improvement_summary(?PDO $db, int $year, float $points): a
     ];
 }
 
-function csm_special_edu_matrix_summary(?PDO $db, int $year, float $points = 1.0): array
+function csm_training_doc_ratio(string $itemCode, int $year, ?DateTimeImmutable $asOf = null): array
 {
-    $empty = ['earned' => 0.0, 'evidence_count' => 0, 'state' => 'no_evidence', 'multiplier' => 0.0, 'revision' => 0, 'automatic' => true, 'status_text' => '미보유'];
+    $asOf ??= new DateTimeImmutable('now', new DateTimeZone('Asia/Seoul'));
+    $todayStr = $asOf->format('Y-m-d');
+    $currentYear = (int)$asOf->format('Y');
+
+    $totalCount = 0;
+    $dueCount = 0;
+    $completedCount = 0;
+
+    $csmDbPath = __DIR__ . '/education/storage/db/csm.db';
+    if (is_file($csmDbPath)) {
+        try {
+            $pdo = new PDO('sqlite:' . $csmDbPath, null, null, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            ]);
+            $stmt = $pdo->prepare("
+                SELECT training_date, scanned_doc_filename, cert_doc_filename
+                FROM csm_trainings
+                WHERE csm_item_code = :code
+                  AND strftime('%Y', training_date) = :year
+                ORDER BY training_date ASC, id ASC
+            ");
+            $stmt->execute([':code' => $itemCode, ':year' => (string)$year]);
+            foreach ($stmt->fetchAll() as $row) {
+                $totalCount++;
+                $isDue = ($year < $currentYear) || ($year === $currentYear && (string)$row['training_date'] <= $todayStr);
+                if ($isDue) {
+                    $dueCount++;
+                    if (!empty($row['scanned_doc_filename']) || !empty($row['cert_doc_filename'])) {
+                        $completedCount++;
+                    }
+                }
+            }
+        } catch (Throwable $e) {
+            error_log('csm_training_doc_ratio error: ' . $e->getMessage());
+        }
+    }
+
+    $multiplier = $dueCount > 0 ? round(min(1.0, $completedCount / (float)$dueCount), 2) : 0.0;
+    return [
+        'total_count' => $totalCount,
+        'due_count' => $dueCount,
+        'completed_count' => $completedCount,
+        'multiplier' => $multiplier,
+        'as_of' => $todayStr,
+    ];
+}
+
+function csm_special_edu_matrix_summary(?PDO $db, int $year, float $points = 1.0, ?DateTimeImmutable $asOf = null): array
+{
+    $empty = ['earned' => 0.0, 'evidence_count' => 0, 'state' => 'no_evidence', 'multiplier' => 0.0, 'revision' => 0, 'automatic' => true, 'status_text' => '미실시'];
     if ($db === null) return $empty;
     require_once __DIR__ . '/education_matrix_store.php';
     $records = education_matrix_records($db, $year);
     $status = education_matrix_status($records);
-    $mult = (float)$status['special_multiplier'];
+    $ratio = csm_training_doc_ratio('5.1.4', $year, $asOf);
+    $mult = (float)$ratio['multiplier'];
+    $completed = (int)$ratio['completed_count'];
+    $due = (int)$ratio['due_count'];
     $tasksCount = (int)$status['special_task_count'];
     return [
-        'earned' => round($points * $mult, 4),
-        'evidence_count' => $tasksCount,
-        'state' => $mult > 0 ? 'assessed' : 'pending',
+        'earned' => round($points * $mult, 2),
+        'evidence_count' => $completed,
+        'state' => $completed > 0 ? 'assessed' : 'no_evidence',
         'multiplier' => $mult,
-        'status_text' => $status['special_status_text'],
+        'status_text' => $completed > 0 ? "서명본 완료 {$completed}/{$due}건" : "서명본 미등록 (0/{$due}건 · Matrix {$tasksCount}종 보유)",
         'revision' => (int)$records['special']['revision'],
         'automatic' => true,
         'task_count' => $tasksCount,
         'assigned_total' => (int)$status['special_assigned_total'],
+        'due_count' => $due,
+        'completed_count' => $completed,
+        'total_count' => (int)$ratio['total_count'],
     ];
 }
 
-function csm_msds_edu_summary(?PDO $db, int $year, float $points = 1.0): array
+function csm_msds_edu_summary(?PDO $db, int $year, float $points = 1.0, ?DateTimeImmutable $asOf = null): array
 {
-    $empty = ['earned' => 0.0, 'evidence_count' => 0, 'state' => 'no_evidence', 'multiplier' => 0.0, 'revision' => 0, 'automatic' => true, 'status_text' => '미보유'];
+    $empty = ['earned' => 0.0, 'evidence_count' => 0, 'state' => 'no_evidence', 'multiplier' => 0.0, 'revision' => 0, 'automatic' => true, 'status_text' => '미실시'];
     if ($db === null) return $empty;
     require_once __DIR__ . '/education_matrix_store.php';
     $records = education_matrix_records($db, $year);
     $status = education_matrix_status($records);
-    $mult = (float)$status['msds_multiplier'];
+    $ratio = csm_training_doc_ratio('5.1.5', $year, $asOf);
+    $mult = (float)$ratio['multiplier'];
+    $completed = (int)$ratio['completed_count'];
+    $due = (int)$ratio['due_count'];
     $substancesCount = (int)$status['msds_substance_count'];
     return [
-        'earned' => round($points * $mult, 4),
-        'evidence_count' => $substancesCount,
-        'state' => $mult > 0 ? 'assessed' : 'pending',
+        'earned' => round($points * $mult, 2),
+        'evidence_count' => $completed,
+        'state' => $completed > 0 ? 'assessed' : 'no_evidence',
         'multiplier' => $mult,
-        'status_text' => $status['msds_status_text'],
+        'status_text' => $completed > 0 ? "서명본 완료 {$completed}/{$due}건" : "서명본 미등록 (0/{$due}건 · Matrix {$substancesCount}종 보유)",
         'revision' => (int)$records['msds']['revision'],
         'automatic' => true,
         'substance_count' => $substancesCount,
         'assigned_total' => (int)$status['msds_assigned_total'],
+        'due_count' => $due,
+        'completed_count' => $completed,
+        'total_count' => (int)$ratio['total_count'],
     ];
 }
 

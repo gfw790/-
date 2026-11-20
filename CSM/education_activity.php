@@ -411,9 +411,13 @@ $openForm = $id > 0 || $error !== '' || (count($records) === 0 && count($trainin
         <p class="hint" style="margin-top: 12px; padding: 8px 12px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; color: #166534; font-size: 11.5px;">
           ✓ <strong>실시간 자동 집계:</strong> 5.1.3 신규채용시 교육은 5.1.2와 같이 입사자 인원 대비 8시간 교육 및 서명본 스캔 등록 실적(현재 <?= $nhSummary['completed_count'] ?? 0 ?>/<?= $nhSummary['target_count'] ?? 0 ?>명 완료)에 따라 점수가 실시간 자동 반영됩니다.
         </p>
-      <?php elseif ($item === '5.1.4' || $item === '5.1.5'): ?>
-        <p class="hint" style="margin-top: 12px; padding: 10px 14px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; color: #1e40af; font-size: 12px; line-height: 1.45;">
-          ✓ <strong>교육 메트릭스 연동:</strong> <?= $item === '5.1.4' ? '5.1.4 특별안전교육은 법정 10대 위험작업별 실제 수행자(80명) 매핑 및 교육일정이 수립되어 1.0점 만점 평가 기준을 100% 충족합니다.' : '5.1.5 MSDS 교육은 9종 유해화학물질별 실제 취급자(76명) 매핑 및 반기별 정기 교육일정이 수립되어 1.0점 만점 평가 기준을 100% 충족합니다.' ?>
+      <?php elseif ($item === '5.1.4' || $item === '5.1.5'):
+        $mDone = (int)($itemScore['completed_count'] ?? 0);
+        $mDue = (int)($itemScore['due_count'] ?? 0);
+        $mEarned = (float)($itemScore['earned'] ?? 0.0);
+      ?>
+        <p class="hint" style="margin-top: 12px; padding: 10px 14px; background: <?= $mDone > 0 ? '#f0fdf4' : '#fffbeb' ?>; border: 1px solid <?= $mDone > 0 ? '#bbf7d0' : '#fde68a' ?>; border-radius: 6px; color: <?= $mDone > 0 ? '#166534' : '#92400e' ?>; font-size: 12px; line-height: 1.45;">
+          ✓ <strong>실시간 자동 집계 (서명본 기준):</strong> 현재 날짜 기준 도래 교육일지 <?= $mDue ?>건 중 서명본 스캔 완료 <strong><?= $mDone ?>/<?= $mDue ?>건</strong> → <strong><?= number_format($mEarned, 2) ?> / 1.0점</strong> 반영 중입니다. (교육일지 스캔본 등록 시 자동 가산)
           <br><a href="education_matrix.php?year=<?= $year ?>&amp;tab=<?= $item === '5.1.4' ? 'special' : 'msds' ?>" style="display: inline-block; margin-top: 6px; font-weight: bold; color: #1e3a8a; text-decoration: underline;">👉 교육 메트릭스(작업내용/물질·교육일·교육받는사람) 상세 관리 바로가기</a>
         </p>
       <?php elseif ($item === '5.2.2' && $expSummary !== null): ?>
