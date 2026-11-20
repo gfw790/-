@@ -603,7 +603,7 @@ function csm_score_summary(?PDO $db, array $catalog, int $year): array
     }
     $items = [];
     $groups = [];
-    foreach ($catalog['groups'] as $group) $groups[$group['id']] = ['earned' => 0.0, 'normalized' => 0.0, 'evidence_items' => 0, 'assessed_items' => 0];
+    foreach ($catalog['groups'] as $group) $groups[$group['id']] = ['earned' => 0.0, 'normalized' => 0.0, 'evidence_items' => 0, 'assessed_items' => 0, 'na_points' => 0.0];
     foreach ($catalog['modules'] as $module) {
         foreach ($module['items'] as $criterion) {
             $code = $criterion['id'];
@@ -656,6 +656,16 @@ function csm_score_summary(?PDO $db, array $catalog, int $year): array
                 $earned = $items[$code]['earned'];
                 $hasEvidence = $items[$code]['evidence_count'] > 0;
                 $assessment = $items[$code]['state'] === 'assessed' ? $items[$code] : null;
+            }
+            if ($code === '2.1.1') {
+                require_once __DIR__ . '/accident_investigation_store.php';
+                $items[$code] = csm_ai_score_summary($year, (float)$criterion['points']);
+                $earned = $items[$code]['earned'];
+                $hasEvidence = $items[$code]['evidence_count'] > 0;
+                $assessment = in_array($items[$code]['state'], ['assessed', 'na'], true) ? $items[$code] : null;
+                if (!empty($items[$code]['is_na']) && $criterion['points'] !== null) {
+                    $groups[$module['group']]['na_points'] += (float)$criterion['points'];
+                }
             }
             if ($code === '2.1.2') {
                 $items[$code] = csm_ra_procedure_score_summary($db, $year);
@@ -758,7 +768,10 @@ function csm_score_summary(?PDO $db, array $catalog, int $year): array
         }
     }
     foreach ($catalog['groups'] as $group) {
-        if ($group['points'] !== null && $group['points'] > 0) $groups[$group['id']]['normalized'] = round($groups[$group['id']]['earned'] / $group['points'] * 100, 1);
+        if ($group['points'] !== null && $group['points'] > 0) {
+            $effectivePoints = max(0.0, (float)$group['points'] - (float)($groups[$group['id']]['na_points'] ?? 0.0));
+            $groups[$group['id']]['normalized'] = $effectivePoints > 0 ? round($groups[$group['id']]['earned'] / $effectivePoints * 100, 1) : 0.0;
+        }
     }
     return ['items' => $items, 'groups' => $groups];
 }
