@@ -194,26 +194,37 @@ function csm_training_doc_ratio(string $itemCode, int $year, ?DateTimeImmutable 
 
 function csm_special_edu_matrix_summary(?PDO $db, int $year, float $points = 1.0, ?DateTimeImmutable $asOf = null): array
 {
-    $empty = ['earned' => 0.0, 'evidence_count' => 0, 'state' => 'no_evidence', 'multiplier' => 0.0, 'revision' => 0, 'automatic' => true, 'status_text' => '미실시'];
-    if ($db === null) return $empty;
-    require_once __DIR__ . '/education_matrix_store.php';
-    $records = education_matrix_records($db, $year);
-    $status = education_matrix_status($records);
     $ratio = csm_training_doc_ratio('5.1.4', $year, $asOf);
     $mult = (float)$ratio['multiplier'];
     $completed = (int)$ratio['completed_count'];
     $due = (int)$ratio['due_count'];
-    $tasksCount = (int)$status['special_task_count'];
+    $tasksCount = 0;
+    $assignedTotal = 0;
+    if ($db !== null) {
+        try {
+            $q = $db->prepare("SELECT payload FROM leadership_records WHERE year=? AND item='5.1.4' ORDER BY id DESC LIMIT 1");
+            $q->execute([$year]);
+            $raw = $q->fetchColumn();
+            if (is_string($raw) && $raw !== '') {
+                $d = json_decode($raw, true);
+                if (is_array($d['tasks'] ?? null)) {
+                    $tasksCount = count($d['tasks']);
+                }
+            }
+        } catch (Throwable $e) {
+            error_log('csm_special_edu_matrix_summary ro read error: ' . $e->getMessage());
+        }
+    }
     return [
         'earned' => round($points * $mult, 2),
         'evidence_count' => $completed,
         'state' => $completed > 0 ? 'assessed' : 'no_evidence',
         'multiplier' => $mult,
-        'status_text' => $completed > 0 ? "서명본 완료 {$completed}/{$due}건" : "서명본 미등록 (0/{$due}건 · Matrix {$tasksCount}종 보유)",
-        'revision' => (int)$records['special']['revision'],
+        'status_text' => $completed > 0 ? "서명본 완료 {$completed}/{$due}건" : "서명본 미등록 (0/{$due}건" . ($tasksCount > 0 ? " · Matrix {$tasksCount}종 보유)" : ")"),
+        'revision' => 0,
         'automatic' => true,
         'task_count' => $tasksCount,
-        'assigned_total' => (int)$status['special_assigned_total'],
+        'assigned_total' => $assignedTotal,
         'due_count' => $due,
         'completed_count' => $completed,
         'total_count' => (int)$ratio['total_count'],
@@ -222,26 +233,37 @@ function csm_special_edu_matrix_summary(?PDO $db, int $year, float $points = 1.0
 
 function csm_msds_edu_summary(?PDO $db, int $year, float $points = 1.0, ?DateTimeImmutable $asOf = null): array
 {
-    $empty = ['earned' => 0.0, 'evidence_count' => 0, 'state' => 'no_evidence', 'multiplier' => 0.0, 'revision' => 0, 'automatic' => true, 'status_text' => '미실시'];
-    if ($db === null) return $empty;
-    require_once __DIR__ . '/education_matrix_store.php';
-    $records = education_matrix_records($db, $year);
-    $status = education_matrix_status($records);
     $ratio = csm_training_doc_ratio('5.1.5', $year, $asOf);
     $mult = (float)$ratio['multiplier'];
     $completed = (int)$ratio['completed_count'];
     $due = (int)$ratio['due_count'];
-    $substancesCount = (int)$status['msds_substance_count'];
+    $substancesCount = 0;
+    $assignedTotal = 0;
+    if ($db !== null) {
+        try {
+            $q = $db->prepare("SELECT payload FROM leadership_records WHERE year=? AND item='5.1.5' ORDER BY id DESC LIMIT 1");
+            $q->execute([$year]);
+            $raw = $q->fetchColumn();
+            if (is_string($raw) && $raw !== '') {
+                $d = json_decode($raw, true);
+                if (is_array($d['substances'] ?? null)) {
+                    $substancesCount = count($d['substances']);
+                }
+            }
+        } catch (Throwable $e) {
+            error_log('csm_msds_edu_summary ro read error: ' . $e->getMessage());
+        }
+    }
     return [
         'earned' => round($points * $mult, 2),
         'evidence_count' => $completed,
         'state' => $completed > 0 ? 'assessed' : 'no_evidence',
         'multiplier' => $mult,
-        'status_text' => $completed > 0 ? "서명본 완료 {$completed}/{$due}건" : "서명본 미등록 (0/{$due}건 · Matrix {$substancesCount}종 보유)",
-        'revision' => (int)$records['msds']['revision'],
+        'status_text' => $completed > 0 ? "서명본 완료 {$completed}/{$due}건" : "서명본 미등록 (0/{$due}건" . ($substancesCount > 0 ? " · Matrix {$substancesCount}종 보유)" : ")"),
+        'revision' => 0,
         'automatic' => true,
         'substance_count' => $substancesCount,
-        'assigned_total' => (int)$status['msds_assigned_total'],
+        'assigned_total' => $assignedTotal,
         'due_count' => $due,
         'completed_count' => $completed,
         'total_count' => (int)$ratio['total_count'],

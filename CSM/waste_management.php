@@ -830,7 +830,7 @@ function wm_render_evidence_box(string $itemCode, string $tabName, int $year, ar
               <td class="ctr" style="white-space:nowrap;">
                 <a class="btn sm sign-btn" href="waste_management_print.php?mode=sign&amp;year=<?= $year ?>&amp;type_id=<?= (int)$wt['id'] ?>" target="_blank" title="현장 부착용 보관표지판 A4 인쇄">🪧 표지판</a>
                 <?php if ($canManage): ?>
-                  <button type="button" class="btn sm ghost" onclick='openWasteTypeModal(<?= json_encode($wt, JSON_UNESCAPED_UNICODE | JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'>수정</button>
+                  <button type="button" class="btn sm ghost js-edit-wt" data-record="<?= $e(json_encode($wt, JSON_UNESCAPED_UNICODE)) ?>">수정</button>
                   <form method="post" onsubmit="return confirm('이 폐기물 항목을 목록에서 제외할까요?');" style="display:inline;">
                     <input type="hidden" name="csrf" value="<?= $e($csrf) ?>">
                     <input type="hidden" name="action" value="delete_waste_type">
@@ -957,7 +957,7 @@ function wm_render_evidence_box(string $itemCode, string $tabName, int $year, ar
                 <td><?= $e($row['note']) ?></td>
                 <td class="ctr" style="white-space:nowrap;">
                   <?php if ($canManage): ?>
-                    <button type="button" class="btn sm ghost" onclick='openLogModal(<?= json_encode($row, JSON_UNESCAPED_UNICODE | JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'>수정</button>
+                    <button type="button" class="btn sm ghost js-edit-log" data-record="<?= $e(json_encode($row, JSON_UNESCAPED_UNICODE)) ?>">수정</button>
                     <form method="post" onsubmit="return confirm('이 관리대장 기록을 삭제할까요?');" style="display:inline;">
                       <input type="hidden" name="csrf" value="<?= $e($csrf) ?>">
                       <input type="hidden" name="action" value="delete_disposal_log">
@@ -1284,6 +1284,13 @@ function wm_render_evidence_box(string $itemCode, string $tabName, int $year, ar
 </div>
 
 <script>
+document.querySelectorAll('.js-edit-wt').forEach(btn => {
+  btn.addEventListener('click', () => { try { openWasteTypeModal(JSON.parse(btn.dataset.record || '{}')); } catch {} });
+});
+document.querySelectorAll('.js-edit-log').forEach(btn => {
+  btn.addEventListener('click', () => { try { openLogModal(JSON.parse(btn.dataset.record || '{}')); } catch {} });
+});
+
 function closeModal(id) {
   document.getElementById(id).classList.remove('open');
 }

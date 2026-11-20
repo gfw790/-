@@ -75,6 +75,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!in_array($st, ['na', 'occurred'], true)) {
                     $st = 'na';
                 }
+                $yrInc = $db->prepare('SELECT COUNT(*) FROM ai_incidents WHERE year = ?');
+                $yrInc->execute([$year]);
+                if ($st === 'na' && (int)$yrInc->fetchColumn() > 0) {
+                    throw new InvalidArgumentException($year . '년에 등록된 산업재해 기록이 있어 해당없음(N/A)으로 설정할 수 없습니다.');
+                }
                 $db->prepare('UPDATE ai_year_status SET status=?, no_accident_since=?, confirm_date=?, department=?, manager_name=?, ceo_name=?, confirm_note=?, updated_by=?, updated_at=? WHERE year=?')
                    ->execute([
                        $st,
@@ -145,7 +150,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     $db->prepare('INSERT INTO ai_incidents (occur_date, year, location, victim_info, accident_type, severity, gov_report_date, direct_cause, root_cause_4m, countermeasure, action_done_date, status, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
                        ->execute([...$fields, $actor, $now, $now]);
-                    $flashSuccess = '산업재해 원인조사 기록이 등록되었습니다.';
+                    ai_get_year_status($db, $incYear);
+                    $db->prepare("UPDATE ai_year_status SET status='occurred', updated_by=?, updated_at=? WHERE year=?")->execute([$actor, $now, $incYear]);
+                    $flashSuccess = '산업재해 원인조사 기록이 등록되었습니다 (해당 연도 상태가 재해발생으로 자동 전환됨).';
                 }
             } elseif ($action === 'delete_incident') {
                 $id = (int)($_POST['id'] ?? 0);
@@ -512,7 +519,7 @@ function ai_fmt_size(int $bytes): string
                 <td class="ctr"><span class="badge <?= $inc['status'] === '완료' ? 'ok' : 'warn' ?>"><?= $e($inc['status']) ?></span></td>
                 <td class="ctr" style="white-space:nowrap;">
                   <?php if ($canManage): ?>
-                    <button type="button" class="btn sm ghost" onclick='openIncidentModal(<?= json_encode($inc, JSON_UNESCAPED_UNICODE | JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'>수정</button>
+                    <button type="button" class="btn sm ghost js-edit-inc" data-record="<?= $e(json_encode($inc, JSON_UNESCAPED_UNICODE)) ?>">수정</button>
                     <form method="post" onsubmit="return confirm('이 재해 조사 기록을 삭제할까요?');" style="display:inline;">
                       <input type="hidden" name="csrf" value="<?= $e($csrf) ?>">
                       <input type="hidden" name="action" value="delete_incident">
@@ -778,6 +785,12 @@ function ai_fmt_size(int $bytes): string
 </div>
 
 <script>
+document.querySelectorAll('.js-edit-inc').forEach(btn => {
+  btn.addEventListener('click', () => {
+    try { openIncidentModal(JSON.parse(btn.dataset.record || '{}')); } catch {}
+  });
+});
+
 function openIncidentModal(data) {
   document.getElementById('incModalTitle').textContent = data ? '산업재해 조사 기록 수정' : '산업재해 원인조사 기록 등록';
   const fields = ['id','occur_date','location','victim_info','accident_type','severity','gov_report_date','direct_cause','root_cause_4m','countermeasure','action_done_date','status'];

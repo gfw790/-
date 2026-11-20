@@ -22,6 +22,11 @@ $isLandscape = ($mode === 'register');
 $yearStatus = ai_get_year_status($db, $year);
 $manual = ai_get_manual($db);
 $incidents = ai_list_incidents($db, $year);
+$yearIncidentsCount = count(array_filter($incidents, static fn($r) => (int)($r['year'] ?? 0) === $year));
+if ($mode === 'na_cert' && ($yearIncidentsCount > 0 || ($yearStatus['status'] ?? 'na') !== 'na')) {
+    http_response_code(409);
+    exit($year . '년에 산업재해 기록이 존재하거나 재해발생 상태이므로 무재해(해당없음) 확인서를 출력할 수 없습니다.');
+}
 
 $logoSrc = is_file(__DIR__ . '/assets/policy-logo.png')
     ? 'assets/policy-logo.png'

@@ -118,8 +118,11 @@ def extract_pages(pdf_path: str) -> list[dict]:
         with open(ps_file, "w", encoding="utf-8") as f:
             f.write(PS_OCR_SCRIPT)
 
+        ps_exe = r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+        if not os.path.isfile(ps_exe):
+            ps_exe = "powershell"
         proc = subprocess.run(
-            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps_file, "-ListFile", list_file],
+            [ps_exe, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps_file, "-ListFile", list_file],
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -293,15 +296,15 @@ def parse_exam_report(pages: list[dict], doc_type: str) -> dict:
             if g not in found_g:
                 found_g.append(g)
         sorted_g = [g for g in priority if g in found_g]
-        top = sorted_g[0] if sorted_g else "A"
+        top = sorted_g[0] if sorted_g else ""
 
         if is_special:
             sig = [g for g in sorted_g if g not in ("A", "B")][:3]
-            spec_g = " / ".join(sig) if sig else "A"
+            spec_g = " / ".join(sig) if sig else ("A" if top in ("A", "B") else "확인필요")
             gen_g = ""
         else:
             sig = [g for g in sorted_g if g not in ("A", "B")][:2]
-            gen_g = " / ".join(sig) if sig else "A"
+            gen_g = " / ".join(sig) if sig else ("A" if top in ("A", "B") else "확인필요")
             spec_g = ""
 
         if top == "D1":
@@ -310,11 +313,13 @@ def parse_exam_report(pages: list[dict], doc_type: str) -> dict:
             res_grade = f"유소견({top})"
         elif top in ("C1", "CN", "C2", "C"):
             res_grade = f"요관찰({top})"
-        else:
+        elif top in ("A", "B"):
             res_grade = "정상(A/B)"
+        else:
+            res_grade = "판정확인필요"
 
         fit_text = join_words(info["fit_words"])
-        fitness = "나" if "나" in fit_text else ("다" if "다" in fit_text else ("라" if "라" in fit_text else ("가" if top in ("A", "B") else "나")))
+        fitness = "나" if "나" in fit_text else ("다" if "다" in fit_text else ("라" if "라" in fit_text else ("가" if top in ("A", "B") else "")))
 
         body_compact = join_words(info["body_words"]).replace(" ", "")
         found_kw = []
@@ -324,8 +329,8 @@ def parse_exam_report(pages: list[dict], doc_type: str) -> dict:
                 if len(found_kw) >= 4:
                     break
         prefix = "특수: " if is_special else "일반: "
-        finding = prefix + (", ".join(found_kw) if found_kw else ("특이소견 없음" if top in ("A", "B") else "사후관리 소견 확인"))
-        followup = "특이사항 없음 (정상)" if top in ("A", "B") else "보호구 착용 지도 및 추적검사 안내"
+        finding = prefix + (", ".join(found_kw) if found_kw else ("특이소견 없음" if top in ("A", "B") else "OCR 판독 확인 필요"))
+        followup = "특이사항 없음 (정상)" if top in ("A", "B") else ("보호구 착용 지도 및 추적검사 안내" if top != "" else "검진 판정 확인 후 사후관리 입력")
 
         records.append({
             "worker_name": nm,

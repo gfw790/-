@@ -148,6 +148,18 @@ function pen_upload_evidence(PDO $db, int $year, string $itemCode, ?array $file,
     if (in_array($ext, ['jpg', 'jpeg', 'png'], true) && @getimagesize((string)$file['tmp_name']) === false) {
         throw new InvalidArgumentException('이미지 파일을 확인해 주세요.');
     }
+    if (in_array($ext, ['xlsx', 'docx'], true)) {
+        $zip = new ZipArchive();
+        if ($zip->open((string)$file['tmp_name']) !== true) {
+            throw new InvalidArgumentException('Office 문서 형식을 확인해 주세요.');
+        }
+        $expected = $ext === 'xlsx' ? 'xl/workbook.xml' : 'word/document.xml';
+        if ($zip->locateName('[Content_Types].xml') === false || $zip->locateName($expected) === false) {
+            $zip->close();
+            throw new InvalidArgumentException('Office 문서 형식을 확인해 주세요.');
+        }
+        $zip->close();
+    }
     $stored = bin2hex(random_bytes(20)) . '.' . $ext;
     if (!move_uploaded_file((string)$file['tmp_name'], $dir . '/' . $stored)) {
         throw new RuntimeException('증빙 파일 저장 실패');

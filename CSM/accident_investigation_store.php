@@ -275,11 +275,17 @@ function csm_ai_score_summary(int $year, float $points = 1.0): array
             $sq->execute([$year]);
             $yearStatus = $sq->fetchColumn() ?: null;
         }
-        // If marked N/A (no industrial accident in this year), report as N/A without penalizing score
-        if ($yearStatus === 'na') {
+        $yearIncidents = 0;
+        if ($db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='ai_incidents'")->fetch()) {
+            $iq = $db->prepare('SELECT COUNT(*) FROM ai_incidents WHERE year = ?');
+            $iq->execute([$year]);
+            $yearIncidents = (int)$iq->fetchColumn();
+        }
+        // Only allow N/A when no industrial accident is recorded for the selected year
+        if ($yearStatus === 'na' && $yearIncidents === 0) {
             return [
                 'earned' => 0.0,
-                'evidence_count' => max($evCount, 1),
+                'evidence_count' => $evCount,
                 'state' => 'na',
                 'multiplier' => null,
                 'revision' => 0,

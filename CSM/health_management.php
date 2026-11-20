@@ -130,9 +130,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 exec($cmd, $outLines, $exitCode);
                 if ($exitCode !== 0 || !is_file($tmpJson)) {
                     @unlink($tmpPdf);
-                    $errRaw = implode(' ', $outLines);
+                    $tail = array_slice($outLines, -4);
+                    $errRaw = implode(' | ', $tail ?: $outLines);
                     $errUtf8 = @mb_convert_encoding($errRaw, 'UTF-8', 'UTF-8,CP949,EUC-KR') ?: $errRaw;
-                    throw new RuntimeException('PDF 자동 분석에 실패했습니다: ' . mb_substr($errUtf8, 0, 260));
+                    throw new RuntimeException('PDF 자동 분석에 실패했습니다: ' . mb_substr($errUtf8, 0, 320));
                 }
                 $parsed = json_decode((string)file_get_contents($tmpJson), true);
                 @unlink($tmpJson);
@@ -157,76 +158,89 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $flashSuccess = sprintf('[%s] %d페이지 분석 완료 — %d명 추출되었습니다. 아래 미리보기를 확인 후 [일괄 반영]을 눌러주세요.', $pdfPreview['doc_label'], $pdfPreview['page_count'], count($pdfPreview['records']));
             } elseif ($action === 'apply_checkup_pdf') {
                 $preview = $_SESSION['hmg_pdf_preview'] ?? null;
+                $postToken = (string)($_POST['preview_token'] ?? '');
+                if (!is_array($preview) || $postToken === '' || !hash_equals((string)($preview['token'] ?? ''), $postToken) || (int)($preview['year'] ?? 0) !== $year) {
+                    throw new InvalidArgumentException('미리보기 세션이 만료되었거나 연도가 일치하지 않습니다. PDF를 다시 분석해 주세요.');
+                }
                 $rowsIn = $_POST['rows'] ?? [];
                 $attachEv = isset($_POST['attach_evidence']);
                 if (!is_array($rowsIn) || !$rowsIn) {
                     throw new InvalidArgumentException('반영할 행이 없습니다.');
                 }
-                $docType = (string)($_POST['doc_type'] ?? ($preview['doc_type'] ?? 'general_report'));
+                $docType = (string)($preview['doc_type'] ?? 'general_report');
                 $applied = 0;
                 $db->beginTransaction();
-                $findStmt = $db->prepare('SELECT * FROM hmg_checkups WHERE year=? AND worker_name=? LIMIT 1');
-                $updStmt = $db->prepare('UPDATE hmg_checkups SET dept_name=?, exam_date=?, hospital=?, general_grade=?, special_grade=?, work_fitness=?, result_grade=?, finding_summary=?, followup_note=?, followup_done=?, updated_at=? WHERE id=?');
-                $insStmt = $db->prepare('INSERT INTO hmg_checkups (year, worker_name, dept_name, job_type, exam_type, hazard_factors, exam_date, hospital, general_grade, special_grade, work_fitness, result_grade, finding_summary, followup_note, followup_done, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-                foreach ($rowsIn as $r) {
-                    if (empty($r['include'])) continue;
-                    $wName = trim((string)($r['worker_name'] ?? ''));
-                    if ($wName === '') continue;
-                    $dept = trim((string)($r['dept_name'] ?? ''));
-                    $genG = trim((string)($r['general_grade'] ?? ''));
-                    $specG = trim((string)($r['special_grade'] ?? ''));
-                    $fit = trim((string)($r['work_fitness'] ?? ''));
-                    $resG = trim((string)($r['result_grade'] ?? ''));
-                    $eDate = trim((string)($r['exam_date'] ?? ''));
-                    $hosp = trim((string)($r['hospital'] ?? ''));
-                    $find = trim((string)($r['finding_summary'] ?? ''));
-                    $fNote = trim((string)($r['followup_note'] ?? ''));
-                    $fDone = !empty($r['followup_done']) ? 1 : 0;
+                try {
+                    $findStmt = $db->prepare('SELECT * FROM hmg_checkups WHERE year=? AND worker_name=? LIMIT 1');
+                    $updStmt = $db->prepare('UPDATE hmg_checkups SET dept_name=?, exam_date=?, hospital=?, general_grade=?, special_grade=?, work_fitness=?, result_grade=?, finding_summary=?, followup_note=?, followup_done=?, updated_at=? WHERE id=?');
+                    $insStmt = $db->prepare('INSERT INTO hmg_checkups (year, worker_name, dept_name, job_type, exam_type, hazard_factors, exam_date, hospital, general_grade, special_grade, work_fitness, result_grade, finding_summary, followup_note, followup_done, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                    foreach ($rowsIn as $r) {
+                        if (empty($r['include'])) continue;
+                        $wName = trim((string)($r['worker_name'] ?? ''));
+                        if ($wName === '') continue;
+                        $dept = trim((string)($r['dept_name'] ?? ''));
+                        $genG = trim((string)($r['general_grade'] ?? ''));
+                        $specG = trim((string)($r['special_grade'] ?? ''));
+                        $fit = trim((string)($r['work_fitness'] ?? ''));
+                        $resG = trim((string)($r['result_grade'] ?? ''));
+                        $eDate = trim((string)($r['exam_date'] ?? ''));
+                        $hosp = trim((string)($r['hospital'] ?? ''));
+                        $find = trim((string)($r['finding_summary'] ?? ''));
+                        $fNote = trim((string)($r['followup_note'] ?? ''));
+                        $fDone = !empty($r['followup_done']) ? 1 : 0;
 
-                    $findStmt->execute([$year, $wName]);
-                    $ex = $findStmt->fetch();
-                    if ($ex) {
-                        $mDept = $dept !== '' ? $dept : (string)$ex['dept_name'];
-                        $mDate = ($docType !== 'followup_cert' && $eDate !== '') ? $eDate : (string)$ex['exam_date'];
-                        $mHosp = ($docType !== 'followup_cert' && $hosp !== '') ? $hosp : (string)$ex['hospital'];
-                        $mGen = $genG !== '' ? $genG : (string)$ex['general_grade'];
-                        $mSpec = $specG !== '' ? $specG : (string)$ex['special_grade'];
-                        $mFit = ($fit === '나' || $fit === '다' || $fit === '라' || (string)$ex['work_fitness'] === '') ? ($fit ?: (string)$ex['work_fitness']) : (string)$ex['work_fitness'];
-                        $mRes = $resG !== '' ? $resG : (string)$ex['result_grade'];
-                        $mFind = (string)$ex['finding_summary'];
-                        if ($find !== '' && !str_contains($mFind, $find)) {
-                            $mFind = $mFind !== '' ? ($mFind . ' / ' . $find) : $find;
+                        $findStmt->execute([$year, $wName]);
+                        $ex = $findStmt->fetch();
+                        if ($ex) {
+                            $mDept = $dept !== '' ? $dept : (string)$ex['dept_name'];
+                            $mDate = ($docType !== 'followup_cert' && $eDate !== '') ? $eDate : (string)$ex['exam_date'];
+                            $mHosp = ($docType !== 'followup_cert' && $hosp !== '') ? $hosp : (string)$ex['hospital'];
+                            $mGen = $genG !== '' ? $genG : (string)$ex['general_grade'];
+                            $mSpec = $specG !== '' ? $specG : (string)$ex['special_grade'];
+                            $mFit = ($fit === '나' || $fit === '다' || $fit === '라' || (string)$ex['work_fitness'] === '') ? ($fit ?: (string)$ex['work_fitness']) : (string)$ex['work_fitness'];
+                            $mRes = $resG !== '' ? $resG : (string)$ex['result_grade'];
+                            $mFind = (string)$ex['finding_summary'];
+                            if ($find !== '' && !str_contains($mFind, $find)) {
+                                $mFind = $mFind !== '' ? ($mFind . ' / ' . $find) : $find;
+                            }
+                            $mFNote = (string)$ex['followup_note'];
+                            if ($fNote !== '' && !str_contains($mFNote, $fNote)) {
+                                $mFNote = ($docType === 'followup_cert' || $mFNote === '') ? ($mFNote !== '' ? $fNote . ' / ' . $mFNote : $fNote) : $mFNote;
+                            }
+                            // Only mark done if followup_cert explicitly confirms it, or if no new abnormal finding resets it
+                            $hasNewAbnormal = ($docType !== 'followup_cert') && (str_contains($resG, '유소견') || str_contains($resG, '요관찰') || str_contains($resG, '확인필요'));
+                            $mFDone = $docType === 'followup_cert' ? ($fDone === 1 ? 1 : (int)$ex['followup_done']) : ($hasNewAbnormal ? $fDone : (($fDone === 1 || (int)$ex['followup_done'] === 1) ? 1 : 0));
+                            $updStmt->execute([$mDept, $mDate, $mHosp, $mGen, $mSpec, $mFit, $mRes, $mFind, $mFNote, $mFDone, $now, (int)$ex['id']]);
+                        } else {
+                            $insStmt->execute([$year, $wName, $dept ?: '공사부', '비사무직', '일반+특수', '', $eDate ?: date('Y-m-d'), $hosp ?: '근로복지공단 동해병원', $genG ?: '확인필요', $specG ?: '확인필요', $fit ?: '나', $resG ?: '판정확인필요', $find, $fNote, $fDone, $actor, $now, $now]);
                         }
-                        $mFNote = (string)$ex['followup_note'];
-                        if ($fNote !== '' && !str_contains($mFNote, $fNote)) {
-                            $mFNote = ($docType === 'followup_cert' || $mFNote === '') ? ($mFNote !== '' ? $fNote . ' / ' . $mFNote : $fNote) : $mFNote;
-                        }
-                        $mFDone = ($fDone === 1 || (int)$ex['followup_done'] === 1) ? 1 : 0;
-                        $updStmt->execute([$mDept, $mDate, $mHosp, $mGen, $mSpec, $mFit, $mRes, $mFind, $mFNote, $mFDone, $now, (int)$ex['id']]);
-                    } else {
-                        $insStmt->execute([$year, $wName, $dept ?: '공사부', '비사무직', '일반+특수', '', $eDate ?: date('Y-m-d'), $hosp ?: '근로복지공단 동해병원', $genG ?: 'A', $specG ?: 'A', $fit ?: '가', $resG ?: '정상(A/B)', $find, $fNote, $fDone, $actor, $now, $now]);
+                        $applied++;
                     }
-                    $applied++;
-                }
-                $db->commit();
 
-                if ($attachEv && is_array($preview) && !empty($preview['tmp_pdf']) && is_file((string)$preview['tmp_pdf'])) {
-                    $evDir = hmg_evidence_dir();
-                    if (!is_dir($evDir)) mkdir($evDir, 0750, true);
-                    $stored = bin2hex(random_bytes(20)) . '.pdf';
-                    $dest = $evDir . '/' . $stored;
-                    $fSize = (int)filesize((string)$preview['tmp_pdf']);
-                    if (@rename((string)$preview['tmp_pdf'], $dest) || (@copy((string)$preview['tmp_pdf'], $dest) && @unlink((string)$preview['tmp_pdf']))) {
-                        $evKind = $docType === 'followup_cert' ? 'followup' : 'checkup_result';
-                        $db->prepare('INSERT INTO hmg_evidence (year, item_code, kind, original_name, stored_name, mime, size, note, uploaded_by, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-                           ->execute([$year, '2.8.1', $evKind, (string)$preview['orig_name'], $stored, 'application/pdf', $fSize, 'PDF 자동분석 업로드 (' . $applied . '명 반영)', $actor, $now]);
+                    $evAttached = false;
+                    if ($attachEv && !empty($preview['tmp_pdf']) && is_file((string)$preview['tmp_pdf'])) {
+                        $evDir = hmg_evidence_dir();
+                        if (!is_dir($evDir)) mkdir($evDir, 0750, true);
+                        $stored = bin2hex(random_bytes(20)) . '.pdf';
+                        $dest = $evDir . '/' . $stored;
+                        $fSize = (int)filesize((string)$preview['tmp_pdf']);
+                        if (@rename((string)$preview['tmp_pdf'], $dest) || (@copy((string)$preview['tmp_pdf'], $dest) && @unlink((string)$preview['tmp_pdf']))) {
+                            $evKind = $docType === 'followup_cert' ? 'followup' : 'checkup_result';
+                            $db->prepare('INSERT INTO hmg_evidence (year, item_code, kind, original_name, stored_name, mime, size, note, uploaded_by, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                               ->execute([$year, '2.8.1', $evKind, (string)$preview['orig_name'], $stored, 'application/pdf', $fSize, 'PDF 자동분석 업로드 (' . $applied . '명 반영)', $actor, $now]);
+                            $evAttached = true;
+                        }
+                    } elseif (!empty($preview['tmp_pdf']) && is_file((string)$preview['tmp_pdf'])) {
+                        @unlink((string)$preview['tmp_pdf']);
                     }
-                } elseif (is_array($preview) && !empty($preview['tmp_pdf']) && is_file((string)$preview['tmp_pdf'])) {
-                    @unlink((string)$preview['tmp_pdf']);
+                    $db->commit();
+                } catch (Throwable $txErr) {
+                    if ($db->inTransaction()) $db->rollBack();
+                    throw $txErr;
                 }
                 unset($_SESSION['hmg_pdf_preview']);
                 $pdfPreview = null;
-                $flashSuccess = sprintf('총 %d명의 건강검진·사후관리 내역이 일괄 반영되었습니다.%s', $applied, $attachEv ? ' (원본 PDF도 2.8.1 증빙에 자동 첨부 완료)' : '');
+                $flashSuccess = sprintf('총 %d명의 건강검진·사후관리 내역이 일괄 반영되었습니다.%s', $applied, $evAttached ? ' (원본 PDF도 2.8.1 증빙에 자동 첨부 완료)' : '');
             } elseif ($action === 'cancel_checkup_pdf') {
                 if (is_array($pdfPreview) && !empty($pdfPreview['tmp_pdf']) && is_file((string)$pdfPreview['tmp_pdf'])) {
                     @unlink((string)$pdfPreview['tmp_pdf']);
@@ -677,6 +691,7 @@ function hmg_render_ev(string $code, string $tabName, int $year, array $items, a
         </div>
         <form method="post">
           <input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="action" value="apply_checkup_pdf"><input type="hidden" name="tab" value="checkup">
+          <input type="hidden" name="preview_token" value="<?= $e($pdfPreview['token']) ?>">
           <input type="hidden" name="doc_type" value="<?= $e($pdfPreview['doc_type']) ?>">
           <div class="tbl-wrap" style="max-height:420px;overflow:auto;">
             <table>
