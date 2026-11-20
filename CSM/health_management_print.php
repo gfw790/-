@@ -88,14 +88,14 @@ if ($mode === 'checkup') {
   .photo-box .pcap { font-size: 8.3pt; font-weight: 800; margin-bottom: 5px; background: #f1f5f9; padding: 3px; }
   .photo-box img { max-width: 100%; max-height: 68mm; object-fit: contain; display: block; margin: 0 auto; }
   .photo-empty { height: 54mm; display: flex; align-items: center; justify-content: center; color: #94a3b8; font-size: 8.3pt; }
-  .doc-footer { margin-top: auto; padding-top: 8px; border-top: 0.75pt solid #cbd5e1; display: flex; align-items: center; justify-content: center; gap: 8px; break-inside: avoid; page-break-inside: avoid; }
+  .doc-footer { margin-top: auto; padding-top: 8px; border-top: 0.75pt solid #cbd5e1; display: flex; align-items: center; justify-content: flex-end; gap: 8px; break-inside: avoid; page-break-inside: avoid; }
   .doc-footer-logo { height: 6mm; width: auto; object-fit: contain; }
   .doc-footer-company { font-size: 10pt; font-weight: 800; letter-spacing: 2px; color: #111; }
   table.print-frame { width: 100%; border-collapse: collapse; border: none; }
   table.print-frame > thead, table.print-frame > tfoot { display: none; }
   table.print-frame > tbody > tr > td.pf-body { padding: 0; border: none; vertical-align: top; }
   .pf-top { height: 20mm; }
-  .pf-bot { height: 12mm; }
+  .pf-bot { height: 15mm; padding: 2mm 12mm 5mm 12mm; display: flex; align-items: flex-end; justify-content: flex-end; gap: 7px; }
   @media print {
     body { background: #fff; }
     .toolbar { display: none !important; }
@@ -105,12 +105,12 @@ if ($mode === 'checkup') {
     table.print-frame > thead > tr > td, table.print-frame > tfoot > tr > td { padding: 0; border: none; }
     table.print-frame > tbody > tr > td.pf-body { padding: 0 12mm; }
     body.margin-left .pf-top { height: 14mm; }
-    body.margin-left .pf-bot { height: 12mm; }
+    body.margin-left .pf-bot { height: 15mm; padding: 2mm 12mm 5mm 20mm; }
     body.margin-left table.print-frame > tbody > tr > td.pf-body { padding: 0 12mm 0 20mm; }
     body.margin-wide .pf-top { height: 18mm; }
-    body.margin-wide .pf-bot { height: 16mm; }
+    body.margin-wide .pf-bot { height: 17mm; padding: 2mm 16mm 6mm 16mm; }
     body.margin-wide table.print-frame > tbody > tr > td.pf-body { padding: 0 16mm; }
-    .doc-footer { margin-top: 14px; }
+    .doc-footer { display: none !important; }
   }
 </style>
 </head>
@@ -129,7 +129,7 @@ if ($mode === 'checkup') {
 
 <?php if ($mode === 'checkup' || $mode === 'env' || $mode === 'msds'): ?>
   <section class="sheet">
-    <table class="print-frame"><thead><tr><td><div class="pf-top"></div></td></tr></thead><tfoot><tr><td><div class="pf-bot"></div></td></tr></tfoot><tbody><tr><td class="pf-body">
+    <table class="print-frame"><thead><tr><td><div class="pf-top"></div></td></tr></thead><tfoot><tr><td><div class="pf-bot"><?php if ($logoSrc !== ''): ?><img class="doc-footer-logo" src="<?= $e($logoSrc) ?>" alt="로고"><?php endif; ?><span class="doc-footer-company">주식회사 현대기전</span></div></td></tr></tfoot><tbody><tr><td class="pf-body">
     <div class="doc-head">
       <div class="doc-title-area">
         <small>CSM 2.8 보건 · 주식회사 현대기전</small>
@@ -172,7 +172,7 @@ if ($mode === 'checkup') {
 <?php else: ?>
   <?php if (!$rows): ?>
     <section class="sheet">
-      <table class="print-frame"><thead><tr><td><div class="pf-top"></div></td></tr></thead><tfoot><tr><td><div class="pf-bot"></div></td></tr></tfoot><tbody><tr><td class="pf-body">
+      <table class="print-frame"><thead><tr><td><div class="pf-top"></div></td></tr></thead><tfoot><tr><td><div class="pf-bot"><?php if ($logoSrc !== ''): ?><img class="doc-footer-logo" src="<?= $e($logoSrc) ?>" alt="로고"><?php endif; ?><span class="doc-footer-company">주식회사 현대기전</span></div></td></tr></tfoot><tbody><tr><td class="pf-body">
       <div class="doc-head"><div class="doc-title-area"><small>CSM 2.8 보건</small><h1><?= $e($titles[$mode]) ?></h1></div><div class="approval-wrap"><div class="ap-side">결<br>재</div><table class="ap-tbl"><tr><th>작 성</th><th>승 인</th></tr><tr><td>&nbsp;</td><td>&nbsp;</td></tr></table></div></div>
       <p style="padding:36px;text-align:center;color:#64748b;">등록된 <?= $year ?>년 점검 기록이 없습니다.</p>
       <div class="doc-footer"><?php if ($logoSrc !== ''): ?><img class="doc-footer-logo" src="<?= $e($logoSrc) ?>" alt="로고"><?php endif; ?><span class="doc-footer-company">주식회사 현대기전</span></div>
@@ -180,7 +180,7 @@ if ($mode === 'checkup') {
     </section>
   <?php else: foreach ($rows as $r): ?>
     <section class="sheet">
-      <table class="print-frame"><thead><tr><td><div class="pf-top"></div></td></tr></thead><tfoot><tr><td><div class="pf-bot"></div></td></tr></tfoot><tbody><tr><td class="pf-body">
+      <table class="print-frame"><thead><tr><td><div class="pf-top"></div></td></tr></thead><tfoot><tr><td><div class="pf-bot"><?php if ($logoSrc !== ''): ?><img class="doc-footer-logo" src="<?= $e($logoSrc) ?>" alt="로고"><?php endif; ?><span class="doc-footer-company">주식회사 현대기전</span></div></td></tr></tfoot><tbody><tr><td class="pf-body">
       <div class="doc-head">
         <div class="doc-title-area">
           <small>CSM <?= $mode === 'chem_check' ? '2.8.4' : '2.8.5' ?> 보건 · 현장 정기점검표</small>
