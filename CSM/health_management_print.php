@@ -68,14 +68,12 @@ if ($mode === 'checkup') {
   .doc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 2px solid #111; }
   .doc-title-area small { display: block; font-size: 8.3pt; color: #475569; font-weight: 700; }
   .doc-title-area h1 { margin: 2px 0 3px; font-size: 16pt; font-weight: 900; }
-  .approval-wrap { display: flex; flex-shrink: 0; border: 1pt solid #000; }
-  .ap-side { width: 18px; display: flex; align-items: center; justify-content: center; text-align: center; font-weight: 800; font-size: 8.3pt; line-height: 1.4; border-right: 1pt solid #000; background: #f8fafc; }
-  .ap-tbl { border-collapse: collapse; width: 128px; table-layout: fixed; }
-  .ap-tbl th, .ap-tbl td { border: 1pt solid #000; text-align: center; padding: 2px 4px; width: 50%; }
-  .ap-tbl tr:first-child th { border-top: none; background: #f8fafc; font-size: 8.3pt; font-weight: 800; height: 19px; }
-  .ap-tbl tr:last-child td { border-bottom: none; height: 40px; }
-  .ap-tbl th:first-child, .ap-tbl td:first-child { border-left: none; }
-  .ap-tbl th:last-child, .ap-tbl td:last-child { border-right: none; }
+  .approval-wrap { flex-shrink: 0; }
+  .ap-tbl { border-collapse: collapse; width: 152px; table-layout: fixed; border: 1px solid #000; }
+  .ap-tbl th, .ap-tbl td { border: 1px solid #000; text-align: center; vertical-align: middle; padding: 2px 4px; }
+  .ap-tbl th.ap-side-cell { width: 22px; background: #f8fafc; font-weight: 800; font-size: 8.3pt; line-height: 1.45; }
+  .ap-tbl tr:first-child th:not(.ap-side-cell) { width: 65px; background: #f8fafc; font-size: 8.3pt; font-weight: 800; height: 20px; }
+  .ap-tbl tr:last-child td { height: 42px; background: #fff; }
   .sec-title { font-size: 10pt; font-weight: 900; margin: 11px 0 5px; padding-left: 7px; border-left: 3.5px solid #0369a1; }
   table.data-tbl { width: 100%; border-collapse: collapse; font-size: 8.4pt; }
   table.data-tbl thead { display: table-header-group; }
@@ -136,7 +134,7 @@ if ($mode === 'checkup') {
         <h1><?= $e($titles[$mode]) ?></h1>
         <div style="font-size:8.5pt;color:#334155;">관리연도: <?= $year ?>년 &nbsp;|&nbsp; 출력일: <?= date('Y. m. d.') ?></div>
       </div>
-      <div class="approval-wrap"><div class="ap-side">결<br>재</div><table class="ap-tbl"><tr><th>작 성</th><th>승 인</th></tr><tr><td>&nbsp;</td><td>&nbsp;</td></tr></table></div>
+      <div class="approval-wrap"><table class="ap-tbl"><tr><th rowspan="2" class="ap-side-cell">결<br>재</th><th>작 성</th><th>승 인</th></tr><tr><td>&nbsp;</td><td>&nbsp;</td></tr></table></div>
     </div>
 
     <?php if ($mode === 'checkup'): ?>
@@ -173,7 +171,7 @@ if ($mode === 'checkup') {
   <?php if (!$rows): ?>
     <section class="sheet">
       <table class="print-frame"><thead><tr><td><div class="pf-top"></div></td></tr></thead><tfoot><tr><td><div class="pf-bot"><?php if ($logoSrc !== ''): ?><img class="doc-footer-logo" src="<?= $e($logoSrc) ?>" alt="로고"><?php endif; ?><span class="doc-footer-company">주식회사 현대기전</span></div></td></tr></tfoot><tbody><tr><td class="pf-body">
-      <div class="doc-head"><div class="doc-title-area"><small>CSM 2.8 보건</small><h1><?= $e($titles[$mode]) ?></h1></div><div class="approval-wrap"><div class="ap-side">결<br>재</div><table class="ap-tbl"><tr><th>작 성</th><th>승 인</th></tr><tr><td>&nbsp;</td><td>&nbsp;</td></tr></table></div></div>
+      <div class="doc-head"><div class="doc-title-area"><small>CSM 2.8 보건</small><h1><?= $e($titles[$mode]) ?></h1></div><div class="approval-wrap"><table class="ap-tbl"><tr><th rowspan="2" class="ap-side-cell">결<br>재</th><th>작 성</th><th>승 인</th></tr><tr><td>&nbsp;</td><td>&nbsp;</td></tr></table></div></div>
       <p style="padding:36px;text-align:center;color:#64748b;">등록된 <?= $year ?>년 점검 기록이 없습니다.</p>
       <div class="doc-footer"><?php if ($logoSrc !== ''): ?><img class="doc-footer-logo" src="<?= $e($logoSrc) ?>" alt="로고"><?php endif; ?><span class="doc-footer-company">주식회사 현대기전</span></div>
       </td></tr></tbody></table>
@@ -187,7 +185,7 @@ if ($mode === 'checkup') {
           <h1><?= $e($titles[$mode]) ?></h1>
           <div style="font-size:8.5pt;color:#334155;">점검일: <?= $e($r['check_date']) ?> &nbsp;|&nbsp; 점검자: <?= $e($r['inspector']) ?> &nbsp;|&nbsp; 장소: <?= $e($r['location']) ?></div>
         </div>
-        <div class="approval-wrap"><div class="ap-side">결<br>재</div><table class="ap-tbl"><tr><th>작 성</th><th>승 인</th></tr><tr><td>&nbsp;</td><td>&nbsp;</td></tr></table></div>
+        <div class="approval-wrap"><table class="ap-tbl"><tr><th rowspan="2" class="ap-side-cell">결<br>재</th><th>작 성</th><th>승 인</th></tr><tr><td>&nbsp;</td><td>&nbsp;</td></tr></table></div>
       </div>
 
       <div class="sec-title">1. 점검 결과 (종합: <?= $e($r['overall_result']) ?>)</div>
