@@ -528,8 +528,17 @@ function er_save_assessment(PDO $db, int $year, string $code, string $level, str
 
 function csm_er_score_summary(int $year, string $itemCode, float $points = 2.0): array
 {
+    $empty = [
+        'earned' => 0.0,
+        'evidence_count' => 0,
+        'state' => 'no_evidence',
+        'multiplier' => 0.0,
+        'revision' => 0,
+        'automatic' => true,
+        'assessment' => null,
+    ];
     if (!in_array($itemCode, array_column(er_items(), 0), true) || !is_file(er_db_path())) {
-        return [];
+        return $empty;
     }
     try {
         $path = str_replace('\\', '/', er_db_path());
@@ -574,7 +583,7 @@ function csm_er_score_summary(int $year, string $itemCode, float $points = 2.0):
             $assessment = $query->fetch() ?: null;
         }
         if (!in_array('er_evidence', $tables, true) && $count === 0 && $assessment === null) {
-            return [];
+            return $empty;
         }
         $multiplier = $count > 0 ? (float)($assessment['multiplier'] ?? 1.0) : 0.0;
         return [
@@ -588,6 +597,6 @@ function csm_er_score_summary(int $year, string $itemCode, float $points = 2.0):
         ];
     } catch (PDOException $error) {
         error_log('csm_er_score_summary: ' . $error->getMessage());
-        return [];
+        return $empty;
     }
 }
