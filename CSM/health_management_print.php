@@ -51,8 +51,10 @@ if ($mode === 'checkup') {
 <head>
 <meta charset="utf-8">
 <title><?= $e($titles[$mode]) ?> · 주식회사 현대기전</title>
+<style id="pageMarginStyle">
+  @page { size: A4 <?= $isLandscape ? 'landscape' : 'portrait' ?>; margin: 20mm 12mm 12mm 12mm; }
+</style>
 <style>
-  @page { size: A4 <?= $isLandscape ? 'landscape' : 'portrait' ?>; margin: 0; }
   * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
   body { margin: 0; background: #e5e9ec; color: #111; font-family: "Malgun Gothic","Apple SD Gothic Neo",sans-serif; font-size: 9pt; line-height: 1.45; }
   .toolbar { position: sticky; top: 0; z-index: 100; background: #0c354c; color: #fff; padding: 10px 20px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
@@ -78,18 +80,25 @@ if ($mode === 'checkup') {
   .ap-tbl th:last-child, .ap-tbl td:last-child { border-right: none; }
   .sec-title { font-size: 10pt; font-weight: 900; margin: 11px 0 5px; padding-left: 7px; border-left: 3.5px solid #0369a1; }
   table.data-tbl { width: 100%; border-collapse: collapse; font-size: 8.4pt; }
+  table.data-tbl thead { display: table-header-group; }
+  table.data-tbl tr { break-inside: avoid; page-break-inside: avoid; }
   table.data-tbl th, table.data-tbl td { border: 0.75pt solid #334155; padding: 4px 6px; vertical-align: middle; }
   table.data-tbl th { background: #eef4f8; font-weight: 800; text-align: center; }
   .ctr { text-align: center; }
   .photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
-  .photo-box { border: 0.75pt solid #334155; padding: 6px; text-align: center; }
+  .photo-box { border: 0.75pt solid #334155; padding: 6px; text-align: center; break-inside: avoid; page-break-inside: avoid; }
   .photo-box .pcap { font-size: 8.3pt; font-weight: 800; margin-bottom: 5px; background: #f1f5f9; padding: 3px; }
   .photo-box img { max-width: 100%; max-height: 68mm; object-fit: contain; display: block; margin: 0 auto; }
   .photo-empty { height: 54mm; display: flex; align-items: center; justify-content: center; color: #94a3b8; font-size: 8.3pt; }
-  .doc-footer { margin-top: auto; padding-top: 8px; border-top: 0.75pt solid #cbd5e1; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .doc-footer { margin-top: auto; padding-top: 8px; border-top: 0.75pt solid #cbd5e1; display: flex; align-items: center; justify-content: center; gap: 8px; break-inside: avoid; page-break-inside: avoid; }
   .doc-footer-logo { height: 6mm; width: auto; object-fit: contain; }
   .doc-footer-company { font-size: 10pt; font-weight: 800; letter-spacing: 2px; color: #111; }
-  @media print { body { background: #fff; } .toolbar { display: none !important; } .sheet { margin: 0; box-shadow: none; } }
+  @media print {
+    body { background: #fff; }
+    .toolbar { display: none !important; }
+    .sheet, body.margin-left .sheet, body.margin-wide .sheet { width: auto; min-height: auto; margin: 0; padding: 0; box-shadow: none; display: block; }
+    .doc-footer { margin-top: 14px; }
+  }
 </style>
 </head>
 <body>
@@ -196,7 +205,19 @@ if ($mode === 'checkup') {
 <?php endif; ?>
 
 <script>
-function setMargin(c){ document.body.classList.remove('margin-left','margin-wide'); if(c) document.body.classList.add(c); ['mTop','mLeft','mWide'].forEach((id,i)=>document.getElementById(id)?.classList.toggle('active', c===['','margin-left','margin-wide'][i])); }
+const PAGE_ORIENT = <?= json_encode($isLandscape ? 'landscape' : 'portrait') ?>;
+const PAGE_MARGINS = {
+  '': '20mm 12mm 12mm 12mm',
+  'margin-left': '14mm 12mm 12mm 20mm',
+  'margin-wide': '18mm 16mm 16mm 16mm'
+};
+function setMargin(c){
+  document.body.classList.remove('margin-left','margin-wide');
+  if(c) document.body.classList.add(c);
+  ['mTop','mLeft','mWide'].forEach((id,i)=>document.getElementById(id)?.classList.toggle('active', c===['','margin-left','margin-wide'][i]));
+  const st = document.getElementById('pageMarginStyle');
+  if (st) st.textContent = `@page { size: A4 ${PAGE_ORIENT}; margin: ${PAGE_MARGINS[c] || PAGE_MARGINS['']}; }`;
+}
 function toggleApproval(){ const h=document.body.classList.toggle('hide-approval'); const b=document.getElementById('btnApproval'); if(b){ b.classList.toggle('active',!h); b.textContent=h?'결재란 OFF':'결재란 ON'; } }
 </script>
 </body>
