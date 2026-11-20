@@ -37,7 +37,7 @@ if ($mode === 'checkup') {
 } elseif ($mode === 'env') {
     $s = $db->prepare('SELECT * FROM hmg_env_measurements WHERE year=? ORDER BY measure_date ASC, id ASC'); $s->execute([$year]); $rows = $s->fetchAll();
 } elseif ($mode === 'msds') {
-    $rows = $db->query('SELECT * FROM hmg_chemicals WHERE active=1 ORDER BY sort_order ASC, id ASC')->fetchAll();
+    $rows = hmg_load_linked_msds();
 } elseif ($mode === 'chem_check') {
     $s = $db->prepare($idFilter > 0 ? 'SELECT * FROM hmg_chem_checks WHERE year=? AND id=?' : 'SELECT * FROM hmg_chem_checks WHERE year=? ORDER BY check_date DESC, id DESC');
     $s->execute($idFilter > 0 ? [$year, $idFilter] : [$year]); $rows = $s->fetchAll();
@@ -131,9 +131,9 @@ if ($mode === 'checkup') {
         <?php endforeach; endif; ?>
       </tbody></table>
     <?php else: ?>
-      <table class="data-tbl"><thead><tr><th>No</th><th>화학물질명</th><th>유해성 분류</th><th>제조사</th><th>사용 공정</th><th>보관장소</th><th>MSDS 개정일</th><th>MSDS 비치</th><th>GHS 표지</th></tr></thead><tbody>
+      <table class="data-tbl"><thead><tr><th style="width:28px;">No</th><th>화학물질명</th><th style="width:120px;">제조사</th><th style="width:78px;">최초작성일</th><th style="width:78px;">최신 개정일</th><th style="width:48px;">개정차수</th><th style="width:66px;">MSDS 원문</th><th>비고</th></tr></thead><tbody>
         <?php foreach ($rows as $i => $r): ?>
-          <tr><td class="ctr"><?= $i+1 ?></td><td><strong><?= $e($r['chem_name']) ?></strong></td><td><?= $e($r['hazard_class']) ?></td><td><?= $e($r['manufacturer']) ?></td><td><?= $e($r['usage_process']) ?></td><td><?= $e($r['storage_place']) ?></td><td class="ctr"><?= $e($r['msds_rev_date']) ?></td><td class="ctr"><?= $e($r['msds_placed']) ?></td><td class="ctr"><?= $e($r['ghs_labeled']) ?></td></tr>
+          <tr><td class="ctr"><?= $i+1 ?></td><td><strong><?= $e($r['material_name']) ?></strong></td><td><?= $e($r['manufacturer'] ?: '-') ?></td><td class="ctr"><?= $e($r['created_date'] ?: '-') ?></td><td class="ctr"><strong><?= $e($r['revised_date'] ?: '-') ?></strong></td><td class="ctr"><?= $r['revision_count'] !== '' ? $e($r['revision_count']) . '차' : '-' ?></td><td class="ctr"><?= !empty($r['has_file']) ? '비치완료' : '미비치' ?></td><td><?= $e($r['note'] ?: '-') ?></td></tr>
         <?php endforeach; ?>
       </tbody></table>
     <?php endif; ?>

@@ -308,6 +308,42 @@ function hmg_seed_defaults(PDO $db): void
     }
 }
 
+function hmg_load_linked_msds(): array
+{
+    $jsonPath = dirname(__DIR__) . '/risk_assessment/msds_records.json';
+    $uploadDir = dirname(__DIR__) . '/risk_assessment/uploads/msds';
+    if (!is_file($jsonPath)) {
+        return [];
+    }
+    $raw = @file_get_contents($jsonPath);
+    if ($raw === false || trim($raw) === '') {
+        return [];
+    }
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        return [];
+    }
+    $out = [];
+    foreach ($decoded as $r) {
+        if (!is_array($r)) continue;
+        $stored = basename((string)($r['stored_name'] ?? ''));
+        $hasFile = $stored !== '' && is_file($uploadDir . '/' . $stored) && filesize($uploadDir . '/' . $stored) > 0;
+        $out[] = [
+            'id' => (string)($r['id'] ?? ''),
+            'material_name' => (string)($r['material_name'] ?? $r['original_name'] ?? ''),
+            'manufacturer' => (string)($r['manufacturer'] ?? ''),
+            'created_date' => (string)($r['created_date'] ?? ''),
+            'revised_date' => (string)($r['revised_date'] ?? ''),
+            'revision_count' => (string)($r['revision_count'] ?? ''),
+            'note' => (string)($r['note'] ?? ''),
+            'original_name' => (string)($r['original_name'] ?? ''),
+            'stored_name' => $stored,
+            'has_file' => $hasFile,
+        ];
+    }
+    return $out;
+}
+
 function hmg_save_photo_file(?array $file, string $base64Data, string $prefix): string
 {
     $dir = hmg_photo_dir();
@@ -454,6 +490,14 @@ function csm_hmg_score_summary(int $year, string $itemCode, float $points = 2.0)
                     if (is_file($p) && filesize($p) > 0) {
                         $evCount++;
                     }
+                }
+            }
+        }
+        // For 2.8.3, also count valid linked MSDS PDF files from risk_assessment/msds_records.json
+        if ($itemCode === '2.8.3') {
+            foreach (hmg_load_linked_msds() as $msds) {
+                if (!empty($msds['has_file'])) {
+                    $evCount++;
                 }
             }
         }

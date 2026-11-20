@@ -219,6 +219,7 @@ $envRows->execute([$year]);
 $envRows = $envRows->fetchAll();
 
 $chemicals = $db->query('SELECT * FROM hmg_chemicals WHERE active=1 ORDER BY sort_order ASC, id ASC')->fetchAll();
+$linkedMsds = hmg_load_linked_msds();
 
 $chemChecks = $db->prepare('SELECT * FROM hmg_chem_checks WHERE year=? ORDER BY check_date DESC, id DESC');
 $chemChecks->execute([$year]);
@@ -625,11 +626,42 @@ function hmg_render_ev(string $code, string $tabName, int $year, array $items, a
   <?php elseif ($tab === 'msds'): ?>
     <section class="card">
       <div class="card-head">
-        <div><h2>2.8.3 취급 화학물질 및 MSDS 최신본 관리대장 (<?= count($chemicals) ?>종)</h2><p class="sub">기존 MSDS 원문 보관함과 연계하여 현장 취급 화학물질 목록 및 최신 개정일을 관리합니다.</p></div>
+        <div>
+          <h2>2.8.3 취급 화학물질 및 MSDS 최신본 실시간 연동 대장 (<?= count($linkedMsds) ?>종)</h2>
+          <p class="sub">기존 <strong>위험성평가 MSDS 자료실(`msds_records.json`)</strong>과 실시간 자동 연동됩니다. PDF 원문 보유 항목은 2.8.3 증빙으로 자동 반영됩니다.</p>
+        </div>
         <div style="display:flex;gap:8px;">
-          <a class="btn sm ghost" href="../risk_assessment/msds_list.php" target="_blank">📂 기존 MSDS 자료실 열기 ↗</a>
+          <a class="btn sm ghost" href="../risk_assessment/msds_list.php" target="_blank">📂 MSDS 자료실 등록·수정 ↗</a>
           <a class="btn sm primary" href="health_management_print.php?mode=msds&amp;year=<?= $year ?>" target="_blank">🖨️ MSDS 대장 A4 출력</a>
         </div>
+      </div>
+      <div class="tbl-wrap"><table><thead><tr><th class="ctr">No</th><th>화학물질명</th><th>제조사</th><th class="ctr">최초작성일</th><th class="ctr">최신 개정일</th><th class="ctr">개정차수</th><th>비고</th><th class="ctr">MSDS 원문</th></tr></thead><tbody>
+        <?php if (!$linkedMsds): ?>
+          <tr><td colspan="8" class="ctr" style="padding:20px;color:var(--muted);">연동된 MSDS 자료가 없습니다.</td></tr>
+        <?php else: foreach ($linkedMsds as $i => $m): ?>
+          <tr>
+            <td class="ctr"><?= $i + 1 ?></td>
+            <td><strong><?= $e($m['material_name']) ?></strong></td>
+            <td><?= $e($m['manufacturer'] ?: '-') ?></td>
+            <td class="ctr"><?= $e($m['created_date'] ?: '-') ?></td>
+            <td class="ctr"><strong><?= $e($m['revised_date'] ?: '-') ?></strong></td>
+            <td class="ctr"><?= $m['revision_count'] !== '' ? $e($m['revision_count']) . '차' : '-' ?></td>
+            <td><?= $e($m['note'] ?: '-') ?></td>
+            <td class="ctr" style="white-space:nowrap;">
+              <?php if ($m['has_file']): ?>
+                <a class="btn sm ghost" href="../risk_assessment/msds_list.php?download_file=<?= urlencode($m['id']) ?>" target="_blank">📄 PDF 다운로드</a>
+              <?php else: ?>
+                <span class="badge warn">파일 없음</span>
+              <?php endif; ?>
+            </td>
+          </tr>
+        <?php endforeach; endif; ?>
+      </tbody></table></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <div><h3>추가 현장 취급 화학물질 메모 (선택 · <?= count($chemicals) ?>종)</h3><p class="sub">MSDS 자료실 외 현장에서 임시·추가 관리가 필요한 항목을 기록할 수 있습니다.</p></div>
       </div>
       <?php if ($canManage): ?>
       <form method="post" style="margin-bottom:14px;padding:12px;background:#f8fbfc;border:1px solid var(--line);border-radius:10px;">
