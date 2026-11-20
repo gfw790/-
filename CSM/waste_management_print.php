@@ -105,6 +105,7 @@ $docTitleMap = [
   .sheet:last-child { page-break-after: auto; break-after: auto; }
   body.margin-left .sheet { padding: 14mm 12mm 12mm 20mm; }
   body.margin-wide .sheet { padding: 18mm 16mm 16mm 16mm; }
+  body.hide-approval .approval-wrap { display: none !important; }
 
   .doc-head {
     display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
@@ -204,7 +205,7 @@ $docTitleMap = [
   }
 </style>
 </head>
-<body>
+<body class="<?= $mode === 'process' ? 'hide-approval' : '' ?>">
 
 <div class="toolbar">
   <div class="toolbar-left">
@@ -212,6 +213,7 @@ $docTitleMap = [
   </div>
   <div class="toolbar-right">
     <?php if ($mode !== 'sign'): ?>
+      <button type="button" class="tbtn <?= $mode === 'process' ? '' : 'active' ?>" id="btnApproval" onclick="toggleApproval()">결재란 <?= $mode === 'process' ? 'OFF' : 'ON' ?></button>
       <button type="button" class="tbtn active" id="mTop" onclick="setMargin('')">상단 편철 (기본 20/12mm)</button>
       <button type="button" class="tbtn" id="mLeft" onclick="setMargin('margin-left')">좌측 편철 (좌 20mm)</button>
       <button type="button" class="tbtn" id="mWide" onclick="setMargin('margin-wide')">여유 편철 (18/16mm)</button>
@@ -534,10 +536,19 @@ $docTitleMap = [
 
 <script>
 function setMargin(cls) {
-  document.body.className = cls;
+  document.body.classList.remove('margin-left', 'margin-wide');
+  if (cls) document.body.classList.add(cls);
   document.getElementById('mTop')?.classList.toggle('active', cls === '');
   document.getElementById('mLeft')?.classList.toggle('active', cls === 'margin-left');
   document.getElementById('mWide')?.classList.toggle('active', cls === 'margin-wide');
+}
+function toggleApproval() {
+  const hidden = document.body.classList.toggle('hide-approval');
+  const btn = document.getElementById('btnApproval');
+  if (btn) {
+    btn.classList.toggle('active', !hidden);
+    btn.textContent = hidden ? '결재란 OFF' : '결재란 ON';
+  }
 }
 </script>
 </body>
