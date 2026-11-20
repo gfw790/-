@@ -76,6 +76,54 @@ function pt_db(): PDO
         updated_by TEXT NOT NULL,
         updated_at TEXT NOT NULL
     )');
+    $db->exec('CREATE TABLE IF NOT EXISTS pt_ladders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        seq_no INTEGER NOT NULL DEFAULT 0,
+        equipment_type TEXT NOT NULL DEFAULT "A형 사다리",
+        code TEXT NOT NULL UNIQUE,
+        kind TEXT NOT NULL DEFAULT "A형",
+        material TEXT NOT NULL DEFAULT "알루미늄",
+        height_spec TEXT NOT NULL DEFAULT "",
+        check1_date TEXT NOT NULL DEFAULT "2026-05-07",
+        r1_step TEXT NOT NULL DEFAULT "",
+        r1_strut TEXT NOT NULL DEFAULT "",
+        r1_brace TEXT NOT NULL DEFAULT "",
+        r1_spreader TEXT NOT NULL DEFAULT "",
+        r1_antislip TEXT NOT NULL DEFAULT "",
+        check2_date TEXT NOT NULL DEFAULT "2026-11-07",
+        r2_step TEXT NOT NULL DEFAULT "",
+        r2_strut TEXT NOT NULL DEFAULT "",
+        r2_brace TEXT NOT NULL DEFAULT "",
+        r2_spreader TEXT NOT NULL DEFAULT "",
+        r2_antislip TEXT NOT NULL DEFAULT "",
+        inspector TEXT NOT NULL DEFAULT "김남균",
+        remarks TEXT NOT NULL DEFAULT "",
+        updated_at TEXT NOT NULL
+    )');
+    $db->exec('CREATE TABLE IF NOT EXISTS pt_harnesses (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        seq_no INTEGER NOT NULL DEFAULT 0,
+        worker_name TEXT NOT NULL DEFAULT "(예비)",
+        code TEXT NOT NULL UNIQUE,
+        check1_date TEXT NOT NULL DEFAULT "2026-05-07",
+        check1_result TEXT NOT NULL DEFAULT "",
+        check2_date TEXT NOT NULL DEFAULT "2026-11-07",
+        check2_result TEXT NOT NULL DEFAULT "",
+        inspector TEXT NOT NULL DEFAULT "김남균",
+        remarks TEXT NOT NULL DEFAULT "",
+        updated_at TEXT NOT NULL
+    )');
+    $db->exec('CREATE TABLE IF NOT EXISTS pt_lockouts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        seq_no INTEGER NOT NULL DEFAULT 0,
+        lock_group TEXT NOT NULL DEFAULT "개인잠금",
+        holder_name TEXT NOT NULL DEFAULT "",
+        issue_date TEXT NOT NULL DEFAULT "2026-01-02",
+        qty INTEGER NOT NULL DEFAULT 1,
+        key_no TEXT NOT NULL,
+        remarks TEXT NOT NULL DEFAULT "",
+        updated_at TEXT NOT NULL
+    )');
     return $db;
 }
 

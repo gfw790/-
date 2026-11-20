@@ -65,7 +65,7 @@ $error = '';
 $notice = $_SESSION['csm_pt_notice'] ?? '';
 unset($_SESSION['csm_pt_notice']);
 $tab = (string)($_GET['tab'] ?? $_POST['tab'] ?? 'register');
-if (!in_array($tab, ['register', 'checklist', 'evidence'], true)) $tab = 'register';
+if (!in_array($tab, ['register', 'checklist', 'ladder', 'harness', 'lockout', 'evidence'], true)) $tab = 'register';
 $selectedId = filter_var($_GET['id'] ?? $_POST['equipment_id'] ?? 0, FILTER_VALIDATE_INT) ?: 0;
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
@@ -238,6 +238,108 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $_SESSION['csm_pt_notice'] = '2.6.2 평가 수준을 저장했습니다.';
             header('Location: portable_tools.php?tab=evidence&year=' . $year, true, 303);
             exit;
+        } elseif ($action === 'save_ladders_batch') {
+            $rowsPost = $_POST['lad'] ?? [];
+            $db->beginTransaction();
+            $st = $db->prepare('UPDATE pt_ladders SET check1_date=?, r1_step=?, r1_strut=?, r1_brace=?, r1_spreader=?, r1_antislip=?, check2_date=?, r2_step=?, r2_strut=?, r2_brace=?, r2_spreader=?, r2_antislip=?, inspector=?, updated_at=? WHERE id=?');
+            foreach ($rowsPost as $lid => $d) {
+                $st->execute([
+                    trim((string)($d['c1_date'] ?? '2026-05-07')),
+                    trim((string)($d['r1_step'] ?? '')), trim((string)($d['r1_strut'] ?? '')),
+                    trim((string)($d['r1_brace'] ?? '')), trim((string)($d['r1_spreader'] ?? '')), trim((string)($d['r1_antislip'] ?? '')),
+                    trim((string)($d['c2_date'] ?? '2026-11-07')),
+                    trim((string)($d['r2_step'] ?? '')), trim((string)($d['r2_strut'] ?? '')),
+                    trim((string)($d['r2_brace'] ?? '')), trim((string)($d['r2_spreader'] ?? '')), trim((string)($d['r2_antislip'] ?? '')),
+                    trim((string)($d['inspector'] ?? '김남균')), date('Y-m-d H:i:s'), (int)$lid
+                ]);
+            }
+            $db->commit();
+            $_SESSION['csm_pt_notice'] = '사다리 관리대장 점검결과를 저장했습니다.';
+            header('Location: portable_tools.php?tab=ladder&year=' . $year, true, 303);
+            exit;
+        } elseif ($action === 'add_ladder') {
+            $code = trim((string)($_POST['code'] ?? ''));
+            if ($code === '') throw new InvalidArgumentException('관리번호를 입력해 주세요.');
+            $nextSeq = ((int)$db->query('SELECT COALESCE(MAX(seq_no), 0) FROM pt_ladders')->fetchColumn()) + 1;
+            $db->prepare('INSERT INTO pt_ladders (seq_no, equipment_type, code, kind, material, height_spec, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+               ->execute([$nextSeq, trim((string)($_POST['equipment_type'] ?? 'A형 사다리')), $code, trim((string)($_POST['kind'] ?? 'A형')), trim((string)($_POST['material'] ?? '알루미늄')), trim((string)($_POST['height_spec'] ?? '')), date('Y-m-d H:i:s')]);
+            $_SESSION['csm_pt_notice'] = "사다리 [{$code}]를 추가했습니다.";
+            header('Location: portable_tools.php?tab=ladder&year=' . $year, true, 303);
+            exit;
+        } elseif ($action === 'delete_ladder') {
+            $db->prepare('DELETE FROM pt_ladders WHERE id = ?')->execute([(int)($_POST['id'] ?? 0)]);
+            $_SESSION['csm_pt_notice'] = '사다리 항목을 삭제했습니다.';
+            header('Location: portable_tools.php?tab=ladder&year=' . $year, true, 303);
+            exit;
+        } elseif ($action === 'save_harnesses_batch') {
+            $rowsPost = $_POST['har'] ?? [];
+            $db->beginTransaction();
+            $st = $db->prepare('UPDATE pt_harnesses SET worker_name=?, check1_date=?, check1_result=?, check2_date=?, check2_result=?, inspector=?, remarks=?, updated_at=? WHERE id=?');
+            foreach ($rowsPost as $hid => $d) {
+                $st->execute([
+                    trim((string)($d['worker_name'] ?? '(예비)')),
+                    trim((string)($d['c1_date'] ?? '2026-05-07')), trim((string)($d['c1_res'] ?? '')),
+                    trim((string)($d['c2_date'] ?? '2026-11-07')), trim((string)($d['c2_res'] ?? '')),
+                    trim((string)($d['inspector'] ?? '김남균')), trim((string)($d['remarks'] ?? '')),
+                    date('Y-m-d H:i:s'), (int)$hid
+                ]);
+            }
+            $db->commit();
+            $_SESSION['csm_pt_notice'] = '전신안전대 관리대장을 저장했습니다.';
+            header('Location: portable_tools.php?tab=harness&year=' . $year, true, 303);
+            exit;
+        } elseif ($action === 'add_harness') {
+            $code = trim((string)($_POST['code'] ?? ''));
+            if ($code === '') throw new InvalidArgumentException('관리번호를 입력해 주세요.');
+            $nextSeq = ((int)$db->query('SELECT COALESCE(MAX(seq_no), 0) FROM pt_harnesses')->fetchColumn()) + 1;
+            $db->prepare('INSERT INTO pt_harnesses (seq_no, worker_name, code, updated_at) VALUES (?, ?, ?, ?)')
+               ->execute([$nextSeq, trim((string)($_POST['worker_name'] ?? '(예비)')), $code, date('Y-m-d H:i:s')]);
+            $_SESSION['csm_pt_notice'] = "전신안전대 [{$code}]를 추가했습니다.";
+            header('Location: portable_tools.php?tab=harness&year=' . $year, true, 303);
+            exit;
+        } elseif ($action === 'delete_harness') {
+            $db->prepare('DELETE FROM pt_harnesses WHERE id = ?')->execute([(int)($_POST['id'] ?? 0)]);
+            $_SESSION['csm_pt_notice'] = '전신안전대 항목을 삭제했습니다.';
+            header('Location: portable_tools.php?tab=harness&year=' . $year, true, 303);
+            exit;
+        } elseif ($action === 'add_lockout') {
+            $keyNo = trim((string)($_POST['key_no'] ?? ''));
+            if ($keyNo === '') throw new InvalidArgumentException('Key 번호를 입력해 주세요.');
+            $nextSeq = ((int)$db->query('SELECT COALESCE(MAX(seq_no), 0) FROM pt_lockouts')->fetchColumn()) + 1;
+            $db->prepare('INSERT INTO pt_lockouts (seq_no, lock_group, holder_name, issue_date, qty, key_no, remarks, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+               ->execute([
+                   $nextSeq,
+                   trim((string)($_POST['lock_group'] ?? '개인잠금')),
+                   trim((string)($_POST['holder_name'] ?? '')),
+                   trim((string)($_POST['issue_date'] ?? date('Y-m-d'))),
+                   max(1, (int)($_POST['qty'] ?? 1)),
+                   $keyNo,
+                   trim((string)($_POST['remarks'] ?? '')),
+                   date('Y-m-d H:i:s')
+               ]);
+            $_SESSION['csm_pt_notice'] = "시건장치 [{$keyNo}]를 등록했습니다.";
+            header('Location: portable_tools.php?tab=lockout&year=' . $year, true, 303);
+            exit;
+        } elseif ($action === 'save_lockouts_batch') {
+            $rowsPost = $_POST['loc'] ?? [];
+            $db->beginTransaction();
+            $st = $db->prepare('UPDATE pt_lockouts SET holder_name=?, issue_date=?, qty=?, key_no=?, remarks=?, updated_at=? WHERE id=?');
+            foreach ($rowsPost as $lid => $d) {
+                $st->execute([
+                    trim((string)($d['holder_name'] ?? '')), trim((string)($d['issue_date'] ?? '')),
+                    max(1, (int)($d['qty'] ?? 1)), trim((string)($d['key_no'] ?? '')),
+                    trim((string)($d['remarks'] ?? '')), date('Y-m-d H:i:s'), (int)$lid
+                ]);
+            }
+            $db->commit();
+            $_SESSION['csm_pt_notice'] = '시건장치 등록대장을 저장했습니다.';
+            header('Location: portable_tools.php?tab=lockout&year=' . $year, true, 303);
+            exit;
+        } elseif ($action === 'delete_lockout') {
+            $db->prepare('DELETE FROM pt_lockouts WHERE id = ?')->execute([(int)($_POST['id'] ?? 0)]);
+            $_SESSION['csm_pt_notice'] = '시건장치 항목을 삭제했습니다.';
+            header('Location: portable_tools.php?tab=lockout&year=' . $year, true, 303);
+            exit;
         }
     } catch (Throwable $e) {
         if ($db->inTransaction()) $db->rollBack();
@@ -256,6 +358,9 @@ foreach ($allEquipment as $eq) {
     if ((int)$eq['id'] === $selectedId) { $selectedEq = $eq; break; }
 }
 $selectedItems = $selectedEq ? pt_fetch_check_items($db, (int)$selectedEq['id']) : [];
+$ladders = $db->query('SELECT * FROM pt_ladders ORDER BY seq_no ASC, id ASC')->fetchAll();
+$harnesses = $db->query('SELECT * FROM pt_harnesses ORDER BY seq_no ASC, id ASC')->fetchAll();
+$lockouts = $db->query('SELECT * FROM pt_lockouts ORDER BY lock_group ASC, seq_no ASC, id ASC')->fetchAll();
 $evidences = pt_fetch_evidence($db, $year);
 $score262 = csm_pt_score_summary($year, 2.0);
 $evidenceKinds = pt_evidence_kinds();
@@ -425,9 +530,12 @@ table.hm-tbl tbody tr:hover td.sticky-col { background: #f8fafc; }
   </section>
 
   <nav class="tabs">
-    <a class="tab-link <?= $tab === 'register' ? 'active' : '' ?>" href="?tab=register&amp;year=<?= $year ?>">📋 휴대용 공구·기구 관리대장 (<?= $totalEq ?>)</a>
-    <a class="tab-link <?= $tab === 'checklist' ? 'active' : '' ?>" href="?tab=checklist&amp;id=<?= $selectedId ?>&amp;year=<?= $year ?>">✅ 공구별 안전점검표 (<?= $totalEq ?>종)</a>
-    <a class="tab-link <?= $tab === 'evidence' ? 'active' : '' ?>" href="?tab=evidence&amp;year=<?= $year ?>">📎 2.6.2 증빙 및 점수 관리 (<?= count($evidences) ?>)</a>
+    <a class="tab-link <?= $tab === 'register' ? 'active' : '' ?>" href="?tab=register&amp;year=<?= $year ?>">📋 휴대용 공구·기구 (<?= $totalEq ?>)</a>
+    <a class="tab-link <?= $tab === 'checklist' ? 'active' : '' ?>" href="?tab=checklist&amp;id=<?= $selectedId ?>&amp;year=<?= $year ?>">✅ 공구별 점검표</a>
+    <a class="tab-link <?= $tab === 'ladder' ? 'active' : '' ?>" href="?tab=ladder&amp;year=<?= $year ?>">🪜 사다리 관리대장 (<?= count($ladders) ?>)</a>
+    <a class="tab-link <?= $tab === 'harness' ? 'active' : '' ?>" href="?tab=harness&amp;year=<?= $year ?>">🦺 전신안전대 관리대장 (<?= count($harnesses) ?>)</a>
+    <a class="tab-link <?= $tab === 'lockout' ? 'active' : '' ?>" href="?tab=lockout&amp;year=<?= $year ?>">🔒 시건장치 등록대장 (<?= count($lockouts) ?>)</a>
+    <a class="tab-link <?= $tab === 'evidence' ? 'active' : '' ?>" href="?tab=evidence&amp;year=<?= $year ?>">📎 2.6.2 증빙·점수 (<?= count($evidences) ?>)</a>
   </nav>
 
   <?php if ($tab === 'register'): ?>
@@ -639,6 +747,298 @@ table.hm-tbl tbody tr:hover td.sticky-col { background: #f8fafc; }
       <?php endif; ?>
     </section>
   </div>
+
+  <?php elseif ($tab === 'ladder'): ?>
+  <section class="panel">
+    <div class="quick-bar">
+      <div>
+        <h2 style="margin:0 0 4px">🪜 사다리 관리대장 (<?= count($ladders) ?>종 · 점검주기 6개월)</h2>
+        <div style="font-size:.83rem;color:#64748b">점검사항: 1. 파손·녹·휘어짐·갈라짐 &nbsp;|&nbsp; 2. 페인트·오일·그리스 오염 &nbsp;|&nbsp; 3. 안전장치(벌어짐·미끄럼방지) 설치 및 작동</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <?php if ($canManage): ?>
+        <button type="button" class="btn btn-sm" onclick="fillAllLadders('r1')">✅ 1차 전체 양호(○)</button>
+        <button type="button" class="btn btn-sm" onclick="fillAllLadders('r2')">✅ 2차 전체 양호(○)</button>
+        <?php endif; ?>
+        <a class="btn btn-sm btn-blue" href="portable_tools_print.php?mode=ladder&amp;year=<?= $year ?>" target="_blank">🖨️ 사다리 관리대장 A4 인쇄</a>
+      </div>
+    </div>
+
+    <form method="post">
+      <input type="hidden" name="csrf" value="<?= $h($_SESSION['csm_pt_csrf']) ?>">
+      <input type="hidden" name="action" value="save_ladders_batch">
+      <input type="hidden" name="year" value="<?= $year ?>">
+      <div class="tbl-wrap">
+        <table class="hm-tbl">
+          <thead>
+            <tr>
+              <th rowspan="2">기기명</th>
+              <th rowspan="2">관리번호</th>
+              <th rowspan="2">구분(종류/재질/길이)</th>
+              <th rowspan="2">차수 / 점검일</th>
+              <th colspan="3">사다리 상태</th>
+              <th colspan="2">안전장치</th>
+              <th rowspan="2">확인자</th>
+              <?php if ($canManage): ?><th rowspan="2">삭제</th><?php endif; ?>
+            </tr>
+            <tr>
+              <th>디딤대</th><th>버팀대</th><th>보강쇠</th>
+              <th>벌어짐방지</th><th>미끄럼방지</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($ladders as $lad): $lid = (int)$lad['id']; ?>
+            <tr>
+              <td rowspan="2" class="nowrap"><strong><?= $h($lad['equipment_type']) ?></strong></td>
+              <td rowspan="2" class="nowrap"><strong><?= $h($lad['code']) ?></strong></td>
+              <td rowspan="2" class="nowrap"><?= $h($lad['kind'] . ' · ' . $lad['material'] . ' · ' . $lad['height_spec']) ?></td>
+              <td class="nowrap">1차 <input type="date" name="lad[<?= $lid ?>][c1_date]" value="<?= $h($lad['check1_date']) ?>" style="padding:3px 5px;border:1px solid #cbd5e1;border-radius:5px;font-size:.78rem"></td>
+              <?php foreach (['r1_step','r1_strut','r1_brace','r1_spreader','r1_antislip'] as $col): ?>
+              <td>
+                <select class="lad-r1" name="lad[<?= $lid ?>][<?= $col ?>]" style="padding:4px;border:1px solid #cbd5e1;border-radius:5px;font-size:.8rem">
+                  <option value="">-</option>
+                  <option value="○" <?= $lad[$col] === '○' ? 'selected' : '' ?>>○ 양호</option>
+                  <option value="×" <?= $lad[$col] === '×' ? 'selected' : '' ?>>× 불량</option>
+                </select>
+              </td>
+              <?php endforeach; ?>
+              <td rowspan="2"><input type="text" name="lad[<?= $lid ?>][inspector]" value="<?= $h($lad['inspector']) ?>" style="width:70px;padding:4px 6px;border:1px solid #cbd5e1;border-radius:5px;text-align:center"></td>
+              <?php if ($canManage): ?>
+              <td rowspan="2"><button type="button" class="btn btn-sm btn-danger" onclick="deleteSubItem('delete_ladder', <?= $lid ?>)">삭제</button></td>
+              <?php endif; ?>
+            </tr>
+            <tr>
+              <td class="nowrap">2차 <input type="date" name="lad[<?= $lid ?>][c2_date]" value="<?= $h($lad['check2_date']) ?>" style="padding:3px 5px;border:1px solid #cbd5e1;border-radius:5px;font-size:.78rem"></td>
+              <?php foreach (['r2_step','r2_strut','r2_brace','r2_spreader','r2_antislip'] as $col): ?>
+              <td>
+                <select class="lad-r2" name="lad[<?= $lid ?>][<?= $col ?>]" style="padding:4px;border:1px solid #cbd5e1;border-radius:5px;font-size:.8rem">
+                  <option value="">-</option>
+                  <option value="○" <?= $lad[$col] === '○' ? 'selected' : '' ?>>○ 양호</option>
+                  <option value="×" <?= $lad[$col] === '×' ? 'selected' : '' ?>>× 불량</option>
+                </select>
+              </td>
+              <?php endforeach; ?>
+            </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+      <?php if ($canManage): ?>
+      <div style="margin-top:14px;display:flex;justify-content:flex-end">
+        <button type="submit" class="btn btn-primary">💾 사다리 관리대장 저장</button>
+      </div>
+      <?php endif; ?>
+    </form>
+
+    <?php if ($canManage): ?>
+    <form method="post" style="margin-top:18px;padding-top:14px;border-top:1px dashed #cbd5e1;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input type="hidden" name="csrf" value="<?= $h($_SESSION['csm_pt_csrf']) ?>">
+      <input type="hidden" name="action" value="add_ladder">
+      <input type="hidden" name="year" value="<?= $year ?>">
+      <strong style="font-size:.84rem">+ 사다리 추가:</strong>
+      <select name="equipment_type" style="padding:7px;border:1px solid #cbd5e1;border-radius:6px"><option>A형 사다리</option><option>안전발판 사다리</option></select>
+      <input type="text" name="code" required placeholder="관리번호 (예: HD-LA-012)" style="padding:7px;border:1px solid #cbd5e1;border-radius:6px;width:160px">
+      <input type="text" name="kind" value="A형" placeholder="종류" style="padding:7px;border:1px solid #cbd5e1;border-radius:6px;width:70px">
+      <input type="text" name="material" value="알루미늄" placeholder="재질" style="padding:7px;border:1px solid #cbd5e1;border-radius:6px;width:90px">
+      <input type="text" name="height_spec" required placeholder="길이 (예: 6단)" style="padding:7px;border:1px solid #cbd5e1;border-radius:6px;width:90px">
+      <button type="submit" class="btn btn-sm btn-primary">추가</button>
+    </form>
+    <?php endif; ?>
+  </section>
+
+  <?php elseif ($tab === 'harness'): ?>
+  <section class="panel">
+    <div class="quick-bar">
+      <div>
+        <h2 style="margin:0 0 4px">🦺 전신안전대 관리대장 (<?= count($harnesses) ?>종 · 점검주기 6개월)</h2>
+        <div style="font-size:.83rem;color:#64748b">Full Body Safety Harness · 죔줄·안전대·D링/버클/카라비나/훅·고통경감장치 폐기기준 확인</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <?php if ($canManage): ?>
+        <button type="button" class="btn btn-sm" onclick="fillAllHarnesses('c1')">✅ 1차 전체 적정</button>
+        <button type="button" class="btn btn-sm" onclick="fillAllHarnesses('c2')">✅ 2차 전체 적정</button>
+        <?php endif; ?>
+        <a class="btn btn-sm btn-blue" href="portable_tools_print.php?mode=harness&amp;year=<?= $year ?>" target="_blank">🖨️ 전신안전대 점검표 A4 인쇄</a>
+      </div>
+    </div>
+
+    <details style="margin-bottom:14px;background:#f8fafc;border:1px solid #dbe2e8;border-radius:10px;padding:10px 14px">
+      <summary style="font-weight:800;font-size:.88rem;cursor:pointer;color:#176053">📌 전신안전대 14개 점검사항 및 폐기기준 보기</summary>
+      <table class="hm-tbl" style="margin-top:10px">
+        <thead><tr><th>구분</th><th>점검사항</th><th>폐기기준</th></tr></thead>
+        <tbody>
+          <tr><td rowspan="4"><strong>죔줄</strong></td><td class="left">소선의 손상 상태</td><td>파손 또는 절단 시</td></tr>
+          <tr><td class="left">페인트·기름·약품 등에 의한 변질</td><td>발생 시</td></tr>
+          <tr><td class="left">불에 의한 손상 및 마모</td><td>발생 시</td></tr>
+          <tr><td class="left">마모 상태</td><td>발생 시</td></tr>
+          <tr><td rowspan="4"><strong>안전대</strong></td><td class="left">잘림·불에 의한 손상·약품 등에 의한 변질</td><td>발생 시</td></tr>
+          <tr><td class="left">해짐·마모</td><td>발생 시</td></tr>
+          <tr><td class="left">재봉 부분의 상태</td><td>이완 발생 시</td></tr>
+          <tr><td class="left">재봉실의 상태</td><td>1개소 이상 절단 시</td></tr>
+          <tr><td rowspan="5"><strong>D링·버클·카라비나·훅</strong></td><td class="left">충격이 가해져 변형·크랙</td><td>발생 시</td></tr>
+          <tr><td class="left">녹 발생</td><td>전체적으로 녹 발생 시</td></tr>
+          <tr><td class="left">심블(Thimble) 상태</td><td>손상 시</td></tr>
+          <tr><td class="left">이탈방지장치 작동 상태</td><td>불량 시</td></tr>
+          <tr><td class="left">버클·카라비나의 체결 및 작동 상태</td><td>불량 시</td></tr>
+          <tr><td><strong>고통경감장치</strong></td><td class="left">부착 및 손상 여부</td><td>손상 시</td></tr>
+        </tbody>
+      </table>
+    </details>
+
+    <form method="post">
+      <input type="hidden" name="csrf" value="<?= $h($_SESSION['csm_pt_csrf']) ?>">
+      <input type="hidden" name="action" value="save_harnesses_batch">
+      <input type="hidden" name="year" value="<?= $year ?>">
+      <div class="tbl-wrap">
+        <table class="hm-tbl">
+          <thead>
+            <tr>
+              <th>순번</th>
+              <th>관리번호</th>
+              <th>근로자명</th>
+              <th>1차 점검일</th>
+              <th>1차 점검결과</th>
+              <th>2차 점검일</th>
+              <th>2차 점검결과</th>
+              <th>작성자</th>
+              <th>비고</th>
+              <?php if ($canManage): ?><th>삭제</th><?php endif; ?>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($harnesses as $har): $hid = (int)$har['id']; ?>
+            <tr>
+              <td><?= (int)$har['seq_no'] ?></td>
+              <td class="nowrap"><strong><?= $h($har['code']) ?></strong></td>
+              <td><input type="text" name="har[<?= $hid ?>][worker_name]" value="<?= $h($har['worker_name']) ?>" style="width:95px;padding:5px 7px;border:1px solid #cbd5e1;border-radius:6px;text-align:center"></td>
+              <td><input type="date" name="har[<?= $hid ?>][c1_date]" value="<?= $h($har['check1_date']) ?>" style="padding:4px 6px;border:1px solid #cbd5e1;border-radius:6px"></td>
+              <td>
+                <select class="har-c1" name="har[<?= $hid ?>][c1_res]" style="padding:5px;border:1px solid #cbd5e1;border-radius:6px">
+                  <option value="">미점검</option>
+                  <option value="적정" <?= $har['check1_result'] === '적정' ? 'selected' : '' ?>>적정 (양호)</option>
+                  <option value="부적정(폐기)" <?= $har['check1_result'] === '부적정(폐기)' ? 'selected' : '' ?>>부적정 (폐기)</option>
+                </select>
+              </td>
+              <td><input type="date" name="har[<?= $hid ?>][c2_date]" value="<?= $h($har['check2_date']) ?>" style="padding:4px 6px;border:1px solid #cbd5e1;border-radius:6px"></td>
+              <td>
+                <select class="har-c2" name="har[<?= $hid ?>][c2_res]" style="padding:5px;border:1px solid #cbd5e1;border-radius:6px">
+                  <option value="">미점검</option>
+                  <option value="적정" <?= $har['check2_result'] === '적정' ? 'selected' : '' ?>>적정 (양호)</option>
+                  <option value="부적정(폐기)" <?= $har['check2_result'] === '부적정(폐기)' ? 'selected' : '' ?>>부적정 (폐기)</option>
+                </select>
+              </td>
+              <td><input type="text" name="har[<?= $hid ?>][inspector]" value="<?= $h($har['inspector']) ?>" style="width:75px;padding:5px;border:1px solid #cbd5e1;border-radius:6px;text-align:center"></td>
+              <td><input type="text" name="har[<?= $hid ?>][remarks]" value="<?= $h($har['remarks']) ?>" style="width:120px;padding:5px;border:1px solid #cbd5e1;border-radius:6px"></td>
+              <?php if ($canManage): ?>
+              <td><button type="button" class="btn btn-sm btn-danger" onclick="deleteSubItem('delete_harness', <?= $hid ?>)">삭제</button></td>
+              <?php endif; ?>
+            </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+      <?php if ($canManage): ?>
+      <div style="margin-top:14px;display:flex;justify-content:flex-end">
+        <button type="submit" class="btn btn-primary">💾 전신안전대 관리대장 저장</button>
+      </div>
+      <?php endif; ?>
+    </form>
+
+    <?php if ($canManage): ?>
+    <form method="post" style="margin-top:18px;padding-top:14px;border-top:1px dashed #cbd5e1;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input type="hidden" name="csrf" value="<?= $h($_SESSION['csm_pt_csrf']) ?>">
+      <input type="hidden" name="action" value="add_harness">
+      <input type="hidden" name="year" value="<?= $year ?>">
+      <strong style="font-size:.84rem">+ 전신안전대 추가:</strong>
+      <input type="text" name="code" required placeholder="관리번호 (예: HD-HA-020)" style="padding:7px;border:1px solid #cbd5e1;border-radius:6px;width:160px">
+      <input type="text" name="worker_name" value="(예비)" placeholder="근로자명" style="padding:7px;border:1px solid #cbd5e1;border-radius:6px;width:120px">
+      <button type="submit" class="btn btn-sm btn-primary">추가</button>
+    </form>
+    <?php endif; ?>
+  </section>
+
+  <?php elseif ($tab === 'lockout'):
+    $personalLocks = array_values(array_filter($lockouts, static fn($l) => $l['lock_group'] === '개인잠금'));
+    $facilityLocks = array_values(array_filter($lockouts, static fn($l) => $l['lock_group'] !== '개인잠금'));
+  ?>
+  <section class="panel">
+    <div class="quick-bar">
+      <div>
+        <h2 style="margin:0 0 4px">🔒 시건장치 등록대장 (총 <?= count($lockouts) ?>건 · 개인 <?= count($personalLocks) ?> / 설비 <?= count($facilityLocks) ?>)</h2>
+        <div style="font-size:.83rem;color:#64748b">LOTO 개인 잠금장치(Key 번호별 지급) 및 설비잠금 공용 시건장치 통합 등록대장</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <a class="btn btn-sm btn-blue" href="portable_tools_print.php?mode=lockout&amp;year=<?= $year ?>" target="_blank">🖨️ 시건장치 등록대장 A4 인쇄</a>
+      </div>
+    </div>
+
+    <form method="post">
+      <input type="hidden" name="csrf" value="<?= $h($_SESSION['csm_pt_csrf']) ?>">
+      <input type="hidden" name="action" value="save_lockouts_batch">
+      <input type="hidden" name="year" value="<?= $year ?>">
+
+      <h3 style="margin:10px 0 8px;font-size:1rem;color:#176053">1. 개인 시건장치 지급 현황 (<?= count($personalLocks) ?>건)</h3>
+      <div class="tbl-wrap" style="margin-bottom:20px">
+        <table class="hm-tbl">
+          <thead><tr><th>순번</th><th>성명</th><th>지급일자</th><th>지급수량</th><th>Key 번호</th><th>비고</th><?php if ($canManage): ?><th>삭제</th><?php endif; ?></tr></thead>
+          <tbody>
+            <?php foreach ($personalLocks as $idx => $loc): $lid = (int)$loc['id']; ?>
+            <tr>
+              <td><?= $idx + 1 ?></td>
+              <td><input type="text" name="loc[<?= $lid ?>][holder_name]" value="<?= $h($loc['holder_name']) ?>" style="width:100px;padding:5px;border:1px solid #cbd5e1;border-radius:6px;text-align:center"></td>
+              <td><input type="date" name="loc[<?= $lid ?>][issue_date]" value="<?= $h($loc['issue_date']) ?>" style="padding:4px 6px;border:1px solid #cbd5e1;border-radius:6px"></td>
+              <td><input type="number" name="loc[<?= $lid ?>][qty]" value="<?= (int)$loc['qty'] ?>" min="1" style="width:60px;padding:5px;border:1px solid #cbd5e1;border-radius:6px;text-align:center"></td>
+              <td><input type="text" name="loc[<?= $lid ?>][key_no]" value="<?= $h($loc['key_no']) ?>" style="width:110px;padding:5px;border:1px solid #cbd5e1;border-radius:6px;text-align:center;font-weight:700"></td>
+              <td><input type="text" name="loc[<?= $lid ?>][remarks]" value="<?= $h($loc['remarks']) ?>" style="width:160px;padding:5px;border:1px solid #cbd5e1;border-radius:6px"></td>
+              <?php if ($canManage): ?><td><button type="button" class="btn btn-sm btn-danger" onclick="deleteSubItem('delete_lockout', <?= $lid ?>)">삭제</button></td><?php endif; ?>
+            </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 style="margin:10px 0 8px;font-size:1rem;color:#176053">2. 설비잠금 시건장치 현황 (<?= count($facilityLocks) ?>건)</h3>
+      <div class="tbl-wrap">
+        <table class="hm-tbl">
+          <thead><tr><th>순번</th><th>품목</th><th>지급일자</th><th>수량</th><th>Key 번호</th><th>비고</th><?php if ($canManage): ?><th>삭제</th><?php endif; ?></tr></thead>
+          <tbody>
+            <?php foreach ($facilityLocks as $idx => $loc): $lid = (int)$loc['id']; ?>
+            <tr>
+              <td><?= $idx + 1 ?></td>
+              <td><input type="text" name="loc[<?= $lid ?>][holder_name]" value="<?= $h($loc['holder_name']) ?>" style="width:100px;padding:5px;border:1px solid #cbd5e1;border-radius:6px;text-align:center"></td>
+              <td><input type="date" name="loc[<?= $lid ?>][issue_date]" value="<?= $h($loc['issue_date']) ?>" style="padding:4px 6px;border:1px solid #cbd5e1;border-radius:6px"></td>
+              <td><input type="number" name="loc[<?= $lid ?>][qty]" value="<?= (int)$loc['qty'] ?>" min="1" style="width:60px;padding:5px;border:1px solid #cbd5e1;border-radius:6px;text-align:center"></td>
+              <td><input type="text" name="loc[<?= $lid ?>][key_no]" value="<?= $h($loc['key_no']) ?>" style="width:110px;padding:5px;border:1px solid #cbd5e1;border-radius:6px;text-align:center;font-weight:700"></td>
+              <td><input type="text" name="loc[<?= $lid ?>][remarks]" value="<?= $h($loc['remarks']) ?>" style="width:160px;padding:5px;border:1px solid #cbd5e1;border-radius:6px"></td>
+              <?php if ($canManage): ?><td><button type="button" class="btn btn-sm btn-danger" onclick="deleteSubItem('delete_lockout', <?= $lid ?>)">삭제</button></td><?php endif; ?>
+            </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+
+      <?php if ($canManage): ?>
+      <div style="margin-top:14px;display:flex;justify-content:flex-end">
+        <button type="submit" class="btn btn-primary">💾 시건장치 등록대장 저장</button>
+      </div>
+      <?php endif; ?>
+    </form>
+
+    <?php if ($canManage): ?>
+    <form method="post" style="margin-top:18px;padding-top:14px;border-top:1px dashed #cbd5e1;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input type="hidden" name="csrf" value="<?= $h($_SESSION['csm_pt_csrf']) ?>">
+      <input type="hidden" name="action" value="add_lockout">
+      <input type="hidden" name="year" value="<?= $year ?>">
+      <strong style="font-size:.84rem">+ 시건장치 추가:</strong>
+      <select name="lock_group" style="padding:7px;border:1px solid #cbd5e1;border-radius:6px"><option value="개인잠금">개인잠금</option><option value="설비잠금">설비잠금</option></select>
+      <input type="text" name="holder_name" required placeholder="성명 또는 설비잠금" style="padding:7px;border:1px solid #cbd5e1;border-radius:6px;width:130px">
+      <input type="date" name="issue_date" value="<?= date('Y-m-d') ?>" style="padding:7px;border:1px solid #cbd5e1;border-radius:6px">
+      <input type="text" name="key_no" required placeholder="Key 번호 (예: HD-K057)" style="padding:7px;border:1px solid #cbd5e1;border-radius:6px;width:140px">
+      <input type="text" name="remarks" placeholder="비고" style="padding:7px;border:1px solid #cbd5e1;border-radius:6px;width:130px">
+      <button type="submit" class="btn btn-sm btn-primary">추가</button>
+    </form>
+    <?php endif; ?>
+  </section>
 
   <?php elseif ($tab === 'evidence'): ?>
   <section class="panel" style="border-left:5px solid <?= $score262['evidence_count'] > 0 ? '#176053' : '#d97706' ?>">
@@ -919,6 +1319,20 @@ pz.addEventListener('drop', e => {
 });
 function markAllPcRound(roundNo, val) {
   document.querySelectorAll('input[type="radio"][name^="r' + roundNo + '["][value="' + val + '"]').forEach(el => { el.checked = true; });
+}
+function fillAllLadders(prefix) {
+  document.querySelectorAll('select.lad-' + prefix).forEach(el => { el.value = '○'; });
+}
+function fillAllHarnesses(prefix) {
+  document.querySelectorAll('select.har-' + prefix).forEach(el => { el.value = '적정'; });
+}
+function deleteSubItem(actionName, id) {
+  if (!confirm('이 항목을 삭제할까요?')) return;
+  const f = document.createElement('form');
+  f.method = 'post';
+  f.innerHTML = `<input type="hidden" name="csrf" value="${PT_CSRF}"><input type="hidden" name="action" value="${actionName}"><input type="hidden" name="id" value="${id}"><input type="hidden" name="year" value="<?= $year ?>">`;
+  document.body.appendChild(f);
+  f.submit();
 }
 function compressImage(file, maxSide = 1280, quality = 0.82) {
   return new Promise(resolve => {

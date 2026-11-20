@@ -9,7 +9,7 @@ $h = static fn($v): string => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 $db = pt_db();
 $year = filter_var($_GET['year'] ?? date('Y'), FILTER_VALIDATE_INT) ?: (int)date('Y');
 $mode = (string)($_GET['mode'] ?? 'register');
-if (!in_array($mode, ['register', 'checklist', 'all_checklists'], true)) $mode = 'register';
+if (!in_array($mode, ['register', 'checklist', 'all_checklists', 'ladder', 'harness', 'lockout'], true)) $mode = 'register';
 $eqId = filter_var($_GET['id'] ?? 0, FILTER_VALIDATE_INT) ?: 0;
 
 $logoPath = __DIR__ . '/assets/policy-logo.png';
@@ -17,7 +17,10 @@ if (!file_exists($logoPath)) $logoPath = dirname(__DIR__) . '/safety_manual/asse
 $logoBase64 = file_exists($logoPath) ? ('data:image/png;base64,' . base64_encode((string)file_get_contents($logoPath))) : '';
 
 $allEquipment = pt_fetch_all_equipment($db);
-$isLandscape = ($mode === 'register');
+$ladders = $mode === 'ladder' ? $db->query('SELECT * FROM pt_ladders ORDER BY seq_no ASC, id ASC')->fetchAll() : [];
+$harnesses = $mode === 'harness' ? $db->query('SELECT * FROM pt_harnesses ORDER BY seq_no ASC, id ASC')->fetchAll() : [];
+$lockouts = $mode === 'lockout' ? $db->query('SELECT * FROM pt_lockouts ORDER BY lock_group ASC, seq_no ASC, id ASC')->fetchAll() : [];
+$isLandscape = in_array($mode, ['register', 'ladder'], true);
 
 $targetChecklists = [];
 if ($mode === 'checklist') {
@@ -29,12 +32,28 @@ if ($mode === 'checklist') {
 }
 
 $registerPages = $mode === 'register' ? array_chunk($allEquipment, 11) : [];
-$totalPages = $mode === 'register' ? max(1, count($registerPages)) : max(1, count($targetChecklists));
-$pageTitle = $mode === 'register'
-    ? "휴대용 공구와 기구 관리대장 ({$year}년)"
-    : ($mode === 'checklist' && !empty($targetChecklists)
-        ? $targetChecklists[0]['code'] . ' ' . $targetChecklists[0]['name'] . ' 안전점검표'
-        : "휴대용 공구·기구 안전점검표 전체 ({$year}년, " . count($targetChecklists) . "종)");
+$ladderPages = $mode === 'ladder' ? array_chunk($ladders, 8) : [];
+$harnessPages = $mode === 'harness' ? array_chunk($harnesses, 11) : [];
+$lockoutGroups = $mode === 'lockout' ? [
+    ['title' => '시건장치 등록대장 (개인 잠금장치)', 'rows' => array_values(array_filter($lockouts, static fn($l) => $l['lock_group'] === '개인잠금'))],
+    ['title' => '시건장치 등록대장 (설비잠금 공용)', 'rows' => array_values(array_filter($lockouts, static fn($l) => $l['lock_group'] !== '개인잠금'))],
+] : [];
+
+$totalPages = match ($mode) {
+    'register' => max(1, count($registerPages)),
+    'ladder' => max(1, count($ladderPages)),
+    'harness' => max(1, count($harnessPages)),
+    'lockout' => max(1, count($lockoutGroups)),
+    default => max(1, count($targetChecklists)),
+};
+$pageTitle = match ($mode) {
+    'register' => "휴대용 공구와 기구 관리대장 ({$year}년)",
+    'ladder' => "사다리 관리대장 ({$year}년)",
+    'harness' => "전신 안전대 점검표 ({$year}년)",
+    'lockout' => "시건장치 등록대장 ({$year}년)",
+    'checklist' => !empty($targetChecklists) ? ($targetChecklists[0]['code'] . ' ' . $targetChecklists[0]['name'] . ' 안전점검표') : '안전점검표',
+    default => "휴대용 공구·기구 안전점검표 전체 ({$year}년, " . count($targetChecklists) . "종)",
+};
 ?>
 <!doctype html>
 <html lang="ko">
@@ -187,6 +206,183 @@ table.chk-tbl td.c { text-align: center; white-space: nowrap; }
       </table>
     </div>
 
+    <footer class="rpt-footer">
+      <div>※ 결재(서명) 후 PDF 스캔하여 CSM 2.6.2 증빙으로 첨부·보관합니다.</div>
+      <div class="rpt-pageno"><?= $pIdx + 1 ?> / <?= $totalPages ?></div>
+      <div class="rpt-brand"><?php if ($logoBase64): ?><img src="<?= $logoBase64 ?>" alt="현대기전 로고" class="doc-footer-logo"><?php endif; ?><span class="doc-footer-company">주식회사 현대기전</span></div>
+    </footer>
+  </section>
+  <?php endforeach; ?>
+
+<?php elseif ($mode === 'ladder'): ?>
+  <?php foreach ($ladderPages as $pIdx => $chunk): ?>
+  <section class="a4-page">
+    <div class="rpt-header">
+      <div>
+        <div class="rpt-kicker">(주)현대기전 안전보건경영체계 · CSM 2.6.2 사다리 관리대장</div>
+        <h1 class="rpt-title">사다리 관리대장 (<?= $year ?>년)</h1>
+        <div class="rpt-sub">점검주기: 6개월 &nbsp;|&nbsp; 총 보유 현황: <?= count($ladders) ?>종 &nbsp;|&nbsp; 확인자: 김남균</div>
+      </div>
+      <div class="approval-wrap">
+        <div class="ap-side">결<br>재</div>
+        <table class="ap-tbl"><tr><th>작성</th><th>승인</th></tr><tr><td class="ap-sign">&nbsp;</td><td class="ap-sign">&nbsp;</td></tr></table>
+      </div>
+    </div>
+    <div class="page-body">
+      <table class="reg-tbl" style="font-size:8pt">
+        <thead>
+          <tr>
+            <th rowspan="2" style="width:12%">기기명</th>
+            <th rowspan="2" style="width:10%">관리번호</th>
+            <th colspan="3" style="width:16%">구 분</th>
+            <th colspan="3" style="width:18%">사다리 상태</th>
+            <th colspan="2" style="width:16%">안 전 장 치</th>
+            <th colspan="2" style="width:18%">점 검 결 과</th>
+          </tr>
+          <tr>
+            <th>종류</th><th>재질</th><th>길이</th>
+            <th>디딤대</th><th>버팀대</th><th>보강쇠</th>
+            <th>벌어짐방지기구</th><th>미끄럼방지장치</th>
+            <th>점검일</th><th>서명</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php foreach ($chunk as $lad): ?>
+          <tr>
+            <td rowspan="2"><strong><?= $h($lad['equipment_type']) ?></strong></td>
+            <td rowspan="2"><strong><?= $h($lad['code']) ?></strong></td>
+            <td rowspan="2"><?= $h($lad['kind']) ?></td>
+            <td rowspan="2"><?= $h($lad['material']) ?></td>
+            <td rowspan="2"><?= $h($lad['height_spec']) ?></td>
+            <td><?= $h($lad['r1_step']) ?></td><td><?= $h($lad['r1_strut']) ?></td><td><?= $h($lad['r1_brace']) ?></td>
+            <td><?= $h($lad['r1_spreader']) ?></td><td><?= $h($lad['r1_antislip']) ?></td>
+            <td><?= $h($lad['check1_date']) ?></td><td><?= $h($lad['inspector']) ?></td>
+          </tr>
+          <tr>
+            <td><?= $h($lad['r2_step']) ?></td><td><?= $h($lad['r2_strut']) ?></td><td><?= $h($lad['r2_brace']) ?></td>
+            <td><?= $h($lad['r2_spreader']) ?></td><td><?= $h($lad['r2_antislip']) ?></td>
+            <td><?= $h($lad['check2_date']) ?></td><td><?= $h($lad['inspector']) ?></td>
+          </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+      <div style="margin-top:8px;font-size:8pt;color:#334155">※ 점검사항: 1. 파손/녹 발생/휘어짐/갈라짐 &nbsp; 2. 페인트/오일/그리스 오염 &nbsp; 3. 안전장치(벌어짐방지·미끄럼방지) 설치 및 작동 여부 (○: 양호 / ×: 불량)</div>
+    </div>
+    <footer class="rpt-footer">
+      <div>※ 결재(서명) 후 PDF 스캔하여 CSM 2.6.2 증빙으로 첨부·보관합니다.</div>
+      <div class="rpt-pageno"><?= $pIdx + 1 ?> / <?= $totalPages ?></div>
+      <div class="rpt-brand"><?php if ($logoBase64): ?><img src="<?= $logoBase64 ?>" alt="현대기전 로고" class="doc-footer-logo"><?php endif; ?><span class="doc-footer-company">주식회사 현대기전</span></div>
+    </footer>
+  </section>
+  <?php endforeach; ?>
+
+<?php elseif ($mode === 'harness'): ?>
+  <?php foreach ($harnessPages as $pIdx => $chunk): ?>
+  <section class="a4-page">
+    <div class="rpt-header">
+      <div>
+        <div class="rpt-kicker">(주)현대기전 안전보건경영체계 · CSM 2.6.2 전신안전대 점검표</div>
+        <h1 class="rpt-title">전신 안전대 점검표 (Full Body Safety Harness)</h1>
+        <div class="rpt-sub">점검주기: 6개월 &nbsp;|&nbsp; 총 보유 현황: <?= count($harnesses) ?>종 &nbsp;|&nbsp; 작성자: 김남균</div>
+      </div>
+      <div class="approval-wrap">
+        <div class="ap-side">결<br>재</div>
+        <table class="ap-tbl"><tr><th>작성</th><th>승인</th></tr><tr><td class="ap-sign">&nbsp;</td><td class="ap-sign">&nbsp;</td></tr></table>
+      </div>
+    </div>
+    <div class="page-body">
+      <table class="chk-tbl" style="font-size:7.6pt;margin-bottom:8px">
+        <thead><tr><th style="width:20%">구분</th><th style="width:52%">점검사항</th><th style="width:28%">폐기기준</th></tr></thead>
+        <tbody>
+          <tr><td class="c" rowspan="4"><strong>죔줄</strong></td><td>소선의 손상 상태</td><td class="c">파손 또는 절단 시</td></tr>
+          <tr><td>페인트·기름·약품 등에 의한 변질</td><td class="c">발생 시</td></tr>
+          <tr><td>불에 의한 손상 및 마모</td><td class="c">발생 시</td></tr>
+          <tr><td>마모 상태</td><td class="c">발생 시</td></tr>
+          <tr><td class="c" rowspan="4"><strong>안전대</strong></td><td>잘림·불에 의한 손상·약품 등에 의한 변질</td><td class="c">발생 시</td></tr>
+          <tr><td>해짐·마모</td><td class="c">발생 시</td></tr>
+          <tr><td>재봉 부분의 상태</td><td class="c">이완 발생 시</td></tr>
+          <tr><td>재봉실의 상태</td><td class="c">1개소 이상 절단 시</td></tr>
+          <tr><td class="c" rowspan="5"><strong>D링·버클·카라비나·훅</strong></td><td>충격이 가해져 변형·크랙</td><td class="c">발생 시</td></tr>
+          <tr><td>녹 발생</td><td class="c">전체적으로 녹 발생 시</td></tr>
+          <tr><td>심블(Thimble) 상태</td><td class="c">손상 시</td></tr>
+          <tr><td>이탈방지장치 작동 상태</td><td class="c">불량 시</td></tr>
+          <tr><td>버클·카라비나의 체결 및 작동 상태</td><td class="c">불량 시</td></tr>
+          <tr><td class="c"><strong>고통경감장치</strong></td><td>부착 및 손상 여부</td><td class="c">손상 시</td></tr>
+        </tbody>
+      </table>
+
+      <table class="chk-tbl" style="font-size:8pt">
+        <thead>
+          <tr>
+            <th rowspan="2" style="width:16%">근로자명</th>
+            <th rowspan="2" style="width:18%">관리번호</th>
+            <th colspan="2" style="width:33%">1차 점검결과 (2026-05-07)</th>
+            <th colspan="2" style="width:33%">2차 점검결과 (2026-11-07)</th>
+          </tr>
+          <tr><th>결과</th><th>서명</th><th>결과</th><th>서명</th></tr>
+        </thead>
+        <tbody>
+          <?php foreach ($chunk as $har): ?>
+          <tr>
+            <td class="c"><strong><?= $h($har['worker_name']) ?></strong></td>
+            <td class="c"><strong><?= $h($har['code']) ?></strong></td>
+            <td class="c"><?= $h($har['check1_result'] ?: '') ?></td>
+            <td class="c"></td>
+            <td class="c"><?= $h($har['check2_result'] ?: '') ?></td>
+            <td class="c"></td>
+          </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+    <footer class="rpt-footer">
+      <div>※ 결재(서명) 후 PDF 스캔하여 CSM 2.6.2 증빙으로 첨부·보관합니다.</div>
+      <div class="rpt-pageno"><?= $pIdx + 1 ?> / <?= $totalPages ?></div>
+      <div class="rpt-brand"><?php if ($logoBase64): ?><img src="<?= $logoBase64 ?>" alt="현대기전 로고" class="doc-footer-logo"><?php endif; ?><span class="doc-footer-company">주식회사 현대기전</span></div>
+    </footer>
+  </section>
+  <?php endforeach; ?>
+
+<?php elseif ($mode === 'lockout'): ?>
+  <?php foreach ($lockoutGroups as $pIdx => $grp): ?>
+  <section class="a4-page">
+    <div class="rpt-header">
+      <div>
+        <div class="rpt-kicker">(주)현대기전 안전보건경영체계 · CSM 2.6.2 시건장치(LOTO) 등록대장</div>
+        <h1 class="rpt-title"><?= $h($grp['title']) ?> (<?= $year ?>년)</h1>
+        <div class="rpt-sub">대장 관리자: 김남균 &nbsp;|&nbsp; 등록 수량: <?= count($grp['rows']) ?>건</div>
+      </div>
+      <div class="approval-wrap">
+        <div class="ap-side">결<br>재</div>
+        <table class="ap-tbl"><tr><th>작성</th><th>승인</th></tr><tr><td class="ap-sign">&nbsp;</td><td class="ap-sign">&nbsp;</td></tr></table>
+      </div>
+    </div>
+    <div class="page-body">
+      <table class="chk-tbl" style="font-size:8.6pt">
+        <thead>
+          <tr>
+            <th style="width:8%">순번</th>
+            <th style="width:20%"><?= $pIdx === 0 ? '성 명' : '품 목' ?></th>
+            <th style="width:20%">지급일자</th>
+            <th style="width:12%">수량</th>
+            <th style="width:20%">Key 번호</th>
+            <th style="width:20%">비 고</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php foreach ($grp['rows'] as $i => $loc): ?>
+          <tr>
+            <td class="c"><?= $i + 1 ?></td>
+            <td class="c"><strong><?= $h($loc['holder_name']) ?></strong></td>
+            <td class="c"><?= $h($loc['issue_date']) ?></td>
+            <td class="c"><?= (int)$loc['qty'] ?></td>
+            <td class="c"><strong><?= $h($loc['key_no']) ?></strong></td>
+            <td><?= $h($loc['remarks']) ?></td>
+          </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
     <footer class="rpt-footer">
       <div>※ 결재(서명) 후 PDF 스캔하여 CSM 2.6.2 증빙으로 첨부·보관합니다.</div>
       <div class="rpt-pageno"><?= $pIdx + 1 ?> / <?= $totalPages ?></div>
